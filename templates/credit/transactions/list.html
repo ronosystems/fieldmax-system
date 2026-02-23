@@ -1,0 +1,169 @@
+{% extends 'credit/base.html' %}
+{% load static %}
+
+{% block title %}Credit Transactions{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-exchange-alt me-2"></i>Credit Transactions</h2>
+    <a href="{% url 'credit:transaction_create' %}" class="btn btn-warning">
+        <i class="fas fa-plus me-2"></i>New Transaction
+    </a>
+</div>
+
+<!-- Filters -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-2">
+                <label class="form-label">Status</label>
+                <select name="status" class="form-select">
+                    <option value="">All</option>
+                    <option value="pending" {% if request.GET.status == 'pending' %}selected{% endif %}>Pending</option>
+                    <option value="paid" {% if request.GET.status == 'paid' %}selected{% endif %}>Paid</option>
+                    <option value="cancelled" {% if request.GET.status == 'cancelled' %}selected{% endif %}>Cancelled</option>
+                    <option value="reversed" {% if request.GET.status == 'reversed' %}selected{% endif %}>Reversed</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Company</label>
+                <select name="company" class="form-select">
+                    <option value="">All Companies</option>
+                    {% for company in companies %}
+                    <option value="{{ company.id }}" {% if request.GET.company == company.id|stringformat:"s" %}selected{% endif %}>{{ company.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Date From</label>
+                <input type="date" name="date_from" class="form-control" value="{{ request.GET.date_from }}">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Date To</label>
+                <input type="date" name="date_to" class="form-control" value="{{ request.GET.date_to }}">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Search</label>
+                <input type="text" name="search" class="form-control" value="{{ request.GET.search }}" placeholder="ID, Customer...">
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <button type="submit" class="btn btn-warning me-2">
+                    <i class="fas fa-filter"></i> Filter
+                </button>
+                <a href="{% url 'credit:transaction_list' %}" class="btn btn-secondary">
+                    <i class="fas fa-times"></i> Clear
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Transactions Table -->
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover" id="transactionsTable">
+                <thead>
+                    <tr>
+                        <th>Transaction ID</th>
+                        <th>Customer</th>
+                        <th>Company</th>
+                        <th>Product</th>
+                        <th>Amount</th>
+                        <th>Date Given</th>
+                        <th>Days</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for transaction in transactions %}
+                    <tr>
+                        <td><span class="badge bg-warning text-dark">{{ transaction.transaction_id }}</span></td>
+                        <td>
+                            <a href="{% url 'credit:customer_detail' transaction.customer.id %}" class="text-decoration-none">
+                                {{ transaction.customer.full_name }}
+                            </a>
+                        </td>
+                        <td>{{ transaction.credit_company.name }}</td>
+                        <td>
+                            <a href="{% url 'inventory:product_detail' transaction.product.id %}" class="text-decoration-none">
+                                {{ transaction.product.product_code }}
+                            </a>
+                        </td>
+                        <td class="fw-bold">KSH {{ transaction.ceiling_price|floatformat:0 }}</td>
+                        <td>{{ transaction.transaction_date|date:"Y-m-d" }}</td>
+                        <td>
+                            {% with days=transaction.days_since_given %}
+                                {% if days > 90 %}
+                                    <span class="badge bg-danger">{{ days }} days</span>
+                                {% elif days > 60 %}
+                                    <span class="badge bg-warning text-dark">{{ days }} days</span>
+                                {% elif days > 30 %}
+                                    <span class="badge bg-info">{{ days }} days</span>
+                                {% else %}
+                                    <span class="badge bg-success">{{ days }} days</span>
+                                {% endif %}
+                            {% endwith %}
+                        </td>
+                        <td>
+                            {% if transaction.payment_status == 'pending' %}
+                                <span class="badge bg-danger">Pending</span>
+                            {% elif transaction.payment_status == 'paid' %}
+                                <span class="badge bg-success">Paid</span>
+                            {% elif transaction.payment_status == 'cancelled' %}
+                                <span class="badge bg-secondary">Cancelled</span>
+                            {% elif transaction.payment_status == 'reversed' %}
+                                <span class="badge bg-info">Reversed</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group" role="group">
+                                <a href="{% url 'credit:transaction_detail' transaction.id %}" class="btn btn-sm btn-info" title="View">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                <a href="{% url 'credit:transaction_receipt' transaction.id %}" class="btn btn-sm btn-secondary" title="Receipt">
+                                    <i class="fas fa-receipt"></i>
+                                </a>
+                                
+                                {% if transaction.payment_status == 'pending' %}
+                                    <a href="{% url 'credit:transaction_pay' transaction.id %}" class="btn btn-sm btn-success" title="Mark Paid">
+                                        <i class="fas fa-check"></i>
+                                    </a>
+                                    <a href="{% url 'credit:transaction_cancel' transaction.id %}" class="btn btn-sm btn-danger" title="Cancel">
+                                        <i class="fas fa-times"></i>
+                                    </a>
+                                    <a href="{% url 'credit:transaction_reverse' transaction.id %}" class="btn btn-sm btn-warning" title="Reverse (Restore to Stock)" 
+                                       onclick="return confirm('Are you sure you want to reverse this transaction? The product will be available again.')">
+                                        <i class="fas fa-undo"></i>
+                                    </a>
+                                    
+                                {% elif transaction.payment_status == 'cancelled' %}
+                                    <a href="{% url 'credit:transaction_reverse' transaction.id %}" class="btn btn-sm btn-warning" title="Reverse (Restore to Stock)" 
+                                       onclick="return confirm('Are you sure you want to reverse this cancelled transaction? The product will be available again.')">
+                                        <i class="fas fa-undo"></i> Restore
+                                    </a>
+                                    
+                                {% elif transaction.payment_status == 'reversed' %}
+                                    <span class="badge bg-info">Reversed</span>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="9" class="text-center py-4">
+                            <i class="fas fa-exchange-alt fa-3x text-muted mb-3"></i>
+                            <p class="text-muted">No transactions found</p>
+                            <a href="{% url 'credit:transaction_create' %}" class="btn btn-warning btn-sm">
+                                <i class="fas fa-plus"></i> Create your first transaction
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

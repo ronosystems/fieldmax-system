@@ -1,0 +1,471 @@
+{% extends 'website/base.html' %}
+{% load static %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col">
+            <h2 class="mb-0">
+                <i class="bi bi-clock-history"></i> Pending Orders
+                <span class="badge bg-warning text-dark ms-2">{{ pending_count }}</span>
+            </h2>
+            <p class="text-muted">Review and approve customer orders</p>
+        </div>
+    </div>
+
+    {% if pending_orders %}
+    <div class="row">
+        {% for order in pending_orders %}
+        <div class="col-lg-6 col-xl-4 mb-4">
+            <div class="card shadow-sm border-warning border-2 h-100 d-flex flex-column">
+                <!-- Order Header -->
+                <div class="card-header bg-warning bg-opacity-10">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="bi bi-cart3"></i> {{ order.order_id }}
+                        </h5>
+                        <span class="badge bg-warning text-dark">
+                            {{ order.get_status_display }}
+                        </span>
+                    </div>
+                    <small class="text-muted">
+                        <i class="bi bi-clock"></i> {{ order.created_at|date:"d M Y, g:i A" }}
+                    </small>
+                </div>
+
+                <!-- Card Body - Scrollable Content -->
+                <div class="card-body flex-grow-1" style="overflow-y: auto; max-height: 400px;">
+                    <!-- Customer Details -->
+                    <div class="mb-3">
+                        <h6 class="text-muted mb-2">Customer Details</h6>
+                        <div class="mb-1">
+                            <i class="bi bi-person-fill text-primary"></i>
+                            <strong>{{ order.buyer_name }}</strong>
+                        </div>
+                        <div class="mb-1">
+                            <i class="bi bi-telephone-fill text-success"></i>
+                            <a href="tel:{{ order.buyer_phone }}">{{ order.buyer_phone }}</a>
+                        </div>
+                        {% if order.buyer_email %}
+                        <div class="mb-1">
+                            <i class="bi bi-envelope-fill text-info"></i>
+                            <a href="mailto:{{ order.buyer_email }}">{{ order.buyer_email }}</a>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Order Summary -->
+                    <div class="mb-3">
+                        <h6 class="text-muted mb-2">Order Summary</h6>
+                        <div class="d-flex justify-content-between mb-1">
+                            <span>Total Items:</span>
+                            <strong>{{ order.item_count }}</strong>
+                        </div>
+                        <div class="d-flex justify-content-between mb-1">
+                            <span>Payment Method:</span>
+                            <strong class="text-capitalize">{{ order.payment_method }}</strong>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span>Total Amount:</span>
+                            <strong class="text-success fs-5">KSh {{ order.total_amount|floatformat:2 }}</strong>
+                        </div>
+                    </div>
+
+                    <!-- Items List with Checkboxes -->
+                    <div class="mb-3">
+                        <button class="btn btn-sm btn-outline-secondary w-100" type="button" 
+                                data-bs-toggle="collapse" data-bs-target="#items-{{ order.order_id }}">
+                            <i class="bi bi-list-ul"></i> View Items ({{ order.item_count }})
+                            <span id="checked-count-{{ order.order_id }}" class="badge bg-info ms-2">0/{{ order.item_count }} checked</span>
+                        </button>
+                        <div class="collapse mt-2" id="items-{{ order.order_id }}">
+                            <div class="list-group list-group-flush">
+                                {% for item in order.items.all %}
+                                <div class="list-group-item px-0 py-2 small">
+                                    <div class="form-check">
+                                        <input class="form-check-input item-checkbox" 
+                                               type="checkbox" 
+                                               value="{{ item.id }}"
+                                               data-order="{{ order.order_id }}"
+                                               id="item-{{ order.order_id }}-{{ item.id }}"
+                                               onchange="updateCheckedCount('{{ order.order_id }}')">
+                                        <label class="form-check-label w-100" for="item-{{ order.order_id }}-{{ item.id }}">
+                                            <div class="d-flex justify-content-between mb-1">
+                                                <span>{{ item.product_name }}</span>
+                                                <span>x{{ item.quantity }}</span>
+                                            </div>
+                                            <small class="text-muted">
+                                                KSh {{ item.unit_price|floatformat:2 }} each
+                                                (Total: KSh {{ item.total_price|floatformat:2 }})
+                                            </small>
+                                            {% if item.product_code %}
+                                            <div class="mt-1">
+                                                <small class="text-muted">Code: {{ item.product_code }}</small>
+                                            </div>
+                                            {% endif %}
+                                        </label>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                                
+                                <!-- Check All Controls -->
+                                <div class="list-group-item px-0 py-2 bg-light">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div class="form-check">
+                                            <input class="form-check-input" 
+                                                   type="checkbox" 
+                                                   id="check-all-{{ order.order_id }}"
+                                                   onchange="toggleAllItems('{{ order.order_id }}', this.checked)">
+                                            <label class="form-check-label small" for="check-all-{{ order.order_id }}">
+                                                Check all items
+                                            </label>
+                                        </div>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="uncheckAllItems('{{ order.order_id }}')">
+                                            <i class="bi bi-x-circle"></i> Clear All
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {% if order.notes %}
+                    <div class="alert alert-info alert-sm mb-3">
+                        <strong>Notes:</strong> {{ order.notes }}
+                    </div>
+                    {% endif %}
+
+                    <!-- Action Buttons - MOVED INSIDE CARD BODY IN COLUMN LAYOUT -->
+                    <div class="mt-auto">
+                        <div class="row g-2">
+                            <div class="col-12">
+                                <button class="btn btn-success w-100" onclick="approveOrder('{{ order.order_id }}')" id="approve-btn-{{ order.order_id }}">
+                                    <i class="bi bi-check-circle"></i> Approve Order
+                                </button>
+                            </div>
+                            <div class="col-12">
+                                <button class="btn btn-outline-warning w-100" onclick="approveSelectedItems('{{ order.order_id }}')" id="partial-approve-btn-{{ order.order_id }}" style="display: none;">
+                                    <i class="bi bi-check-square"></i> Approve Selected Items
+                                </button>
+                            </div>
+                            <div class="col-12">
+                                <button class="btn btn-outline-danger w-100" onclick="showRejectModal('{{ order.order_id }}')">
+                                    <i class="bi bi-x-circle"></i> Reject Order
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <!-- No Pending Orders -->
+    <div class="text-center py-5">
+        <i class="bi bi-inbox display-1 text-muted"></i>
+        <h3 class="mt-3 text-muted">No Pending Orders</h3>
+        <p class="text-muted">All orders have been processed</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Reject Modal -->
+<div class="modal fade" id="rejectModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">
+                    <i class="bi bi-x-circle"></i> Reject Order
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Please provide a reason for rejecting this order:</p>
+                <textarea id="rejectionReason" class="form-control" rows="3" 
+                          placeholder="e.g., Item out of stock, incorrect pricing, etc."></textarea>
+                <input type="hidden" id="orderIdToReject">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" onclick="confirmReject()">
+                    Confirm Rejection
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Get CSRF token
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// Show loading overlay
+function showLoading(message = 'Processing...') {
+    const loadingHtml = `
+        <div id="loadingOverlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+             background: rgba(0,0,0,0.7); z-index: 9999; display: flex; align-items: center; 
+             justify-content: center;">
+            <div class="text-center text-white">
+                <div class="spinner-border mb-3" role="status"></div>
+                <div>${message}</div>
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', loadingHtml);
+}
+
+function hideLoading() {
+    const overlay = document.getElementById('loadingOverlay');
+    if (overlay) overlay.remove();
+}
+
+// Update checked items count
+function updateCheckedCount(orderId) {
+    const checkboxes = document.querySelectorAll(`.item-checkbox[data-order="${orderId}"]`);
+    const checkedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
+    const totalCount = checkboxes.length;
+    
+    // Update badge
+    document.getElementById(`checked-count-${orderId}`).textContent = `${checkedCount}/${totalCount} checked`;
+    
+    // Show/hide partial approve button
+    const partialBtn = document.getElementById(`partial-approve-btn-${orderId}`);
+    const approveBtn = document.getElementById(`approve-btn-${orderId}`);
+    
+    if (checkedCount > 0 && checkedCount < totalCount) {
+        partialBtn.style.display = 'block';
+        approveBtn.textContent = `Approve All Items (${totalCount})`;
+    } else if (checkedCount === totalCount) {
+        partialBtn.style.display = 'none';
+        approveBtn.textContent = 'Approve All Items';
+    } else {
+        partialBtn.style.display = 'none';
+        approveBtn.textContent = 'Approve Order';
+    }
+}
+
+// Toggle all items
+function toggleAllItems(orderId, isChecked) {
+    const checkboxes = document.querySelectorAll(`.item-checkbox[data-order="${orderId}"]`);
+    checkboxes.forEach(cb => {
+        cb.checked = isChecked;
+    });
+    updateCheckedCount(orderId);
+}
+
+// Uncheck all items
+function uncheckAllItems(orderId) {
+    const checkboxes = document.querySelectorAll(`.item-checkbox[data-order="${orderId}"]`);
+    checkboxes.forEach(cb => {
+        cb.checked = false;
+    });
+    document.getElementById(`check-all-${orderId}`).checked = false;
+    updateCheckedCount(orderId);
+}
+
+// Get selected item IDs
+function getSelectedItemIds(orderId) {
+    const checkboxes = document.querySelectorAll(`.item-checkbox[data-order="${orderId}"]:checked`);
+    return Array.from(checkboxes).map(cb => cb.value);
+}
+
+// Approve Order (all items)
+async function approveOrder(orderId) {
+    const checkboxes = document.querySelectorAll(`.item-checkbox[data-order="${orderId}"]`);
+    const checkedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
+    const totalCount = checkboxes.length;
+    
+    if (checkedCount === 0) {
+        // No items checked, approve entire order
+        if (!confirm(`Approve ALL items in order ${orderId}? This will create a sale and deduct stock for all ${totalCount} items.`)) {
+            return;
+        }
+        await processApproval(orderId, []);
+    } else if (checkedCount === totalCount) {
+        // All items checked
+        if (!confirm(`Approve ALL ${totalCount} items in order ${orderId}? This will create a sale and deduct stock.`)) {
+            return;
+        }
+        const itemIds = getSelectedItemIds(orderId);
+        await processApproval(orderId, itemIds);
+    } else {
+        // Some items checked - ask if they want to approve only checked or all
+        const choice = confirm(`You have ${checkedCount}/${totalCount} items checked.\n\nClick OK to approve only the checked items.\nClick Cancel to approve ALL items.`);
+        if (choice) {
+            // Approve only checked items
+            const itemIds = getSelectedItemIds(orderId);
+            await processApproval(orderId, itemIds);
+        } else {
+            // Approve all items
+            await processApproval(orderId, []);
+        }
+    }
+}
+
+// Approve only selected items
+async function approveSelectedItems(orderId) {
+    const itemIds = getSelectedItemIds(orderId);
+    if (itemIds.length === 0) {
+        alert('Please select at least one item to approve.');
+        return;
+    }
+    
+    if (!confirm(`Approve only the ${itemIds.length} selected items in order ${orderId}?`)) {
+        return;
+    }
+    
+    await processApproval(orderId, itemIds);
+}
+
+// Process approval request
+async function processApproval(orderId, itemIds) {
+    showLoading('Approving order...');
+
+    try {
+        const response = await fetch(`/staff/approve-order/${orderId}/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({ 
+                item_ids: itemIds,
+                approve_all: itemIds.length === 0
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            alert(`✅ ${data.message}`);
+            location.reload();
+        } else {
+            alert(`❌ ${data.message}`);
+        }
+    } catch (error) {
+        console.error('Approval error:', error);
+        alert('Failed to approve order. Please try again.');
+    } finally {
+        hideLoading();
+    }
+}
+
+// Show Reject Modal
+function showRejectModal(orderId) {
+    document.getElementById('orderIdToReject').value = orderId;
+    document.getElementById('rejectionReason').value = '';
+    const modal = new bootstrap.Modal(document.getElementById('rejectModal'));
+    modal.show();
+}
+
+// Confirm Rejection
+async function confirmReject() {
+    const orderId = document.getElementById('orderIdToReject').value;
+    const reason = document.getElementById('rejectionReason').value.trim();
+
+    if (!reason) {
+        alert('Please provide a reason for rejection');
+        return;
+    }
+
+    showLoading('Rejecting order...');
+
+    try {
+        const response = await fetch(`/staff/reject-order/${orderId}/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({ reason: reason })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            alert(`✅ ${data.message}`);
+            location.reload();
+        } else {
+            alert(`❌ ${data.message}`);
+        }
+    } catch (error) {
+        console.error('Rejection error:', error);
+        alert('Failed to reject order. Please try again.');
+    } finally {
+        hideLoading();
+        bootstrap.Modal.getInstance(document.getElementById('rejectModal')).hide();
+    }
+}
+
+// Auto-refresh every 60 seconds to check for new orders
+setInterval(() => {
+    console.log('Auto-refreshing pending orders...');
+    location.reload();
+}, 60000); // Changed from 30000 to 60000 (60 seconds)
+</script>
+
+<style>
+.card {
+    transition: transform 0.2s;
+}
+
+.card:hover {
+    transform: translateY(-5px);
+}
+
+.list-group-item {
+    border-left: none;
+    border-right: none;
+}
+
+.alert-sm {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+}
+
+.form-check-input:checked {
+    background-color: #198754;
+    border-color: #198754;
+}
+
+.form-check-input:focus {
+    border-color: #86b7fe;
+    outline: 0;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+/* Make card body scrollable but keep action buttons at bottom */
+.card {
+    display: flex;
+    flex-direction: column;
+}
+
+.card-body {
+    flex: 1;
+    overflow-y: auto;
+}
+
+/* Style for action buttons container */
+.mt-auto {
+    margin-top: auto;
+    padding-top: 1rem;
+    border-top: 1px solid #dee2e6;
+}
+</style>
+{% endblock %}

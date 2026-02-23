@@ -1,0 +1,208 @@
+{% extends 'sales/base.html' %}
+{% load static %}
+
+{% block title %}Sales List{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-shopping-cart me-2"></i>Sales History</h2>
+    <a href="{% url 'sales:sale_create' %}" class="btn btn-success">
+        <i class="fas fa-plus me-2"></i>New Sale
+    </a>
+</div>
+
+<!-- Filters -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">Date From</label>
+                <input type="date" name="date_from" class="form-control" value="{{ request.GET.date_from }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Date To</label>
+                <input type="date" name="date_to" class="form-control" value="{{ request.GET.date_to }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Payment Method</label>
+                <select name="payment_method" class="form-select">
+                    <option value="">All</option>
+                    <option value="Cash" {% if request.GET.payment_method == 'Cash' %}selected{% endif %}>Cash</option>
+                    <option value="M-Pesa" {% if request.GET.payment_method == 'M-Pesa' %}selected{% endif %}>M-Pesa</option>
+                    <option value="Card" {% if request.GET.payment_method == 'Card' %}selected{% endif %}>Card</option>
+                    <option value="Points" {% if request.GET.payment_method == 'Points' %}selected{% endif %}>Points</option>
+                    <option value="Credit" {% if request.GET.payment_method == 'Credit' %}selected{% endif %}>Credit</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Sale Type</label>
+                <select name="sale_type" class="form-select">
+                    <option value="">All Types</option>
+                    <option value="cash" {% if request.GET.sale_type == 'cash' %}selected{% endif %}>Cash Sales</option>
+                    <option value="credit" {% if request.GET.sale_type == 'credit' %}selected{% endif %}>Credit Sales</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Search</label>
+                <input type="text" name="search" class="form-control" value="{{ request.GET.search }}" placeholder="Sale ID or Customer...">
+            </div>
+            <div class="col-12 d-flex justify-content-end">
+                <button type="submit" class="btn btn-success me-2">
+                    <i class="fas fa-filter"></i> Filter
+                </button>
+                <a href="{% url 'sales:sale_list' %}" class="btn btn-secondary">
+                    <i class="fas fa-times"></i> Clear
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Sales Table -->
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Sale ID</th>
+                        <th>Date & Time</th>
+                        <th>Customer</th>
+                        <th>Items</th>
+                        <th>Total</th>
+                        <th>Payment Method</th>
+                        <th>Sale Type</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for sale in sales %}
+                    <tr>
+                        <td><span class="badge bg-success">{{ sale.sale_id }}</span></td>
+                        <td>{{ sale.sale_date|date:"Y-m-d H:i" }}</td>
+                        <td>{{ sale.buyer_name|default:"Walk-in Customer" }}</td>
+                        <td>{{ sale.items.count }}</td>
+                        <td class="fw-bold">KSH {{ sale.total_amount|floatformat:0 }}</td>
+                        <td>
+                            {% if sale.is_credit %}
+                                <span class="badge bg-warning text-dark">
+                                    <i class="fas fa-credit-card me-1"></i> Credit
+                                </span>
+                            {% else %}
+                                {% if sale.payment_method == 'Cash' %}
+                                    <span class="badge bg-success">{{ sale.payment_method }}</span>
+                                {% elif sale.payment_method == 'M-Pesa' %}
+                                    <span class="badge bg-info">{{ sale.payment_method }}</span>
+                                {% elif sale.payment_method == 'Card' %}
+                                    <span class="badge bg-primary">{{ sale.payment_method }}</span>
+                                {% elif sale.payment_method == 'Points' %}
+                                    <span class="badge bg-warning text-dark">{{ sale.payment_method }}</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">{{ sale.payment_method }}</span>
+                                {% endif %}
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if sale.is_credit %}
+                                <span class="badge bg-warning text-dark">Credit Sale</span>
+                            {% else %}
+                                <span class="badge bg-success">Cash Sale</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if sale.is_reversed %}
+                                <span class="badge bg-danger">Reversed</span>
+                            {% elif sale.is_credit %}
+                                <span class="badge bg-secondary">Pending</span>
+                            {% else %}
+                                <span class="badge bg-success">Completed</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group" role="group">
+                                <a href="{% url 'sales:sale_detail' sale.sale_id %}" class="btn btn-sm btn-info" title="View">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                <a href="{% url 'sales:sale_receipt' sale.sale_id %}" class="btn btn-sm btn-warning" title="Receipt">
+                                    <i class="fas fa-receipt"></i>
+                                </a>
+                                {% if sale.is_credit and sale.credit_sale_id %}
+                                <a href="{% url 'credit:transaction_detail' sale.credit_sale_id %}" class="btn btn-sm btn-primary" title="View in Credit App">
+                                    <i class="fas fa-external-link-alt"></i>
+                                </a>
+                                {% endif %}
+                                {% if not sale.is_reversed and not sale.is_credit %}
+                                <a href="{% url 'sales:sale_reverse' sale.sale_id %}" class="btn btn-sm btn-danger" title="Reverse">
+                                    <i class="fas fa-undo"></i>
+                                </a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="9" class="text-center py-4">
+                            <i class="fas fa-shopping-cart fa-3x text-muted mb-3"></i>
+                            <p class="text-muted">No sales found</p>
+                            <a href="{% url 'sales:sale_create' %}" class="btn btn-success btn-sm">
+                                <i class="fas fa-plus"></i> Create your first sale
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Pagination -->
+{% if sales.has_other_pages %}
+<nav aria-label="Page navigation" class="mt-4">
+    <ul class="pagination justify-content-center">
+        {% if sales.has_previous %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ sales.previous_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                Previous
+            </a>
+        </li>
+        {% endif %}
+        
+        {% for num in sales.paginator.page_range %}
+            {% if sales.number == num %}
+            <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+            {% elif num > sales.number|add:'-3' and num < sales.number|add:'3' %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ num }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                    {{ num }}
+                </a>
+            </li>
+            {% endif %}
+        {% endfor %}
+        
+        {% if sales.has_next %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ sales.next_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                Next
+            </a>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    'use strict';
+    
+    // Initialize tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl)
+    });
+})();
+</script>
+{% endblock %}

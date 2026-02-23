@@ -1,0 +1,304 @@
+{% extends 'staff/base.html' %}
+
+{% block title %}System Users - FieldMax{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-users me-2"></i>System Users</h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'staff:staff_dashboard' %}">Dashboard</a></li>
+                    <li class="breadcrumb-item active">Users</li>
+                </ol>
+            </nav>
+        </div>
+        <a href="{% url 'admin:auth_user_add' %}" class="btn btn-primary" target="_blank">
+            <i class="fas fa-plus me-2"></i>Add New User
+        </a>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card stat-card">
+                <div class="card-body">
+                    <div class="stat-icon">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <div class="stat-value">{{ total_users }}</div>
+                    <div class="stat-label">Total Users</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card stat-card">
+                <div class="card-body">
+                    <div class="stat-icon">
+                        <i class="fas fa-check-circle" style="color: #28a745;"></i>
+                    </div>
+                    <div class="stat-value">{{ active_users }}</div>
+                    <div class="stat-label">Active Users</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card stat-card">
+                <div class="card-body">
+                    <div class="stat-icon">
+                        <i class="fas fa-user-tie" style="color: #17a2b8;"></i>
+                    </div>
+                    <div class="stat-value">{{ staff_users }}</div>
+                    <div class="stat-label">Staff Members</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Users Table -->
+    <div class="card">
+        <div class="card-header">
+            <div class="d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-list me-2"></i>All Users</h5>
+                <div class="btn-group">
+                    <button class="btn btn-sm btn-outline-secondary" onclick="exportTableToCSV('users.csv')">
+                        <i class="fas fa-download me-1"></i>Export
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover datatable" id="usersTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Username</th>
+                            <th>Full Name</th>
+                            <th>Email</th>
+                            <th>User Type</th>
+                            <th>Group/Role</th>
+                            <th>Status</th>
+                            <th>Last Login</th>
+                            <th>Date Joined</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for user in users %}
+                        <tr>
+                            <td>{{ user.id }}</td>
+                            <td>
+                                <strong>{{ user.username }}</strong>
+                                {% if user == request.user %}
+                                    <span class="badge bg-info ms-1">You</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if user.get_full_name %}
+                                    {{ user.get_full_name }}
+                                {% else %}
+                                    <span class="text-muted fst-italic">Not provided</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if user.email %}
+                                    <a href="mailto:{{ user.email }}">{{ user.email }}</a>
+                                {% else %}
+                                    <span class="text-muted fst-italic">No email</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if user.is_superuser %}
+                                    <span class="badge bg-danger">Super Admin</span>
+                                {% elif user.is_staff %}
+                                    <span class="badge bg-primary">Staff</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Regular User</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% with groups=user.groups.all %}
+                                    {% if groups %}
+                                        {% for group in groups %}
+                                            {% if group.name == 'Administrator' %}
+                                                <span class="badge" style="background-color: #dc3545; color: white; margin: 2px;">{{ group.name }}</span>
+                                            {% elif group.name == 'Supervisor' %}
+                                                <span class="badge" style="background-color: #fd7e14; color: white; margin: 2px;">{{ group.name }}</span>
+                                            {% elif group.name == 'Sales Manager' %}
+                                                <span class="badge" style="background-color: #28a745; color: white; margin: 2px;">{{ group.name }}</span>
+                                            {% elif group.name == 'Store Manager' %}
+                                                <span class="badge" style="background-color: #17a2b8; color: white; margin: 2px;">{{ group.name }}</span>
+                                            {% elif group.name == 'Credit Officer' %}
+                                                <span class="badge" style="background-color: #6f42c1; color: white; margin: 2px;">{{ group.name }}</span>
+                                            {% elif group.name == 'Inventory Manager' %}
+                                                <span class="badge" style="background-color: #20c997; color: white; margin: 2px;">{{ group.name }}</span>
+                                            {% elif group.name == 'Assistant Manager' %}
+                                                <span class="badge" style="background-color: #ffc107; color: white; margin: 2px;">{{ group.name }}</span>
+                                            {% elif group.name == 'Customer Service' %}
+                                                <span class="badge" style="background-color: #6c757d; color: white; margin: 2px;">{{ group.name }}</span>
+                                            {% elif group.name == 'Security Officer' %}
+                                                <span class="badge" style="background-color: #343a40; color: white; margin: 2px;">{{ group.name }}</span>
+                                            {% elif group.name == 'Sales Agent' %}
+                                                <span class="badge" style="background-color: #007bff; color: white; margin: 2px;">{{ group.name }}</span>
+                                            {% elif group.name == 'Cashier' %}
+                                                <span class="badge" style="background-color: #17a2b8; color: white; margin: 2px;">{{ group.name }}</span>
+                                            {% elif group.name == 'Cleaner' %}
+                                                <span class="badge" style="background-color: #6c757d; color: white; margin: 2px;">{{ group.name }}</span>
+                                            {% else %}
+                                                <span class="badge" style="background-color: #6c757d; color: white; margin: 2px;">{{ group.name }}</span>
+                                            {% endif %}
+                                        {% endfor %}
+                                    {% else %}
+                                        <span class="text-muted fst-italic">No role assigned</span>
+                                    {% endif %}
+                                {% endwith %}
+                            </td>
+                            <td>
+                                {% if user.is_active %}
+                                    <span class="badge bg-success">Active</span>
+                                {% else %}
+                                    <span class="badge bg-danger">Inactive</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if user.last_login %}
+                                    {{ user.last_login|date:"M d, Y H:i" }}
+                                {% else %}
+                                    <span class="text-muted fst-italic">Never</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ user.date_joined|date:"M d, Y" }}</td>
+                            <td>
+                                <div class="btn-group" role="group">
+                                    <a href="{% url 'staff:user_detail' user.id %}" 
+                                       class="btn btn-sm btn-outline-info" 
+                                       title="View Full Details">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    <a href="{% url 'admin:auth_user_change' user.id %}" 
+                                       class="btn btn-sm btn-outline-primary" 
+                                       target="_blank"
+                                       title="Edit in Admin">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    {% if user != request.user %}
+                                    <button type="button" 
+                                            class="btn btn-sm btn-outline-danger"
+                                            onclick="confirmUserDelete('{{ user.id }}', '{{ user.username }}')"
+                                            title="Delete User">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="10" class="text-center py-5">
+                                <i class="fas fa-users fa-4x text-muted mb-3"></i>
+                                <p class="text-muted mb-3">No users found in the system.</p>
+                                <a href="{% url 'admin:auth_user_add' %}" class="btn btn-primary" target="_blank">
+                                    <i class="fas fa-plus me-2"></i>Add First User
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteConfirmModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title text-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Confirm Delete
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete user <strong id="deleteUserName"></strong>?</p>
+                <p class="text-muted small">This action cannot be undone. The user will be permanently removed from the system.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <a href="#" id="confirmDeleteBtn" class="btn btn-danger">Delete User</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Initialize DataTable
+    if ($.fn.DataTable.isDataTable('#usersTable')) {
+        $('#usersTable').DataTable().destroy();
+    }
+    
+    $('#usersTable').DataTable({
+        "pageLength": 25,
+        "order": [[8, "desc"]], // Sort by date joined (index 8)
+        "language": {
+            "search": "Search users:",
+            "lengthMenu": "Show _MENU_ users",
+            "info": "Showing _START_ to _END_ of _TOTAL_ users",
+            "infoEmpty": "Showing 0 to 0 of 0 users",
+            "infoFiltered": "(filtered from _MAX_ total users)",
+            "emptyTable": "No users available",
+            "zeroRecords": "No matching users found"
+        },
+        "columnDefs": [
+            {
+                "targets": [9], // Actions column (now index 9)
+                "orderable": false
+            }
+        ]
+    });
+});
+
+// Delete confirmation function
+function confirmUserDelete(userId, username) {
+    $('#deleteUserName').text(username);
+    $('#confirmDeleteBtn').attr('href', `/admin/auth/user/${userId}/delete/`);
+    $('#deleteConfirmModal').modal('show');
+}
+
+// Export to CSV function
+function exportTableToCSV(filename) {
+    var csv = [];
+    var rows = document.querySelectorAll('#usersTable tr');
+    
+    for (var i = 0; i < rows.length; i++) {
+        var row = [], cols = rows[i].querySelectorAll('td, th');
+        
+        for (var j = 0; j < cols.length - 1; j++) { // Exclude last column (actions)
+            // Clean the data - remove HTML tags and get text content
+            var cellText = cols[j].innerText.replace(/,/g, ';').replace(/\n/g, ' ');
+            row.push('"' + cellText + '"');
+        }
+        
+        csv.push(row.join(','));
+    }
+    
+    // Download CSV file
+    var csvFile = new Blob([csv.join('\n')], {type: 'text/csv'});
+    var downloadLink = document.createElement('a');
+    downloadLink.download = filename;
+    downloadLink.href = window.URL.createObjectURL(csvFile);
+    downloadLink.style.display = 'none';
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
+}
+</script>
+{% endblock %}

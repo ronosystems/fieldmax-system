@@ -1,0 +1,112 @@
+{% extends 'credit/base.html' %}
+{% load static %}
+
+{% block title %}Edit Customer{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'credit:dashboard' %}">Dashboard</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'credit:customer_list' %}">Customers</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'credit:customer_detail' customer.id %}">{{ customer.full_name }}</a></li>
+            <li class="breadcrumb-item active">Edit</li>
+        </ol>
+    </nav>
+</div>
+
+<div class="card">
+    <div class="card-header bg-warning text-dark">
+        <h5 class="mb-0"><i class="fas fa-edit me-2"></i>Edit Customer: {{ customer.full_name }}</h5>
+    </div>
+    <div class="card-body">
+        <form method="post">
+            {% csrf_token %}
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <h6 class="mb-3">Personal Information</h6>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Full Name <span class="text-danger">*</span></label>
+                        <input type="text" name="full_name" class="form-control" value="{{ customer.full_name }}" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">ID Number</label>
+                        <input type="text" class="form-control" value="{{ customer.id_number }}" readonly disabled>
+                        <small class="text-muted">ID number cannot be changed</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Phone Number <span class="text-danger">*</span></label>
+                        <input type="text" name="phone_number" class="form-control" value="{{ customer.phone_number }}" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" name="email" class="form-control" value="{{ customer.email|default:'' }}">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Alternate Phone</label>
+                        <input type="text" name="alternate_phone" class="form-control" value="{{ customer.alternate_phone|default:'' }}">
+                    </div>
+                </div>
+                
+                <div class="col-md-6">
+                    <h6 class="mb-3">Address Information</h6>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">County</label>
+                        <input type="text" name="county" class="form-control" value="{{ customer.county|default:'' }}">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Town</label>
+                        <input type="text" name="town" class="form-control" value="{{ customer.town|default:'' }}">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Physical Address</label>
+                        <textarea name="physical_address" class="form-control" rows="2">{{ customer.physical_address|default:'' }}</textarea>
+                    </div>
+                    
+                    <h6 class="mb-3 mt-3">Next of Kin</h6>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">NOK Name</label>
+                        <input type="text" name="nok_name" class="form-control" value="{{ customer.nok_name|default:'' }}">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">NOK Phone</label>
+                        <input type="text" name="nok_phone" class="form-control" value="{{ customer.nok_phone|default:'' }}">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input type="checkbox" name="is_active" class="form-check-input" id="isActive" {% if customer.is_active %}checked{% endif %}>
+                            <label class="form-check-label" for="isActive">Active</label>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Notes</label>
+                        <textarea name="notes" class="form-control" rows="2">{{ customer.notes|default:'' }}</textarea>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="d-flex justify-content-end gap-2 mt-4">
+                <a href="{% url 'credit:customer_detail' customer.id %}" class="btn btn-secondary">
+                    <i class="fas fa-times"></i> Cancel
+                </a>
+                <button type="submit" class="btn btn-warning">
+                    <i class="fas fa-save"></i> Update Customer
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

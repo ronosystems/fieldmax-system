@@ -1,0 +1,304 @@
+{% extends 'credit/base.html' %}
+{% load static %}
+
+{% block title %}Transaction {{ transaction.transaction_id }}{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'credit:dashboard' %}">Dashboard</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'credit:transaction_list' %}">Transactions</a></li>
+            <li class="breadcrumb-item active">{{ transaction.transaction_id }}</li>
+        </ol>
+    </nav>
+</div>
+
+<div class="row">
+    <!-- Transaction Details -->
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-file-invoice me-2"></i>Transaction Information</h5>
+                <span class="badge bg-dark">{{ transaction.transaction_id }}</span>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tr>
+                        <th>Transaction ID:</th>
+                        <td><span class="badge bg-warning text-dark">{{ transaction.transaction_id }}</span></td>
+                    </tr>
+                    <tr>
+                        <th>ETR Receipt:</th>
+                        <td>{{ transaction.etr_receipt_number|default:"-" }}</td>
+                    </tr>
+                    <tr>
+                        <th>Date Given:</th>
+                        <td>{{ transaction.transaction_date|date:"Y-m-d H:i" }}</td>
+                    </tr>
+                    <tr>
+                        <th>Days Since:</th>
+                        <td>
+                            {% with days=transaction.days_since_given %}
+                                {% if days > 90 %}
+                                    <span class="badge bg-danger">{{ days }} days</span>
+                                {% elif days > 60 %}
+                                    <span class="badge bg-warning text-dark">{{ days }} days</span>
+                                {% elif days > 30 %}
+                                    <span class="badge bg-info">{{ days }} days</span>
+                                {% else %}
+                                    <span class="badge bg-success">{{ days }} days</span>
+                                {% endif %}
+                            {% endwith %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Status:</th>
+                        <td>
+                            {% if transaction.payment_status == 'pending' %}
+                                <span class="badge bg-danger">Pending Payment</span>
+                            {% elif transaction.payment_status == 'paid' %}
+                                <span class="badge bg-success">Paid by Company</span>
+                            {% elif transaction.payment_status == 'cancelled' %}
+                                <span class="badge bg-secondary">Cancelled</span>
+                            {% elif transaction.payment_status == 'reversed' %}
+                                <span class="badge bg-info">Reversed</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% if transaction.paid_date %}
+                    <tr>
+                        <th>Paid Date:</th>
+                        <td>{{ transaction.paid_date|date:"Y-m-d H:i" }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if transaction.payment_reference %}
+                    <tr>
+                        <th>Payment Ref:</th>
+                        <td>{{ transaction.payment_reference }}</td>
+                    </tr>
+                    {% endif %}
+                </table>
+            </div>
+        </div>
+        
+        <!-- Company & Customer -->
+        <div class="card mb-4">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0"><i class="fas fa-building me-2"></i>Company & Customer</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tr>
+                        <th>Credit Company:</th>
+                        <td>
+                            <a href="{% url 'credit:company_detail' transaction.credit_company.id %}" class="text-decoration-none">
+                                {{ transaction.credit_company.name }}
+                            </a>
+                            <br>
+                            <small class="text-muted">{{ transaction.credit_company.phone|default:"" }}</small>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Customer:</th>
+                        <td>
+                            <a href="{% url 'credit:customer_detail' transaction.customer.id %}" class="text-decoration-none">
+                                {{ transaction.customer.full_name }}
+                            </a><br>
+                            <small class="text-muted">
+                                ID: {{ transaction.customer.id_number }} | 
+                                Tel: {{ transaction.customer.phone_number }}
+                            </small>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Dealer:</th>
+                        <td>{{ transaction.dealer.get_full_name|default:transaction.dealer.username }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Product & Payment -->
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0"><i class="fas fa-box me-2"></i>Product Information</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tr>
+                        <th>Product:</th>
+                        <td>
+                            <a href="{% url 'inventory:product_detail' transaction.product.id %}" class="text-decoration-none">
+                                {{ transaction.product.display_name }}
+                            </a>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Product Code:</th>
+                        <td><span class="badge bg-secondary">{{ transaction.product.product_code }}</span></td>
+                    </tr>
+                    <tr>
+                        <th>Current Status:</th>
+                        <td>
+                            {% if transaction.product.status == 'available' %}
+                                <span class="badge bg-success">Available</span>
+                            {% elif transaction.product.status == 'sold' %}
+                                <span class="badge bg-danger">Sold</span>
+                            {% elif transaction.product.status == 'lowstock' %}
+                                <span class="badge bg-warning text-dark">Low Stock</span>
+                            {% elif transaction.product.status == 'outofstock' %}
+                                <span class="badge bg-secondary">Out of Stock</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>IMEI:</th>
+                        <td>{{ transaction.product.sku_value|default:"-" }}</td>
+                    </tr>
+                    <tr>
+                        <th>Ceiling Price:</th>
+                        <td class="fw-bold text-warning">KSH {{ transaction.ceiling_price|floatformat:0 }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Reversal Information (if reversed) -->
+        {% if transaction.payment_status == 'reversed' %}
+        <div class="card mb-4 border-info">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="fas fa-undo me-2"></i>Reversal Information</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tr>
+                        <th>Reversed At:</th>
+                        <td>{{ transaction.reversed_at|date:"Y-m-d H:i" }}</td>
+                    </tr>
+                    <tr>
+                        <th>Reversed By:</th>
+                        <td>{{ transaction.reversed_by.get_full_name|default:transaction.reversed_by.username|default:"System" }}</td>
+                    </tr>
+                    <tr>
+                        <th>Reason:</th>
+                        <td>{{ transaction.reversal_reason|default:"Not specified" }}</td>
+                    </tr>
+                </table>
+                
+                <div class="alert alert-info mt-2">
+                    <i class="fas fa-info-circle me-2"></i>
+                    This transaction has been reversed. The product 
+                    <strong>{{ transaction.product.display_name }}</strong> is now available for new credit transactions.
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Action Buttons -->
+        <div class="card mb-4">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0"><i class="fas fa-cog me-2"></i>Actions</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{% url 'credit:transaction_receipt' transaction.id %}" class="btn btn-info">
+                        <i class="fas fa-receipt me-2"></i>View Receipt
+                    </a>
+                    
+                    {% if transaction.payment_status == 'pending' %}
+                        <a href="{% url 'credit:transaction_pay' transaction.id %}" class="btn btn-success">
+                            <i class="fas fa-check-circle me-2"></i>Mark as Paid
+                        </a>
+                        <a href="{% url 'credit:transaction_cancel' transaction.id %}" class="btn btn-danger">
+                            <i class="fas fa-times-circle me-2"></i>Cancel Transaction
+                        </a>
+                        <a href="{% url 'credit:transaction_reverse' transaction.id %}" class="btn btn-warning">
+                            <i class="fas fa-undo me-2"></i>Reverse (Restore to Stock)
+                        </a>
+                        
+                    {% elif transaction.payment_status == 'cancelled' %}
+                        <a href="{% url 'credit:transaction_reverse' transaction.id %}" class="btn btn-warning">
+                            <i class="fas fa-undo me-2"></i>Reverse (Restore to Stock)
+                        </a>
+                        
+                    {% elif transaction.payment_status == 'paid' %}
+                        <div class="alert alert-success mb-2">
+                            <i class="fas fa-check-circle me-2"></i>
+                            This transaction has been paid. No further actions available.
+                        </div>
+                    {% elif transaction.payment_status == 'reversed' %}
+                        <div class="alert alert-info mb-2">
+                            <i class="fas fa-info-circle me-2"></i>
+                            This transaction has been reversed. Product is available again.
+                        </div>
+                    {% endif %}
+                    
+                    <a href="{% url 'credit:company_detail' transaction.credit_company.id %}" class="btn btn-outline-warning">
+                        <i class="fas fa-building me-2"></i>View Company
+                    </a>
+                    <a href="{% url 'credit:customer_detail' transaction.customer.id %}" class="btn btn-outline-warning">
+                        <i class="fas fa-user me-2"></i>View Customer
+                    </a>
+                    <a href="{% url 'credit:transaction_list' %}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left me-2"></i>Back to Transactions
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Transaction Logs -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0"><i class="fas fa-history me-2"></i>Transaction History Log</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Date & Time</th>
+                                <th>Action</th>
+                                <th>Performed By</th>
+                                <th>Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for log in logs %}
+                            <tr>
+                                <td>{{ log.created_at|date:"Y-m-d H:i:s" }}</td>
+                                <td>
+                                    {% if log.action == 'created' %}
+                                        <span class="badge bg-info">Created</span>
+                                    {% elif log.action == 'paid' %}
+                                        <span class="badge bg-success">Paid</span>
+                                    {% elif log.action == 'cancelled' %}
+                                        <span class="badge bg-secondary">Cancelled</span>
+                                    {% elif log.action == 'reversed' %}
+                                        <span class="badge bg-warning text-dark">Reversed</span>
+                                    {% else %}
+                                        <span class="badge bg-dark">{{ log.action }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ log.performed_by.get_full_name|default:log.performed_by.username|default:"System" }}</td>
+                                <td>{{ log.notes|default:"-" }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center py-3">No logs available</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

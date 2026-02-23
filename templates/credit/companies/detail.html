@@ -1,0 +1,220 @@
+{% extends 'credit/base.html' %}
+{% load static %}
+
+{% block title %}{{ company.name }}{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'credit:dashboard' %}">Dashboard</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'credit:company_list' %}">Companies</a></li>
+            <li class="breadcrumb-item active">{{ company.name }}</li>
+        </ol>
+    </nav>
+</div>
+
+<div class="row">
+    <!-- Company Details -->
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0"><i class="fas fa-building me-2"></i>Company Information</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tr>
+                        <th>Code:</th>
+                        <td><span class="badge bg-warning text-dark">{{ company.code }}</span></td>
+                    </tr>
+                    <tr>
+                        <th>Name:</th>
+                        <td class="fw-bold">{{ company.name }}</td>
+                    </tr>
+                    <tr>
+                        <th>Contact Person:</th>
+                        <td>{{ company.contact_person|default:"-" }}</td>
+                    </tr>
+                    <tr>
+                        <th>Phone:</th>
+                        <td>{{ company.phone|default:"-" }}</td>
+                    </tr>
+                    <tr>
+                        <th>Email:</th>
+                        <td>{{ company.email }}</td>
+                    </tr>
+                    <tr>
+                        <th>Address:</th>
+                        <td>{{ company.address|default:"-"|linebreaks }}</td>
+                    </tr>
+                    <tr>
+                        <th>Payment Terms:</th>
+                        <td>{{ company.payment_terms|default:"-" }}</td>
+                    </tr>
+                    <tr>
+                        <th>Status:</th>
+                        <td>
+                            {% if company.is_active %}
+                                <span class="badge bg-success">Active</span>
+                            {% else %}
+                                <span class="badge bg-danger">Inactive</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Added On:</th>
+                        <td>{{ company.created_at|date:"Y-m-d" }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Financial Summary -->
+        <div class="card mb-4">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Financial Summary</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between mb-2">
+                    <span>Pending Amount:</span>
+                    <span class="amount-pending fw-bold">KSH {{ company.pending_amount|floatformat:0 }}</span>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span>Paid Amount:</span>
+                    <span class="amount-paid fw-bold">KSH {{ company.paid_amount|floatformat:0 }}</span>
+                </div>
+                <div class="d-flex justify-content-between pt-2 border-top">
+                    <span>Total:</span>
+                    <span class="amount-total fw-bold">KSH {{ company.pending_amount|add:company.paid_amount|floatformat:0 }}</span>
+                </div>
+                <hr>
+                <div class="d-flex justify-content-between">
+                    <span>Transactions:</span>
+                    <span class="fw-bold">{{ company.transaction_count }}</span>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <span>Pending:</span>
+                    <span class="fw-bold text-warning">{{ company.pending_count }}</span>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <span>Paid:</span>
+                    <span class="fw-bold text-success">{{ company.paid_count }}</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Action Buttons -->
+        <div class="d-grid gap-2">
+            <a href="{% url 'credit:company_edit' company.id %}" class="btn btn-warning">
+                <i class="fas fa-edit me-2"></i>Edit Company
+            </a>
+            <a href="{% url 'credit:transaction_create' %}?company={{ company.id }}" class="btn btn-success">
+                <i class="fas fa-plus-circle me-2"></i>Add Transaction
+            </a>
+            <a href="{% url 'credit:payment_add' %}?company={{ company.id }}" class="btn btn-info">
+                <i class="fas fa-money-bill-wave me-2"></i>Record Payment
+            </a>
+            <a href="{% url 'credit:company_list' %}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left me-2"></i>Back to Companies
+            </a>
+        </div>
+    </div>
+    
+    <!-- Transactions -->
+    <div class="col-md-8">
+        <!-- Pending Transactions -->
+        <div class="card mb-4">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0"><i class="fas fa-clock me-2"></i>Pending Transactions ({{ pending_transactions.count }})</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Transaction ID</th>
+                                <th>Customer</th>
+                                <th>Product</th>
+                                <th>Amount</th>
+                                <th>Date Given</th>
+                                <th>Days</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for transaction in pending_transactions %}
+                            <tr>
+                                <td><span class="badge bg-warning text-dark">{{ transaction.transaction_id }}</span></td>
+                                <td>{{ transaction.customer.full_name }}</td>
+                                <td>{{ transaction.product.product_code }}</td>
+                                <td class="fw-bold">KSH {{ transaction.ceiling_price|floatformat:0 }}</td>
+                                <td>{{ transaction.transaction_date|date:"Y-m-d" }}</td>
+                                <td>
+                                    {% with days=transaction.days_since_given %}
+                                        {% if days > 90 %}
+                                            <span class="badge bg-danger">{{ days }}d</span>
+                                        {% elif days > 60 %}
+                                            <span class="badge bg-warning text-dark">{{ days }}d</span>
+                                        {% else %}
+                                            <span class="badge bg-success">{{ days }}d</span>
+                                        {% endif %}
+                                    {% endwith %}
+                                </td>
+                                <td>
+                                    <a href="{% url 'credit:transaction_detail' transaction.id %}" class="btn btn-sm btn-info">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="7" class="text-center py-3">No pending transactions</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Paid Transactions -->
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="fas fa-check-circle me-2"></i>Paid Transactions ({{ paid_transactions.count }})</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Transaction ID</th>
+                                <th>Customer</th>
+                                <th>Product</th>
+                                <th>Amount</th>
+                                <th>Paid Date</th>
+                                <th>Reference</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for transaction in paid_transactions %}
+                            <tr>
+                                <td><span class="badge bg-warning text-dark">{{ transaction.transaction_id }}</span></td>
+                                <td>{{ transaction.customer.full_name }}</td>
+                                <td>{{ transaction.product.product_code }}</td>
+                                <td class="fw-bold">KSH {{ transaction.ceiling_price|floatformat:0 }}</td>
+                                <td>{{ transaction.paid_date|date:"Y-m-d"|default:"-" }}</td>
+                                <td><small>{{ transaction.payment_reference|default:"-" }}</small></td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="6" class="text-center py-3">No paid transactions</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

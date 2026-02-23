@@ -1,0 +1,114 @@
+{% extends 'credit/base.html' %}
+{% load static %}
+
+{% block title %}New Credit Transaction{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'credit:dashboard' %}">Dashboard</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'credit:transaction_list' %}">Transactions</a></li>
+            <li class="breadcrumb-item active">New Transaction</li>
+        </ol>
+    </nav>
+</div>
+
+<div class="card">
+    <div class="card-header bg-warning text-dark">
+        <h5 class="mb-0"><i class="fas fa-plus-circle me-2"></i>Create New Credit Transaction</h5>
+    </div>
+    <div class="card-body">
+        <form method="post" id="transactionForm">
+            {% csrf_token %}
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <h6 class="mb-3">Select Company & Customer</h6>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Credit Company <span class="text-danger">*</span></label>
+                        <select name="company" class="form-select" required id="companySelect">
+                            <option value="">Select Company</option>
+                            {% for company in companies %}
+                            <option value="{{ company.id }}" {% if request.GET.company == company.id|stringformat:"s" %}selected{% endif %}>
+                                {{ company.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Customer <span class="text-danger">*</span></label>
+                        <select name="customer" class="form-select" required id="customerSelect">
+                            <option value="">Select Customer</option>
+                            {% for customer in customers %}
+                            <option value="{{ customer.id }}" {% if request.GET.customer == customer.id|stringformat:"s" %}selected{% endif %}>
+                                {{ customer.full_name }} ({{ customer.id_number }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Or Add New Customer</label>
+                        <a href="{% url 'credit:customer_add' %}?next={% url 'credit:transaction_create' %}" class="btn btn-sm btn-outline-warning">
+                            <i class="fas fa-user-plus"></i> New Customer
+                        </a>
+                    </div>
+                </div>
+                
+                <div class="col-md-6">
+                    <h6 class="mb-3">Product Details</h6>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Product <span class="text-danger">*</span></label>
+                        <select name="product" class="form-select" required id="productSelect">
+                            <option value="">Select Product</option>
+                            {% for product in products %}
+                            <option value="{{ product.id }}" data-price="{{ product.selling_price }}">
+                                {{ product.product_code }} - {{ product.display_name }} (Stock: {{ product.quantity }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Ceiling Price (KSH) <span class="text-danger">*</span></label>
+                        <input type="number" name="ceiling_price" class="form-control" step="0.01" required id="priceInput">
+                        <small class="text-muted">Amount the credit company will pay you</small>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="d-flex justify-content-end gap-2 mt-4">
+                <a href="{% url 'credit:transaction_list' %}" class="btn btn-secondary">
+                    <i class="fas fa-times"></i> Cancel
+                </a>
+                <button type="submit" class="btn btn-warning">
+                    <i class="fas fa-save"></i> Create Transaction
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Auto-fill price when product is selected
+    const productSelect = document.getElementById('productSelect');
+    const priceInput = document.getElementById('priceInput');
+    
+    if (productSelect && priceInput) {
+        productSelect.addEventListener('change', function() {
+            const selected = this.options[this.selectedIndex];
+            if (selected && selected.dataset.price) {
+                priceInput.value = selected.dataset.price;
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

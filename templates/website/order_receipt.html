@@ -1,0 +1,627 @@
+{% extends 'website/base.html' %}
+{% load static %}
+
+{% block title %}{{ page_title }} - Fieldmax{% endblock %}
+
+{% block content %}
+<style>
+  body {
+    background: linear-gradient(135deg, #0a0e17 0%, #1a1f35 100%);
+    color: #f0f0f0;
+    min-height: 100vh;
+  }
+
+  .search-results-container {
+    padding: 100px 5% 80px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  .search-header {
+    text-align: center;
+    margin-bottom: 50px;
+  }
+
+  .search-title {
+    font-size: 2.5rem;
+    font-weight: 900;
+    color: #1900ff;
+    margin-bottom: 15px;
+  }
+
+  .search-query {
+    color: #fd0000;
+    font-style: italic;
+  }
+
+  .search-message {
+    font-size: 1.2rem;
+    color: rgb(0, 0, 0);
+    margin-top: 15px;
+  }
+
+  /* Exact Match - Full Details */
+  .exact-match-card {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.15), rgba(118, 75, 162, 0.15));
+    border: 2px solid rgb(0, 0, 0);
+    border-radius: 30px;
+    padding: 40px;
+    margin-bottom: 60px;
+    backdrop-filter: blur(10px);
+  }
+
+  .product-details-grid {
+    display: grid;
+    grid-template-columns: 1fr 1.5fr;
+    gap: 50px;
+    align-items: start;
+  }
+
+  .product-image-section {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 20px;
+    padding: 30px;
+    text-align: center;
+  }
+
+  .product-main-image {
+    width: 100%;
+    max-width: 400px;
+    height: auto;
+    border-radius: 15px;
+    margin-bottom: 20px;
+  }
+
+  .product-badge {
+    display: inline-block;
+    padding: 8px 20px;
+    border-radius: 20px;
+    font-weight: 900;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin: 5px;
+  }
+
+  .badge-available {
+    background: rgba(16, 185, 129, 0.3);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.5);
+  }
+
+  .badge-lowstock {
+    background: rgba(245, 158, 11, 0.3);
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.5);
+  }
+
+  .badge-sold {
+    background: rgba(239, 68, 68, 0.3);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.5);
+  }
+
+  .product-info-section {
+    color: #ffffff;
+  }
+
+  .product-name {
+    font-size: 2.5rem;
+    font-weight: 900;
+    margin-bottom: 20px;
+    color: #ffffff;
+  }
+
+  .product-meta {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    margin-bottom: 25px;
+  }
+
+  .meta-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.8);
+  }
+
+  .product-price {
+    font-size: 3rem;
+    font-weight: 900;
+    background: linear-gradient(135deg, #00c8ff, #02adfc);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 20px;
+  }
+
+  .price-details {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 30px;
+  }
+
+  .price-card {
+    background: rgba(255, 255, 255, 0.08);
+    padding: 15px 20px;
+    border-radius: 15px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .price-label {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.7);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 5px;
+  }
+
+  .price-value {
+    font-size: 1.3rem;
+    font-weight: 900;
+    color: #ffffff;
+  }
+
+  .product-description {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 20px;
+    border-radius: 15px;
+    margin-bottom: 30px;
+    border-left: 4px solid #667eea;
+  }
+
+  .action-buttons {
+    display: flex;
+    gap: 15px;
+    margin-top: 30px;
+  }
+
+  .btn-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    padding: 18px 35px;
+    border-radius: 50px;
+    font-weight: 900;
+    font-size: 15px;
+    text-decoration: none;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .btn-primary {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: rgb(89, 255, 0);
+    flex: 1;
+  }
+
+  .btn-primary:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+  }
+
+  .btn-secondary {
+    background: rgba(255, 255, 255, 0.15);
+    color: rgb(0, 60, 255);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+  }
+
+  .btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.25);
+    transform: translateY(-3px);
+  }
+
+  /* Product Grid for Multiple Results */
+  .products-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 30px;
+    margin-top: 40px;
+  }
+
+  .product-card {
+    background: rgba(255, 255, 255, 0.08);
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    overflow: hidden;
+    transition: all 0.4s ease;
+    backdrop-filter: blur(10px);
+  }
+
+  .product-card:hover {
+    transform: translateY(-10px);
+    border-color: rgba(102, 126, 234, 0.6);
+    background: rgba(255, 255, 255, 0.12);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+  }
+
+  .card-image-container {
+    position: relative;
+    width: 100%;
+    height: 250px;
+    background: linear-gradient(135deg, rgba(20, 30, 48, 0.95), rgba(36, 59, 85, 0.9));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .card-image {
+    max-width: 80%;
+    max-height: 80%;
+    object-fit: contain;
+    transition: transform 0.6s ease;
+  }
+
+  .product-card:hover .card-image {
+    transform: scale(1.1);
+  }
+
+  .card-content {
+    padding: 25px;
+  }
+
+  .card-title {
+    font-size: 1.3rem;
+    font-weight: 900;
+    color: #e90000;
+    margin-bottom: 15px;
+    line-height: 1.4;
+  }
+
+  .card-price {
+    font-size: 1.8rem;
+    font-weight: 900;
+    background: linear-gradient(135deg, #667eea, #02adfc);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 15px;
+  }
+
+  .card-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    font-size: 13px;
+  }
+
+  .card-actions {
+    display: flex;
+    gap: 10px;
+  }
+
+  .btn-card {
+    flex: 1;
+    padding: 12px;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 13px;
+    text-align: center;
+    text-decoration: none;
+    transition: all 0.3s ease;
+  }
+
+  .btn-view {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: rgb(17, 0, 255);
+  }
+
+  .btn-view:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+  }
+
+  /* No Results */
+  .no-results {
+    text-align: center;
+    padding: 80px 20px;
+    color: rgba(0, 47, 255, 0.8);
+  }
+
+  .no-results-icon {
+    font-size: 5rem;
+    margin-bottom: 30px;
+  }
+
+  .no-results h3 {
+    font-size: 2rem;
+    margin-bottom: 20px;
+    color: #ff0000;
+  }
+
+  /* Related Products Section */
+  .related-section {
+    margin-top: 60px;
+    padding-top: 40px;
+    border-top: 2px solid rgba(102, 126, 234, 0.3);
+  }
+
+  .section-title {
+    font-size: 2rem;
+    font-weight: 900;
+    color: #000000;
+    margin-bottom: 30px;
+    text-align: center;
+  }
+
+  /* Responsive */
+  @media (max-width: 992px) {
+    .product-details-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .products-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .search-title {
+      font-size: 2rem;
+    }
+
+    .product-name {
+      font-size: 1.8rem;
+    }
+
+    .product-price {
+      font-size: 2.2rem;
+    }
+
+    .action-buttons {
+      flex-direction: column;
+    }
+  }
+</style>
+
+<div class="search-results-container">
+  <div class="search-header">
+    <h1 class="search-title">
+      Search Results
+      {% if search_query %}
+        for "<span class="search-query">{{ search_query }}</span>"
+      {% endif %}
+    </h1>
+    {% if message %}
+      <p class="search-message">{{ message }}</p>
+    {% endif %}
+  </div>
+
+  {% if match_type == 'exact' and exact_match %}
+    <!-- EXACT MATCH - FULL PRODUCT DETAILS -->
+    <div class="exact-match-card">
+      <div class="product-details-grid">
+        <!-- Product Image -->
+        <div class="product-image-section">
+          {% if exact_match.image %}
+            <img src="{{ exact_match.image.url }}" alt="{{ exact_match.name }}" class="product-main-image">
+          {% else %}
+            <div style="font-size: 8rem; color: #667eea;">📱</div>
+          {% endif %}
+          
+          <div>
+            {% if exact_match.status == 'available' %}
+              <span class="product-badge badge-available">✅ IN STOCK</span>
+            {% elif exact_match.status == 'lowstock' %}
+              <span class="product-badge badge-lowstock">⚠️ LOW STOCK</span>
+            {% else %}
+              <span class="product-badge badge-sold">❌ SOLD OUT</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Product Info -->
+        <div class="product-info-section">
+          <h2 class="product-name">{{ exact_match.name }}</h2>
+          
+          <div class="product-meta">
+            <div class="meta-item">
+              <span>🏷️</span>
+              <span>Code: <strong>{{ exact_match.product_code }}</strong></span>
+            </div>
+            {% if exact_match.category %}
+              <div class="meta-item">
+                <span>📦</span>
+                <span>Category: <strong>{{ exact_match.category.name }}</strong></span>
+              </div>
+            {% endif %}
+            {% if exact_match.sku_value %}
+              <div class="meta-item">
+                <span>🔢</span>
+                <span>SKU: <strong>{{ exact_match.sku_value }}</strong></span>
+              </div>
+            {% endif %}
+          </div>
+
+          <div class="product-price">
+            KSh {{ exact_match.selling_price|floatformat:0 }}
+          </div>
+
+          <div class="price-details">
+            {% if exact_match.buying_price %}
+              <div class="price-card">
+                <div class="price-label">Cost Price</div>
+                <div class="price-value">KSh {{ exact_match.buying_price|floatformat:0 }}</div>
+              </div>
+            {% endif %}
+            
+            {% if exact_match.profit_margin %}
+              <div class="price-card">
+                <div class="price-label">You Save</div>
+                <div class="price-value" style="color: #10b981;">KSh {{ exact_match.profit_margin|floatformat:0 }}</div>
+              </div>
+            {% endif %}
+
+            {% if not exact_match.category.is_single_item %}
+              <div class="price-card">
+                <div class="price-label">Quantity Available</div>
+                <div class="price-value">{{ exact_match.quantity }} units</div>
+              </div>
+            {% endif %}
+          </div>
+
+          <div class="product-description">
+            <h3 style="margin-bottom: 15px; color: #667eea;">📝 Product Details</h3>
+            <p style="line-height: 1.8; color: rgba(255, 255, 255, 0.9);">
+              {% if exact_match.category.is_single_item %}
+                This is a single-item product with unique identification.
+              {% else %}
+                This is a bulk product with {{ exact_match.quantity }} units currently in stock.
+              {% endif %}
+              
+              {% if exact_match.owner %}
+                Managed by {{ exact_match.owner.username }}.
+              {% endif %}
+            </p>
+          </div>
+
+          <div class="action-buttons">
+            {% if exact_match.status == 'available' or exact_match.status == 'lowstock' %}
+              <button class="btn-action btn-primary" 
+                      onclick="addToCart('{{ exact_match.id }}', '{{ exact_match.name|escapejs }}', '{{ exact_match.selling_price }}')">
+                <span>🛒</span>
+                <span>ADD TO CART</span>
+              </button>
+            {% else %}
+              <button class="btn-action btn-primary" disabled style="opacity: 0.5; cursor: not-allowed;">
+                <span>⏳</span>
+                <span>OUT OF STOCK</span>
+              </button>
+            {% endif %}
+            
+            <a href="{% url 'product_detail' exact_match.id %}" class="btn-action btn-secondary">
+              <span>👁️</span>
+              <span>VIEW FULL DETAILS</span>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Related Products -->
+    {% if related_products %}
+      <div class="related-section">
+        <h3 class="section-title">🔗 Related Products</h3>
+        <div class="products-grid">
+          {% for product in related_products %}
+            <div class="product-card">
+              <div class="card-image-container">
+                {% if product.image %}
+                  <img src="{{ product.image.url }}" alt="{{ product.name }}" class="card-image">
+                {% else %}
+                  <div style="font-size: 4rem; color: #667eea;">📱</div>
+                {% endif %}
+              </div>
+              <div class="card-content">
+                <h3 class="card-title">{{ product.name|truncatechars:50 }}</h3>
+                <div class="card-price">KSh {{ product.selling_price|floatformat:0 }}</div>
+                <div class="card-meta">
+                  <span style="color: rgba(255,255,255,0.7);">{{ product.product_code }}</span>
+                  {% if product.status == 'available' %}
+                    <span class="product-badge badge-available" style="font-size: 11px; padding: 4px 10px;">IN STOCK</span>
+                  {% elif product.status == 'lowstock' %}
+                    <span class="product-badge badge-lowstock" style="font-size: 11px; padding: 4px 10px;">LOW STOCK</span>
+                  {% else %}
+                    <span class="product-badge badge-sold" style="font-size: 11px; padding: 4px 10px;">SOLD</span>
+                  {% endif %}
+                </div>
+                <div class="card-actions">
+                  <a href="{% url 'product_detail' product.id %}" class="btn-card btn-view">
+                    👁️ VIEW DETAILS
+                  </a>
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+
+  {% elif products %}
+    <!-- MULTIPLE RESULTS OR SUGGESTIONS -->
+    <div class="products-grid">
+      {% for product in products %}
+        <div class="product-card">
+          <div class="card-image-container">
+            {% if product.image %}
+              <img src="{{ product.image.url }}" alt="{{ product.name }}" class="card-image">
+            {% else %}
+              <div style="font-size: 4rem; color: #667eea;">📱</div>
+            {% endif %}
+          </div>
+          <div class="card-content">
+            <h3 class="card-title">{{ product.name|truncatechars:50 }}</h3>
+            <div class="card-price">KSh {{ product.selling_price|floatformat:0 }}</div>
+            <div class="card-meta">
+              <span style="color: rgba(255,255,255,0.7);">{{ product.product_code }}</span>
+              {% if product.status == 'available' %}
+                <span class="product-badge badge-available" style="font-size: 11px; padding: 4px 10px;">IN STOCK</span>
+              {% elif product.status == 'lowstock' %}
+                <span class="product-badge badge-lowstock" style="font-size: 11px; padding: 4px 10px;">LOW STOCK</span>
+              {% else %}
+                <span class="product-badge badge-sold" style="font-size: 11px; padding: 4px 10px;">SOLD</span>
+              {% endif %}
+            </div>
+            <div class="card-actions">
+              <a href="{% url 'product_detail' product.id %}" class="btn-card btn-view">
+                👁️ VIEW DETAILS
+              </a>
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+
+  {% else %}
+    <!-- NO RESULTS -->
+    <div class="no-results">
+      <div class="no-results-icon">🔍</div>
+      <h3>No products found</h3>
+      <p style="font-size: 1.1rem; margin-bottom: 30px;">
+        We couldn't find any products matching "{{ search_query }}"
+      </p>
+      <a href="{% url 'shop' %}" class="btn-action btn-primary" style="display: inline-flex;">
+        <span>🛍️</span>
+        <span>BROWSE ALL PRODUCTS</span>
+      </a>
+    </div>
+  {% endif %}
+</div>
+
+<script>
+function addToCart(productId, productName, productPrice) {
+  // Get cart from localStorage
+  let cart = JSON.parse(localStorage.getItem('fieldmax_cart') || '[]');
+  
+  // Check if item already exists
+  const existingIndex = cart.findIndex(item => item.id === productId);
+  if (existingIndex > -1) {
+    cart[existingIndex].quantity += 1;
+  } else {
+    cart.push({
+      id: productId,
+      name: productName,
+      price: parseFloat(productPrice),
+      quantity: 1,
+      timestamp: Date.now()
+    });
+  }
+  
+  // Save to localStorage
+  localStorage.setItem('fieldmax_cart', JSON.stringify(cart));
+  
+  // Show notification
+  alert(`${productName} added to cart!`);
+  
+  // Reload page to update cart count
+  location.reload();
+}
+</script>
+
+{% endblock %}

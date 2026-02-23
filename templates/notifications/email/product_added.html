@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>New Product Added - FieldMax</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
+        .container { max-width: 600px; margin: 20px auto; background: #ffffff; border-radius: 15px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        .header { background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; padding: 30px; text-align: center; }
+        .header h2 { margin: 0; font-size: 28px; font-weight: 600; }
+        .header p { margin: 10px 0 0; opacity: 0.9; }
+        .content { padding: 30px; background: #f9f9f9; }
+        .product-details { background: white; padding: 20px; border-radius: 10px; border: 1px solid #e0e0e0; }
+        .product-details h3 { margin-top: 0; color: #28a745; border-bottom: 2px solid #28a745; padding-bottom: 10px; }
+        .detail-row { display: flex; justify-content: space-between; margin-bottom: 10px; padding: 8px 0; border-bottom: 1px dashed #e0e0e0; }
+        .detail-label { font-weight: 600; color: #666; }
+        .detail-value { font-weight: 500; color: #333; }
+        .price-tag { background: #e8f5e9; padding: 15px; border-radius: 8px; margin: 15px 0; }
+        .badge-single { background: #17a2b8; color: white; padding: 3px 8px; border-radius: 4px; font-size: 12px; }
+        .badge-bulk { background: #6c757d; color: white; padding: 3px 8px; border-radius: 4px; font-size: 12px; }
+        .footer { background: #f1f1f1; padding: 20px; text-align: center; font-size: 12px; color: #666; }
+        .button { display: inline-block; padding: 10px 20px; background: #28a745; color: white; text-decoration: none; border-radius: 5px; margin-top: 15px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2>🆕 New Product Added</h2>
+            <p>A new product has been added to inventory</p>
+        </div>
+        
+        <div class="content">
+            <div class="product-details">
+                <h3>{{ product.display_name }}</h3>
+                
+                <div class="detail-row">
+                    <span class="detail-label">Product Code:</span>
+                    <span class="detail-value">{{ product.product_code }}</span>
+                </div>
+                
+                <div class="detail-row">
+                    <span class="detail-label">Category:</span>
+                    <span class="detail-value">{{ product.category.name }}</span>
+                </div>
+                
+                <div class="detail-row">
+                    <span class="detail-label">Type:</span>
+                    <span class="detail-value">
+                        {% if is_single %}
+                            <span class="badge-single">📱 Single Item</span>
+                        {% else %}
+                            <span class="badge-bulk">📦 Bulk Item</span>
+                        {% endif %}
+                    </span>
+                </div>
+                
+                {% if product.sku_value %}
+                <div class="detail-row">
+                    <span class="detail-label">SKU/IMEI:</span>
+                    <span class="detail-value">{{ product.sku_value }}</span>
+                </div>
+                {% endif %}
+                
+                <div class="detail-row">
+                    <span class="detail-label">Brand:</span>
+                    <span class="detail-value">{{ product.brand|default:"N/A" }}</span>
+                </div>
+                
+                <div class="detail-row">
+                    <span class="detail-label">Model:</span>
+                    <span class="detail-value">{{ product.model|default:"N/A" }}</span>
+                </div>
+            </div>
+            
+            <div class="price-tag">
+                <div style="display: flex; justify-content: space-around; text-align: center;">
+                    <div>
+                        <div style="color: #666; font-size: 12px;">Buying Price</div>
+                        <div style="font-weight: bold; color: #28a745;">KSH {{ product.buying_price|floatformat:0 }}</div>
+                    </div>
+                    <div>
+                        <div style="color: #666; font-size: 12px;">Selling Price</div>
+                        <div style="font-weight: bold; color: #28a745;">KSH {{ product.selling_price|floatformat:0 }}</div>
+                    </div>
+                    {% if product.best_price %}
+                    <div>
+                        <div style="color: #666; font-size: 12px;">Best Price</div>
+                        <div style="font-weight: bold; color: #ffc107;">KSH {{ product.best_price|floatformat:0 }}</div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="detail-row">
+                <span class="detail-label">Added By:</span>
+                <span class="detail-value">{{ added_by }}</span>
+            </div>
+            
+            <div class="detail-row">
+                <span class="detail-label">Date Added:</span>
+                <span class="detail-value">{{ date }}</span>
+            </div>
+            
+            <div style="text-align: center; margin-top: 20px;">
+                <a href="{{ site_url }}/inventory/products/{{ product.id }}/" class="button">View Product</a>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>This is an automated notification from FieldMax System</p>
+            <p>&copy; {% now "Y" %} FieldMax. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>

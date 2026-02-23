@@ -1,0 +1,660 @@
+{% extends 'sales/base.html' %}
+{% load static %}
+
+{% block title %}New Sale{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-plus-circle me-2"></i>New Sale</h2>
+    <a href="{% url 'sales:sale_list' %}" class="btn btn-secondary">
+        <i class="fas fa-arrow-left"></i> Back to Sales
+    </a>
+</div>
+
+<div class="row">
+    <!-- Product Search and Cart -->
+    <div class="col-md-8">
+        <div class="card mb-3">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="fas fa-search"></i> Add Products</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-5">
+                        <div class="form-group mb-3">
+                            <label class="form-label fw-bold">
+                                <i class="fas fa-barcode me-1"></i>Product Code/Barcode
+                            </label>
+                            <input type="text" id="productSearch" class="form-control form-control-lg" 
+                                   placeholder="Scan or enter code" autofocus>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="form-group mb-3">
+                            <label class="form-label fw-bold">
+                                <i class="fas fa-tag me-1"></i>Custom Price (Optional)
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text">KSH</span>
+                                <input type="number" id="customPrice" class="form-control form-control-lg" 
+                                       placeholder="Leave blank for default" step="0.01" min="0">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group mb-3">
+                            <label class="form-label fw-bold">&nbsp;</label>
+                            <button class="btn btn-success btn-lg w-100" type="button" id="addProductBtn">
+                                <i class="fas fa-cart-plus me-2"></i>Add to Cart
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row mt-2">
+                    <div class="col-12">
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="allowPriceEdit">
+                            <label class="form-check-label" for="allowPriceEdit">
+                                <i class="fas fa-pencil-alt me-1"></i>
+                                <strong>Enable price editing</strong> - Allow modifying prices after adding to cart
+                            </label>
+                            <small class="form-text text-muted d-block mt-1">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Different prices for the same product will appear as separate rows
+                            </small>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <div id="productInfo" class="alert alert-info" style="display: none;"></div>
+                        <div id="productError" class="alert alert-danger" style="display: none;"></div>
+                        <div id="productSuccess" class="alert alert-success" style="display: none;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Cart Items -->
+        <div class="card">
+            <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                <div>
+                    <i class="fas fa-shopping-cart me-2"></i>
+                    <h5 class="mb-0 d-inline">Current Cart</h5>
+                    <span class="badge bg-light text-dark ms-2 fs-6" id="cartCount">0</span>
+                </div>
+                <div>
+                    {% if cart %}
+                    <button class="btn btn-sm btn-danger" id="clearCartBtn" title="Clear all items">
+                        <i class="fas fa-trash me-1"></i> Clear Cart
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="cartItems">
+                    {% for item in cart %}
+                    <div class="cart-item mb-3 p-3 border rounded" 
+                         data-code="{{ item.product_code }}" 
+                         data-price="{{ item.price }}"
+                         data-price-editable="{{ item.price_editable|yesno:'true,false' }}">
+                        <div class="row align-items-center">
+                            <div class="col-5">
+                                <div class="d-flex align-items-center">
+                                    <div>
+                                        <strong>{{ item.name }}</strong><br>
+                                        <small class="text-muted">
+                                            <i class="fas fa-barcode me-1"></i>{{ item.product_code }}
+                                        </small>
+                                    </div>
+                                    {% if item.price != item.original_price %}
+                                    <span class="badge bg-warning text-dark ms-2" title="Custom Price">
+                                        <i class="fas fa-star me-1"></i>Special
+                                    </span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-2">
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text">KSH</span>
+                                    <input type="number" class="form-control form-control-sm price-input" 
+                                           value="{{ item.price|floatformat:0 }}" 
+                                           min="0" step="0.01"
+                                           data-code="{{ item.product_code }}"
+                                           data-price="{{ item.price }}"
+                                           data-original-price="{{ item.original_price|default:item.price|floatformat:0 }}"
+                                           {% if not item.price_editable %}readonly{% endif %}>
+                                </div>
+                            </div>
+                            <div class="col-2">
+                                <input type="number" class="form-control form-control-sm quantity-input" 
+                                       value="{{ item.quantity }}" min="1" 
+                                       data-code="{{ item.product_code }}"
+                                       data-price="{{ item.price }}">
+                            </div>
+                            <div class="col-2">
+                                <span class="fw-bold text-success">KSH <span class="item-total">{{ item.total|floatformat:0 }}</span></span>
+                            </div>
+                            <div class="col-1">
+                                <button class="btn btn-sm btn-outline-danger remove-item" 
+                                        data-code="{{ item.product_code }}"
+                                        data-price="{{ item.price }}"
+                                        title="Remove item">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="row mt-2">
+                            <div class="col-12">
+                                <small class="text-muted">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Default Price: KSH {{ item.original_price|default:item.price|floatformat:0 }}
+                                    
+                                    {% if item.price_editable %}
+                                        <span class="badge bg-success ms-2">
+                                            <i class="fas fa-lock-open me-1"></i>Editable
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-secondary ms-2">
+                                            <i class="fas fa-lock me-1"></i>Locked
+                                        </span>
+                                    {% endif %}
+                                    
+                                    {% if item.quantity > 1 %}
+                                        <span class="badge bg-info ms-2">
+                                            <i class="fas fa-cubes me-1"></i>{{ item.quantity }} units
+                                        </span>
+                                    {% endif %}
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div id="emptyCartMessage" class="text-center py-5">
+                        <i class="fas fa-shopping-cart fa-4x text-muted mb-3"></i>
+                        <p class="text-muted mb-2">Your cart is empty</p>
+                        <p class="text-muted small">Enter product code above and click "Add to Cart"</p>
+                        <p class="text-muted small">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Different prices for same product will appear as separate rows
+                        </p>
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                {% if cart %}
+                <hr>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="alert alert-info mb-0">
+                            <i class="fas fa-calculator me-2"></i>
+                            <strong>Total Items:</strong> <span id="totalItems">{{ cart|length }}</span> rows
+                            <br>
+                            <small>Different prices shown separately</small>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="text-end">
+                            <h3>Subtotal: <span class="text-success">KSH <span id="subtotal">{{ subtotal|floatformat:0 }}</span></span></h3>
+                            <small class="text-muted">Sum of all rows</small>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Customer Details and Checkout -->
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="fas fa-user"></i> Customer Details</h5>
+            </div>
+            <div class="card-body">
+                <form method="post" id="saleForm">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label class="form-label">
+                            <i class="fas fa-user me-1"></i>Buyer Name
+                        </label>
+                        <input type="text" name="buyer_name" class="form-control" placeholder="Walk-in Customer">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">
+                            <i class="fas fa-phone me-1"></i>Phone Number
+                        </label>
+                        <input type="text" name="buyer_phone" class="form-control" placeholder="07XX XXX XXX">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">
+                            <i class="fas fa-id-card me-1"></i>ID Number
+                        </label>
+                        <input type="text" name="buyer_id_number" class="form-control" placeholder="National ID">
+                    </div>
+                    
+                    <hr>
+                    
+                    <h6 class="fw-bold mb-3">
+                        <i class="fas fa-users me-1"></i>Next of Kin
+                    </h6>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Next of Kin Name</label>
+                        <input type="text" name="nok_name" class="form-control">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Next of Kin Phone</label>
+                        <input type="text" name="nok_phone" class="form-control">
+                    </div>
+                    
+                    <hr>
+                    
+                    <!-- Payment Method -->
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">
+                            <i class="fas fa-credit-card me-1"></i>Payment Method
+                        </label>
+                        <select name="payment_method" class="form-select" id="paymentMethod" required>
+                            <option value="Cash">💵 Cash</option>
+                            <option value="M-Pesa">📱 M-Pesa</option>
+                            <option value="Card">💳 Card</option>
+                            <option value="Points">⭐ Points</option>
+                            <option value="Credit">📋 Credit</option>
+                        </select>
+                    </div>
+
+                    <!-- Credit Checkbox -->
+                    <div class="mb-3 form-check" id="creditCheckbox" style="display: none;">
+                        <input type="checkbox" name="is_credit" class="form-check-input" id="isCredit">
+                        <label class="form-check-label" for="isCredit">
+                            <i class="fas fa-credit-card me-1"></i>
+                            This is a credit sale
+                        </label>
+                    </div>
+
+                    <!-- Cash Payment Section -->
+                    <div class="mb-3" id="cashPaymentSection">
+                        <label class="form-label fw-bold">
+                            <i class="fas fa-money-bill me-1"></i>Amount Paid (KSH)
+                        </label>
+                        <input type="number" name="amount_paid" id="amountPaid" class="form-control form-control-lg" step="0.01" min="0" value="0" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Change Due</label>
+                        <h2 class="text-success">KSH <span id="changeDue">0</span></h2>
+                    </div>
+                    
+                    <!-- Credit Info Alert -->
+                    <div id="creditInfo" class="alert alert-warning" style="display: none;">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Credit Sale</strong> - No payment required now
+                    </div>
+                    
+                    <!-- Price Edit Warning -->
+                    <div id="priceEditWarning" class="alert alert-warning" style="display: none;">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Multiple Prices</strong> - Some products have different prices
+                    </div>
+                    
+                    <button type="submit" class="btn btn-success btn-lg w-100 mt-3" id="completeSaleBtn" {% if not cart %}disabled{% endif %}>
+                        <i class="fas fa-check-circle me-2"></i>
+                        <span id="submitButtonText">Complete Sale</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // ============================================
+    // ADD TO CART FUNCTIONALITY
+    // ============================================
+    
+    function addProductToCart() {
+        let productCode = $('#productSearch').val().trim();
+        if(!productCode) {
+            showError('Please enter a product code');
+            $('#productSearch').focus();
+            return;
+        }
+        
+        let customPrice = $('#customPrice').val().trim();
+        let price = customPrice ? parseFloat(customPrice) : null;
+        let allowEdit = $('#allowPriceEdit').is(':checked');
+        
+        if (customPrice && (isNaN(price) || price <= 0)) {
+            showError('Please enter a valid positive price');
+            $('#customPrice').focus();
+            return;
+        }
+        
+        setAddButtonLoading(true);
+        
+        $.ajax({
+            url: '{% url "sales:add_to_cart" %}',
+            method: 'POST',
+            headers: {'X-CSRFToken': '{{ csrf_token }}'},
+            data: JSON.stringify({
+                product_code: productCode,
+                quantity: 1,
+                custom_price: price,
+                allow_price_edit: allowEdit
+            }),
+            contentType: 'application/json',
+            success: function(response) {
+                if(response.success) {
+                    showSuccess('✓ Added' + (customPrice ? ' at KSH ' + price : ''));
+                    clearInputFields();
+                    setTimeout(() => location.reload(), 800);
+                } else {
+                    showError(response.error || 'Failed to add product');
+                    setAddButtonLoading(false);
+                }
+            },
+            error: function(xhr) {
+                let errorMsg = 'Server error';
+                try {
+                    let response = JSON.parse(xhr.responseText);
+                    errorMsg = response.error || errorMsg;
+                } catch(e) {}
+                showError(errorMsg);
+                setAddButtonLoading(false);
+            }
+        });
+    }
+    
+    function setAddButtonLoading(isLoading) {
+        let btn = $('#addProductBtn');
+        btn.prop('disabled', isLoading)
+           .html(isLoading ? 
+               '<i class="fas fa-spinner fa-spin me-2"></i>Adding...' : 
+               '<i class="fas fa-cart-plus me-2"></i>Add to Cart');
+    }
+    
+    function clearInputFields() {
+        $('#productSearch').val('');
+        $('#customPrice').val('');
+        $('#productSearch').focus();
+    }
+    
+    function showError(message) {
+        $('#productError').html('<i class="fas fa-exclamation-circle me-2"></i>' + message).show();
+        $('#productInfo, #productSuccess').hide();
+        setTimeout(() => $('#productError').fadeOut(), 3000);
+    }
+    
+    function showSuccess(message) {
+        $('#productSuccess').html('<i class="fas fa-check-circle me-2"></i>' + message).show();
+        $('#productInfo, #productError').hide();
+        setTimeout(() => $('#productSuccess').fadeOut(), 2000);
+    }
+    
+    $('#addProductBtn').click(addProductToCart);
+    
+    $('#productSearch, #customPrice').keypress(function(e) {
+        if(e.which == 13) {
+            e.preventDefault();
+            addProductToCart();
+        }
+    });
+    
+    // ============================================
+    // CART UPDATE FUNCTIONS (Price-Specific)
+    // ============================================
+    
+    // Update quantity
+    $(document).on('change', '.quantity-input', function() {
+        let code = $(this).data('code');
+        let qty = parseInt($(this).val());
+        let row = $(this).closest('.cart-item');
+        let price = parseFloat(row.data('price'));
+        
+        if (qty < 1) {
+            qty = 1;
+            $(this).val(1);
+        }
+        
+        $.ajax({
+            url: '{% url "sales:update_cart" %}',
+            method: 'POST',
+            headers: {'X-CSRFToken': '{{ csrf_token }}'},
+            data: JSON.stringify({
+                product_code: code,
+                quantity: qty,
+                price: price
+            }),
+            contentType: 'application/json',
+            success: function(response) {
+                if(response.success) location.reload();
+                else showError(response.error);
+            }
+        });
+    });
+    
+    // Update price
+    $(document).on('change', '.price-input', function() {
+        let code = $(this).data('code');
+        let newPrice = parseFloat($(this).val());
+        let oldPrice = parseFloat($(this).data('price'));
+        let row = $(this).closest('.cart-item');
+        let isEditable = row.data('price-editable') === true || row.data('price-editable') === 'true';
+        
+        if (isNaN(newPrice) || newPrice < 0) {
+            newPrice = 0;
+            $(this).val(0);
+        }
+        
+        if (!isEditable) {
+            showError('Price is locked');
+            $(this).val(oldPrice);
+            return;
+        }
+        
+        // Check if price actually changed
+        if (newPrice === oldPrice) {
+            return;
+        }
+        
+        $.ajax({
+            url: '{% url "sales:update_cart_price" %}',
+            method: 'POST',
+            headers: {'X-CSRFToken': '{{ csrf_token }}'},
+            data: JSON.stringify({
+                product_code: code,
+                old_price: oldPrice,
+                price: newPrice
+            }),
+            contentType: 'application/json',
+            success: function(response) {
+                if(response.success) {
+                    showSuccess('Price updated');
+                    setTimeout(() => location.reload(), 500);
+                } else {
+                    showError(response.error);
+                    $(this).val(oldPrice);
+                }
+            },
+            error: function() {
+                showError('Error updating price');
+                $(this).val(oldPrice);
+            }
+        });
+    });
+    
+    // Remove item
+    $(document).on('click', '.remove-item', function() {
+        let code = $(this).data('code');
+        let price = $(this).data('price');
+        let row = $(this).closest('.cart-item');
+        let productName = row.find('strong').text();
+        
+        if (confirm(`Remove ${productName} at KSH ${price} from cart?`)) {
+            $.ajax({
+                url: '{% url "sales:remove_from_cart" %}',
+                method: 'POST',
+                headers: {'X-CSRFToken': '{{ csrf_token }}'},
+                data: JSON.stringify({
+                    product_code: code,
+                    price: price
+                }),
+                contentType: 'application/json',
+                success: function(response) {
+                    if(response.success) location.reload();
+                    else showError(response.error);
+                }
+            });
+        }
+    });
+    
+    // Clear cart
+    $('#clearCartBtn').click(function() {
+        if (confirm('Clear all items from cart?')) {
+            $.ajax({
+                url: '{% url "sales:clear_cart" %}',
+                method: 'POST',
+                headers: {'X-CSRFToken': '{{ csrf_token }}'},
+                success: function(response) {
+                    if(response.success) location.reload();
+                }
+            });
+        }
+    });
+    
+    // ============================================
+    // PAYMENT HANDLING
+    // ============================================
+    
+    const paymentMethod = $('#paymentMethod');
+    const creditCheckbox = $('#creditCheckbox');
+    const creditInfo = $('#creditInfo');
+    const cashPaymentSection = $('#cashPaymentSection');
+    const amountPaid = $('#amountPaid');
+    const changeDue = $('#changeDue');
+    const subtotal = $('#subtotal');
+    const submitButtonText = $('#submitButtonText');
+    
+    function updatePaymentUI() {
+        if (paymentMethod.val() === 'Credit') {
+            creditCheckbox.show();
+            creditInfo.show();
+            cashPaymentSection.hide();
+            amountPaid.removeAttr('required');
+            amountPaid.val('0');
+            changeDue.text('0');
+            submitButtonText.text('Create Credit Sale');
+        } else {
+            creditCheckbox.hide();
+            creditInfo.hide();
+            cashPaymentSection.show();
+            amountPaid.attr('required', true);
+            submitButtonText.text('Complete Sale');
+            calculateChange();
+        }
+    }
+    
+    function calculateChange() {
+        let paid = parseFloat(amountPaid.val()) || 0;
+        let total = parseFloat(subtotal.text()) || 0;
+        changeDue.text((paid - total).toFixed(0));
+    }
+    
+    paymentMethod.on('change', updatePaymentUI);
+    amountPaid.on('input', calculateChange);
+    
+    // Check for multiple prices
+    function checkMultiplePrices() {
+        let prices = new Set();
+        $('.cart-item').each(function() {
+            prices.add($(this).data('price'));
+        });
+        if (prices.size > 1) {
+            $('#priceEditWarning').show();
+        } else {
+            $('#priceEditWarning').hide();
+        }
+    }
+    checkMultiplePrices();
+    
+    // Form validation
+    $('#saleForm').on('submit', function(e) {
+        if ($('#cartItems').children('.cart-item').length === 0) {
+            e.preventDefault();
+            alert('Cart is empty');
+            return false;
+        }
+        
+        if (paymentMethod.val() !== 'Credit') {
+            let paid = parseFloat(amountPaid.val()) || 0;
+            let total = parseFloat(subtotal.text()) || 0;
+            
+            if (paid < total) {
+                e.preventDefault();
+                alert('Amount paid must be at least KSH ' + total.toFixed(0));
+                return false;
+            }
+        }
+    });
+    
+    // Initialize
+    updatePaymentUI();
+    $('#productSearch').focus();
+    
+    // Update cart count
+    function updateCartCount() {
+        let count = $('.cart-item').length;
+        $('#cartCount').text(count);
+    }
+    updateCartCount();
+});
+</script>
+
+<style>
+.cart-item {
+    border-left: 4px solid #28a745;
+    transition: all 0.3s ease;
+    position: relative;
+}
+.cart-item:hover {
+    background-color: #f8f9fa;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+.cart-item .badge.bg-warning {
+    background-color: #fff3cd !important;
+    color: #856404;
+}
+.price-input:not([readonly]) {
+    background-color: #fff3cd;
+    border-color: #ffc107;
+}
+.price-input:not([readonly]):focus {
+    box-shadow: 0 0 0 0.2rem rgba(255,193,7,.25);
+}
+.price-input[readonly] {
+    background-color: #e9ecef;
+    cursor: not-allowed;
+}
+#addProductBtn {
+    height: 48px;
+}
+@media (max-width: 768px) {
+    .col-5, .col-2, .col-1 {
+        margin-bottom: 10px;
+    }
+    .cart-item .row {
+        text-align: center;
+    }
+}
+</style>
+{% endblock %}

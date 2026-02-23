@@ -1,0 +1,276 @@
+{% extends 'sales/base.html' %}
+{% load static %}
+
+{% block title %}Sales Dashboard{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-chart-line me-2"></i>Sales Dashboard</h2>
+    <div>
+        <span class="text-muted">Last updated: {% now "F j, Y H:i" %}</span>
+        <span class="ms-3">
+            <a href="{% url 'sales:sale_list' %}" class="btn btn-sm btn-success">
+                <i class="fas fa-eye me-1"></i>View Sales
+            </a>
+            <a href="{% url 'inventory:product_list' %}" class="btn btn-sm btn-info">
+                <i class="fas fa-boxes me-1"></i>View Products
+            </a>
+        </span>     
+    </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="stat-card" style="border-left: 5px solid #28a745;">
+            <div class="stat-value">{{ total_sales|default:"0" }}</div>
+            <div class="stat-label">Total Sales</div>
+            <i class="fas fa-shopping-cart stat-icon" style="color: #28a745;"></i>
+        </div>
+    </div>
+    
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="stat-card" style="border-left: 5px solid #2ecc71;">
+            <div class="stat-value">KSH {{ today_sales|default:"0"|floatformat:0 }}</div>
+            <div class="stat-label">Today's Sales</div>
+            <i class="fas fa-calendar-day stat-icon" style="color: #2ecc71;"></i>
+        </div>
+    </div>
+    
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="stat-card" style="border-left: 5px solid #f39c12;">
+            <div class="stat-value">{{ today_transactions|default:"0" }}</div>
+            <div class="stat-label">Today's Transactions</div>
+            <i class="fas fa-receipt stat-icon" style="color: #f39c12;"></i>
+        </div>
+    </div>
+    
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="stat-card" style="border-left: 5px solid #e74c3c;">
+            <div class="stat-value">{{ items_sold_today|default:"0" }}</div>
+            <div class="stat-label">Items Sold Today</div>
+            <i class="fas fa-box-open stat-icon" style="color: #e74c3c;"></i>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row -->
+<div class="row mb-4">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-chart-line me-2"></i>Sales Trend (Last 30 Days)
+            </div>
+            <div class="card-body">
+                <canvas id="salesChart" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-chart-pie me-2"></i>Payment Methods
+            </div>
+            <div class="card-body">
+                <canvas id="paymentChart" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Sales and Top Products -->
+<div class="row">
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="fas fa-history me-2"></i>Recent Sales</span>
+                <a href="{% url 'sales:sale_list' %}" class="btn btn-sm btn-success">View All</a>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Sale ID</th>
+                                <th>Customer</th>
+                                <th>Items</th>
+                                <th>Total</th>
+                                <th>Time</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for sale in recent_sales %}
+                            <tr>
+                                <td><span class="badge bg-success">{{ sale.sale_id }}</span></td>
+                                <td>{{ sale.buyer_name|default:"Walk-in" }}</td>
+                                <td>{{ sale.item_count }}</td>
+                                <td>KSH {{ sale.total_amount|floatformat:0 }}</td>
+                                <td>{{ sale.sale_date|timesince }} ago</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center py-4">No sales yet</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="fas fa-chart-bar me-2"></i>Top Selling Products</span>
+                <a href="{% url 'inventory:product_list' %}" class="btn btn-sm btn-success">View Products</a>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Product</th>
+                                <th>Category</th>
+                                <th>Units Sold</th>
+                                <th>Revenue</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in top_products %}
+                            <tr>
+                                <td>{{ item.product__name }}</td>
+                                <td>
+                                    {% if item.product__category__is_single_item %}
+                                        <span class="badge bg-info">📱 Single</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">📦 Bulk</span>
+                                    {% endif %}
+                                </td>
+                                <td><span class="fw-bold">{{ item.total_sold }}</span></td>
+                                <td>KSH {{ item.total_revenue|floatformat:0 }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center py-4">No sales data yet</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Today's Summary -->
+<div class="row">
+    <div class="col-12">
+        <div class="card border-success">
+            <div class="card-header bg-success text-white">
+                <i class="fas fa-calendar-check me-2"></i>Today's Summary ({% now "F j, Y" %})
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-md-3">
+                        <div class="p-3">
+                            <h6 class="text-muted">Total Sales</h6>
+                            <h3 class="text-success">KSH {{ today_sales|floatformat:0 }}</h3>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="p-3">
+                            <h6 class="text-muted">Transactions</h6>
+                            <h3>{{ today_transactions }}</h3>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="p-3">
+                            <h6 class="text-muted">Items Sold</h6>
+                            <h3>{{ items_sold_today }}</h3>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="p-3">
+                            <h6 class="text-muted">Average per Sale</h6>
+                            <h3>KSH {{ avg_sale_today|floatformat:0 }}</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+/* global Chart */
+(function() {
+    'use strict';
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        // Get chart data
+        var chartLabels = {{ chart_labels|safe }};
+        var salesData = {{ sales_data|safe }};
+        var paymentData = {{ payment_data|safe }};
+        
+        // Sales Trend Chart
+        var salesChartEl = document.getElementById('salesChart');
+        if (salesChartEl && chartLabels.length > 0) {
+            var ctx1 = salesChartEl.getContext('2d');
+            new Chart(ctx1, {
+                type: 'line',
+                data: {
+                    labels: chartLabels,
+                    datasets: [{
+                        label: 'Sales (KSH)',
+                        data: salesData,
+                        borderColor: '#28a745',
+                        backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Payment Methods Chart
+        var paymentChartEl = document.getElementById('paymentChart');
+        if (paymentChartEl) {
+            var ctx2 = paymentChartEl.getContext('2d');
+            new Chart(ctx2, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Cash', 'M-Pesa', 'Card', 'Points'],
+                    datasets: [{
+                        data: paymentData,
+                        backgroundColor: ['#28a745', '#f39c12', '#3498db', '#9b59b6'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+        }
+    });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,325 @@
+{% extends 'inventory/base.html' %}
+{% load static %}
+
+{% block title %}Bulk Add Products{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-layer-group me-2"></i>Bulk Add Single Items</h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'inventory:dashboard' %}">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'inventory:product_list' %}">Products</a></li>
+                    <li class="breadcrumb-item active">Bulk Add</li>
+                </ol>
+            </nav>
+        </div>
+        <a href="{% url 'inventory:product_add' %}" class="btn btn-outline-primary">
+            <i class="fas fa-plus me-2"></i>Add Single
+        </a>
+    </div>
+
+    <div class="row">
+        <!-- Left Column - Form -->
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="fas fa-copy me-2"></i>Create Multiple Items with Different SKUs</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" id="bulkAddForm">
+                        {% csrf_token %}
+                        
+                        <!-- Common Product Details -->
+                        <div class="card mb-3">
+                            <div class="card-header bg-light">
+                                <h6 class="mb-0"><i class="fas fa-info-circle me-2"></i>Common Product Details</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label required">Product Name</label>
+                                        <input type="text" name="name" class="form-control" required 
+                                               placeholder="Enter product name">
+                                    </div>
+                                    
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label required">Category</label>
+                                        <select name="category" class="form-select" required>
+                                            <option value="">Select Category</option>
+                                            {% for category in categories %}
+                                            <option value="{{ category.id }}">
+                                                {{ category.name }} (Single Items)
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Brand</label>
+                                        <input type="text" name="brand" class="form-control" 
+                                               placeholder="Enter brand name">
+                                    </div>
+                                    
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Model</label>
+                                        <input type="text" name="model" class="form-control" 
+                                               placeholder="Enter model number">
+                                    </div>
+                                    
+                                    <div class="col-12 mb-3">
+                                        <label class="form-label">Description</label>
+                                        <textarea name="description" class="form-control" rows="2" 
+                                                  placeholder="Enter product description"></textarea>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Pricing -->
+                        <div class="card mb-3">
+                            <div class="card-header bg-light">
+                                <h6 class="mb-0"><i class="fas fa-tag me-2"></i>Pricing</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-4 mb-3">
+                                        <label class="form-label required">Buying Price (KSH)</label>
+                                        <input type="number" name="buying_price" class="form-control" 
+                                               step="0.01" min="0" required value="0">
+                                    </div>
+                                    
+                                    <div class="col-md-4 mb-3">
+                                        <label class="form-label required">Selling Price (KSH)</label>
+                                        <input type="number" name="selling_price" class="form-control" 
+                                               step="0.01" min="0" required value="0">
+                                    </div>
+                                    
+                                    <div class="col-md-4 mb-3">
+                                        <label class="form-label">Best Price (KSH)</label>
+                                        <input type="number" name="best_price" class="form-control" 
+                                               step="0.01" min="0" placeholder="Optional">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Additional Details -->
+                        <div class="card mb-3">
+                            <div class="card-header bg-light">
+                                <h6 class="mb-0"><i class="fas fa-cog me-2"></i>Additional Details</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Condition</label>
+                                        <select name="condition" class="form-select">
+                                            <option value="new">Brand New</option>
+                                            <option value="refurbished">Refurbished</option>
+                                            <option value="used">Used - Excellent</option>
+                                            <option value="used_good">Used - Good</option>
+                                            <option value="used_fair">Used - Fair</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Warranty (months)</label>
+                                        <input type="number" name="warranty_months" class="form-control" 
+                                               value="12" min="0">
+                                    </div>
+                                    
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Supplier</label>
+                                        <select name="supplier" class="form-select">
+                                            <option value="">None</option>
+                                            {% for supplier in suppliers %}
+                                            <option value="{{ supplier.id }}">{{ supplier.name }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Specifications (JSON)</label>
+                                        <input type="text" name="specifications" class="form-control" 
+                                               value="{}" placeholder='{"key":"value"}'>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Summary -->
+                        <div class="card mb-3">
+                            <div class="card-header bg-info text-white">
+                                <h6 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Summary</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <p><strong>Product:</strong> <span id="summaryName">-</span></p>
+                                        <p><strong>Brand/Model:</strong> <span id="summaryBrandModel">-</span></p>
+                                        <p><strong>Category:</strong> <span id="summaryCategory">-</span></p>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <p><strong>Buying Price:</strong> KSH <span id="summaryBuying">0</span></p>
+                                        <p><strong>Selling Price:</strong> KSH <span id="summarySelling">0</span></p>
+                                        <p><strong>Items to Create:</strong> <span id="summaryCount">0</span></p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="d-flex justify-content-end gap-2">
+                            <a href="{% url 'inventory:product_list' %}" class="btn btn-secondary">
+                                <i class="fas fa-times me-2"></i>Cancel
+                            </a>
+                            <button type="submit" class="btn btn-success" id="submitBtn">
+                                <i class="fas fa-save me-2"></i>Create Products
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Right Column - Instructions & SKU List -->
+        <div class="col-md-4">
+            <!-- Instructions Card -->
+            <div class="card mb-3">
+                <div class="card-header bg-primary text-white">
+                    <h6 class="mb-0"><i class="fas fa-info-circle me-2"></i>Instructions</h6>
+                </div>
+                <div class="card-body">
+                    <h6>How to use:</h6>
+                    <ol class="small">
+                        <li>Fill in the common product details (name, brand, model, prices)</li>
+                        <li>Enter all SKU/IMEI numbers in the text area - one per line</li>
+                        <li>Each SKU will create a separate product with quantity = 1</li>
+                        <li>SKUs must be unique - duplicates will be skipped</li>
+                        <li>Click "Create Products" to generate all items at once</li>
+                    </ol>
+                    
+                    <div class="alert alert-warning small mt-3">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Note:</strong> This feature is only for single item categories (phones, electronics with IMEI numbers).
+                    </div>
+                </div>
+            </div>
+            
+            <!-- SKU List Card - Moved to bottom of right column -->
+            <div class="card">
+                <div class="card-header bg-warning">
+                    <h6 class="mb-0"><i class="fas fa-barcode me-2"></i>SKU/IMEI Numbers</h6>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info small">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Enter one SKU/IMEI per line. Each will create a separate product.
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label required">SKU/IMEI List</label>
+                        <textarea name="skus" form="bulkAddForm" class="form-control" rows="12" required 
+                                  placeholder="123456789012345&#10;123456789012346&#10;123456789012347"></textarea>
+                        <small class="text-muted">Total: <span id="skuCount">0</span> items</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Or upload from file</label>
+                        <input type="file" id="skuFile" class="form-control" accept=".txt,.csv">
+                        <small class="text-muted">Upload .txt file with one SKU per line</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .required:after {
+        content: " *";
+        color: #dc3545;
+    }
+    
+    /* Make textarea taller to fill column */
+    textarea[name="skus"] {
+        min-height: 200px;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const skuTextarea = document.querySelector('textarea[name="skus"]');
+    const skuCount = document.getElementById('skuCount');
+    const form = document.getElementById('bulkAddForm');
+    
+    // Update SKU count
+    function updateSkuCount() {
+        const skus = skuTextarea.value.split('\n').filter(s => s.trim() !== '');
+        skuCount.textContent = skus.length;
+        updateSummary();
+    }
+    
+    // Update summary
+    function updateSummary() {
+        document.getElementById('summaryName').textContent = document.querySelector('input[name="name"]').value || '-';
+        
+        const brand = document.querySelector('input[name="brand"]').value;
+        const model = document.querySelector('input[name="model"]').value;
+        document.getElementById('summaryBrandModel').textContent = (brand || model) ? `${brand} ${model}`.trim() : '-';
+        
+        const categorySelect = document.querySelector('select[name="category"]');
+        const categoryText = categorySelect.options[categorySelect.selectedIndex]?.text.split('(')[0] || '-';
+        document.getElementById('summaryCategory').textContent = categoryText;
+        
+        document.getElementById('summaryBuying').textContent = document.querySelector('input[name="buying_price"]').value || '0';
+        document.getElementById('summarySelling').textContent = document.querySelector('input[name="selling_price"]').value || '0';
+        
+        const skus = skuTextarea.value.split('\n').filter(s => s.trim() !== '');
+        document.getElementById('summaryCount').textContent = skus.length;
+    }
+    
+    // File upload handler
+    document.getElementById('skuFile').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            skuTextarea.value = e.target.result;
+            updateSkuCount();
+        };
+        reader.readAsText(file);
+    });
+    
+    // Form validation
+    form.addEventListener('submit', function(e) {
+        const skus = skuTextarea.value.split('\n').filter(s => s.trim() !== '');
+        
+        if (skus.length === 0) {
+            e.preventDefault();
+            alert('Please enter at least one SKU.');
+            return;
+        }
+        
+        if (!confirm(`Are you sure you want to create ${skus.length} products?`)) {
+            e.preventDefault();
+        }
+    });
+    
+    // Update on input
+    skuTextarea.addEventListener('input', updateSkuCount);
+    document.querySelectorAll('input, select').forEach(el => {
+        el.addEventListener('input', updateSummary);
+        el.addEventListener('change', updateSummary);
+    });
+    
+    // Initial update
+    updateSkuCount();
+});
+</script>
+{% endblock %}

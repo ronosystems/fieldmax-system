@@ -1,0 +1,215 @@
+{% extends 'staff/base.html' %}
+{% load static %}
+
+{% block title %}{{ application.full_name }} - Application{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'staff:staff_dashboard' %}">Dashboard</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'staff:application_list' %}">Applications</a></li>
+            <li class="breadcrumb-item active">{{ application.full_name }}</li>
+        </ol>
+    </nav>
+</div>
+
+<div class="row">
+    <!-- Left Column - Personal Info & Status -->
+    <div class="col-md-4">
+        <!-- Status Card -->
+        <div class="card mb-4">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="fas fa-info-circle me-2"></i>Application Status</h5>
+            </div>
+            <div class="card-body">
+                <div class="text-center mb-3">
+                    {% if application.status == 'pending' %}
+                        <span class="badge bg-warning fs-6 p-2">Pending Review</span>
+                    {% elif application.status == 'approved' %}
+                        <span class="badge bg-success fs-6 p-2">Approved</span>
+                    {% elif application.status == 'rejected' %}
+                        <span class="badge bg-danger fs-6 p-2">Rejected</span>
+                    {% elif application.status == 'under_review' %}
+                        <span class="badge bg-info fs-6 p-2">Under Review</span>
+                    {% endif %}
+                </div>
+                
+                <table class="table table-sm">
+                    <tr>
+                        <th>Application ID:</th>
+                        <td>#{{ application.id }}</td>
+                    </tr>
+                    <tr>
+                        <th>Applied On:</th>
+                        <td>{{ application.application_date|date:"Y-m-d H:i" }}</td>
+                    </tr>
+                    {% if application.reviewed_by %}
+                    <tr>
+                        <th>Reviewed By:</th>
+                        <td>{{ application.reviewed_by.username }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if application.review_date %}
+                    <tr>
+                        <th>Review Date:</th>
+                        <td>{{ application.review_date|date:"Y-m-d H:i" }}</td>
+                    </tr>
+                    {% endif %}
+                </table>
+                
+                {% if application.review_notes %}
+                <div class="alert alert-info mt-2">
+                    <strong>Review Notes:</strong><br>
+                    {{ application.review_notes }}
+                </div>
+                {% endif %}
+                
+                <div class="d-grid gap-2 mt-3">
+                    {% if application.status == 'pending' or application.status == 'under_review' %}
+                        <a href="{% url 'staff:application_approve' application.id %}" class="btn btn-success">
+                            <i class="fas fa-check me-2"></i>Approve
+                        </a>
+                        <a href="{% url 'staff:application_reject' application.id %}" class="btn btn-danger">
+                            <i class="fas fa-times me-2"></i>Reject
+                        </a>
+                    {% endif %}
+                    <a href="{% url 'staff:view_documents' application.id %}" class="btn btn-info">
+                        <i class="fas fa-file-pdf me-2"></i>View Documents
+                    </a>
+                    <a href="{% url 'staff:application_list' %}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left me-2"></i>Back to List
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Terms Acceptance Card -->
+        <div class="card mb-4">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="fas fa-file-signature me-2"></i>Terms Acceptance</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tr>
+                        <th>Terms Accepted:</th>
+                        <td>
+                            {% if application.terms_accepted %}
+                                <span class="badge bg-success">Yes</span>
+                            {% else %}
+                                <span class="badge bg-danger">No</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Privacy Accepted:</th>
+                        <td>
+                            {% if application.privacy_accepted %}
+                                <span class="badge bg-success">Yes</span>
+                            {% else %}
+                                <span class="badge bg-danger">No</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+                
+                {% if application.ip_address %}
+                <small class="text-muted">
+                    <i class="fas fa-network-wired me-1"></i>IP: {{ application.ip_address }}<br>
+                    <i class="fas fa-globe me-1"></i>UA: {{ application.user_agent|truncatechars:50 }}
+                </small>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Right Column - Personal & Application Details -->
+    <div class="col-md-8">
+        <!-- Personal Information Card -->
+        <div class="card mb-4">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="fas fa-user me-2"></i>Personal Information</h5>
+            </div>
+            <div class="card-body">
+                <table class="table">
+                    <tr>
+                        <th style="width: 150px;">Full Name:</th>
+                        <td class="fw-bold">{{ application.full_name }}</td>
+                    </tr>
+                    <tr>
+                        <th>Email:</th>
+                        <td>{{ application.email }}</td>
+                    </tr>
+                    <tr>
+                        <th>Phone:</th>
+                        <td>{{ application.phone }}</td>
+                    </tr>
+                    <tr>
+                        <th>ID Number:</th>
+                        <td><span class="badge bg-secondary">{{ application.id_number }}</span></td>
+                    </tr>
+                    <tr>
+                        <th>Address:</th>
+                        <td>{{ application.address|default:"-"|linebreaks }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Application Details Card -->
+        <div class="card mb-4">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="fas fa-briefcase me-2"></i>Application Details</h5>
+            </div>
+            <div class="card-body">
+                <table class="table">
+                    <tr>
+                        <th style="width: 150px;">Position Applied:</th>
+                        <td><span class="badge bg-info fs-6">{{ application.get_position_display }}</span></td>
+                    </tr>
+                    {% if application.experience %}
+                    <tr>
+                        <th>Experience:</th>
+                        <td>{{ application.experience|linebreaks }}</td>
+                    </tr>
+                    {% endif %}
+                </table>
+            </div>
+        </div>
+        
+        <!-- Document Previews Card -->
+        <div class="card">
+            <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-images me-2"></i>Document Previews</h5>
+                <a href="{% url 'staff:view_documents' application.id %}" class="btn btn-sm btn-light">
+                    <i class="fas fa-expand"></i> View All
+                </a>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% if application.passport_photo %}
+                    <div class="col-md-4 text-center mb-3">
+                        <label class="fw-bold d-block mb-2">Passport Photo</label>
+                        <img src="{{ application.passport_photo.url }}" class="document-preview" style="max-height: 120px;">
+                    </div>
+                    {% endif %}
+                    
+                    {% if application.id_front %}
+                    <div class="col-md-4 text-center mb-3">
+                        <label class="fw-bold d-block mb-2">ID Front</label>
+                        <img src="{{ application.id_front.url }}" class="document-preview" style="max-height: 120px;">
+                    </div>
+                    {% endif %}
+                    
+                    {% if application.id_back %}
+                    <div class="col-md-4 text-center mb-3">
+                        <label class="fw-bold d-block mb-2">ID Back</label>
+                        <img src="{{ application.id_back.url }}" class="document-preview" style="max-height: 120px;">
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

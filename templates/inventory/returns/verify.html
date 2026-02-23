@@ -1,0 +1,242 @@
+<!-- templates/inventory/returns/verify.html -->
+{% extends 'inventory/base.html' %}
+{% load static %}
+
+{% block title %}Verify Return #{{ return.return_id }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-clipboard-check me-2"></i>Verify Return Product</h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'inventory:dashboard' %}">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'inventory:return_list' %}">Returns</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'inventory:return_detail' return.id %}">{{ return.return_id }}</a></li>
+                    <li class="breadcrumb-item active">Verify</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-search me-2"></i>Physical Verification Checklist</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Important:</strong> Physically inspect the returned product and verify against system records.
+                        </div>
+                        
+                        <div class="row">
+                            <!-- Left Column - System Records -->
+                            <div class="col-md-6">
+                                <div class="card mb-3">
+                                    <div class="card-header bg-secondary text-white">
+                                        <h6 class="mb-0">System Records</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <table class="table table-sm">
+                                            <tr>
+                                                <th>Product:</th>
+                                                <td>{{ return.product_name }}</td>
+                                            </tr>
+                                            <tr>
+                                                <th>Code:</th>
+                                                <td>{{ return.product_code }}</td>
+                                            </tr>
+                                            <tr>
+                                                <th>SKU/IMEI:</th>
+                                                <td>{{ return.sku_value|default:"N/A" }}</td>
+                                            </tr>
+                                            <tr>
+                                                <th>Expected Condition:</th>
+                                                <td>{{ return.get_reported_condition_display }}</td>
+                                            </tr>
+                                            <tr>
+                                                <th>Sale Date:</th>
+                                                <td>{{ return.sale.sale_date|date:"Y-m-d"|default:"N/A" }}</td>
+                                            </tr>
+                                            <tr>
+                                                <th>ETR Number:</th>
+                                                <td>{{ return.etr_number|default:"N/A" }}</td>
+                                            </tr>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Right Column - Physical Inspection -->
+                            <div class="col-md-6">
+                                <div class="card mb-3">
+                                    <div class="card-header bg-warning text-dark">
+                                        <h6 class="mb-0">Physical Inspection</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="mb-3">
+                                            <label class="form-label fw-bold">Actual SKU/IMEI Found:</label>
+                                            <input type="text" name="actual_sku" class="form-control" 
+                                                   placeholder="Enter SKU/IMEI from physical product">
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label class="form-label fw-bold">Actual Condition:</label>
+                                            <select name="actual_condition" class="form-select">
+                                                <option value="">Select Condition</option>
+                                                <option value="new">Like New</option>
+                                                <option value="good">Good</option>
+                                                <option value="fair">Fair</option>
+                                                <option value="damaged">Damaged</option>
+                                                <option value="different">Different Product</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Verification Checklist -->
+                        <div class="card mb-3">
+                            <div class="card-header bg-info text-white">
+                                <h6 class="mb-0"><i class="fas fa-check-circle me-2"></i>Verification Checklist</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="form-check mb-2">
+                                            <input type="checkbox" name="physical_product_seen" class="form-check-input" id="chkSeen">
+                                            <label class="form-check-label" for="chkSeen">
+                                                Physical product inspected
+                                            </label>
+                                        </div>
+                                        
+                                        <div class="form-check mb-2">
+                                            <input type="checkbox" name="serial_number_matches" class="form-check-input" id="chkSerial">
+                                            <label class="form-check-label" for="chkSerial">
+                                                Serial number matches system
+                                            </label>
+                                        </div>
+                                        
+                                        <div class="form-check mb-2">
+                                            <input type="checkbox" name="condition_matches_report" class="form-check-input" id="chkCondition">
+                                            <label class="form-check-label" for="chkCondition">
+                                                Condition matches customer report
+                                            </label>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="col-md-6">
+                                        <div class="form-check mb-2">
+                                            <input type="checkbox" name="accessories_present" class="form-check-input" id="chkAccessories">
+                                            <label class="form-check-label" for="chkAccessories">
+                                                All accessories present
+                                            </label>
+                                        </div>
+                                        
+                                        <div class="form-check mb-2">
+                                            <input type="checkbox" name="box_present" class="form-check-input" id="chkBox">
+                                            <label class="form-check-label" for="chkBox">
+                                                Original box present
+                                            </label>
+                                        </div>
+                                        
+                                        <div class="form-check mb-2">
+                                            <input type="checkbox" name="receipt_present" class="form-check-input" id="chkReceipt">
+                                            <label class="form-check-label" for="chkReceipt">
+                                                Receipt/ETR present
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Photo Upload -->
+                        <div class="card mb-3">
+                            <div class="card-header bg-secondary text-white">
+                                <h6 class="mb-0"><i class="fas fa-camera me-2"></i>Product Photos</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Product Photo 1</label>
+                                        <input type="file" name="product_photo_1" class="form-control" accept="image/*">
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Product Photo 2</label>
+                                        <input type="file" name="product_photo_2" class="form-control" accept="image/*">
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Product Photo 3</label>
+                                        <input type="file" name="product_photo_3" class="form-control" accept="image/*">
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Damage Photo (if any)</label>
+                                        <input type="file" name="damage_photo" class="form-control" accept="image/*">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Verification Notes -->
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Verification Notes:</label>
+                            <textarea name="verification_notes" class="form-control" rows="3" 
+                                      placeholder="Add any notes about the physical inspection..."></textarea>
+                        </div>
+                        
+                        <div class="d-flex justify-content-end gap-2">
+                            <a href="{% url 'inventory:return_detail' return.id %}" class="btn btn-secondary">
+                                <i class="fas fa-times me-2"></i>Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-check-circle me-2"></i>Submit Verification
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Sidebar -->
+        <div class="col-md-4">
+            <div class="card mb-3">
+                <div class="card-header bg-warning text-dark">
+                    <h6 class="mb-0"><i class="fas fa-info-circle me-2"></i>Return Information</h6>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm">
+                        <tr>
+                            <th>Return ID:</th>
+                            <td>{{ return.return_id }}</td>
+                        </tr>
+                        <tr>
+                            <th>Requested By:</th>
+                            <td>{{ return.requested_by.get_full_name|default:return.requested_by.username }}</td>
+                        </tr>
+                        <tr>
+                            <th>Requested At:</th>
+                            <td>{{ return.requested_at|date:"Y-m-d H:i" }}</td>
+                        </tr>
+                        <tr>
+                            <th>Reason:</th>
+                            <td>{{ return.get_reason_display }}</td>
+                        </tr>
+                        <tr>
+                            <th>Customer Reported:</th>
+                            <td>{{ return.get_reported_condition_display }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

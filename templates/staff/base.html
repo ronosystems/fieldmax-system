@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FieldMax Staff - {% block title %}Staff Dashboard{% endblock %}</title>
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- DataTables -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css">
+    <!-- Custom CSS -->
+    <style>
+        :root {
+            --primary-color: #17a2b8;  /* Teal/Blue theme for staff */
+            --success-color: #28a745;
+            --danger-color: #dc3545;
+            --warning-color: #ffc107;
+            --info-color: #17a2b8;
+            --dark-color: #343a40;
+            --light-bg: #f8f9fa;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #6c757d;
+            background: #4d5457;
+        }
+        
+        .sidebar {
+            min-height: 100vh;
+            background: #17a2b8;  /* Teal theme for staff */
+            color: white;
+            box-shadow: 2px 0 10px rgb(0, 0, 0);
+        }
+        
+        .sidebar .nav-link {
+            color: rgba(255,255,255,0.8);
+            padding: 12px 20px;
+            margin: 5px 0;
+            border-radius: 10px;
+            transition: all 0.3s;
+        }
+        
+        .sidebar .nav-link:hover {
+            background: rgba(243, 7, 7, 0.918);
+            color: white;
+            transform: translateX(5px);
+        }
+        
+        .sidebar .nav-link.active {
+            background: rgba(0, 0, 0, 0.932);
+            color: white;
+            font-weight: 600;
+        }
+        
+        .sidebar .nav-link i {
+            margin-right: 10px;
+            width: 25px;
+        }
+        
+        .main-content {
+            padding: 30px;
+            background-color: var(--light-bg);
+        }
+        
+        .stat-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.966);
+            transition: transform 0.3s;
+            border: none;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .stat-icon {
+            font-size: 3rem;
+            opacity: 0.2;
+            position: absolute;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            color: #6c757d;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+            letter-spacing: 1px;
+        }
+        
+        .card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.05);
+        }
+        
+        .card-header {
+            background: white;
+            border-bottom: 2px solid var(--light-bg);
+            padding: 20px 25px;
+            font-weight: 600;
+            border-radius: 15px 15px 0 0 !important;
+        }
+        
+        .table {
+            margin-bottom: 0;
+        }
+        
+        .table thead th {
+            border-top: none;
+            background: var(--light-bg);
+            color: var(--dark-color);
+            font-weight: 600;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .badge-pending {
+            background-color: #ffc107;
+            color: #212529;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-weight: 500;
+        }
+        
+        .badge-approved {
+            background-color: #28a745;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-weight: 500;
+        }
+        
+        .badge-rejected {
+            background-color: #dc3545;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-weight: 500;
+        }
+        
+        .badge-review {
+            background-color: #17a2b8;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-weight: 500;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+            border: none;
+            padding: 10px 25px;
+            border-radius: 10px;
+            font-weight: 600;
+        }
+        
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #138496 0%, #17a2b8 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(23, 162, 184, 0.4);
+        }
+        
+        .footer {
+            background: rgb(111, 173, 173);
+            padding: 20px 0;
+            margin-top: 30px;
+            border-radius: 15px;
+            border: 1px solid #000000;
+        }
+        
+        .footer-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 20px;
+        }
+        
+        .footer-left {
+            color: #000000;
+        }
+        
+        .footer-right {
+            color: #0501fd;
+            font-weight: 500;
+        }
+        
+        .footer-right i {
+            color: #ff0095;
+            margin-right: 5px;
+        }
+        
+        /* Staff-specific styles */
+        .document-preview {
+            max-height: 150px;
+            max-width: 150px;
+            border: 2px dashed #17a2b8;
+            border-radius: 8px;
+            padding: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .document-preview:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        
+        /* Role badge styles */
+        .role-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+        
+        .role-sales_agent { background: #28a745; color: white; }
+        .role-cashier { background: #17a2b8; color: white; }
+        .role-store_manager { background: #ffc107; color: black; }
+        .role-sales_manager { background: #dc3545; color: white; }
+        .role-credit_manager { background: #fd7e14; color: white; }
+        .role-customer_service { background: #6f42c1; color: white; }
+        .role-supervisor { background: #343a40; color: white; }
+        .role-security { background: #20c997; color: black; }
+        .role-cleaner { background: #6c757d; color: white; }
+        
+        @media (max-width: 768px) {
+            .sidebar {
+                min-height: auto;
+            }
+            .footer-content {
+                flex-direction: column;
+                gap: 10px;
+                text-align: center;
+            }
+        }
+    </style>
+    
+    <!-- Load custom template tags -->
+    {% load staff_tags %}
+    
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-md-3 col-lg-2 px-0 border border-dark sidebar">
+                <div class="p-4">
+                    <h4 class="text-white mb-4">
+                        <span class="brand-text"><strong>FIELDMAX STAFF</strong></span>
+                    </h4>
+                    
+                    <!-- HOME BUTTON -->
+                    <a href="{% url 'home' %}" class="btn btn-light w-100 mb-3" style="color: #17a2b8; font-weight: 600;">
+                        <i class="fas fa-home me-2"></i> HOME PAGE
+                    </a>
+
+                    <hr class="bg-black-200 my-3">
+                    
+                    <nav class="nav flex-column">
+                        <!-- Dashboard Link (Role-specific) -->
+                        <a class="nav-link {% if request.resolver_match.url_name == 'staff_dashboard' %}active{% endif %}" 
+                           href="{% url 'staff:staff_dashboard' %}">
+                            <i class="fas fa-tachometer-alt"></i> 
+                            {% if request.user.is_superuser %}
+                                Overview Dashboard
+                            {% else %}
+                                {% get_dashboard_name request.user %}
+                            {% endif %}
+                        </a>
+                        
+                        <!-- Applications - Only for relevant roles -->
+                        {% if request.user.is_superuser or request.user|has_role:'sales_agent,sales_manager,supervisor,credit_manager' %}
+                        <a class="nav-link {% if 'application' in request.path %}active{% endif %}" 
+                           href="{% url 'staff:application_list' %}">
+                            <i class="fas fa-file-alt"></i> Staff Onboarding
+                        </a>
+                        {% endif %}
+
+                        <!-- Public Application Form (everyone can access) -->
+                        <a class="nav-link" href="{% url 'staff:apply' %}" target="_blank">
+                            <i class="fas fa-user-plus"></i> Application Form
+                        </a>
+
+                        <!-- Users - Only for admin/supervisor -->
+                        {% if request.user.is_superuser or request.user|has_role:'supervisor' %}
+                        <a class="nav-link {% if 'users' in request.path %}active{% endif %}" 
+                           href="{% url 'staff:user_list' %}">
+                            <i class="fas fa-users"></i> User Management
+                        </a>
+                        {% endif %}
+                        
+                        <!-- Divider -->
+                        <hr class="bg-white-100 my-3">
+                        
+                        <!-- Other Apps Navigation -->
+                        <div class="text-white-100 small fw-bold mb-2">OTHER APPS</div>
+                        
+                        <!-- Inventory Section - Only for relevant roles -->
+                        {% if request.user.is_superuser or request.user|has_role:'store_manager,supervisor' %}
+                        <div class="text-white-50 small fw-bold mb-2">INVENTORY</div>
+                        <a class="nav-link" href="{% url 'inventory:dashboard' %}">
+                            <i class="fas fa-boxes" style="color: #4361ee;"></i> Inventory Dashboard
+                        </a>
+                        {% endif %}
+                        
+                        <!-- Sales Section - Only for relevant roles -->
+                        {% if request.user.is_superuser or request.user|has_role:'sales_agent,sales_manager,supervisor,cashier' %}
+                        <div class="text-white-50 small fw-bold mb-2">SALES</div>
+                        <a class="nav-link" href="{% url 'sales:sales_dashboard' %}">
+                            <i class="fas fa-shopping-cart" style="color: #259e41;"></i> Sales Dashboard
+                        </a>
+                        {% endif %}
+                        
+                        <!-- Credit Section - Only for relevant roles -->
+                        {% if request.user.is_superuser or request.user|has_role:'credit_manager,supervisor' %}
+                        <div class="text-white-50 small fw-bold mb-2">CREDIT</div>
+                        <a class="nav-link" href="{% url 'credit:dashboard' %}">
+                            <i class="fas fa-credit-card" style="color: #ff9d00;"></i> Credit Dashboard
+                        </a>
+                        {% endif %}
+                        
+                    </nav>
+                    
+                    <hr class="bg-white-50 mt-4">
+                    
+                    <div class="mt-4">
+                        <div class="d-flex align-items-center text-white">
+                            <i class="fas fa-user-circle fa-2x me-2"></i>
+                            <div>
+                                <small>Welcome,</small>
+                                <p class="mb-0 fw-bold">{{ request.user.get_full_name|default:request.user.username }}</p>
+                                <small class="text-white-50">
+                                    {% if request.user.is_superuser %}
+                                        System Administrator
+                                    {% else %}
+                                        {% get_user_position request.user as position %}
+                                        {% if position %}
+                                            {{ position|title|replace:"_, " }}
+                                        {% else %}
+                                            Staff Member
+                                        {% endif %}
+                                    {% endif %}
+                                </small>
+                            </div>
+                        </div>
+                        <form method="post" action="{% url 'staff:logout' %}" class="mt-3">
+                           {% csrf_token %}
+                           <button type="submit" class="btn btn-outline-light btn-sm w-100">
+                             <i class="fas fa-sign-out-alt me-2"></i> Logout
+                           </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Main Content -->
+            <div class="col-md-9 col-lg-10 main-content">
+                {% if messages %}
+                    {% for message in messages %}
+                        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+                
+                {% block content %}{% endblock %}
+                
+                <!-- Footer -->
+                <div class="footer">
+                    <div class="footer-content">
+                        <div class="footer-left">
+                            <p class="mb-0">&copy; {% now "Y" %} FieldMax Staff System. All rights reserved.</p>
+                        </div>
+                        <div class="footer-right">
+                            <i class="fas fa-bolt"></i> POWERED BY FIELDMAX DEV TEAM
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Hidden div with user role data (no linter errors) -->
+    {% if not request.user.is_superuser %}
+        {% get_user_position request.user as user_position %}
+    {% endif %}
+    <div id="user-role-data" 
+         data-is-superuser="{% if request.user.is_superuser %}true{% else %}false{% endif %}"
+         data-user-position="{% if not request.user.is_superuser %}{{ user_position|default:'' }}{% endif %}"
+         style="display: none;"></div>
+    
+    <!-- Scripts -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <script>
+        $(document).ready(function() {
+            // Single source of DataTables initialization
+            $('table.datatable').each(function() {
+                var $table = $(this);
+                
+                // Destroy existing instance if any
+                if ($.fn.DataTable.isDataTable(this)) {
+                    $table.DataTable().destroy();
+                }
+                
+                // Initialize with clean configuration
+                $table.DataTable({
+                    "pageLength": 25,
+                    "language": {
+                        "search": "Search:",
+                        "lengthMenu": "Show _MENU_ entries",
+                        "info": "Showing _START_ to _END_ of _TOTAL_ entries",
+                        "infoEmpty": "Showing 0 to 0 of 0 entries",
+                        "infoFiltered": "(filtered from _MAX_ total entries)",
+                        "emptyTable": "No data available",
+                        "zeroRecords": "No matching records found"
+                    }
+                });
+            });
+            
+            // Auto-hide alerts after 5 seconds
+            setTimeout(function() {
+                $('.alert').fadeOut('slow');
+            }, 5000);
+            
+            // Get role data from data attributes (no linter errors)
+            var userRoleData = document.getElementById('user-role-data');
+            if (userRoleData) {
+                var isSuperuser = userRoleData.dataset.isSuperuser === 'true';
+                var userPosition = userRoleData.dataset.userPosition;
+                
+                if (isSuperuser) {
+                    console.log('User Role: Super Admin');
+                } else {
+                    console.log('User Role: ' + (userPosition || 'No role'));
+                }
+            }
+        });
+    </script>
+    
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

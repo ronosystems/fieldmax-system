@@ -1,0 +1,292 @@
+{% extends 'sales/base.html' %}
+{% load static %}
+
+{% block title %}Sale #{{ sale.sale_id }}{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'sales:sales_dashboard' %}">Dashboard</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'sales:sale_list' %}">Sales</a></li>
+            <li class="breadcrumb-item active">Sale #{{ sale.sale_id }}</li>
+        </ol>
+    </nav>
+</div>
+
+<div class="row">
+    <!-- Sale Details -->
+    <div class="col-md-8">
+        <div class="card mb-4">
+            <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-receipt me-2"></i>Sale Items</h5>
+                <span class="badge bg-light text-dark">Total Items: {{ sale.items.count }}</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Product Code</th>
+                                <th>Product Name</th>
+                                <th>SKU</th>
+                                <th>Quantity</th>
+                                <th>Unit Price</th>
+                                <th>Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in items %}
+                            <tr>
+                                <td><span class="badge bg-secondary">{{ item.product_code }}</span></td>
+                                <td>{{ item.product_name }}</td>
+                                <td><small>{{ item.sku_value|default:"-" }}</small></td>
+                                <td>{{ item.quantity }}</td>
+                                <td>KSH {{ item.unit_price|floatformat:0 }}</td>
+                                <td class="fw-bold">KSH {{ item.total_price|floatformat:0 }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot class="table-light">
+                            <tr>
+                                <th colspan="5" class="text-end">Subtotal:</th>
+                                <th>KSH {{ sale.subtotal|floatformat:0 }}</th>
+                            </tr>
+                            <tr>
+                                <th colspan="5" class="text-end">Tax:</th>
+                                <th>KSH {{ sale.tax_amount|floatformat:0 }}</th>
+                            </tr>
+                            <tr>
+                                <th colspan="5" class="text-end">Total:</th>
+                                <th class="text-success">KSH {{ sale.total_amount|floatformat:0 }}</th>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Customer & Payment Info -->
+    <div class="col-md-4">
+        <!-- Sale Info -->
+        <div class="card mb-4">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="fas fa-info-circle me-2"></i>Sale Information</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tr>
+                        <th>Sale ID:</th>
+                        <td><span class="badge bg-success">{{ sale.sale_id }}</span></td>
+                    </tr>
+                    <tr>
+                        <th>Date:</th>
+                        <td>{{ sale.sale_date|date:"Y-m-d H:i" }}</td>
+                    </tr>
+                    <tr>
+                        <th>Seller:</th>
+                        <td>{{ sale.seller.username|default:"System" }}</td>
+                    </tr>
+                    <tr>
+                        <th>Sale Type:</th>
+                        <td>
+                            {% if sale.is_credit %}
+                                <span class="badge bg-warning text-dark">
+                                    <i class="fas fa-credit-card me-1"></i> Credit Sale
+                                </span>
+                            {% else %}
+                                <span class="badge bg-success">
+                                    <i class="fas fa-money-bill me-1"></i> Cash Sale
+                                </span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Status:</th>
+                        <td>
+                            {% if sale.is_reversed %}
+                                <span class="badge bg-danger">Reversed</span>
+                            {% else %}
+                                <span class="badge bg-success">Completed</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Customer Info -->
+        <div class="card mb-4">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="fas fa-user me-2"></i>Customer Details</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tr>
+                        <th>Name:</th>
+                        <td>{{ sale.buyer_name|default:"Walk-in Customer" }}</td>
+                    </tr>
+                    <tr>
+                        <th>Phone:</th>
+                        <td>{{ sale.buyer_phone|default:"-" }}</td>
+                    </tr>
+                    <tr>
+                        <th>ID Number:</th>
+                        <td>{{ sale.buyer_id_number|default:"-" }}</td>
+                    </tr>
+                    {% if sale.nok_name %}
+                    <tr>
+                        <th>Next of Kin:</th>
+                        <td>{{ sale.nok_name }}</td>
+                    </tr>
+                    <tr>
+                        <th>NOK Phone:</th>
+                        <td>{{ sale.nok_phone|default:"-" }}</td>
+                    </tr>
+                    {% endif %}
+                </table>
+            </div>
+        </div>
+        
+        <!-- Payment Info - CORRECTED with view-calculated values -->
+        <div class="card mb-4">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="fas fa-credit-card me-2"></i>Payment Details</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tr>
+                        <th>Method:</th>
+                        <td>
+                            {% if sale.is_credit %}
+                                <span class="badge bg-warning text-dark">Credit</span>
+                            {% else %}
+                                <span class="badge bg-info">{{ sale.payment_method }}</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Subtotal:</th>
+                        <td>KSH {{ sale.subtotal|floatformat:0 }}</td>
+                    </tr>
+                    <tr>
+                        <th>Tax:</th>
+                        <td>KSH {{ sale.tax_amount|floatformat:0 }}</td>
+                    </tr>
+                    <tr>
+                        <th class="fw-bold">Total:</th>
+                        <td class="fw-bold text-success">KSH {{ sale.total_amount|floatformat:0 }}</td>
+                    </tr>
+                    
+                    {% if sale.is_credit %}
+                        <!-- Credit Sale Payment Info -->
+                        <tr>
+                            <th>Credit Status:</th>
+                            <td>
+                                {% if sale.credit_sale %}
+                                    <a href="{% url 'credit:detail' sale.credit_sale.id %}" class="text-decoration-none">
+                                        View in Credit App
+                                    </a>
+                                {% else %}
+                                    <span class="badge bg-secondary">Pending</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Amount Paid:</th>
+                            <td>KSH {{ sale.amount_paid|floatformat:0 }}</td>
+                        </tr>
+                        <tr>
+                            <th>Balance:</th>
+                            <td class="fw-bold text-warning">
+                                KSH {{ balance|floatformat:0 }}
+                            </td>
+                        </tr>
+                    {% else %}
+                        <!-- Cash Sale Payment Info - Using calculated values -->
+                        <tr>
+                            <th>Amount Paid:</th>
+                            <td class="fw-bold">KSH {{ sale.amount_paid|floatformat:0 }}</td>
+                        </tr>
+                        <tr>
+                            <th>Change:</th>
+                            <td class="fw-bold {% if change >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                KSH {{ change|floatformat:0 }}
+                            </td>
+                        </tr>
+                    {% endif %}
+                </table>
+                
+                {% if not sale.is_credit and change < 0 %}
+                <div class="alert alert-warning mt-2">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Balance of KSH {{ balance|floatformat:0 }} remaining
+                </div>
+                {% endif %}
+
+                {% if sale.is_credit and sale.credit_sale %}
+                <div class="alert alert-info mt-2">
+                    <i class="fas fa-info-circle me-2"></i>
+                    This credit sale is being managed in the Credit App.
+                    <a href="{% url 'credit:detail' sale.credit_sale.id %}" class="d-block mt-1 btn btn-sm btn-outline-warning">
+                        <i class="fas fa-external-link-alt me-1"></i> Open in Credit App
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Credit App Link (if credit sale) -->
+        {% if sale.is_credit and sale.credit_sale_id %}
+        <div class="card mb-4 border-warning">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0"><i class="fas fa-link me-2"></i>Credit App Integration</h5>
+            </div>
+            <div class="card-body">
+                <p class="mb-2">This sale is linked to a credit record.</p>
+                <a href="{% url 'credit:detail' sale.credit_sale_id %}" class="btn btn-warning w-100">
+                    <i class="fas fa-external-link-alt me-2"></i> View Credit Details
+                </a>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Action Buttons -->
+        <div class="d-grid gap-2">
+            <a href="{% url 'sales:sale_receipt' sale.sale_id %}" class="btn btn-warning">
+                <i class="fas fa-receipt me-2"></i>Print Receipt
+            </a>
+            {% if not sale.is_reversed %}
+                {% if sale.is_credit %}
+                    <button class="btn btn-secondary" disabled title="Credit sales cannot be reversed from Sales app">
+                        <i class="fas fa-undo me-2"></i>Reverse in Credit App
+                    </button>
+                {% else %}
+                    <a href="{% url 'sales:sale_reverse' sale.sale_id %}" class="btn btn-danger">
+                        <i class="fas fa-undo me-2"></i>Reverse Sale
+                    </a>
+                {% endif %}
+            {% endif %}
+            <a href="{% url 'sales:sale_list' %}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left me-2"></i>Back to Sales
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    'use strict';
+    
+    // Log for debugging
+    console.log('Sale detail page loaded');
+    console.log('Amount Paid:', {{ sale.amount_paid|default:0 }});
+    console.log('Total:', {{ sale.total_amount|default:0 }});
+    console.log('Change:', {{ change|default:0 }});
+    console.log('Balance:', {{ balance|default:0 }});
+})();
+</script>
+{% endblock %}

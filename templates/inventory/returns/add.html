@@ -1,0 +1,518 @@
+{% extends 'inventory/base.html' %}
+{% load static %}
+
+{% block title %}Add Return - Record Returned Product{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-undo-alt me-2"></i>Record Returned Product</h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'inventory:dashboard' %}">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'inventory:return_list' %}">Returns</a></li>
+                    <li class="breadcrumb-item active">Add Return</li>
+                </ol>
+            </nav>
+        </div>
+        <a href="{% url 'inventory:return_list' %}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left me-2"></i>Back to Returns
+        </a>
+    </div>
+
+    <!-- Messages -->
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="row">
+        <div class="col-md-8">
+            <!-- Main Form Card -->
+            <div class="card mb-4">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0"><i class="fas fa-undo-alt me-2"></i>Return Information</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" id="returnForm" action="{% url 'inventory:return_submit' %}" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        
+                        <!-- Step 1: Product Search -->
+                        <div class="card mb-3 border-primary">
+                            <div class="card-header bg-primary text-white py-2">
+                                <h6 class="mb-0"><i class="fas fa-search me-2"></i>Step 1: Find Product</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="alert alert-info">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    Search by ETR number, product code, or SKU/IMEI number.
+                                </div>
+                                
+                                <div class="row">
+                                    <div class="col-md-8">
+                                        <div class="input-group input-group-lg">
+                                            <span class="input-group-text"><i class="fas fa-barcode"></i></span>
+                                            <input type="text" class="form-control" id="productSearch" 
+                                                   placeholder="Enter ETR number, product code, or SKU..." 
+                                                   value="{{ search_term|default:'' }}" autocomplete="off">
+                                            <button class="btn btn-primary" type="button" id="searchBtn">
+                                                <i class="fas fa-search me-2"></i>Search
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <small class="text-muted d-block mt-2">
+                                            <i class="fas fa-lightbulb me-1"></i>
+                                            Try: FSL00001, IMEI number, or Sale ID
+                                        </small>
+                                    </div>
+                                </div>
+                                
+                                <!-- Search Results Dropdown -->
+                                <div id="searchResults" class="list-group mt-2" style="max-height: 250px; overflow-y: auto; display: none;"></div>
+                                <div id="searchError" class="alert alert-danger mt-2" style="display: none;"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- Step 2: Selected Product (Hidden by default) -->
+                        <div id="selectedProductSection" style="display: none;">
+                            <div class="card mb-3 border-success">
+                                <div class="card-header bg-success text-white py-2">
+                                    <h6 class="mb-0"><i class="fas fa-check-circle me-2"></i>Step 2: Selected Product</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="selected-product-card p-3 bg-light rounded">
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <p class="mb-1"><strong>Product:</strong> <span id="selectedProductName"></span></p>
+                                                <p class="mb-1"><strong>Code:</strong> <span id="selectedProductCode"></span></p>
+                                                <p class="mb-1"><strong>SKU/IMEI:</strong> <span id="selectedProductSku"></span></p>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <p class="mb-1"><strong>Original Sale:</strong> <span id="selectedSaleId"></span></p>
+                                                <p class="mb-1"><strong>Sale Date:</strong> <span id="selectedSaleDate"></span></p>
+                                                <p class="mb-1"><strong>Customer:</strong> <span id="selectedCustomer"></span></p>
+                                            </div>
+                                        </div>
+                                        <input type="hidden" name="product_id" id="productId">
+                                        <input type="hidden" name="sale_id" id="saleId">
+                                        <input type="hidden" name="etr_number" id="etrNumber">
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Step 3: Return Details -->
+                            <div class="card mb-3 border-warning">
+                                <div class="card-header bg-warning text-dark py-2">
+                                    <h6 class="mb-0"><i class="fas fa-clipboard-list me-2"></i>Step 3: Return Details</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label required">Reason for Return</label>
+                                            <select name="reason" class="form-select" required id="reasonSelect">
+                                                <option value="">Select Reason</option>
+                                                <option value="defective">Defective Product</option>
+                                                <option value="wrong_item">Wrong Item Received</option>
+                                                <option value="changed_mind">Changed Mind</option>
+                                                <option value="damaged">Damaged During Shipping</option>
+                                                <option value="not_as_described">Not as Described</option>
+                                                <option value="other">Other</option>
+                                            </select>
+                                        </div>
+                                        
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Quantity</label>
+                                            <input type="number" name="quantity" class="form-control" value="1" min="1" id="quantity">
+                                        </div>
+                                        
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Reported Condition</label>
+                                            <select name="reported_condition" class="form-select">
+                                                <option value="new">Like New</option>
+                                                <option value="good" selected>Good</option>
+                                                <option value="fair">Fair</option>
+                                                <option value="damaged">Damaged</option>
+                                            </select>
+                                        </div>
+                                        
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Refund Amount (KSH)</label>
+                                            <div class="input-group">
+                                                <span class="input-group-text">KSH</span>
+                                                <input type="number" name="refund_amount" class="form-control" step="0.01" min="0" id="refundAmount">
+                                            </div>
+                                            <small class="text-muted">Leave blank to use original price</small>
+                                        </div>
+                                        
+                                        <div class="col-12 mb-3">
+                                            <label class="form-label">Additional Details</label>
+                                            <textarea name="reason_text" class="form-control" rows="2" 
+                                                      placeholder="Provide any additional information about the return..."></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Step 4: Photo Evidence (Optional) -->
+                            <div class="card mb-3 border-info">
+                                <div class="card-header bg-info text-white py-2">
+                                    <h6 class="mb-0"><i class="fas fa-camera me-2"></i>Step 4: Photo Evidence (Optional)</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Product Photo 1</label>
+                                            <input type="file" name="product_photo_1" class="form-control" accept="image/*">
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Product Photo 2</label>
+                                            <input type="file" name="product_photo_2" class="form-control" accept="image/*">
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Damage Photo (if any)</label>
+                                            <input type="file" name="damage_photo" class="form-control" accept="image/*">
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Receipt Photo</label>
+                                            <input type="file" name="receipt_photo" class="form-control" accept="image/*">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Submit Buttons -->
+                            <div class="d-flex justify-content-end gap-2">
+                                <button type="button" class="btn btn-secondary" onclick="resetForm()">
+                                    <i class="fas fa-times me-2"></i>Cancel
+                                </button>
+                                <button type="submit" class="btn btn-warning" id="submitBtn">
+                                    <i class="fas fa-save me-2"></i>Submit Return Request
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Right Column - Instructions & Policy -->
+        <div class="col-md-4">
+            <!-- Return Policy Card -->
+            <div class="card mb-4">
+                <div class="card-header bg-info text-white">
+                    <h6 class="mb-0"><i class="fas fa-info-circle me-2"></i>Return Policy</h6>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled mb-0">
+                        <li class="mb-2">
+                            <i class="fas fa-check-circle text-success me-2"></i>
+                            <strong>14-day return window</strong>
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-check-circle text-success me-2"></i>
+                            Product must be in original condition
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-check-circle text-success me-2"></i>
+                            Original receipt required
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-check-circle text-success me-2"></i>
+                            All accessories must be included
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-exclamation-triangle text-warning me-2"></i>
+                            Manager verification required
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            
+            <!-- Quick Tips Card -->
+            <div class="card mb-4">
+                <div class="card-header bg-success text-white">
+                    <h6 class="mb-0"><i class="fas fa-lightbulb me-2"></i>Quick Tips</h6>
+                </div>
+                <div class="card-body">
+                    <div class="tip-item mb-3">
+                        <h6><i class="fas fa-search me-2 text-primary"></i>Finding Products</h6>
+                        <p class="small text-muted">Search by ETR number from receipt, product code (FSL00001), or IMEI/SKU number.</p>
+                    </div>
+                    <div class="tip-item mb-3">
+                        <h6><i class="fas fa-camera me-2 text-primary"></i>Photos</h6>
+                        <p class="small text-muted">Take clear photos showing the product condition and any damage.</p>
+                    </div>
+                    <div class="tip-item">
+                        <h6><i class="fas fa-clock me-2 text-primary"></i>Processing Time</h6>
+                        <p class="small text-muted">Returns are verified within 24-48 hours by a manager.</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Status Guide Card -->
+            <div class="card">
+                <div class="card-header bg-secondary text-white">
+                    <h6 class="mb-0"><i class="fas fa-tasks me-2"></i>Return Status Guide</h6>
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush">
+                        <div class="list-group-item d-flex align-items-center">
+                            <span class="badge bg-secondary me-2">Pending</span>
+                            <small>Waiting for submission</small>
+                        </div>
+                        <div class="list-group-item d-flex align-items-center">
+                            <span class="badge bg-info me-2">Submitted</span>
+                            <small>Awaiting manager verification</small>
+                        </div>
+                        <div class="list-group-item d-flex align-items-center">
+                            <span class="badge bg-primary me-2">Verified</span>
+                            <small>Product verified, awaiting approval</small>
+                        </div>
+                        <div class="list-group-item d-flex align-items-center">
+                            <span class="badge bg-success me-2">Approved</span>
+                            <small>Return approved, pending processing</small>
+                        </div>
+                        <div class="list-group-item d-flex align-items-center">
+                            <span class="badge bg-danger me-2">Rejected</span>
+                            <small>Return rejected</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .required:after {
+        content: " *";
+        color: #dc3545;
+    }
+    .selected-product-card {
+        border-left: 4px solid #28a745;
+        animation: slideDown 0.3s ease;
+    }
+    @keyframes slideDown {
+        from {
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    #searchResults {
+        position: absolute;
+        z-index: 1000;
+        width: calc(100% - 30px);
+        background: white;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+    }
+    .search-result-item {
+        cursor: pointer;
+        padding: 12px 15px;
+        border-bottom: 1px solid #dee2e6;
+        transition: background 0.2s;
+    }
+    .search-result-item:hover {
+        background: #f8f9fa;
+    }
+    .search-result-item:last-child {
+        border-bottom: none;
+    }
+    .tip-item {
+        border-bottom: 1px dashed #dee2e6;
+        padding-bottom: 10px;
+    }
+    .tip-item:last-child {
+        border-bottom: none;
+        padding-bottom: 0;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('productSearch');
+    const searchBtn = document.getElementById('searchBtn');
+    const searchResults = document.getElementById('searchResults');
+    const searchError = document.getElementById('searchError');
+    const selectedProductSection = document.getElementById('selectedProductSection');
+    const returnForm = document.getElementById('returnForm');
+    const reasonSelect = document.getElementById('reasonSelect');
+    const quantity = document.getElementById('quantity');
+    const refundAmount = document.getElementById('refundAmount');
+    let searchTimer;
+    let currentRequest = null;
+    
+    // Search function using actual API
+    function performSearch() {
+        const query = searchInput.value.trim();
+        
+        if (query.length < 2) {
+            searchResults.style.display = 'none';
+            return;
+        }
+        
+        // Show loading
+        searchResults.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div> Searching...</div>';
+        searchResults.style.display = 'block';
+        searchError.style.display = 'none';
+        
+        // Cancel previous request
+        if (currentRequest) {
+            currentRequest.abort();
+        }
+        
+        // Make AJAX call to search API
+        currentRequest = $.ajax({
+            url: '{% url "inventory:return_search_api" %}',
+            method: 'GET',
+            data: { q: query },
+            success: function(data) {
+                if (data.results && data.results.length > 0) {
+                    let html = '';
+                    data.results.forEach(item => {
+                        if (item.type === 'product') {
+                            html += `
+                                <div class="search-result-item" onclick="selectProduct(${item.id}, '${item.code}', '${item.name}', '${item.sku}', '${item.sale_id || ''}', '${item.sale_date || ''}', '${item.customer || 'Unknown'}', ${item.price})">
+                                    <div class="d-flex justify-content-between">
+                                        <div>
+                                            <strong>${item.code}</strong> - ${item.name}
+                                            <br>
+                                            <small class="text-muted">SKU: ${item.sku}</small>
+                                        </div>
+                                        <div class="text-end">
+                                            <span class="badge bg-info">KSH ${item.price}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        } else {
+                            html += `
+                                <div class="search-result-item" onclick="selectSale(${item.id}, '${item.sale_id}', '${item.etr}', '${item.date}', '${item.customer}', ${item.amount})">
+                                    <div class="d-flex justify-content-between">
+                                        <div>
+                                            <strong>Sale: ${item.sale_id}</strong>
+                                            <br>
+                                            <small class="text-muted">ETR: ${item.etr || 'N/A'}</small>
+                                        </div>
+                                        <div class="text-end">
+                                            <span class="badge bg-warning">KSH ${item.amount}</span>
+                                            <br>
+                                            <small class="text-muted">${item.date}</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        }
+                    });
+                    searchResults.innerHTML = html;
+                } else {
+                    searchResults.innerHTML = '<div class="text-center py-3 text-muted">No products found</div>';
+                }
+            },
+            error: function(xhr, status, error) {
+                if (status !== 'abort') {
+                    searchError.textContent = 'Error searching for products. Please try again.';
+                    searchError.style.display = 'block';
+                    searchResults.style.display = 'none';
+                }
+            },
+            complete: function() {
+                currentRequest = null;
+            }
+        });
+    }
+    
+    searchInput.addEventListener('input', function() {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(performSearch, 300);
+    });
+    
+    searchBtn.addEventListener('click', performSearch);
+    
+    document.addEventListener('click', function(e) {
+        if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
+            searchResults.style.display = 'none';
+        }
+    });
+    
+    // Select product function
+    window.selectProduct = function(id, code, name, sku, saleId, saleDate, customer, price) {
+        document.getElementById('selectedProductName').textContent = name;
+        document.getElementById('selectedProductCode').textContent = code;
+        document.getElementById('selectedProductSku').textContent = sku || 'N/A';
+        document.getElementById('selectedSaleId').textContent = saleId || 'N/A';
+        document.getElementById('selectedSaleDate').textContent = saleDate || 'N/A';
+        document.getElementById('selectedCustomer').textContent = customer || 'Unknown';
+        document.getElementById('productId').value = id;
+        document.getElementById('saleId').value = saleId || '';
+        document.getElementById('etrNumber').value = saleId || '';
+        
+        // Set default refund amount
+        document.getElementById('refundAmount').value = price;
+        
+        selectedProductSection.style.display = 'block';
+        searchResults.style.display = 'none';
+        searchInput.value = code;
+        
+        // Scroll to form
+        selectedProductSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+    
+    // Select sale function (if you want to handle sales directly)
+    window.selectSale = function(id, saleId, etr, date, customer, amount) {
+        // You can implement this to fetch products from the sale
+        alert('Please search by product code or SKU instead.');
+    };
+    
+    // Reset form
+    window.resetForm = function() {
+        if (confirm('Clear all form data?')) {
+            returnForm.reset();
+            selectedProductSection.style.display = 'none';
+            searchInput.value = '';
+            searchInput.focus();
+        }
+    };
+    
+    // Form validation
+    returnForm.addEventListener('submit', function(e) {
+        if (!document.getElementById('productId').value) {
+            e.preventDefault();
+            alert('Please search and select a product first.');
+            return;
+        }
+        
+        if (!reasonSelect.value) {
+            e.preventDefault();
+            alert('Please select a reason for return.');
+            return;
+        }
+        
+        if (quantity.value < 1) {
+            e.preventDefault();
+            alert('Quantity must be at least 1.');
+            return;
+        }
+        
+        // Show loading state
+        const submitBtn = document.getElementById('submitBtn');
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Submitting...';
+    });
+});
+</script>
+{% endblock %}

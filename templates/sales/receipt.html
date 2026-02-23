@@ -1,0 +1,541 @@
+{% extends 'sales/base.html' %}
+{% load static %}
+
+{% block title %}Receipt #{{ sale.sale_id }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* ============================================
+       THERMAL RECEIPT PRINTER STYLES
+       ============================================ */
+    
+    .receipt-container {
+        max-width: 302px; /* 80mm = ~302px at 96dpi */
+        margin: 20px auto;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        overflow: hidden;
+    }
+
+    .receipt {
+        padding: 16px 12px;
+        font-family: 'Courier New', monospace;
+        font-size: 11px;
+        line-height: 1.4;
+        color: #000;
+    }
+
+    /* Company Header */
+    .receipt-header {
+        text-align: center;
+        border-bottom: 2px dashed #28a745;
+        padding-bottom: 12px;
+        margin-bottom: 12px;
+    }
+
+    .company-name {
+        font-size: 16px;
+        font-weight: bold;
+        color: #28a745;
+        margin-bottom: 5px;
+        letter-spacing: 0.5px;
+    }
+
+    .company-details {
+        font-size: 10px;
+        line-height: 1.4;
+        color: #333;
+    }
+
+    /* Receipt Info Grid */
+    .receipt-info-grid {
+        background: #f8f9fa;
+        border-radius: 6px;
+        padding: 10px;
+        margin-bottom: 12px;
+        border: 1px solid #e9ecef;
+    }
+
+    .info-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        margin-bottom: 6px;
+        font-size: 10px;
+    }
+
+    .info-row:last-child {
+        margin-bottom: 0;
+    }
+
+    .info-label {
+        font-weight: bold;
+        color: #28a745;
+    }
+
+    /* Customer Card */
+    .customer-card {
+        background: #f8f9fa;
+        border-radius: 6px;
+        padding: 10px;
+        margin-bottom: 12px;
+        border-left: 3px solid #28a745;
+    }
+
+    .customer-title {
+        font-weight: bold;
+        color: #28a745;
+        margin-bottom: 6px;
+        font-size: 10px;
+        text-transform: uppercase;
+    }
+
+    .customer-detail {
+        margin-bottom: 3px;
+        font-size: 10px;
+        word-wrap: break-word;
+    }
+
+    /* Items Table */
+    .items-table {
+        margin-bottom: 12px;
+        border: 1px solid #dee2e6;
+        border-radius: 6px;
+        overflow: hidden;
+    }
+
+    .items-header {
+        display: grid;
+        grid-template-columns: 35% 10% 20% 15% 20%;
+        background: #28a745;
+        color: white;
+        font-weight: bold;
+        font-size: 9px;
+        padding: 6px 4px;
+        text-transform: uppercase;
+    }
+
+    .items-header > div {
+        padding: 0 2px;
+        text-align: right;
+    }
+
+    .items-header > div:first-child {
+        text-align: left;
+    }
+
+    .item-row {
+        display: grid;
+        grid-template-columns: 35% 10% 20% 15% 20%;
+        font-size: 9px;
+        border-bottom: 1px dashed #dee2e6;
+        padding: 6px 4px;
+    }
+
+    .item-row:last-child {
+        border-bottom: none;
+    }
+
+    .item-row > div {
+        padding: 0 2px;
+        text-align: right;
+        word-wrap: break-word;
+    }
+
+    .item-row > div:first-child {
+        text-align: left;
+    }
+
+    .item-description {
+        font-weight: 600;
+    }
+
+    .item-sku {
+        font-size: 7px;
+        color: #6c757d;
+        display: block;
+        margin-top: 2px;
+    }
+
+    /* Totals Card */
+    .totals-card {
+        background: #f8f9fa;
+        border-radius: 6px;
+        padding: 12px;
+        margin-bottom: 12px;
+        border: 1px solid #e9ecef;
+    }
+
+    .total-line {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 6px;
+        font-size: 11px;
+    }
+
+    .total-line.grand-total {
+        font-size: 14px;
+        font-weight: bold;
+        border-top: 2px solid #28a745;
+        padding-top: 8px;
+        margin-top: 8px;
+        color: #28a745;
+    }
+
+    /* Payment Card */
+    .payment-card {
+        background: #f8f9fa;
+        border-radius: 6px;
+        padding: 12px;
+        margin-bottom: 12px;
+        border-left: 3px solid #28a745;
+    }
+
+    .payment-line {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 6px;
+        font-size: 11px;
+    }
+
+    .change-positive {
+        color: #28a745;
+        font-weight: bold;
+    }
+
+    .change-negative {
+        color: #dc3545;
+        font-weight: bold;
+    }
+
+    /* Fiscal Info */
+    .fiscal-info {
+        display: flex;
+        justify-content: space-between;
+        background: #e9ecef;
+        border-radius: 4px;
+        padding: 6px 10px;
+        margin-bottom: 12px;
+        font-size: 9px;
+    }
+
+    /* Footer */
+    .receipt-footer {
+        text-align: center;
+        font-size: 9px;
+        color: #6c757d;
+    }
+
+    .thank-you {
+        color: #28a745;
+        font-weight: bold;
+        font-size: 12px;
+        margin: 12px 0 8px;
+    }
+
+    .footer-divider {
+        border-top: 1px dashed #dee2e6;
+        margin: 10px 0;
+    }
+
+    .receipt-barcode {
+        font-family: 'Courier New', monospace;
+        font-size: 10px;
+        letter-spacing: 2px;
+        margin-top: 8px;
+        color: #28a745;
+    }
+
+    /* Print Button */
+    .print-button {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 12px 24px;
+        background: #28a745;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: bold;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        z-index: 1000;
+        transition: all 0.2s;
+    }
+
+    .print-button:hover {
+        background: #218838;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+
+    .print-button:active {
+        transform: translateY(0);
+    }
+
+    /* Print Styles */
+    @media print {
+        .no-print, .print-button, .sidebar, .footer, .main-content > .footer {
+            display: none !important;
+        }
+
+        .receipt-container {
+            max-width: 80mm;
+            box-shadow: none;
+            margin: 0 auto;
+            border-radius: 0;
+        }
+
+        body {
+            background: white;
+            padding: 0;
+        }
+
+        .main-content {
+            padding: 0 !important;
+        }
+
+        * {
+            color: #000 !important;
+        }
+
+        .items-header {
+            background: #f0f0f0 !important;
+            color: #000 !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .company-name {
+            color: #000 !important;
+        }
+
+        .total-line.grand-total {
+            color: #000 !important;
+        }
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+        .receipt-container {
+            margin: 10px;
+        }
+        
+        .print-button {
+            position: sticky;
+            top: 10px;
+            right: 10px;
+            width: calc(100% - 20px);
+            margin: 10px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Print Button (Hidden when printing) -->
+<button class="print-button no-print" onclick="window.print()">
+    <i class="fas fa-print me-2"></i>Print Receipt
+</button>
+
+<div class="receipt-container">
+    <div class="receipt">
+        <!-- ============================================
+             HEADER SECTION
+             ============================================ -->
+        <div class="receipt-header">
+            <div class="company-name">FIELDMAX SUPPLIERS LIMITED</div>
+            <div class="company-details">
+                Address: NAIROBI KENYA<br>
+                Tel: 0722 558 544<br>
+                Email: fieldmaxsuppliers@gmail.com<br>
+                PIN: ------------<br>
+            </div>
+        </div>
+
+        <!-- ============================================
+             RECEIPT INFORMATION
+             ============================================ -->
+        <div class="receipt-info-grid">
+            <div class="info-row">
+                <div><span class="info-label">Rcpt No:</span> {{ sale.sale_id }}</div>
+                <div><span class="info-label">Date:</span> {{ sale.sale_date|date:"Y-m-d" }}</div>
+            </div>
+            <div class="info-row">
+                <div><span class="info-label">Served By:</span> 
+                    {% if sale.seller.first_name %}
+                        {{ sale.seller.first_name }}
+                    {% else %}
+                        {{ sale.seller.username|default:"System" }}
+                    {% endif %}
+                </div>
+                <div><span class="info-label">Time:</span> {{ sale.sale_date|date:"H:i:s" }}</div>
+            </div>
+        </div>
+
+        <!-- ============================================
+             CUSTOMER INFORMATION
+             ============================================ -->
+        {% if sale.buyer_name or sale.buyer_phone or sale.buyer_id_number %}
+        <div class="customer-card">
+            <div class="customer-title">
+                <i class="fas fa-user me-1"></i> Customer Details
+            </div>
+            {% if sale.buyer_name %}
+            <div class="customer-detail"><strong>Name:</strong> {{ sale.buyer_name }}</div>
+            {% endif %}
+            {% if sale.buyer_phone %}
+            <div class="customer-detail"><strong>Phone:</strong> {{ sale.buyer_phone }}</div>
+            {% endif %}
+            {% if sale.buyer_id_number %}
+            <div class="customer-detail"><strong>ID No:</strong> {{ sale.buyer_id_number }}</div>
+            {% endif %}
+            {% if sale.nok_name %}
+            <div class="customer-detail"><strong>NOK:</strong> {{ sale.nok_name }}</div>
+            {% endif %}
+            {% if sale.nok_phone %}
+            <div class="customer-detail"><strong>NOK Phone:</strong> {{ sale.nok_phone }}</div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- ============================================
+             ITEMS SECTION
+             ============================================ -->
+        <div class="items-table">
+            <div class="items-header">
+                <div>Description</div>
+                <div>Qty</div>
+                <div>Price</div>
+                <div>Disc</div>
+                <div>Total</div>
+            </div>
+            
+            {% for item in items %}
+            <div class="item-row">
+                <div>
+                    <span class="item-description">{{ item.product_name }}</span>
+                    <span class="item-sku">
+                        {% if item.product.category.sku_type %}{{ item.product.category.sku_type }}: {% endif %}
+                        {{ item.sku_value|default:"-" }}
+                    </span>
+                </div>
+                <div>{{ item.quantity }}</div>
+                <div>{{ item.unit_price|floatformat:0 }}</div>
+                <div>0</div>
+                <div><strong>{{ item.total_price|floatformat:0 }}</strong></div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- ============================================
+             TOTALS SECTION
+             ============================================ -->
+        <div class="totals-card">
+            <div class="total-line">
+                <span>Subtotal:</span>
+                <span>KSH {{ sale.subtotal|floatformat:2 }}</span>
+            </div>
+
+            {% if sale.tax_amount and sale.tax_amount > 0 %}
+            <div class="total-line">
+                <span>VAT (16%):</span>
+                <span>KSH {{ sale.tax_amount|floatformat:2 }}</span>
+            </div>
+            {% endif %}
+
+            <div class="total-line grand-total">
+                <span>GRAND TOTAL:</span>
+                <span>KSH {{ sale.total_amount|floatformat:2 }}</span>
+            </div>
+        </div>
+
+        <!-- ============================================
+             PAYMENT SECTION
+             ============================================ -->
+        <div class="payment-card">
+            <div class="payment-line">
+                <span>Payment Method:</span>
+                <span><strong>{{ sale.payment_method|default:"Cash" }}</strong></span>
+            </div>
+            <div class="payment-line">
+                <span>Amount Paid:</span>
+                <span>KSH {{ sale.amount_paid|floatformat:2 }}</span>
+            </div>
+            <div class="payment-line">
+                <span>Change:</span>
+                <span class="{% if change >= 0 %}change-positive{% else %}change-negative{% endif %}">
+                    KSH {{ change|floatformat:2 }}
+                </span>
+            </div>
+        </div>
+
+        <!-- ============================================
+             FISCAL INFORMATION
+             ============================================ -->
+        <div class="fiscal-info">
+            <span>FISCAL RECEIPT</span>
+            <span>TAX INVOICE</span>
+            {% if sale.fiscal_receipt_number %}
+            <span>| NO: {{ sale.fiscal_receipt_number }}</span>
+            {% endif %}
+        </div>
+
+        <!-- ============================================
+             FOOTER
+             ============================================ -->
+        <div class="receipt-footer">
+            <div class="footer-divider"></div>
+            <div class="thank-you">THANK YOU FOR YOUR BUSINESS!</div>
+            <div class="small">
+                Goods once sold cannot be returned<br>
+                Please keep this receipt for your records
+            </div>
+            <div class="footer-divider"></div>
+            <div class="small">
+                This is a computer-generated receipt<br>
+                No signature required
+            </div>
+            <div class="receipt-barcode">
+                * {{ sale.sale_id }} *
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    'use strict';
+    
+    // Print function
+    window.printReceipt = function() {
+        window.print();
+    };
+
+    // Keyboard shortcut: Ctrl+P
+    document.addEventListener('keydown', function(e) {
+        if (e.ctrlKey && e.key === 'p') {
+            e.preventDefault();
+            window.print();
+        }
+    });
+
+    // Auto-focus print button for keyboard users
+    document.addEventListener('DOMContentLoaded', function() {
+        const printBtn = document.querySelector('.print-button');
+        if (printBtn) {
+            printBtn.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    window.print();
+                }
+            });
+        }
+    });
+})();
+</script>
+{% endblock %}

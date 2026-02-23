@@ -1,0 +1,106 @@
+{% extends 'credit/base.html' %}
+{% load static %}
+
+{% block title %}Credit Customers{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-users me-2"></i>Credit Customers</h2>
+    <a href="{% url 'credit:customer_add' %}" class="btn btn-warning">
+        <i class="fas fa-plus me-2"></i>Add Customer
+    </a>
+</div>
+
+<!-- Filters -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">Search</label>
+                <input type="text" name="search" class="form-control" value="{{ request.GET.search }}" placeholder="Name, ID, Phone...">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">County</label>
+                <input type="text" name="county" class="form-control" value="{{ request.GET.county }}">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Status</label>
+                <select name="status" class="form-select">
+                    <option value="">All</option>
+                    <option value="active" {% if request.GET.status == 'active' %}selected{% endif %}>Active</option>
+                    <option value="inactive" {% if request.GET.status == 'inactive' %}selected{% endif %}>Inactive</option>
+                </select>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <button type="submit" class="btn btn-warning me-2">
+                    <i class="fas fa-filter"></i> Filter
+                </button>
+                <a href="{% url 'credit:customer_list' %}" class="btn btn-secondary">
+                    <i class="fas fa-times"></i> Clear
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Customers Table -->
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover" id="customersTable">
+                <thead>
+                    <tr>
+                        <th>ID Number</th>
+                        <th>Full Name</th>
+                        <th>Phone</th>
+                        <th>Location</th>
+                        <th>Total Credit</th>
+                        <th>Transactions</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for customer in customers %}
+                    <tr>
+                        <td><span class="badge bg-secondary">{{ customer.id_number }}</span></td>
+                        <td class="fw-bold">{{ customer.full_name }}</td>
+                        <td>{{ customer.phone_number }}</td>
+                        <td>{{ customer.town|default:customer.county|default:"-" }}</td>
+                        <td class="amount-total">KSH {{ customer.total_credit|default:"0"|floatformat:0 }}</td>
+                        <td><span class="badge bg-secondary">{{ customer.transaction_count }}</span></td>
+                        <td>
+                            {% if customer.is_active %}
+                                <span class="badge bg-success">Active</span>
+                            {% else %}
+                                <span class="badge bg-danger">Inactive</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group" role="group">
+                                <a href="{% url 'credit:customer_detail' customer.id %}" class="btn btn-sm btn-info" title="View">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                <a href="{% url 'credit:customer_edit' customer.id %}" class="btn btn-sm btn-warning" title="Edit">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="text-center py-4">
+                            <i class="fas fa-users fa-3x text-muted mb-3"></i>
+                            <p class="text-muted">No customers found</p>
+                            <a href="{% url 'credit:customer_add' %}" class="btn btn-warning btn-sm">
+                                <i class="fas fa-plus"></i> Add your first customer
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

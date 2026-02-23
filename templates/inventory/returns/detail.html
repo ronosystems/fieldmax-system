@@ -1,0 +1,375 @@
+{% extends 'inventory/base.html' %}
+{% load static %}
+
+{% block title %}Return #{{ return.return_id }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-undo-alt me-2"></i>Return Details</h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'inventory:dashboard' %}">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'inventory:return_list' %}">Returns</a></li>
+                    <li class="breadcrumb-item active">{{ return.return_id }}</li>
+                </ol>
+            </nav>
+        </div>
+        <div>
+            <a href="{% url 'inventory:return_list' %}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left me-2"></i>Back to Returns
+            </a>
+        </div>
+    </div>
+
+    <!-- Messages -->
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="row">
+        <div class="col-md-8">
+            <!-- Main Return Details Card -->
+            <div class="card mb-4">
+                <div class="card-header {% if return.status == 'submitted' %}bg-info{% elif return.status == 'verified' %}bg-primary{% elif return.status == 'approved' %}bg-success{% elif return.status == 'rejected' %}bg-danger{% else %}bg-secondary{% endif %} text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-undo-alt me-2"></i>
+                        Return #{{ return.return_id }}
+                    </h5>
+                    <span class="badge bg-light text-dark">
+                        Requested: {{ return.requested_at|date:"Y-m-d H:i" }}
+                    </span>
+                </div>
+                <div class="card-body">
+                    <!-- Status Badge -->
+                    <div class="text-center mb-4">
+                        {% if return.status == 'submitted' %}
+                            <span class="badge bg-info p-3 fs-6">📤 Awaiting Verification</span>
+                        {% elif return.status == 'verified' %}
+                            <span class="badge bg-primary p-3 fs-6">✓ Verified</span>
+                        {% elif return.status == 'approved' %}
+                            <span class="badge bg-success p-3 fs-6">✅ Approved</span>
+                        {% elif return.status == 'rejected' %}
+                            <span class="badge bg-danger p-3 fs-6">❌ Rejected</span>
+                        {% elif return.status == 'processed' %}
+                            <span class="badge bg-success p-3 fs-6">🔄 Processed</span>
+                        {% elif return.status == 'mismatch' %}
+                            <span class="badge bg-warning text-dark p-3 fs-6">⚠️ Mismatch</span>
+                        {% endif %}
+                    </div>
+
+                    <div class="row">
+                        <!-- Product Information -->
+                        <div class="col-md-6 mb-3">
+                            <div class="card h-100">
+                                <div class="card-header bg-light">
+                                    <h6 class="mb-0"><i class="fas fa-box me-2"></i>Product Information</h6>
+                                </div>
+                                <div class="card-body">
+                                    <table class="table table-sm">
+                                        <tr>
+                                            <th style="width: 120px;">Product:</th>
+                                            <td>{{ return.product_name }}</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Code:</th>
+                                            <td><span class="badge bg-secondary">{{ return.product_code }}</span></td>
+                                        </tr>
+                                        <tr>
+                                            <th>SKU/IMEI:</th>
+                                            <td>
+                                                {% if return.sku_value %}
+                                                    <span class="badge bg-info">{{ return.sku_value }}</span>
+                                                {% else %}
+                                                    <span class="text-muted">N/A</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <th>Quantity:</th>
+                                            <td>{{ return.quantity }}</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Refund Amount:</th>
+                                            <td class="fw-bold text-success">KSH {{ return.refund_amount|floatformat:0 }}</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Return Information -->
+                        <div class="col-md-6 mb-3">
+                            <div class="card h-100">
+                                <div class="card-header bg-light">
+                                    <h6 class="mb-0"><i class="fas fa-clipboard-list me-2"></i>Return Information</h6>
+                                </div>
+                                <div class="card-body">
+                                    <table class="table table-sm">
+                                        <tr>
+                                            <th style="width: 120px;">Reason:</th>
+                                            <td><span class="badge bg-warning text-dark">{{ return.get_reason_display }}</span></td>
+                                        </tr>
+                                        <tr>
+                                            <th>Condition:</th>
+                                            <td>{{ return.get_reported_condition_display }}</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Sale ID:</th>
+                                            <td>
+                                                {% if return.sale_id %}
+                                                    <span class="badge bg-secondary">{{ return.sale_id }}</span>
+                                                {% else %}
+                                                    <span class="text-muted">N/A</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <th>ETR Number:</th>
+                                            <td>
+                                                {% if return.etr_number %}
+                                                    <span class="badge bg-secondary">{{ return.etr_number }}</span>
+                                                {% else %}
+                                                    <span class="text-muted">N/A</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Additional Details -->
+                        {% if return.reason_text %}
+                        <div class="col-12 mb-3">
+                            <div class="card">
+                                <div class="card-header bg-light">
+                                    <h6 class="mb-0"><i class="fas fa-sticky-note me-2"></i>Additional Details</h6>
+                                </div>
+                                <div class="card-body">
+                                    <p class="mb-0">{{ return.reason_text }}</p>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Verification Information (shown if verified) -->
+                        {% if return.verified_by %}
+                        <div class="col-12 mb-3">
+                            <div class="card border-primary">
+                                <div class="card-header bg-primary text-white">
+                                    <h6 class="mb-0"><i class="fas fa-clipboard-check me-2"></i>Verification Information</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <p><strong>Verified By:</strong> {{ return.verified_by.get_full_name|default:return.verified_by.username }}</p>
+                                            <p><strong>Verified At:</strong> {{ return.verified_at|date:"Y-m-d H:i" }}</p>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <p><strong>Verification Status:</strong> 
+                                                {% if return.verification_status == 'passed' %}
+                                                    <span class="badge bg-success">✓ Passed</span>
+                                                {% elif return.verification_status == 'failed' %}
+                                                    <span class="badge bg-danger">✗ Failed</span>
+                                                {% else %}
+                                                    <span class="badge bg-secondary">{{ return.verification_status }}</span>
+                                                {% endif %}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Verification Checklist -->
+                                    <div class="row mt-2">
+                                        <div class="col-md-6">
+                                            <ul class="list-unstyled">
+                                                <li>
+                                                    <i class="fas fa-{% if return.physical_product_seen %}check-circle text-success{% else %}times-circle text-danger{% endif %} me-2"></i>
+                                                    Physical Product Seen
+                                                </li>
+                                                <li>
+                                                    <i class="fas fa-{% if return.serial_number_matches %}check-circle text-success{% else %}times-circle text-danger{% endif %} me-2"></i>
+                                                    Serial Number Matches
+                                                </li>
+                                                <li>
+                                                    <i class="fas fa-{% if return.condition_matches_report %}check-circle text-success{% else %}times-circle text-danger{% endif %} me-2"></i>
+                                                    Condition Matches Report
+                                                </li>
+                                            </ul>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <ul class="list-unstyled">
+                                                <li>
+                                                    <i class="fas fa-{% if return.accessories_present %}check-circle text-success{% else %}times-circle text-danger{% endif %} me-2"></i>
+                                                    Accessories Present
+                                                </li>
+                                                <li>
+                                                    <i class="fas fa-{% if return.box_present %}check-circle text-success{% else %}times-circle text-danger{% endif %} me-2"></i>
+                                                    Box Present
+                                                </li>
+                                                <li>
+                                                    <i class="fas fa-{% if return.receipt_present %}check-circle text-success{% else %}times-circle text-danger{% endif %} me-2"></i>
+                                                    Receipt Present
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                    
+                                    {% if return.verification_notes %}
+                                    <div class="mt-2">
+                                        <strong>Notes:</strong>
+                                        <p class="mb-0">{{ return.verification_notes }}</p>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Approval/Rejection Information -->
+                        {% if return.approved_by %}
+                        <div class="col-12 mb-3">
+                            <div class="card border-{% if return.status == 'approved' %}success{% elif return.status == 'rejected' %}danger{% endif %}">
+                                <div class="card-header bg-{% if return.status == 'approved' %}success{% elif return.status == 'rejected' %}danger{% endif %} text-white">
+                                    <h6 class="mb-0">
+                                        <i class="fas fa-{% if return.status == 'approved' %}check-circle{% else %}times-circle{% endif %} me-2"></i>
+                                        {% if return.status == 'approved' %}Approval{% else %}Rejection{% endif %} Information
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <p><strong>{% if return.status == 'approved' %}Approved{% else %}Rejected{% endif %} By:</strong> {{ return.approved_by.get_full_name|default:return.approved_by.username }}</p>
+                                    <p><strong>{% if return.status == 'approved' %}Approved{% else %}Rejected{% endif %} At:</strong> {{ return.approved_at|date:"Y-m-d H:i" }}</p>
+                                    {% if return.notes %}
+                                    <p><strong>Notes:</strong> {{ return.notes }}</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Photos -->
+                        {% if return.product_photo_1 or return.product_photo_2 or return.product_photo_3 or return.damage_photo %}
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header bg-light">
+                                    <h6 class="mb-0"><i class="fas fa-camera me-2"></i>Photos</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        {% if return.product_photo_1 %}
+                                        <div class="col-md-3 mb-2">
+                                            <a href="{{ return.product_photo_1.url }}" target="_blank">
+                                                <img src="{{ return.product_photo_1.url }}" class="img-fluid rounded" alt="Product Photo 1">
+                                            </a>
+                                        </div>
+                                        {% endif %}
+                                        {% if return.product_photo_2 %}
+                                        <div class="col-md-3 mb-2">
+                                            <a href="{{ return.product_photo_2.url }}" target="_blank">
+                                                <img src="{{ return.product_photo_2.url }}" class="img-fluid rounded" alt="Product Photo 2">
+                                            </a>
+                                        </div>
+                                        {% endif %}
+                                        {% if return.product_photo_3 %}
+                                        <div class="col-md-3 mb-2">
+                                            <a href="{{ return.product_photo_3.url }}" target="_blank">
+                                                <img src="{{ return.product_photo_3.url }}" class="img-fluid rounded" alt="Product Photo 3">
+                                            </a>
+                                        </div>
+                                        {% endif %}
+                                        {% if return.damage_photo %}
+                                        <div class="col-md-3 mb-2">
+                                            <a href="{{ return.damage_photo.url }}" target="_blank">
+                                                <img src="{{ return.damage_photo.url }}" class="img-fluid rounded" alt="Damage Photo">
+                                            </a>
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column - Actions -->
+        <div class="col-md-4">
+            <!-- Action Buttons -->
+            <div class="card mb-4">
+                <div class="card-header bg-secondary text-white">
+                    <h6 class="mb-0"><i class="fas fa-cog me-2"></i>Actions</h6>
+                </div>
+                <div class="card-body">
+                    {% if return.status == 'submitted' and request.user.is_staff %}
+                        <a href="{% url 'inventory:return_verify' return.id %}" class="btn btn-primary w-100 mb-2">
+                            <i class="fas fa-clipboard-check me-2"></i>Verify Product
+                        </a>
+                        <a href="{% url 'inventory:return_reject' return.id %}" class="btn btn-danger w-100">
+                            <i class="fas fa-times-circle me-2"></i>Reject Return
+                        </a>
+                    {% endif %}
+                    
+                    {% if return.status == 'verified' and request.user.is_staff %}
+                        <a href="{% url 'inventory:return_approve' return.id %}" class="btn btn-success w-100 mb-2">
+                            <i class="fas fa-check-circle me-2"></i>Approve Return
+                        </a>
+                        <a href="{% url 'inventory:return_reject' return.id %}" class="btn btn-danger w-100">
+                            <i class="fas fa-times-circle me-2"></i>Reject Return
+                        </a>
+                    {% endif %}
+                    
+                    {% if return.status == 'approved' and request.user.is_staff %}
+                        <a href="{% url 'inventory:return_process' return.id %}" class="btn btn-warning w-100">
+                            <i class="fas fa-undo-alt me-2"></i>Process Return
+                        </a>
+                    {% endif %}
+                    
+                    {% if not request.user.is_staff %}
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            This return is awaiting manager verification.
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Request Information -->
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0"><i class="fas fa-user me-2"></i>Request Information</h6>
+                </div>
+                <div class="card-body">
+                    <p><strong>Requested By:</strong><br>
+                        {{ return.requested_by.get_full_name|default:return.requested_by.username }}
+                    </p>
+                    <p><strong>Requested At:</strong><br>
+                        {{ return.requested_at|date:"Y-m-d H:i" }}
+                    </p>
+                    <p><strong>Current Status:</strong><br>
+                        {% if return.status == 'submitted' %}
+                            <span class="badge bg-info">Awaiting Verification</span>
+                        {% elif return.status == 'verified' %}
+                            <span class="badge bg-primary">Verified</span>
+                        {% elif return.status == 'approved' %}
+                            <span class="badge bg-success">Approved</span>
+                        {% elif return.status == 'rejected' %}
+                            <span class="badge bg-danger">Rejected</span>
+                        {% elif return.status == 'processed' %}
+                            <span class="badge bg-success">Processed</span>
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

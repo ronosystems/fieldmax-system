@@ -1,0 +1,96 @@
+{% extends 'inventory/base.html' %}
+{% load static %}
+
+{% block title %}Add Category{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'inventory:dashboard' %}">Dashboard</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'inventory:category_list' %}">Categories</a></li>
+            <li class="breadcrumb-item active">Add Category</li>
+        </ol>
+    </nav>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-plus-circle me-2"></i>Add New Category</h5>
+    </div>
+    <div class="card-body">
+        <form method="post">
+            {% csrf_token %}
+            
+            <div class="row">
+                <div class="col-md-8 mx-auto">
+                    <div class="mb-3">
+                        <label class="form-label">Category Name <span class="text-danger">*</span></label>
+                        <input type="text" name="name" class="form-control" required>
+                        <small class="text-muted">Enter a unique category name (e.g., Smartphones, Chargers, Cables)</small>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Item Type <span class="text-danger">*</span></label>
+                            <select name="item_type" class="form-select" required>
+                                <option value="">Select Item Type</option>
+                                <option value="single">📱 Single Item (Phones, Laptops, etc.)</option>
+                                <option value="bulk">📦 Bulk Item (Cables, Chargers, Accessories)</option>
+                            </select>
+                            <small class="text-muted">Determines how inventory is tracked</small>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <label class="form-label">SKU Type <span class="text-danger">*</span></label>
+                            <select name="sku_type" class="form-select" required>
+                                <option value="">Select SKU Type</option>
+                                <option value="imei">📱 IMEI Number (for phones)</option>
+                                <option value="serial">🔢 Serial Number (for electronics)</option>
+                            </select>
+                            <small class="text-muted">Type of identifier for this category</small>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Category Code</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light">FSL.</span>
+                            <input type="text" name="category_code" class="form-control" placeholder="SMARTPHONES">
+                        </div>
+                        <small class="text-muted">Leave blank to auto-generate from category name</small>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <div class="form-check">
+                            <input type="checkbox" name="is_active" class="form-check-input" id="isActive" checked>
+                            <label class="form-check-label" for="isActive">Active</label>
+                        </div>
+                        <small class="text-muted">Inactive categories won't be available for new products</small>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Category Settings Impact:</strong>
+                        <ul class="mb-0 mt-2">
+                            <li><strong>Single Items:</strong> Each unit gets its own product record with unique SKU (IMEI/Serial)</li>
+                            <li><strong>Bulk Items:</strong> Multiple units share one product record with quantity tracking</li>
+                            <li><strong>IMEI Type:</strong> Requires 15-digit IMEI numbers for validation</li>
+                            <li><strong>Serial Type:</strong> Accepts alphanumeric serial numbers</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="d-flex justify-content-end gap-2 mt-4">
+                <a href="{% url 'inventory:category_list' %}" class="btn btn-secondary">
+                    <i class="fas fa-times"></i> Cancel
+                </a>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save"></i> Save Category
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

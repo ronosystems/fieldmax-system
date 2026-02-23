@@ -1,0 +1,735 @@
+{% extends 'inventory/base.html' %}
+{% load static %}
+
+{% block title %}Products{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-box me-2"></i>Products</h2>
+    <div>
+        <a href="{% url 'inventory:product_add' %}" class="btn btn-primary">
+            <i class="fas fa-plus me-2"></i>Add New Product
+        </a>
+        <a href="{% url 'inventory:product_bulk_add' %}" class="btn btn-success">
+            <i class="fas fa-copy me-2"></i>Bulk Add Products
+        </a>        
+        <a href="{% url 'inventory:product_restock' %}" class="btn btn-success">
+            <i class="fas fa-copy me-2"></i> Restock Products
+        </a>
+        <a href="{% url 'inventory:return_product' %}" class="btn btn-warning">
+            <i class="fas fa-undo-alt me-2"></i>Return Product
+        </a>
+        <!-- Transfer Button in Header -->
+        <button type="button" class="btn btn-warning me-2" onclick="showTransferModal()">
+            <i class="fas fa-exchange-alt me-2"></i>Transfer Products
+        </button>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">Category</label>
+                <select name="category" class="form-select">
+                    <option value="">All Categories</option>
+                    {% for cat in categories %}
+                    <option value="{{ cat.id }}" {% if request.GET.category == cat.id|stringformat:"s" %}selected{% endif %}>
+                        {{ cat.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Status</label>
+                <select name="status" class="form-select">
+                    <option value="">All Status</option>
+                    <option value="available" {% if request.GET.status == 'available' %}selected{% endif %}>Available</option>
+                    <option value="sold" {% if request.GET.status == 'sold' %}selected{% endif %}>Sold</option>
+                    <option value="lowstock" {% if request.GET.status == 'lowstock' %}selected{% endif %}>Low Stock</option>
+                    <option value="outofstock" {% if request.GET.status == 'outofstock' %}selected{% endif %}>Out of Stock</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Brand</label>
+                <input type="text" name="brand" class="form-control" value="{{ request.GET.brand }}" placeholder="Enter brand">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Search</label>
+                <input type="text" name="search" class="form-control" value="{{ request.GET.search }}" placeholder="Search products...">
+            </div>
+            
+            <!-- Single Product Search Button Row -->
+            <div class="col-12">
+                <hr class="my-2">
+                <div class="d-flex align-items-center">
+                    <div class="flex-grow-1 me-2">
+                        <label class="form-label">Quick Single Product Search</label>
+                        <input type="text" id="quickSearch" class="form-control" placeholder="Enter product code, SKU or barcode...">
+                    </div>
+                    <div class="mt-4">
+                        <button type="button" class="btn btn-outline-info" id="searchSingleBtn">
+                            <i class="fas fa-search me-2"></i>Search Single Product
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-12 d-flex justify-content-end">
+                <button type="submit" class="btn btn-primary me-2">
+                    <i class="fas fa-filter"></i> Filter
+                </button>
+                <a href="{% url 'inventory:product_list' %}" class="btn btn-secondary">
+                    <i class="fas fa-times"></i> Clear
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Products Table -->
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>
+                            <input type="checkbox" id="selectAllProducts" class="form-check-input">
+                        </th>
+                        <th>Code</th>
+                        <th>Product</th>
+                        <th>Category</th>
+                        <th>Cost (KSH)</th>
+                        <th>Sell (KSH)</th>
+                        <th>Best (KSH)</th>
+                        <th>SKU</th>
+                        <th>Barcode</th>
+                        <th>Stock</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for product in products %}
+                    <tr>
+                        <td>
+                            <input type="checkbox" class="product-checkbox form-check-input" 
+                                   data-id="{{ product.id }}"
+                                   data-sku="{{ product.sku_value }}"
+                                   data-name="{{ product.display_name }}"
+                                   {% if not product.sku_value or product.status != 'available' or product.owner != request.user %}disabled{% endif %}>
+                        </td>
+                        <td><span class="badge bg-secondary">{{ product.product_code }}</span></td>
+                        <td>
+                            <a href="{% url 'inventory:product_detail' product.id %}" class="text-decoration-none fw-bold">
+                                {{ product.display_name }}
+                            </a>
+                        </td>
+                        <td>
+                            {% if product.category.is_single_item %}
+                                <span class="badge bg-info">📱 {{ product.category.name }}</span>
+                            {% else %}
+                                <span class="badge bg-secondary">📦 {{ product.category.name }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{% if product.buying_price %}KSH {{ product.buying_price|floatformat:0 }}{% else %}-{% endif %}</td>
+                        <td class="fw-bold text-success">KSH {{ product.selling_price|floatformat:0 }}</td>
+                        <td>{% if product.best_price %}KSH {{ product.best_price|floatformat:0 }}{% else %}-{% endif %}</td>
+                        <td>
+                            {% if product.sku_value %}
+                                <span class="small">{{ product.sku_value|truncatechars:12 }}</span>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if product.barcode %}
+                                <span class="small">{{ product.barcode|truncatechars:12 }}</span>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <!-- Stock Column -->
+                        <td>
+                            {% if product.category.is_single_item %}
+                                {% if product.quantity > 0 and product.status == 'available' %}
+                                    <span class="badge bg-success">✓ In Stock</span>
+                                {% else %}
+                                    <span class="badge bg-danger">SOLD</span>
+                                {% endif %}
+                            {% else %}
+                                <span class="fw-bold">{{ product.quantity }}</span>
+                                {% if product.quantity <= product.reorder_level %}
+                                    <span class="badge bg-warning text-dark ms-1">Reorder</span>
+                                {% endif %}
+                            {% endif %}
+                        </td>
+                        <!-- Status Column -->
+                        <td>
+                            {% if product.status == 'available' %}
+                                <span class="badge-available">✓ Available</span>
+                            {% elif product.status == 'sold' %}
+                                <span class="badge bg-secondary">Sold Out</span>
+                            {% elif product.status == 'lowstock' %}
+                                <span class="badge-lowstock">⚠️ Low Stock</span>
+                            {% elif product.status == 'outofstock' %}
+                                <span class="badge bg-danger">❌ Out of Stock</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ product.get_status_display }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group" role="group">
+                                <a href="{% url 'inventory:product_detail' product.id %}" class="btn btn-sm btn-info" title="View">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                <a href="{% url 'inventory:product_edit' product.id %}" class="btn btn-sm btn-warning" title="Edit">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                <a href="{% url 'inventory:product_delete' product.id %}" class="btn btn-sm btn-danger" title="Delete" 
+                                   onclick="return confirm('Are you sure you want to delete this product?')">
+                                    <i class="fas fa-trash"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="12" class="text-center py-4">
+                            <i class="fas fa-box-open fa-3x text-muted mb-3"></i>
+                            <p class="text-muted">No products found</p>
+                            <a href="{% url 'inventory:product_add' %}" class="btn btn-primary btn-sm">
+                                <i class="fas fa-plus"></i> Add your first product
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Selected Products Bar -->
+        <div id="selectedProductsBar" class="selected-bar mt-3" style="display: none;">
+            <div class="d-flex justify-content-between align-items-center p-2 bg-light rounded">
+                <div>
+                    <span class="fw-bold" id="selectedCount">0</span> products selected
+                </div>
+                <div>
+                    <button type="button" class="btn btn-sm btn-warning" onclick="showTransferModal()">
+                        <i class="fas fa-exchange-alt me-1"></i>Transfer Selected
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearSelections()">
+                        <i class="fas fa-times me-1"></i>Clear
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Pagination -->
+{% if products.has_other_pages %}
+<nav class="mt-4">
+    <ul class="pagination justify-content-center">
+        {% if products.has_previous %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ products.previous_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                Previous
+            </a>
+        </li>
+        {% endif %}
+        
+        {% for num in products.paginator.page_range %}
+            {% if products.number == num %}
+            <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+            {% elif num > products.number|add:'-3' and num < products.number|add:'3' %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ num }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                    {{ num }}
+                </a>
+            </li>
+            {% endif %}
+        {% endfor %}
+        
+        {% if products.has_next %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ products.next_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                Next
+            </a>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+
+<!-- Transfer Modal -->
+<div class="modal fade" id="transferModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="fas fa-exchange-alt me-2"></i>Transfer Products</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="post" action="{% url 'inventory:product_transfer' %}" id="transferForm">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <!-- Selected Products Summary -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-info text-white">
+                            <h6 class="mb-0"><i class="fas fa-list me-2"></i>Products to Transfer</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <textarea name="skus" id="skuTextarea" class="form-control" rows="4" readonly 
+                                          placeholder="Selected products will appear here..."></textarea>
+                                <small class="text-muted">Total: <span id="transferSkuCount">0</span> items</small>
+                            </div>
+                            
+                            <!-- Selected Products Preview -->
+                            <div id="selectedProductsPreview" class="mt-2 d-flex flex-wrap gap-1"></div>
+                            
+                            <button type="button" class="btn btn-sm btn-outline-danger mt-2" id="clearSelectedBtn">
+                                <i class="fas fa-trash me-1"></i>Clear Selection
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Receiver User Search -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-light">
+                            <h6 class="mb-0"><i class="fas fa-user me-2"></i>Select Receiver</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3 position-relative">
+                                <label class="form-label required">Search User</label>
+                                <input type="text" class="form-control" id="userSearch" 
+                                       placeholder="Type username, name or email..." autocomplete="off">
+                                <input type="hidden" name="receiver_id" id="receiverId" required>
+                                <div id="userSuggestions" class="list-group mt-1" style="max-height: 200px; overflow-y: auto; display: none;"></div>
+                            </div>
+                            
+                            <!-- Selected User Display -->
+                            <div id="selectedUserCard" class="selected-user-card" style="display: none;">
+                                <div class="d-flex align-items-center">
+                                    <div class="user-avatar me-3">
+                                        <i class="fas fa-user-circle fa-2x text-primary"></i>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <h6 class="mb-1" id="selectedUserName"></h6>
+                                        <small class="text-muted" id="selectedUserEmail"></small>
+                                    </div>
+                                    <button type="button" class="btn btn-sm btn-outline-danger" id="clearUserBtn">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Transfer Summary -->
+                    <div class="card">
+                        <div class="card-header bg-success text-white">
+                            <h6 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Transfer Summary</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <p><strong>Sender:</strong> {{ request.user.get_full_name|default:request.user.username }}</p>
+                                    <p><strong>Receiver:</strong> <span id="summaryReceiver">Not selected</span></p>
+                                </div>
+                                <div class="col-md-6">
+                                    <p><strong>Items to Transfer:</strong> <span id="summaryTransferCount">0</span></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-2"></i>Cancel
+                    </button>
+                    <button type="submit" class="btn btn-primary" id="transferSubmitBtn">
+                        <i class="fas fa-exchange-alt me-2"></i>Transfer Products
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+    .required:after {
+        content: " *";
+        color: #dc3545;
+    }
+    .selected-user-card {
+        background: #e8f5e9;
+        border-left: 4px solid #28a745;
+        border-radius: 8px;
+        padding: 12px 15px;
+        margin-top: 10px;
+        animation: slideDown 0.3s ease;
+    }
+    .product-badge {
+        display: inline-block;
+        background: #e9ecef;
+        padding: 5px 10px;
+        margin: 2px;
+        border-radius: 20px;
+        font-size: 12px;
+        border: 1px solid #dee2e6;
+        animation: fadeIn 0.3s ease;
+    }
+    .product-badge .remove-product {
+        margin-left: 5px;
+        color: #dc3545;
+        cursor: pointer;
+        font-weight: bold;
+    }
+    .product-badge .remove-product:hover {
+        color: #bd2130;
+    }
+    .selected-bar {
+        position: sticky;
+        bottom: 20px;
+        z-index: 100;
+        animation: slideUp 0.3s ease;
+    }
+    @keyframes slideDown {
+        from {
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    @keyframes slideUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: scale(0.9);
+        }
+        to {
+            opacity: 1;
+            transform: scale(1);
+        }
+    }
+    #userSuggestions {
+        position: absolute;
+        z-index: 1000;
+        background: white;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        width: 100%;
+    }
+    .user-suggestion-item {
+        cursor: pointer;
+        padding: 10px 15px;
+        border-bottom: 1px solid #dee2e6;
+        transition: background 0.2s;
+    }
+    .user-suggestion-item:hover {
+        background: #f8f9fa;
+    }
+    .user-suggestion-item:last-child {
+        border-bottom: none;
+    }
+    /* Style for disabled checkboxes */
+    .product-checkbox:disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // ============================================
+    // SINGLE PRODUCT SEARCH
+    // ============================================
+    const quickSearch = document.getElementById('quickSearch');
+    const searchBtn = document.getElementById('searchSingleBtn');
+    
+    function searchSingleProduct() {
+        const searchTerm = quickSearch.value.trim();
+        if (!searchTerm) {
+            alert('Please enter a product code, SKU or barcode to search.');
+            return;
+        }
+        window.location.href = `{% url 'inventory:product_list' %}?search=${encodeURIComponent(searchTerm)}`;
+    }
+    
+    searchBtn.addEventListener('click', searchSingleProduct);
+    
+    quickSearch.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            searchSingleProduct();
+        }
+    });
+    
+    // ============================================
+    // PRODUCT SELECTION FOR TRANSFER
+    // ============================================
+    const selectAllCheckbox = document.getElementById('selectAllProducts');
+    const productCheckboxes = document.querySelectorAll('.product-checkbox');
+    const selectedProductsBar = document.getElementById('selectedProductsBar');
+    const selectedCount = document.getElementById('selectedCount');
+    const skuTextarea = document.getElementById('skuTextarea');
+    const transferSkuCount = document.getElementById('transferSkuCount');
+    const selectedProductsPreview = document.getElementById('selectedProductsPreview');
+    const clearSelectedBtn = document.getElementById('clearSelectedBtn');
+    
+    let selectedProducts = [];
+    
+    // Update selected products display
+    function updateSelectedProducts() {
+        // Update checkboxes state
+        productCheckboxes.forEach(cb => {
+            if (!cb.disabled) {
+                const productId = cb.dataset.id;
+                cb.checked = selectedProducts.some(p => p.id === productId);
+            }
+        });
+        
+        // Update selected count and bar
+        const count = selectedProducts.length;
+        selectedCount.textContent = count;
+        selectedProductsBar.style.display = count > 0 ? 'block' : 'none';
+        
+        // Update SKU textarea
+        const skus = selectedProducts.map(p => p.sku).join('\n');
+        skuTextarea.value = skus;
+        transferSkuCount.textContent = count;
+        
+        // Update preview badges
+        let previewHtml = '';
+        selectedProducts.forEach((product, index) => {
+            const shortSku = product.sku.slice(-6);
+            previewHtml += `<span class="product-badge">${product.name} (...${shortSku}) <span class="remove-product" onclick="removeProduct(${index})"><i class="fas fa-times"></i></span></span>`;
+        });
+        selectedProductsPreview.innerHTML = previewHtml;
+        
+        // Update transfer summary
+        document.getElementById('summaryTransferCount').textContent = count;
+    }
+    
+    // Add product to selection
+    function addProduct(product) {
+        if (!selectedProducts.some(p => p.id === product.id)) {
+            selectedProducts.push(product);
+            updateSelectedProducts();
+        }
+    }
+    
+    // Remove product from selection
+    window.removeProduct = function(index) {
+        selectedProducts.splice(index, 1);
+        updateSelectedProducts();
+    };
+    
+    // Clear all selections
+    window.clearSelections = function() {
+        selectedProducts = [];
+        updateSelectedProducts();
+    };
+    
+    clearSelectedBtn.addEventListener('click', clearSelections);
+    
+    // Handle individual checkbox changes
+    productCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            if (this.disabled) return;
+            
+            const product = {
+                id: this.dataset.id,
+                sku: this.dataset.sku,
+                name: this.dataset.name
+            };
+            
+            if (this.checked) {
+                addProduct(product);
+            } else {
+                const index = selectedProducts.findIndex(p => p.id === product.id);
+                if (index !== -1) {
+                    selectedProducts.splice(index, 1);
+                    updateSelectedProducts();
+                }
+            }
+        });
+    });
+    
+    // Handle select all
+    if (selectAllCheckbox) {
+        selectAllCheckbox.addEventListener('change', function() {
+            if (this.checked) {
+                productCheckboxes.forEach(cb => {
+                    if (!cb.disabled) {
+                        cb.checked = true;
+                        const product = {
+                            id: cb.dataset.id,
+                            sku: cb.dataset.sku,
+                            name: cb.dataset.name
+                        };
+                        if (!selectedProducts.some(p => p.id === product.id)) {
+                            selectedProducts.push(product);
+                        }
+                    }
+                });
+            } else {
+                productCheckboxes.forEach(cb => {
+                    if (!cb.disabled) {
+                        cb.checked = false;
+                    }
+                });
+                selectedProducts = [];
+            }
+            updateSelectedProducts();
+        });
+    }
+    
+    // ============================================
+    // TRANSFER MODAL FUNCTIONALITY
+    // ============================================
+    let searchTimer;
+    let currentRequest = null;
+    
+    const transferModal = document.getElementById('transferModal');
+    const userSearch = document.getElementById('userSearch');
+    const userSuggestions = document.getElementById('userSuggestions');
+    const receiverId = document.getElementById('receiverId');
+    const selectedUserCard = document.getElementById('selectedUserCard');
+    const selectedUserName = document.getElementById('selectedUserName');
+    const selectedUserEmail = document.getElementById('selectedUserEmail');
+    const clearUserBtn = document.getElementById('clearUserBtn');
+    const summaryReceiver = document.getElementById('summaryReceiver');
+    const transferForm = document.getElementById('transferForm');
+    
+    // Show transfer modal
+    window.showTransferModal = function() {
+        if (selectedProducts.length === 0) {
+            alert('Please select at least one product to transfer.');
+            return;
+        }
+        new bootstrap.Modal(transferModal).show();
+    };
+    
+    // Update summary when modal opens
+    transferModal.addEventListener('show.bs.modal', function() {
+        updateSelectedProducts();
+    });
+    
+    // User search functionality
+    if (userSearch) {
+        userSearch.addEventListener('input', function() {
+            clearTimeout(searchTimer);
+            const query = this.value.trim();
+            
+            if (query.length < 2) {
+                userSuggestions.style.display = 'none';
+                return;
+            }
+            
+            userSuggestions.innerHTML = '<div class="text-center py-2"><div class="spinner-border spinner-border-sm text-primary"></div> Searching...</div>';
+            userSuggestions.style.display = 'block';
+            
+            searchTimer = setTimeout(function() {
+                if (currentRequest) {
+                    currentRequest.abort();
+                }
+                
+                currentRequest = $.ajax({
+                    url: '{% url "inventory:search_users" %}',
+                    method: 'GET',
+                    data: { q: query },
+                    success: function(users) {
+                        if (users.length > 0) {
+                            let html = '';
+                            users.forEach(function(user) {
+                                const fullName = user.full_name.replace(/'/g, "\\'");
+                                html += `
+                                    <div class="user-suggestion-item" onclick="selectUser(${user.id}, '${fullName}', '${user.email}')">
+                                        <strong>${user.full_name}</strong><br>
+                                        <small class="text-muted">${user.email} (${user.username})</small>
+                                    </div>
+                                `;
+                            });
+                            userSuggestions.innerHTML = html;
+                        } else {
+                            userSuggestions.innerHTML = '<div class="text-center py-2 text-muted">No users found</div>';
+                        }
+                    },
+                    error: function() {
+                        userSuggestions.innerHTML = '<div class="text-center py-2 text-danger">Error searching users</div>';
+                    },
+                    complete: function() {
+                        currentRequest = null;
+                    }
+                });
+            }, 300);
+        });
+        
+        // Hide suggestions when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!userSearch.contains(e.target) && !userSuggestions.contains(e.target)) {
+                userSuggestions.style.display = 'none';
+            }
+        });
+    }
+    
+    // Select user function
+    window.selectUser = function(id, name, email) {
+        receiverId.value = id;
+        selectedUserName.textContent = name;
+        selectedUserEmail.textContent = email;
+        selectedUserCard.style.display = 'block';
+        userSearch.value = '';
+        userSuggestions.style.display = 'none';
+        summaryReceiver.textContent = name;
+    };
+    
+    // Clear selected user
+    if (clearUserBtn) {
+        clearUserBtn.addEventListener('click', function() {
+            receiverId.value = '';
+            selectedUserCard.style.display = 'none';
+            summaryReceiver.textContent = 'Not selected';
+        });
+    }
+    
+    // Form validation
+    transferForm.addEventListener('submit', function(e) {
+        if (!receiverId.value) {
+            e.preventDefault();
+            alert('Please select a receiver user.');
+            return;
+        }
+        
+        if (selectedProducts.length === 0) {
+            e.preventDefault();
+            alert('No products selected for transfer.');
+            return;
+        }
+        
+        if (!confirm(`Are you sure you want to transfer ${selectedProducts.length} products?`)) {
+            e.preventDefault();
+        }
+    });
+});
+</script>
+{% endblock %}

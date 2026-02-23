@@ -1,0 +1,95 @@
+{% extends 'credit/base.html' %}
+{% load static %}
+
+{% block title %}Reverse Transaction{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'credit:dashboard' %}">Dashboard</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'credit:transaction_list' %}">Transactions</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'credit:transaction_detail' transaction.id %}">{{ transaction.transaction_id }}</a></li>
+            <li class="breadcrumb-item active">Reverse Transaction</li>
+        </ol>
+    </nav>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card border-warning">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0"><i class="fas fa-undo me-2"></i>Reverse Credit Transaction</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>Warning:</strong> Reversing this transaction will:
+                    <ul class="mb-0 mt-2">
+                        <li>Mark the transaction as <strong>Reversed</strong></li>
+                        <li>Make the product <strong>available again</strong> for new credit transactions</li>
+                        <li>This action can be undone by creating a new transaction</li>
+                    </ul>
+                </div>
+                
+                <div class="card mb-3 bg-light">
+                    <div class="card-body">
+                        <h6>Transaction Details</h6>
+                        <table class="table table-sm">
+                            <tr>
+                                <th>Transaction ID:</th>
+                                <td><span class="badge bg-warning text-dark">{{ transaction.transaction_id }}</span></td>
+                            </tr>
+                            <tr>
+                                <th>Company:</th>
+                                <td>{{ transaction.credit_company.name }}</td>
+                            </tr>
+                            <tr>
+                                <th>Customer:</th>
+                                <td>{{ transaction.customer.full_name }}</td>
+                            </tr>
+                            <tr>
+                                <th>Product:</th>
+                                <td>{{ transaction.product.display_name }} ({{ transaction.product.product_code }})</td>
+                            </tr>
+                            <tr>
+                                <th>Amount:</th>
+                                <td class="fw-bold">KSH {{ transaction.ceiling_price|floatformat:0 }}</td>
+                            </tr>
+                            <tr>
+                                <th>Current Status:</th>
+                                <td>
+                                    {% if transaction.payment_status == 'pending' %}
+                                        <span class="badge bg-danger">Pending</span>
+                                    {% elif transaction.payment_status == 'cancelled' %}
+                                        <span class="badge bg-secondary">Cancelled</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+                
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Reason for Reversal <span class="text-danger">*</span></label>
+                        <textarea name="reason" class="form-control" rows="3" required 
+                                  placeholder="e.g., Wrong product selected, Customer changed mind, Incorrect details..."></textarea>
+                    </div>
+                    
+                    <div class="d-flex justify-content-center gap-3">
+                        <a href="{% url 'credit:transaction_detail' transaction.id %}" class="btn btn-secondary">
+                            <i class="fas fa-times"></i> Cancel
+                        </a>
+                        <button type="submit" class="btn btn-warning">
+                            <i class="fas fa-undo"></i> Reverse Transaction
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

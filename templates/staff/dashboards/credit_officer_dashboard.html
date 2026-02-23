@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FieldMax - Credit Sales Dashboard</title>
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --primary-color: #ffc107;
+            --primary-dark: #e0a800;
+            --secondary-color: #17a2b8;
+            --success-color: #28a745;
+            --danger-color: #dc3545;
+            --dark-color: #343a40;
+            --light-bg: #f8f9fa;
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+        
+        .dashboard-container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        /* Header Styles */
+        .dashboard-header {
+            background: white;
+            border-radius: 20px;
+            padding: 20px 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        
+        .header-left h2 {
+            color: #ffc107;
+            font-weight: 700;
+            font-size: 1.8rem;
+            margin-bottom: 5px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .header-left p {
+            color: #6c757d;
+            margin-bottom: 0;
+            font-size: 0.95rem;
+        }
+        
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            background: #f8f9fa;
+            padding: 8px 20px;
+            border-radius: 50px;
+            border: 1px solid #e9ecef;
+        }
+        
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #ffc107, #fd7e14);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+        
+        .user-details {
+            line-height: 1.3;
+        }
+        
+        .user-name {
+            font-weight: 600;
+            color: #343a40;
+            font-size: 0.95rem;
+        }
+        
+        .user-role {
+            color: #ffc107;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+        
+        .logout-btn {
+            background: linear-gradient(135deg, #dc3545, #c82333);
+            color: white;
+            border: none;
+            padding: 10px 25px;
+            border-radius: 50px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 5px 15px rgba(220,53,69,0.3);
+        }
+        
+        .logout-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(220,53,69,0.4);
+        }
+        
+        /* Stats Cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            transition: transform 0.3s;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+        }
+        
+        .stat-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+        }
+        
+        .stat-card:nth-child(1) .stat-icon {
+            background: rgba(40, 167, 69, 0.1);
+            color: #28a745;
+        }
+        
+        .stat-card:nth-child(2) .stat-icon {
+            background: rgba(23, 162, 184, 0.1);
+            color: #17a2b8;
+        }
+        
+        .stat-card:nth-child(3) .stat-icon {
+            background: rgba(255, 193, 7, 0.1);
+            color: #ffc107;
+        }
+        
+        .stat-card:nth-child(4) .stat-icon {
+            background: rgba(111, 66, 193, 0.1);
+            color: #6f42c1;
+        }
+        
+        .stat-content h3 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin-bottom: 5px;
+            color: #343a40;
+        }
+        
+        .stat-content p {
+            margin-bottom: 0;
+            color: #6c757d;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+        
+        /* Main Card */
+        .main-card {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            overflow: hidden;
+            border: none;
+        }
+        
+        .card-header {
+            background: linear-gradient(135deg, #ffc107, #fd7e14);
+            padding: 20px 25px;
+            border-bottom: none;
+        }
+        
+        .card-header h5 {
+            margin: 0;
+            font-weight: 600;
+            color: #343a40;
+            font-size: 1.2rem;
+        }
+        
+        .card-header h5 i {
+            margin-right: 10px;
+        }
+        
+        .card-body {
+            padding: 30px;
+        }
+        
+        /* Form Styles */
+        .form-label {
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+        }
+        
+        .form-label .text-danger {
+            font-size: 1.1rem;
+        }
+        
+        .form-control, .form-select {
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            padding: 10px 15px;
+            font-size: 0.95rem;
+            transition: all 0.3s;
+        }
+        
+        .form-control:focus, .form-select:focus {
+            border-color: #ffc107;
+            outline: none;
+            box-shadow: 0 0 0 4px rgba(255,193,7,0.1);
+        }
+        
+        .input-group .btn {
+            border: 2px solid #e9ecef;
+            border-left: none;
+        }
+        
+        .btn-warning {
+            background: linear-gradient(135deg, #ffc107, #fd7e14);
+            border: none;
+            color: #343a40;
+            font-weight: 600;
+            padding: 10px 20px;
+            border-radius: 10px;
+            transition: all 0.3s;
+        }
+        
+        .btn-warning:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(255,193,7,0.4);
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 10px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        
+        .btn-secondary:hover {
+            background: #5a6268;
+            transform: translateY(-2px);
+        }
+        
+        /* Product Suggestions */
+        #productSuggestions {
+            position: absolute;
+            z-index: 1000;
+            width: 100%;
+            max-height: 300px;
+            overflow-y: auto;
+            border-radius: 10px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+            background: white;
+        }
+        
+        .list-group-item {
+            cursor: pointer;
+            border: none;
+            border-bottom: 1px solid #e9ecef;
+            padding: 12px 15px;
+            transition: all 0.2s;
+        }
+        
+        .list-group-item:hover {
+            background-color: #fff3cd;
+        }
+        
+        .sku-badge {
+            background: #6c757d;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            margin-left: 8px;
+        }
+        
+        /* Selected Product Card */
+        .selected-product-card {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .sku-info {
+            font-size: 0.85rem;
+            color: #856404;
+            margin-top: 5px;
+            padding-top: 5px;
+            border-top: 1px dashed #ffc107;
+        }
+        
+        /* Modal Styles */
+        .modal-content {
+            border-radius: 20px;
+            border: none;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+        }
+        
+        .modal-header {
+            background: linear-gradient(135deg, #ffc107, #fd7e14);
+            border-bottom: none;
+            padding: 20px 25px;
+        }
+        
+        .modal-header .modal-title {
+            color: #343a40;
+            font-weight: 600;
+        }
+        
+        .modal-body {
+            padding: 25px;
+        }
+        
+        .modal-footer {
+            border-top: 2px solid #e9ecef;
+            padding: 20px 25px;
+        }
+        
+        /* Alert Styles */
+        .alert {
+            border-radius: 10px;
+            border: none;
+            padding: 15px 20px;
+            margin-bottom: 20px;
+        }
+        
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        /* Responsive */
+        @media (max-width: 992px) {
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .dashboard-header {
+                flex-direction: column;
+                gap: 15px;
+                text-align: center;
+            }
+            
+            .header-right {
+                width: 100%;
+                justify-content: center;
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+    
+    <!-- Product Data Script - MUST BE BEFORE THE MAIN SCRIPT -->
+    <script id="productsData" type="application/json">{{ products_json|safe }}</script>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Dashboard Header with Logout -->
+        <div class="dashboard-header">
+            <div class="header-left">
+                <h2><i class="fas fa-credit-card me-2"></i>Credit Sales Dashboard</h2>
+                <p><i class="far fa-calendar-alt me-1"></i><span id="currentDate"></span> | <i class="far fa-clock me-1"></i><span id="currentTime"></span></p>
+            </div>
+            
+            <div class="header-right">
+                <div class="user-info">
+                    <div class="user-avatar">
+                        {{ request.user.first_name|default:request.user.username|first|upper }}
+                    </div>
+                    <div class="user-details">
+                        <div class="user-name">{{ request.user.get_full_name|default:request.user.username }}</div>
+                        <div class="user-role">Front Officer</div>
+                    </div>
+                </div>
+                
+                <form method="post" action="{% url 'staff:logout' %}" style="margin: 0;">
+                    {% csrf_token %}
+                    <button type="submit" class="logout-btn">
+                        <i class="fas fa-sign-out-alt"></i>
+                        Logout
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Stats Cards -->
+        <div class="stats-grid">
+            <!-- Card 1: My Stock Count -->
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fas fa-boxes"></i>
+                </div>
+                <div class="stat-content">
+                    <h3>{{ total_products|default:"0" }}</h3>
+                    <p>My Stock Count</p>
+                    <small class="text-muted">Available in inventory</small>
+                </div>
+            </div>
+            
+            <!-- Card 2: Daily Sales Count -->
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fas fa-shopping-cart"></i>
+                </div>
+                <div class="stat-content">
+                    <h3>{{ daily_sales|default:"0" }}</h3>
+                    <p>Daily Sales Count</p>
+                    <small class="text-muted">Today's transactions</small>
+                </div>
+            </div>
+            
+            <!-- Card 3: Monthly Sales Count -->
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fas fa-calendar-alt"></i>
+                </div>
+                <div class="stat-content">
+                    <h3>{{ monthly_sales|default:"0" }}</h3>
+                    <p>Monthly Sales Count</p>
+                    <small class="text-muted">Last 30 days</small>
+                </div>
+            </div>
+            
+            <!-- Card 4: Total Customers -->
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fas fa-users"></i>
+                </div>
+                <div class="stat-content">
+                    <h3>{{ total_customers|default:"0" }}</h3>
+                    <p>Total Customers</p>
+                    <small class="text-muted">Registered customers</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Credit Form Card -->
+        <div class="main-card">
+            <div class="card-header">
+                <h5><i class="fas fa-plus-circle me-2"></i>Create New Credit Transaction</h5>
+            </div>
+            <div class="card-body">
+                <!-- Messages will appear here -->
+                <div id="messageContainer"></div>
+                
+                <form method="post" id="transactionForm" action="{% url 'credit:transaction_create' %}">
+                    {% csrf_token %}
+                    
+                    <div class="row">
+                        <!-- Company Selection -->
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">
+                                <i class="fas fa-building me-1"></i>Credit Company <span class="text-danger">*</span>
+                            </label>
+                            <select name="company" class="form-select" required id="companySelect">
+                                <option value="">-- Select Company --</option>
+                                {% for company in companies %}
+                                <option value="{{ company.id }}">{{ company.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <!-- Customer Selection with Popup -->
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">
+                                <i class="fas fa-user me-1"></i>Customer <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group">
+                                <select name="customer" class="form-select" required id="customerSelect">
+                                    <option value="">-- Select Existing Customer --</option>
+                                    {% for customer in customers %}
+                                    <option value="{{ customer.id }}">
+                                        {{ customer.full_name }} - {{ customer.phone_number }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                <button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#addCustomerModal">
+                                    <i class="fas fa-user-plus"></i> New
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Product Search with Suggestions (Showing SKU) -->
+                    <div class="row">
+                        <div class="col-md-12 mb-3 position-relative">
+                            <label class="form-label">
+                                <i class="fas fa-box me-1"></i>Search Product <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="productSearch" 
+                                       placeholder="Type product code, name or SKU..." autocomplete="off">
+                                <input type="hidden" name="product" id="selectedProductId" required>
+                                <button class="btn btn-outline-warning" type="button" id="clearProductBtn">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                            <div id="productSuggestions" class="list-group mt-1" style="display: none;"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Selected Product Display with SKU -->
+                    <div id="selectedProductCard" class="selected-product-card" style="display: none;">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <strong><i class="fas fa-box me-1"></i>Product:</strong> 
+                                <span id="selectedProductName"></span><br>
+                                <strong><i class="fas fa-barcode me-1"></i>Code:</strong> 
+                                <span id="selectedProductCode"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <strong><i class="fas fa-tag me-1"></i>Price:</strong> 
+                                KSH <span id="selectedProductPrice"></span><br>
+                                <strong><i class="fas fa-cubes me-1"></i>Stock:</strong> 
+                                <span id="selectedProductStock"></span>
+                            </div>
+                        </div>
+                        <div class="row mt-2">
+                            <div class="col-12 sku-info" id="selectedProductSkuContainer">
+                                <strong><i class="fas fa-qrcode me-1"></i>SKU:</strong> 
+                                <span id="selectedProductSku"></span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- IMEI and Price -->
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">
+                                <i class="fas fa-qrcode me-1"></i>IMEI / Serial Number
+                            </label>
+                            <input type="text" name="imei" class="form-control" 
+                                   placeholder="Enter IMEI number (if applicable)">
+                            <small class="text-muted">Required for phones and electronics</small>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">
+                                <i class="fas fa-money-bill-wave me-1"></i>Ceiling Price (KSH) <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light">KSH</span>
+                                <input type="number" name="ceiling_price" class="form-control" 
+                                       step="0.01" required id="priceInput" placeholder="0.00">
+                            </div>
+                            <small class="text-muted">Amount the credit company will pay you</small>
+                        </div>
+                    </div>
+                    
+                    <!-- Notes -->
+                    <div class="row">
+                        <div class="col-md-12 mb-4">
+                            <label class="form-label">
+                                <i class="fas fa-sticky-note me-1"></i>Notes
+                            </label>
+                            <textarea name="notes" class="form-control" rows="2" 
+                                      placeholder="Any additional notes about this transaction..."></textarea>
+                        </div>
+                    </div>
+                    
+                    <!-- Form Actions -->
+                    <div class="d-flex justify-content-end gap-2">
+                        <a href="{% url 'credit:transaction_list' %}" class="btn btn-secondary">
+                            <i class="fas fa-times me-1"></i>Cancel
+                        </a>
+                        <button type="submit" class="btn btn-warning">
+                            <i class="fas fa-save me-1"></i>Create Transaction
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Customer Modal with Next of Kin and Photo Uploads -->
+    <div class="modal fade" id="addCustomerModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-user-plus me-2"></i>Add New Customer</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                
+                <form method="post" action="{% url 'credit:customer_add' %}" id="addCustomerForm" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    
+                    <div class="modal-body">
+                        <!-- Personal Information Section -->
+                        <div class="row">
+                            <div class="col-md-12 mb-3">
+                                <h6 class="fw-bold text-warning">
+                                    <i class="fas fa-user-circle me-2"></i>Personal Information
+                                </h6>
+                            </div>
+                            
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Full Name <span class="text-danger">*</span></label>
+                                <input type="text" name="full_name" class="form-control" required 
+                                       placeholder="e.g., John Doe">
+                            </div>
+                            
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Phone Number <span class="text-danger">*</span></label>
+                                <input type="text" name="phone_number" class="form-control" required 
+                                       placeholder="e.g., 0712345678">
+                            </div>
+                            
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">ID Number <span class="text-danger">*</span></label>
+                                <input type="text" name="id_number" class="form-control" required 
+                                       placeholder="e.g., 12345678">
+                            </div>
+                            
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Alternate Phone</label>
+                                <input type="text" name="alternate_phone" class="form-control" 
+                                       placeholder="e.g., 0723456789">
+                            </div>
+                        </div>
+                    
+                        <!-- Next of Kin Section -->
+                        <div class="row mt-2">
+                            <div class="col-md-12 mb-3">
+                                <h6 class="fw-bold text-warning">
+                                    <i class="fas fa-users me-2"></i>Next of Kin Information
+                                </h6>
+                            </div>
+                            
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">NOK Full Name</label>
+                                <input type="text" name="nok_name" class="form-control">
+                            </div>
+                            
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">NOK Phone Number</label>
+                                <input type="text" name="nok_phone" class="form-control">
+                            </div>
+                        </div>
+                        
+                        <!-- Photo Upload Section -->
+                        <div class="row mt-3">
+                            <div class="col-md-12 mb-3">
+                                <h6 class="fw-bold text-warning">
+                                    <i class="fas fa-camera me-2"></i>Customer Photos / Documents
+                                </h6>
+                                <small class="text-muted d-block mb-3">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Upload clear photos to help with future verifications and claims.
+                                </small>
+                            </div>
+                            
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">Passport Photo</label>
+                                <div class="input-group">
+                                    <input type="file" name="passport_photo" class="form-control" accept="image/*">
+                                    <span class="input-group-text bg-light">
+                                        <i class="fas fa-camera"></i>
+                                    </span>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">ID Front Photo</label>
+                                <div class="input-group">
+                                    <input type="file" name="id_front_photo" class="form-control" accept="image/*">
+                                    <span class="input-group-text bg-light">
+                                        <i class="fas fa-id-card"></i>
+                                    </span>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">ID Back Photo</label>
+                                <div class="input-group">
+                                    <input type="file" name="id_back_photo" class="form-control" accept="image/*">
+                                    <span class="input-group-text bg-light">
+                                        <i class="fas fa-id-card"></i>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <input type="hidden" name="next" value="{% url 'credit:transaction_create' %}">
+                    </div>
+                    
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                            <i class="fas fa-times me-1"></i>Cancel
+                        </button>
+                        <button type="submit" class="btn btn-warning">
+                            <i class="fas fa-save me-1"></i>Save Customer
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        // Update date and time
+        function updateDateTime() {
+            const now = new Date();
+            const dateString = now.toLocaleDateString('en-US', { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            });
+            const timeString = now.toLocaleTimeString('en-US', { 
+                hour: '2-digit', 
+                minute: '2-digit', 
+                second: '2-digit' 
+            });
+            document.getElementById('currentDate').innerHTML = dateString;
+            document.getElementById('currentTime').innerHTML = timeString;
+        }
+        updateDateTime();
+        setInterval(updateDateTime, 1000);
+        
+        // Product data from server
+        let products = [];
+        try {
+            const productsData = document.getElementById('productsData');
+            if (productsData) {
+                products = JSON.parse(productsData.textContent);
+                console.log('Products loaded:', products.length);
+            } else {
+                console.error('productsData element not found');
+            }
+        } catch (error) {
+            console.error('Error parsing products data:', error);
+            products = [];
+        }
+        
+        // DOM Elements
+        const searchInput = document.getElementById('productSearch');
+        const suggestionsDiv = document.getElementById('productSuggestions');
+        const selectedProductId = document.getElementById('selectedProductId');
+        const selectedProductCard = document.getElementById('selectedProductCard');
+        const clearProductBtn = document.getElementById('clearProductBtn');
+        const priceInput = document.getElementById('priceInput');
+        const transactionForm = document.getElementById('transactionForm');
+        const customerForm = document.getElementById('addCustomerForm');
+        const messageContainer = document.getElementById('messageContainer');
+        
+        // Product Search with Suggestions (Showing SKU)
+        if (searchInput) {
+            searchInput.addEventListener('input', function() {
+                const query = this.value.toLowerCase().trim();
+                
+                if (query.length < 2) {
+                    suggestionsDiv.style.display = 'none';
+                    return;
+                }
+                
+                const matches = products.filter(p => 
+                    p.code.toLowerCase().includes(query) || 
+                    p.name.toLowerCase().includes(query) ||
+                    (p.sku && p.sku.toLowerCase().includes(query))
+                ).slice(0, 5);
+                
+                if (matches.length > 0) {
+                    suggestionsDiv.innerHTML = matches.map(p => `
+                        <a href="#" class="list-group-item list-group-item-action" 
+                           onclick="selectProduct(${p.id}, '${p.code}', '${p.name}', ${p.price}, ${p.stock}, '${p.sku || ''}'); return false;">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>${p.code}</strong> - ${p.name}
+                                    <br>
+                                    <small class="text-muted">
+                                        <i class="fas fa-qrcode me-1"></i>SKU: ${p.sku || 'N/A'}
+                                    </small>
+                                </div>
+                                <div class="text-end">
+                                    <span class="badge bg-info">Stock: ${p.stock}</span>
+                                    <br>
+                                    <small class="text-warning fw-bold">KSH ${p.price}</small>
+                                </div>
+                            </div>
+                        </a>
+                    `).join('');
+                    suggestionsDiv.style.display = 'block';
+                } else {
+                    suggestionsDiv.style.display = 'none';
+                }
+            });
+            
+            // Hide suggestions when clicking outside
+            document.addEventListener('click', function(e) {
+                if (!searchInput.contains(e.target) && !suggestionsDiv.contains(e.target)) {
+                    suggestionsDiv.style.display = 'none';
+                }
+            });
+        }
+        
+        // Clear selected product
+        if (clearProductBtn) {
+            clearProductBtn.addEventListener('click', function() {
+                selectedProductId.value = '';
+                searchInput.value = '';
+                selectedProductCard.style.display = 'none';
+                priceInput.value = '';
+            });
+        }
+        
+        // Make selectProduct function global (updated to include SKU)
+        window.selectProduct = function(id, code, name, price, stock, sku) {
+            selectedProductId.value = id;
+            searchInput.value = code;
+            document.getElementById('selectedProductName').textContent = name;
+            document.getElementById('selectedProductCode').textContent = code;
+            document.getElementById('selectedProductPrice').textContent = price;
+            document.getElementById('selectedProductStock').textContent = stock;
+            document.getElementById('priceInput').value = price;
+            
+            // Show SKU in selected product card
+            const skuElement = document.getElementById('selectedProductSku');
+            const skuContainer = document.getElementById('selectedProductSkuContainer');
+            
+            if (skuElement && skuContainer) {
+                if (sku) {
+                    skuElement.textContent = sku;
+                    skuContainer.style.display = 'block';
+                } else {
+                    skuElement.textContent = 'N/A';
+                    skuContainer.style.display = 'block';
+                }
+            }
+            
+            selectedProductCard.style.display = 'block';
+            suggestionsDiv.style.display = 'none';
+        };
+        
+        // Handle transaction form submission
+        if (transactionForm) {
+            transactionForm.addEventListener('submit', function(e) {
+                if (!selectedProductId.value) {
+                    e.preventDefault();
+                    showMessage('Please select a product', 'danger');
+                    return;
+                }
+                
+                if (!document.getElementById('companySelect').value) {
+                    e.preventDefault();
+                    showMessage('Please select a credit company', 'danger');
+                    return;
+                }
+                
+                if (!document.getElementById('customerSelect').value) {
+                    e.preventDefault();
+                    showMessage('Please select a customer', 'danger');
+                    return;
+                }
+            });
+        }
+        
+        // Handle customer form submission with AJAX
+        if (customerForm) {
+            customerForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const formData = new FormData(customerForm);
+                
+                fetch(customerForm.action, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {'X-Requested-With': 'XMLHttpRequest'}
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const customerSelect = document.getElementById('customerSelect');
+                        const newOption = new Option(
+                            data.customer.full_name + ' - ' + data.customer.phone_number,
+                            data.customer.id,
+                            true,
+                            true
+                        );
+                        customerSelect.add(newOption);
+                        
+                        // Close modal
+                        bootstrap.Modal.getInstance(document.getElementById('addCustomerModal')).hide();
+                        
+                        // Show success message
+                        showMessage(`Customer "${data.customer.full_name}" added successfully!`, 'success');
+                        
+                        // Reset the form
+                        customerForm.reset();
+                    } else {
+                        showMessage('Error: ' + data.error, 'danger');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showMessage('An error occurred while adding customer.', 'danger');
+                });
+            });
+        }
+        
+        // Show message function
+        function showMessage(message, type) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+            alertDiv.innerHTML = `
+                <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'} me-2"></i>
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            messageContainer.innerHTML = '';
+            messageContainer.appendChild(alertDiv);
+            
+            // Auto-hide after 3 seconds
+            setTimeout(() => {
+                alertDiv.remove();
+            }, 3000);
+        }
+    </script>
+</body>
+</html>

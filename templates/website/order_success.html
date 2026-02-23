@@ -1,0 +1,659 @@
+{% extends 'website/base.html' %}
+{% load static %}
+
+{% block title %}Order Success - Fieldmax{% endblock %}
+
+{% block content %}
+<style>
+    .success-page {
+        min-height: 100vh;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 25%, #f093fb 50%, #4facfe 75%, #00f2fe 100%);
+        background-size: 400% 400%;
+        animation: gradientShift 20s ease infinite;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 15px;
+    }
+
+    @keyframes gradientShift {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+    }
+
+    .success-container {
+        max-width: 750px;
+        width: 100%;
+        max-height: 95vh;
+        overflow-y: auto;
+        background: rgba(255,255,255,0.95);
+        backdrop-filter: blur(30px);
+        border-radius: 20px;
+        padding: 25px;
+        box-shadow: 0 15px 40px rgba(0,0,0,0.25);
+        animation: slideUp 0.5s ease-out;
+        scrollbar-width: thin;
+    }
+
+    .success-container::-webkit-scrollbar {
+        width: 5px;
+    }
+
+    .success-container::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 10px;
+    }
+
+    .success-container::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 10px;
+    }
+
+    @keyframes slideUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .success-icon {
+        width: 60px;
+        height: 60px;
+        margin: 0 auto 15px;
+        background: linear-gradient(135deg, #10b981, #059669);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 30px;
+        box-shadow: 0 8px 20px rgba(16, 185, 129, 0.3);
+        animation: scaleIn 0.4s ease-out 0.1s both;
+    }
+
+    @keyframes scaleIn {
+        from {
+            transform: scale(0);
+        }
+        to {
+            transform: scale(1);
+        }
+    }
+
+    .success-title {
+        text-align: center;
+        font-size: 28px;
+        font-weight: 800;
+        color: #1a1f2e;
+        margin-bottom: 5px;
+    }
+
+    .success-subtitle {
+        text-align: center;
+        font-size: 14px;
+        color: #6b7280;
+        margin-bottom: 20px;
+        line-height: 1.4;
+    }
+
+    .order-info-card {
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        border-radius: 15px;
+        padding: 20px;
+        margin-bottom: 15px;
+        color: #fff;
+        box-shadow: 0 8px 20px rgba(102, 126, 234, 0.25);
+    }
+
+    .order-number {
+        text-align: center;
+        margin-bottom: 15px;
+    }
+
+    .order-number-label {
+        font-size: 12px;
+        opacity: 0.9;
+        margin-bottom: 4px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+
+    .order-number-value {
+        font-size: 26px;
+        font-weight: 800;
+        letter-spacing: 1.5px;
+        word-break: break-all;
+    }
+
+    .order-details {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 15px;
+        margin-top: 15px;
+        padding-top: 15px;
+        border-top: 1px solid rgba(255,255,255,0.2);
+    }
+
+    .detail-item {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+    }
+
+    .detail-label {
+        font-size: 11px;
+        opacity: 0.8;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .detail-value {
+        font-size: 14px;
+        font-weight: 700;
+        word-break: break-word;
+    }
+
+    .info-section {
+        background: #f9fafb;
+        border-radius: 12px;
+        padding: 15px;
+        margin-bottom: 15px;
+    }
+
+    .section-title {
+        font-size: 16px;
+        font-weight: 700;
+        color: #1a1f2e;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .info-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 0;
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    .info-row:last-child {
+        border-bottom: none;
+    }
+
+    .info-label {
+        color: #6b7280;
+        font-size: 13px;
+    }
+
+    .info-value {
+        color: #1a1f2e;
+        font-weight: 600;
+        font-size: 13px;
+        text-align: right;
+    }
+
+    .company-info {
+        background: #fff;
+        border: 1.5px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 15px;
+        margin-bottom: 15px;
+    }
+
+    .company-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 12px;
+        padding-bottom: 12px;
+        border-bottom: 1.5px solid #e5e7eb;
+    }
+
+    .company-logo {
+        width: 45px;
+        height: 45px;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+    }
+
+    .company-name {
+        flex: 1;
+    }
+
+    .company-name h3 {
+        font-size: 20px;
+        font-weight: 800;
+        color: #1a1f2e;
+        margin-bottom: 2px;
+    }
+
+    .company-tagline {
+        font-size: 12px;
+        color: #6b7280;
+    }
+
+    .contact-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+    }
+
+    .contact-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px;
+        background: #f9fafb;
+        border-radius: 8px;
+        font-size: 12px;
+        color: #374151;
+    }
+
+    .contact-icon {
+        font-size: 16px;
+    }
+
+    .action-buttons {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+        margin-top: 15px;
+    }
+
+    .btn {
+        padding: 12px;
+        border-radius: 40px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        text-align: center;
+        text-decoration: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        border: none;
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: #fff;
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.35);
+    }
+
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 18px rgba(102, 126, 234, 0.45);
+    }
+
+    .btn-secondary {
+        background: #fff;
+        color: #667eea;
+        border: 2px solid #667eea;
+    }
+
+    .btn-secondary:hover {
+        background: #667eea;
+        color: #fff;
+    }
+
+    .next-steps {
+        background: #fef3c7;
+        border-left: 4px solid #f59e0b;
+        padding: 12px 15px;
+        border-radius: 8px;
+        margin-top: 15px;
+    }
+
+    .next-steps-title {
+        font-size: 14px;
+        font-weight: 700;
+        color: #92400e;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .next-steps-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .next-steps-list li {
+        padding: 4px 0;
+        color: #78350f;
+        font-size: 12px;
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    .next-steps-list li::before {
+        content: '✓';
+        color: #10b981;
+        font-weight: 700;
+        flex-shrink: 0;
+    }
+
+    @media (max-width: 768px) {
+        .success-container {
+            padding: 20px;
+            max-height: 98vh;
+        }
+
+        .success-title {
+            font-size: 24px;
+        }
+
+        .order-number-value {
+            font-size: 22px;
+        }
+
+        .order-details,
+        .contact-grid,
+        .action-buttons {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @media (max-height: 700px) {
+        .success-container {
+            padding: 15px;
+        }
+        
+        .success-icon {
+            width: 45px;
+            height: 45px;
+            font-size: 22px;
+            margin-bottom: 10px;
+        }
+        
+        .success-title {
+            font-size: 22px;
+        }
+        
+        .order-info-card {
+            padding: 15px;
+            margin-bottom: 10px;
+        }
+        
+        .info-section, .company-info {
+            padding: 12px;
+            margin-bottom: 10px;
+        }
+        
+        .action-buttons {
+            margin-top: 10px;
+        }
+        
+        .next-steps {
+            margin-top: 10px;
+            padding: 10px 12px;
+        }
+    }
+</style>
+
+<div class="success-page">
+    <div class="success-container">
+        <!-- Wrap the receipt block for printing -->
+        <div id="receiptBlock">
+            <div class="success-icon">✓</div>
+            
+            <h1 class="success-title">Order Receipt</h1>
+            <p class="success-subtitle" id="receiptSubtitle">
+                Thank you for your order. Here's your receipt.
+            </p>
+
+            <!-- Order Information Card -->
+            <div class="order-info-card">
+                <div class="order-number">
+                    <div class="order-number-label">Order Number</div>
+                    <div class="order-number-value" id="orderNumber">Loading...</div>
+                </div>
+
+                <div class="order-details">
+                    <div class="detail-item">
+                        <div class="detail-label">Customer</div>
+                        <div class="detail-value" id="customerName">-</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">Phone</div>
+                        <div class="detail-value" id="customerPhone">-</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">Payment Method</div>
+                        <div class="detail-value" id="paymentMethod">-</div>
+                    </div>
+                    <div class="detail-item">
+                        <div class="detail-label">Total Amount</div>
+                        <div class="detail-value" id="totalAmount">-</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Order Items Summary -->
+            <div class="info-section">
+                <h3 class="section-title">
+                    <span>📦</span>
+                    <span>Order Summary</span>
+                </h3>
+                <div class="info-row">
+                    <span class="info-label">Total Items</span>
+                    <span class="info-value" id="itemCount">-</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Order Status</span>
+                    <span class="info-value" id="orderStatus">⏳ Pending</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Order Date</span>
+                    <span class="info-value" id="orderDate">-</span>
+                </div>
+            </div>
+
+            <!-- Company Information -->
+            <div class="company-info">
+                <div class="company-header">
+                    <div class="company-logo">🏪</div>
+                    <div class="company-name">
+                        <h3>Fieldmax</h3>
+                        <div class="company-tagline">Your Trusted Electronics Partner</div>
+                    </div>
+                </div>
+
+                <div class="contact-grid">
+                    <div class="contact-item">
+                        <span class="contact-icon">📱</span>
+                        <span>0722558544</span>
+                    </div>
+                    <div class="contact-item">
+                        <span class="contact-icon">📧</span>
+                        <span>info@fieldmax.co.ke</span>
+                    </div>
+                    <div class="contact-item">
+                        <span class="contact-icon">🌐</span>
+                        <span>www.fieldmax.co.ke</span>
+                    </div>
+                    <div class="contact-item">
+                        <span class="contact-icon">📍</span>
+                        <span>Nairobi, Kenya</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Next Steps -->
+            <div class="next-steps">
+                <div class="next-steps-title">
+                    <span>💡</span>
+                    <span>What Happens Next?</span>
+                </div>
+                <ul class="next-steps-list">
+                    <li>Our team will review and confirm your order</li>
+                    <li>You'll receive a call to verify your order details</li>
+                    <li>We'll process your payment and prepare your items</li>
+                    <li>Your order will be ready for pickup or delivery</li>
+                </ul>
+            </div>
+        </div> <!-- End receiptBlock -->
+
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+            <button onclick="window.location.href='/'" class="btn btn-primary">
+                <span>🏠</span>
+                <span>Home</span>
+            </button>
+            <button onclick="printReceipt()" class="btn btn-secondary">
+                <span>🖨️</span>
+                <span>Print Receipt</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Function to print only the receipt block
+    function printReceipt() {
+        const receiptContent = document.getElementById('receiptBlock').innerHTML;
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Fieldmax Receipt - ${document.getElementById('orderNumber').textContent}</title>
+                <style>
+                    body { font-family: 'Segoe UI', sans-serif; padding: 15px; margin: 0; }
+                    .order-info-card { background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 15px; border-radius: 12px; margin-bottom: 15px; }
+                    .order-number { text-align: center; margin-bottom: 15px; }
+                    .order-number-value { font-size: 22px; font-weight: 900; }
+                    .order-details { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+                    .info-section { background: #f9fafb; padding: 15px; border-radius: 8px; margin-bottom: 15px; }
+                    .info-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #e5e7eb; }
+                    .company-info { border: 2px solid #e5e7eb; padding: 15px; border-radius: 8px; margin-bottom: 15px; }
+                    .contact-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+                    .next-steps { background: #fef3c7; padding: 12px; border-radius: 8px; }
+                    .text-center { text-align: center; }
+                </style>
+            </head>
+            <body>
+                ${receiptContent}
+            </body>
+            </html>
+        `);
+        printWindow.document.close();
+        setTimeout(() => {
+            printWindow.print();
+        }, 500);
+    }
+
+    // Load order information from sessionStorage or API
+    console.log('Success page loaded');
+    
+    document.addEventListener('DOMContentLoaded', async () => {
+        // Check if we have an order ID from view receipt
+        const viewOrderId = sessionStorage.getItem('view_order_id');
+        const newOrderInfo = sessionStorage.getItem('order_info');
+        
+        let order = null;
+        
+        if (viewOrderId) {
+            // We're viewing an existing order - fetch it from API
+            console.log('Loading existing order:', viewOrderId);
+            try {
+                const response = await fetch(`/api/order/${viewOrderId}/receipt/`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success) {
+                        if (data.order) {
+                            order = data.order;
+                        } else if (data.receipt) {
+                            order = data.receipt;
+                        }
+                        document.getElementById('receiptSubtitle').textContent = 'Here is your order receipt.';
+                    }
+                }
+                // Clear after using
+                sessionStorage.removeItem('view_order_id');
+            } catch (error) {
+                console.error('Error fetching order:', error);
+            }
+        } else if (newOrderInfo) {
+            // New order just placed - use session data
+            console.log('Loading new order from session');
+            try {
+                order = JSON.parse(newOrderInfo);
+                document.getElementById('receiptSubtitle').textContent = 'Thank you for your order. Your receipt is below.';
+                sessionStorage.removeItem('order_info');
+            } catch (error) {
+                console.error('Error parsing order info:', error);
+            }
+        }
+        
+        if (!order) {
+            console.error('No order information found');
+            document.getElementById('orderNumber').textContent = 'Not Found';
+            document.getElementById('receiptSubtitle').textContent = 'No order information available.';
+            return;
+        }
+
+        console.log('Loaded order:', order);
+        
+        // Populate order details
+        document.getElementById('orderNumber').textContent = order.order_id || 'N/A';
+        document.getElementById('customerName').textContent = order.buyer_name || 'N/A';
+        document.getElementById('customerPhone').textContent = order.buyer_phone || 'N/A';
+        document.getElementById('paymentMethod').textContent = formatPaymentMethod(order.payment_method);
+        document.getElementById('totalAmount').textContent = `KSh ${(order.total_amount || 0).toLocaleString()}`;
+        document.getElementById('itemCount').textContent = `${order.item_count || 0} item(s)`;
+        document.getElementById('orderStatus').textContent = order.status ? 
+            `⏳ ${order.status.charAt(0).toUpperCase() + order.status.slice(1)}` : 
+            '⏳ Pending';
+        
+        // Set current date or order date
+        if (order.created_at) {
+            const orderDate = new Date(order.created_at);
+            const dateStr = orderDate.toLocaleDateString('en-GB', { 
+                day: '2-digit', 
+                month: 'short', 
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            document.getElementById('orderDate').textContent = dateStr;
+        } else {
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('en-GB', { 
+                day: '2-digit', 
+                month: 'short', 
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            document.getElementById('orderDate').textContent = dateStr;
+        }
+    });
+
+    function formatPaymentMethod(method) {
+        if (!method) return 'Not specified';
+        const methods = {
+            'cash': '💵 Cash',
+            'mpesa': '📱 M-Pesa',
+            'card': '💳 Card',
+            'bank': '🏦 Bank Transfer'
+        };
+        return methods[method.toLowerCase()] || method;
+    }
+</script>
+
+{% endblock %}

@@ -1,0 +1,358 @@
+{% extends 'staff/base.html' %}
+{% load static %}
+
+{% block title %}Staff Applications{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-file-alt me-2"></i>Staff Applications</h2>
+    <a href="{% url 'staff:apply' %}" class="btn btn-info" target="_blank">
+        <i class="fas fa-plus me-2"></i>New Application
+    </a>
+</div>
+
+<!-- Filters -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">Status</label>
+                <select name="status" class="form-select">
+                    <option value="">All Status</option>
+                    {% for status_code, status_name in status_choices %}
+                    <option value="{{ status_code }}" {% if request.GET.status == status_code %}selected{% endif %}>
+                        {{ status_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Position</label>
+                <select name="position" class="form-select">
+                    <option value="">All Positions</option>
+                    {% for pos_code, pos_name in position_choices %}
+                    <option value="{{ pos_code }}" {% if request.GET.position == pos_code %}selected{% endif %}>
+                        {{ pos_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Search</label>
+                <input type="text" name="search" class="form-control" value="{{ request.GET.search }}" 
+                       placeholder="Name, Email, ID Number...">
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <button type="submit" class="btn btn-info me-2">
+                    <i class="fas fa-filter"></i> Filter
+                </button>
+                <a href="{% url 'staff:application_list' %}" class="btn btn-secondary">
+                    <i class="fas fa-times"></i> Clear
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Applications Table -->
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover" id="applicationsTable">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Name</th>
+                        <th>Position</th>
+                        <th>Email</th>
+                        <th>Phone</th>
+                        <th>Applied On</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for app in applications %}
+                    <tr>
+                        <td><span class="badge bg-secondary">#{{ app.id }}</span></td>
+                        <td class="fw-bold">{{ app.full_name }}</td>
+                        <td>{{ app.get_position_display }}</td>
+                        <td>{{ app.email }}</td>
+                        <td>{{ app.phone }}</td>
+                        <td>{{ app.application_date|date:"Y-m-d" }}</td>
+                        <td>
+                            {% if app.status == 'pending' %}
+                                <span class="badge bg-warning">Pending</span>
+                            {% elif app.status == 'approved' %}
+                                <span class="badge bg-success">Approved</span>
+                            {% elif app.status == 'rejected' %}
+                                <span class="badge bg-danger">Rejected</span>
+                            {% elif app.status == 'under_review' %}
+                                <span class="badge bg-info">Under Review</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group" role="group">
+                                <a href="{% url 'staff:application_detail' app.id %}" class="btn btn-sm btn-info" title="View">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                <a href="{% url 'staff:view_documents' app.id %}" class="btn btn-sm btn-secondary" title="Documents">
+                                    <i class="fas fa-file-pdf"></i>
+                                </a>
+                                
+                                <!-- Status-specific action buttons -->
+                                {% if app.status == 'pending' or app.status == 'under_review' %}
+                                    <a href="{% url 'staff:application_approve' app.id %}" class="btn btn-sm btn-success" title="Approve">
+                                        <i class="fas fa-check"></i>
+                                    </a>
+                                    <a href="{% url 'staff:application_reject' app.id %}" class="btn btn-sm btn-danger" title="Reject">
+                                        <i class="fas fa-times"></i>
+                                    </a>
+                                {% elif app.status == 'approved' %}
+                                    <!-- Revert button for approved applications -->
+                                    <button type="button" 
+                                            class="btn btn-sm btn-warning" 
+                                            title="Revert to Pending"
+                                            onclick="showRevertModal('{{ app.id }}', '{{ app.full_name|escapejs }}')">
+                                        <i class="fas fa-undo"></i>
+                                    </button>
+                                {% elif app.status == 'rejected' %}
+                                    <!-- Reopen button for rejected applications -->
+                                    <button type="button" 
+                                            class="btn btn-sm btn-info" 
+                                            title="Reopen Application"
+                                            onclick="showReopenModal('{{ app.id }}', '{{ app.full_name|escapejs }}')">
+                                        <i class="fas fa-redo"></i>
+                                    </button>
+                                {% endif %}
+                            </div>
+                            
+                            <!-- Hidden forms for revert/reopen actions -->
+                            <form id="revert-form-{{ app.id }}" method="post" action="{% url 'staff:application_revert_to_pending' app.id %}" style="display: none;">
+                                {% csrf_token %}
+                            </form>
+                            
+                            <form id="reopen-form-{{ app.id }}" method="post" action="{% url 'staff:application_revert_to_pending' app.id %}" style="display: none;">
+                                {% csrf_token %}
+                            </form>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="text-center py-4">
+                            <i class="fas fa-file-alt fa-3x text-muted mb-3"></i>
+                            <p class="text-muted">No applications found</p>
+                            <a href="{% url 'staff:apply' %}" class="btn btn-info btn-sm" target="_blank">
+                                <i class="fas fa-plus"></i> Create your first application
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Pagination -->
+{% if applications.has_other_pages %}
+<nav class="mt-4">
+    <ul class="pagination justify-content-center">
+        {% if applications.has_previous %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ applications.previous_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                Previous
+            </a>
+        </li>
+        {% endif %}
+        
+        {% for num in applications.paginator.page_range %}
+            {% if applications.number == num %}
+            <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+            {% elif num > applications.number|add:'-3' and num < applications.number|add:'3' %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ num }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                    {{ num }}
+                </a>
+            </li>
+            {% endif %}
+        {% endfor %}
+        
+        {% if applications.has_next %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ applications.next_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                Next
+            </a>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+
+<!-- Revert Confirmation Modal -->
+<div class="modal fade" id="revertConfirmModal" tabindex="-1" aria-labelledby="revertConfirmModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title" id="revertConfirmModalLabel">
+                    <i class="fas fa-undo me-2"></i>
+                    Revert Application to Pending
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to revert <strong id="revertApplicantName"></strong>'s application from <span class="badge bg-success">APPROVED</span> back to <span class="badge bg-warning">PENDING</span>?</p>
+                
+                <div class="alert alert-warning mt-3">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>Warning:</strong> This action will require the application to be reviewed and approved again.
+                </div>
+                
+                <p class="text-muted small mb-0">
+                    <i class="fas fa-info-circle me-1"></i>
+                    The applicant will need to go through the approval process again.
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-1"></i>Cancel
+                </button>
+                <button type="button" class="btn btn-warning" id="confirmRevertBtn">
+                    <i class="fas fa-undo me-1"></i>Revert to Pending
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Reopen Confirmation Modal -->
+<div class="modal fade" id="reopenConfirmModal" tabindex="-1" aria-labelledby="reopenConfirmModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="reopenConfirmModalLabel">
+                    <i class="fas fa-redo me-2"></i>
+                    Reopen Rejected Application
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to reopen <strong id="reopenApplicantName"></strong>'s application from <span class="badge bg-danger">REJECTED</span> to <span class="badge bg-warning">PENDING</span>?</p>
+                
+                <div class="alert alert-info mt-3">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>Note:</strong> This will allow the application to be reviewed again.
+                </div>
+                
+                <p class="text-muted small mb-0">
+                    <i class="fas fa-clock me-1"></i>
+                    The application will be moved back to pending status for reconsideration.
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-1"></i>Cancel
+                </button>
+                <button type="button" class="btn btn-info" id="confirmReopenBtn">
+                    <i class="fas fa-redo me-1"></i>Reopen Application
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentApplicationId = null;
+let currentApplicantName = null;
+
+// Show revert modal for approved applications
+function showRevertModal(applicationId, applicantName) {
+    currentApplicationId = applicationId;
+    currentApplicantName = applicantName;
+    document.getElementById('revertApplicantName').textContent = applicantName;
+    
+    // Use Bootstrap 5 modal
+    const revertModal = new bootstrap.Modal(document.getElementById('revertConfirmModal'));
+    revertModal.show();
+}
+
+// Show reopen modal for rejected applications
+function showReopenModal(applicationId, applicantName) {
+    currentApplicationId = applicationId;
+    currentApplicantName = applicantName;
+    document.getElementById('reopenApplicantName').textContent = applicantName;
+    
+    // Use Bootstrap 5 modal
+    const reopenModal = new bootstrap.Modal(document.getElementById('reopenConfirmModal'));
+    reopenModal.show();
+}
+
+// Initialize everything when document is ready
+document.addEventListener('DOMContentLoaded', function() {
+    // Revert button click handler
+    const confirmRevertBtn = document.getElementById('confirmRevertBtn');
+    if (confirmRevertBtn) {
+        confirmRevertBtn.addEventListener('click', function() {
+            if (currentApplicationId) {
+                const form = document.getElementById(`revert-form-${currentApplicationId}`);
+                if (form) {
+                    form.submit();
+                }
+            }
+        });
+    }
+    
+    // Reopen button click handler
+    const confirmReopenBtn = document.getElementById('confirmReopenBtn');
+    if (confirmReopenBtn) {
+        confirmReopenBtn.addEventListener('click', function() {
+            if (currentApplicationId) {
+                const form = document.getElementById(`reopen-form-${currentApplicationId}`);
+                if (form) {
+                    form.submit();
+                }
+            }
+        });
+    }
+    
+    // Initialize DataTable
+    if (document.getElementById('applicationsTable')) {
+        // Check if DataTable is already initialized
+        if (!$.fn.DataTable.isDataTable('#applicationsTable')) {
+            $('#applicationsTable').DataTable({
+                "paging": false,  // Disable DataTable pagination since we have custom pagination
+                "ordering": true,
+                "info": false,
+                "searching": false,  // Disable search since we have custom filter
+                "language": {
+                    "emptyTable": "No applications available"
+                }
+            });
+        }
+    }
+    
+    // Initialize tooltips
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[title]'));
+    tooltipTriggerList.map(function(tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+    
+    // Clear modals when hidden
+    const revertModal = document.getElementById('revertConfirmModal');
+    if (revertModal) {
+        revertModal.addEventListener('hidden.bs.modal', function() {
+            currentApplicationId = null;
+        });
+    }
+    
+    const reopenModal = document.getElementById('reopenConfirmModal');
+    if (reopenModal) {
+        reopenModal.addEventListener('hidden.bs.modal', function() {
+            currentApplicationId = null;
+        });
+    }
+});
+</script>
+{% endblock %}

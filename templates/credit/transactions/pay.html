@@ -1,0 +1,55 @@
+{% extends 'credit/base.html' %}
+{% load static %}
+
+{% block title %}Cancel Transaction{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'credit:dashboard' %}">Dashboard</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'credit:transaction_list' %}">Transactions</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'credit:transaction_detail' transaction.id %}">{{ transaction.transaction_id }}</a></li>
+            <li class="breadcrumb-item active">Cancel</li>
+        </ol>
+    </nav>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card border-danger">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0"><i class="fas fa-exclamation-triangle me-2"></i>Cancel Transaction</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-warning">
+                    <strong>Transaction:</strong> {{ transaction.transaction_id }}<br>
+                    <strong>Customer:</strong> {{ transaction.customer.full_name }}<br>
+                    <strong>Amount:</strong> KSH {{ transaction.ceiling_price|floatformat:0 }}<br>
+                    <strong>Status:</strong> <span class="badge bg-danger">Pending</span>
+                </div>
+                
+                <p class="text-danger">Are you sure you want to cancel this transaction? This action cannot be undone.</p>
+                
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Reason for Cancellation</label>
+                        <textarea name="reason" class="form-control" rows="3" required></textarea>
+                    </div>
+                    
+                    <div class="d-flex justify-content-center gap-3">
+                        <a href="{% url 'credit:transaction_detail' transaction.id %}" class="btn btn-secondary">
+                            <i class="fas fa-times"></i> No, Go Back
+                        </a>
+                        <button type="submit" class="btn btn-danger">
+                            <i class="fas fa-trash"></i> Yes, Cancel Transaction
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

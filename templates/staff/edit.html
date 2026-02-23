@@ -1,0 +1,139 @@
+{% extends 'staff/base.html' %}
+{% load static %}
+
+{% block title %}Edit Application - {{ application.full_name }}{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'staff:staff_dashboard' %}">Dashboard</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'staff:application_list' %}">Applications</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'staff:application_detail' application.id %}">{{ application.full_name }}</a></li>
+            <li class="breadcrumb-item active">Edit</li>
+        </ol>
+    </nav>
+</div>
+
+<div class="card">
+    <div class="card-header bg-info text-white">
+        <h5 class="mb-0"><i class="fas fa-edit me-2"></i>Edit Application: {{ application.full_name }}</h5>
+    </div>
+    <div class="card-body">
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            
+            <!-- Personal Information -->
+            <h6 class="mb-3 text-info">Personal Information</h6>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">First Name <span class="text-danger">*</span></label>
+                    <input type="text" name="first_name" class="form-control" value="{{ application.first_name }}" required>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Last Name <span class="text-danger">*</span></label>
+                    <input type="text" name="last_name" class="form-control" value="{{ application.last_name }}" required>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Email <span class="text-danger">*</span></label>
+                    <input type="email" name="email" class="form-control" value="{{ application.email }}" required>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Phone <span class="text-danger">*</span></label>
+                    <input type="text" name="phone" class="form-control" value="{{ application.phone }}" required>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">ID Number <span class="text-danger">*</span></label>
+                    <input type="text" name="id_number" class="form-control" value="{{ application.id_number }}" required>
+                </div>
+                <div class="col-md-12 mb-3">
+                    <label class="form-label">Address</label>
+                    <textarea name="address" class="form-control" rows="2">{{ application.address }}</textarea>
+                </div>
+            </div>
+            
+            <!-- Application Details -->
+            <h6 class="mb-3 text-info mt-4">Application Details</h6>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Position <span class="text-danger">*</span></label>
+                    <select name="position" class="form-select" required>
+                        {% for pos_code, pos_name in position_choices %}
+                        <option value="{{ pos_code }}" {% if application.position == pos_code %}selected{% endif %}>
+                            {{ pos_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-12 mb-3">
+                    <label class="form-label">Experience</label>
+                    <textarea name="experience" class="form-control" rows="3">{{ application.experience }}</textarea>
+                </div>
+            </div>
+            
+            <!-- Document Uploads -->
+            <h6 class="mb-3 text-info mt-4">Document Uploads</h6>
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Passport Photo</label>
+                    {% if application.passport_photo %}
+                    <div class="mb-2">
+                        <img src="{{ application.passport_photo.url }}" style="max-height: 80px;">
+                        <small class="d-block text-muted">Current file</small>
+                    </div>
+                    {% endif %}
+                    <input type="file" name="passport_photo" class="form-control" accept="image/*">
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">ID Front</label>
+                    {% if application.id_front %}
+                    <div class="mb-2">
+                        <img src="{{ application.id_front.url }}" style="max-height: 80px;">
+                        <small class="d-block text-muted">Current file</small>
+                    </div>
+                    {% endif %}
+                    <input type="file" name="id_front" class="form-control" accept="image/*">
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">ID Back</label>
+                    {% if application.id_back %}
+                    <div class="mb-2">
+                        <img src="{{ application.id_back.url }}" style="max-height: 80px;">
+                        <small class="d-block text-muted">Current file</small>
+                    </div>
+                    {% endif %}
+                    <input type="file" name="id_back" class="form-control" accept="image/*">
+                </div>
+            </div>
+            
+            <!-- Status -->
+            <h6 class="mb-3 text-info mt-4">Status</h6>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Application Status</label>
+                    <select name="status" class="form-select">
+                        {% for status_code, status_name in status_choices %}
+                        <option value="{{ status_code }}" {% if application.status == status_code %}selected{% endif %}>
+                            {{ status_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Review Notes</label>
+                    <textarea name="review_notes" class="form-control" rows="3">{{ application.review_notes }}</textarea>
+                </div>
+            </div>
+            
+            <div class="d-flex justify-content-end gap-2 mt-4">
+                <a href="{% url 'staff:application_detail' application.id %}" class="btn btn-secondary">
+                    <i class="fas fa-times"></i> Cancel
+                </a>
+                <button type="submit" class="btn btn-info">
+                    <i class="fas fa-save"></i> Save Changes
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
