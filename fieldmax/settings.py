@@ -73,6 +73,7 @@ INSTALLED_APPS = [
     'cloudinary',
     
     # Fieldmax apps
+    'django_dbconn_retry',
     'website',
     'inventory',
     'sales',
