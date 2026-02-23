@@ -1,0 +1,122 @@
+{% extends 'inventory/base.html' %}
+{% load static %}
+
+{% block title %}Suppliers{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-truck me-2"></i>Suppliers</h2>
+    <a href="{% url 'inventory:supplier_add' %}" class="btn btn-primary">
+        <i class="fas fa-plus me-2"></i>Add Supplier
+    </a>
+</div>
+
+<!-- Suppliers Table -->
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover" id="suppliersTable">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Contact Person</th>
+                        <th>Phone</th>
+                        <th>Email</th>
+                        <th>Products</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for supplier in suppliers %}
+                    <tr>
+                        <td class="fw-bold">{{ supplier.name }}</td>
+                        <td>{{ supplier.contact_person|default:"-" }}</td>
+                        <td>{{ supplier.phone }}</td>
+                        <td>{{ supplier.email|default:"-" }}</td>
+                        <td><span class="badge bg-secondary">{{ supplier.product_count }}</span></td>
+                        <td>
+                            {% if supplier.is_active %}
+                                <span class="badge bg-success">Active</span>
+                            {% else %}
+                                <span class="badge bg-danger">Inactive</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ supplier.created_at|date:"Y-m-d" }}</td>
+                        <td>
+                            <div class="btn-group" role="group">
+                                <a href="{% url 'inventory:supplier_edit' supplier.id %}" class="btn btn-sm btn-warning" title="Edit">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                <button type="button" class="btn btn-sm btn-danger" title="Delete" 
+                                        onclick="confirmDelete({{ supplier.id }})">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td class="text-center py-4" colspan="8">
+                            <i class="fas fa-truck fa-3x text-muted mb-3"></i>
+                            <p class="text-muted">No suppliers found</p>
+                            <a href="{% url 'inventory:supplier_add' %}" class="btn btn-primary btn-sm">
+                                <i class="fas fa-plus"></i> Add your first supplier
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="deleteModalLabel">
+                    <i class="fas fa-exclamation-triangle me-2"></i>Confirm Deletion
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete this supplier?</p>
+                <p class="text-warning"><i class="fas fa-info-circle me-2"></i>Products from this supplier will not be deleted but will have supplier set to null.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <a href="#" id="confirmDeleteBtn" class="btn btn-danger">Delete</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    'use strict';
+    
+    // Global function for confirming deletion
+    window.confirmDelete = function(supplierId) {
+        var modalElement = document.getElementById('deleteModal');
+        if (!modalElement) return;
+        
+        var modal = new bootstrap.Modal(modalElement);
+        var confirmBtn = document.getElementById('confirmDeleteBtn');
+        
+        if (confirmBtn) {
+            var baseUrl = "{% url 'inventory:supplier_delete' 0 %}";
+            var deleteUrl = baseUrl.replace('0', supplierId.toString());
+            confirmBtn.setAttribute('href', deleteUrl);
+        }
+        
+        modal.show();
+    };
+})();
+</script>
+{% endblock %}

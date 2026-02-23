@@ -1,0 +1,197 @@
+{% extends 'inventory/base.html' %}
+{% load static %}
+
+{% block title %}Stock Movements{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-exchange-alt me-2"></i>Stock Movements</h2>
+    <div>
+        <span class="text-muted">Total Entries: {{ entries.paginator.count }}</span>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">Entry Type</label>
+                <select name="type" class="form-select">
+                    <option value="">All Types</option>
+                    {% for type_code, type_name in entry_types %}
+                    <option value="{{ type_code }}" {% if request.GET.type == type_code %}selected{% endif %}>
+                        {{ type_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Date From</label>
+                <input type="date" name="date_from" class="form-control" value="{{ request.GET.date_from }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Date To</label>
+                <input type="date" name="date_to" class="form-control" value="{{ request.GET.date_to }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Search</label>
+                <input type="text" name="search" class="form-control" value="{{ request.GET.search }}" placeholder="Reference or notes...">
+            </div>
+            <div class="col-12 d-flex justify-content-end">
+                <button type="submit" class="btn btn-primary me-2">
+                    <i class="fas fa-filter"></i> Filter
+                </button>
+                <a href="{% url 'inventory:stock_movements' %}" class="btn btn-secondary">
+                    <i class="fas fa-times"></i> Clear
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Stock Movements Table -->
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Product</th>
+                        <th>Type</th>
+                        <th>Quantity</th>
+                        <th>Unit Price</th>
+                        <th>Total</th>
+                        <th>Reference</th>
+                        <th>Created By</th>
+                        <th>Date</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entry in entries %}
+                    <tr>
+                        <td><span class="badge bg-secondary">#{{ entry.id }}</span></td>
+                        <td>
+                            <a href="{% url 'inventory:product_detail' entry.product.id %}" class="text-decoration-none">
+                                {{ entry.product.display_name }}
+                            </a>
+                        </td>
+                        <td>
+                            {% if entry.entry_type == 'purchase' %}
+                                <span class="badge bg-success">Purchase</span>
+                            {% elif entry.entry_type == 'sale' %}
+                                <span class="badge bg-danger">Sale</span>
+                            {% elif entry.entry_type == 'reversal' %}
+                                <span class="badge bg-warning text-dark">Return</span>
+                            {% else %}
+                                <span class="badge bg-info">Adjustment</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if entry.quantity > 0 %}
+                                <span class="text-success fw-bold">+{{ entry.quantity }}</span>
+                            {% else %}
+                                <span class="text-danger fw-bold">{{ entry.quantity }}</span>
+                            {% endif %}
+                        </td>
+                        <td>KSH {{ entry.unit_price|floatformat:0 }}</td>
+                        <td>KSH {{ entry.total_amount|floatformat:0 }}</td>
+                        <td><small>{{ entry.reference_id|default:"-" }}</small></td>
+                        <td>{{ entry.created_by.username|default:"System" }}</td>
+                        <td>{{ entry.created_at|date:"Y-m-d H:i" }}</td>
+                        <td>
+                            <button type="button" class="btn btn-sm btn-warning" title="Reverse Entry"
+                                    onclick="reverseEntry({{ entry.id }})">
+                                <i class="fas fa-undo"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="10" class="text-center py-4">
+                            <i class="fas fa-exchange-alt fa-3x text-muted mb-3"></i>
+                            <p class="text-muted">No stock movements found</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Pagination -->
+{% if entries.has_other_pages %}
+<nav class="mt-4">
+    <ul class="pagination justify-content-center">
+        {% if entries.has_previous %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ entries.previous_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                Previous
+            </a>
+        </li>
+        {% endif %}
+        
+        {% for num in entries.paginator.page_range %}
+            {% if entries.number == num %}
+            <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+            {% elif num > entries.number|add:'-3' and num < entries.number|add:'3' %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ num }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                    {{ num }}
+                </a>
+            </li>
+            {% endif %}
+        {% endfor %}
+        
+        {% if entries.has_next %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ entries.next_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                Next
+            </a>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+
+<!-- Reverse Entry Modal -->
+<div class="modal fade" id="reverseModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title"><i class="fas fa-undo me-2"></i>Reverse Entry</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to reverse this stock entry?</p>
+                <p class="text-warning"><i class="fas fa-info-circle me-2"></i>A reversal entry will be created with opposite quantity.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <a href="#" id="confirmReverseBtn" class="btn btn-warning">Reverse Entry</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}  <!-- THIS WAS MISSING - Added at line 153 -->
+
+{% block extra_js %}
+<script>
+(function() {
+    'use strict';
+    
+    function reverseEntry(entryId) {
+        var modal = new bootstrap.Modal(document.getElementById('reverseModal'));
+        var confirmBtn = document.getElementById('confirmReverseBtn');
+        var reverseUrl = "{% url 'inventory:reverse_entry' 0 %}".replace('0', entryId);
+        confirmBtn.setAttribute('href', reverseUrl);
+        modal.show();
+    }
+    
+    window.reverseEntry = reverseEntry;
+})();
+</script>
+{% endblock %}

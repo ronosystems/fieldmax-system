@@ -1,0 +1,125 @@
+{% extends 'inventory/base.html' %}
+{% load static %}
+
+{% block title %}Categories{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-tags me-2"></i>Categories</h2>
+    <a href="{% url 'inventory:category_add' %}" class="btn btn-primary">
+        <i class="fas fa-plus me-2"></i>Add Category
+    </a>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Category Code</th>
+                        <th>Name</th>
+                        <th>Item Type</th>
+                        <th>SKU Type</th>
+                        <th>Products</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for category in categories %}
+                    <tr>
+                        <td><span class="badge bg-secondary">{{ category.category_code }}</span></td>
+                        <td class="fw-bold">{{ category.name }}</td>
+                        <td>
+                            {% if category.item_type == 'single' %}
+                                <span class="badge bg-info">📱 Single Item</span>
+                            {% else %}
+                                <span class="badge bg-secondary">📦 Bulk Item</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if category.sku_type == 'imei' %}
+                                <span class="badge bg-primary">IMEI Number</span>
+                            {% else %}
+                                <span class="badge bg-warning text-dark">Serial Number</span>
+                            {% endif %}
+                        </td>
+                        <td><span class="badge bg-secondary">{{ category.product_count }}</span></td>
+                        <td>
+                            {% if category.is_active %}
+                                <span class="badge bg-success">Active</span>
+                            {% else %}
+                                <span class="badge bg-danger">Inactive</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ category.created_at|date:"Y-m-d" }}</td>
+                        <td>
+                            <div class="btn-group" role="group">
+                                <a href="{% url 'inventory:category_edit' category.id %}" class="btn btn-sm btn-warning" title="Edit">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                <button type="button" class="btn btn-sm btn-danger" title="Delete" 
+                                        onclick="confirmDelete({{ category.id }})">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="text-center py-4">
+                            <i class="fas fa-tags fa-3x text-muted mb-3"></i>
+                            <p class="text-muted">No categories found</p>
+                            <a href="{% url 'inventory:category_add' %}" class="btn btn-primary btn-sm">
+                                <i class="fas fa-plus"></i> Add your first category
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="fas fa-exclamation-triangle me-2"></i>Confirm Deletion</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete this category?</p>
+                <p class="text-warning"><i class="fas fa-info-circle me-2"></i>Products in this category will not be deleted but will need to be reassigned.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <a href="#" id="confirmDeleteBtn" class="btn btn-danger">Delete</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    'use strict';
+    
+    function confirmDelete(categoryId) {
+        var modal = new bootstrap.Modal(document.getElementById('deleteModal'));
+        var confirmBtn = document.getElementById('confirmDeleteBtn');
+        var deleteUrl = "{% url 'inventory:category_delete' 0 %}".replace('0', categoryId);
+        confirmBtn.setAttribute('href', deleteUrl);
+        modal.show();
+    }
+    
+    // Attach to window to make it globally available
+    window.confirmDelete = confirmDelete;
+})();
+</script>
+{% endblock %}

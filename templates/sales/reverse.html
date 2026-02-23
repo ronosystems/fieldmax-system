@@ -1,0 +1,117 @@
+{% extends 'sales/base.html' %}
+{% load static %}
+
+{% block title %}Reverse Sale #{{ sale.sale_id }}{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'sales:sales_dashboard' %}">Dashboard</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'sales:sale_list' %}">Sales</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'sales:sale_detail' sale.sale_id %}">Sale #{{ sale.sale_id }}</a></li>
+            <li class="breadcrumb-item active">Reverse Sale</li>
+        </ol>
+    </nav>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card border-danger">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0"><i class="fas fa-exclamation-triangle me-2"></i>Confirm Sale Reversal</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-warning">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>Warning:</strong> Reversing a sale will:
+                    <ul class="mb-0 mt-2">
+                        <li>Restock all items back to inventory</li>
+                        <li>Mark this sale as reversed</li>
+                        <li>Create reversal stock entries</li>
+                        <li>This action cannot be undone</li>
+                    </ul>
+                </div>
+                
+                <div class="card mb-3 bg-light">
+                    <div class="card-body">
+                        <h6>Sale Summary</h6>
+                        <table class="table table-sm">
+                            <tr>
+                                <th>Sale ID:</th>
+                                <td>{{ sale.sale_id }}</td>
+                            </tr>
+                            <tr>
+                                <th>Date:</th>
+                                <td>{{ sale.sale_date|date:"Y-m-d H:i" }}</td>
+                            </tr>
+                            <tr>
+                                <th>Items:</th>
+                                <td>{{ sale.items.count }}</td>
+                            </tr>
+                            <tr>
+                                <th>Total Amount:</th>
+                                <td class="fw-bold">KSH {{ sale.total_amount|floatformat:0 }}</td>
+                            </tr>
+                            <tr>
+                                <th>Payment Method:</th>
+                                <td>{{ sale.payment_method }}</td>
+                            </tr>
+                            <tr>
+                                <th>Customer:</th>
+                                <td>{{ sale.buyer_name|default:"Walk-in Customer" }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+                
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Reason for Reversal <span class="text-danger">*</span></label>
+                        <textarea name="reason" class="form-control" rows="3" required 
+                                  placeholder="Please provide a reason for reversing this sale..."></textarea>
+                    </div>
+                    
+                    <div class="d-flex justify-content-center gap-3">
+                        <a href="{% url 'sales:sale_detail' sale.sale_id %}" class="btn btn-secondary btn-lg">
+                            <i class="fas fa-times"></i> Cancel
+                        </a>
+                        <button type="submit" class="btn btn-danger btn-lg">
+                            <i class="fas fa-undo"></i> Reverse Sale
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Items in this sale -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h6 class="mb-0"><i class="fas fa-box me-2"></i>Items to be Restocked</h6>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th>Quantity</th>
+                            <th>Price</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in sale.items.all %}
+                        <tr>
+                            <td>{{ item.product_name }}</td>
+                            <td>{{ item.quantity }}</td>
+                            <td>KSH {{ item.total_price|floatformat:0 }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

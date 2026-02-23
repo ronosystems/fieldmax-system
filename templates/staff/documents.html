@@ -1,0 +1,288 @@
+{% extends 'staff/base.html' %}
+{% load static %}
+
+{% block title %}Documents - {{ application.full_name }}{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'staff:staff_dashboard' %}">Dashboard</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'staff:application_list' %}">Applications</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'staff:application_detail' application.id %}">{{ application.full_name }}</a></li>
+            <li class="breadcrumb-item active">Documents</li>
+        </ol>
+    </nav>
+</div>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-file-pdf me-2"></i>Application Documents</h2>
+    <div>
+        <span class="badge bg-info fs-6 p-2">Application #{{ application.id }}</span>
+    </div>
+</div>
+
+<!-- Applicant Info Card -->
+<div class="card mb-4">
+    <div class="card-header bg-info text-white">
+        <h5 class="mb-0"><i class="fas fa-user-circle me-2"></i>Applicant Information</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <p><strong>Name:</strong> {{ application.full_name }}</p>
+                <p><strong>Email:</strong> {{ application.email }}</p>
+                <p><strong>Phone:</strong> {{ application.phone }}</p>
+            </div>
+            <div class="col-md-6">
+                <p><strong>ID Number:</strong> {{ application.id_number }}</p>
+                <p><strong>Position:</strong> {{ application.get_position_display }}</p>
+                <p><strong>Status:</strong> 
+                    {% if application.status == 'pending' %}
+                        <span class="badge bg-warning">Pending</span>
+                    {% elif application.status == 'approved' %}
+                        <span class="badge bg-success">Approved</span>
+                    {% elif application.status == 'rejected' %}
+                        <span class="badge bg-danger">Rejected</span>
+                    {% elif application.status == 'under_review' %}
+                        <span class="badge bg-info">Under Review</span>
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Documents Grid -->
+<div class="row">
+    <!-- Passport Photo -->
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-camera me-2"></i>Passport Photo</h5>
+                {% if application.passport_photo %}
+                <a href="{{ application.passport_photo.url }}" class="btn btn-sm btn-light" download>
+                    <i class="fas fa-download"></i> Download
+                </a>
+                {% endif %}
+            </div>
+            <div class="card-body text-center">
+                {% if application.passport_photo %}
+                    <div class="document-container">
+                        <img src="{{ application.passport_photo.url }}" alt="Passport Photo" class="img-fluid document-image mb-3" style="max-height: 300px; border: 1px solid #ddd; border-radius: 8px; cursor: pointer;" onclick="showImageModal('{{ application.passport_photo.url }}', 'Passport Photo - {{ application.full_name }}')">
+                        <div class="mt-2">
+                            <p class="text-muted small">
+                                <i class="fas fa-file me-1"></i> Filename: {{ application.passport_photo.name|slice:"-30:" }}
+                            </p>
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="py-5">
+                        <i class="fas fa-camera fa-4x text-muted mb-3"></i>
+                        <p class="text-muted">No passport photo uploaded</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- ID Front -->
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-id-card me-2"></i>ID Front</h5>
+                {% if application.id_front %}
+                <a href="{{ application.id_front.url }}" class="btn btn-sm btn-light" download>
+                    <i class="fas fa-download"></i> Download
+                </a>
+                {% endif %}
+            </div>
+            <div class="card-body text-center">
+                {% if application.id_front %}
+                    <div class="document-container">
+                        <img src="{{ application.id_front.url }}" alt="ID Front" class="img-fluid document-image mb-3" style="max-height: 300px; border: 1px solid #ddd; border-radius: 8px; cursor: pointer;" onclick="showImageModal('{{ application.id_front.url }}', 'ID Front - {{ application.full_name }}')">
+                        <div class="mt-2">
+                            <p class="text-muted small">
+                                <i class="fas fa-file me-1"></i> Filename: {{ application.id_front.name|slice:"-30:" }}
+                            </p>
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="py-5">
+                        <i class="fas fa-id-card fa-4x text-muted mb-3"></i>
+                        <p class="text-muted">No ID front image uploaded</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- ID Back -->
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-id-card me-2"></i>ID Back</h5>
+                {% if application.id_back %}
+                <a href="{{ application.id_back.url }}" class="btn btn-sm btn-light" download>
+                    <i class="fas fa-download"></i> Download
+                </a>
+                {% endif %}
+            </div>
+            <div class="card-body text-center">
+                {% if application.id_back %}
+                    <div class="document-container">
+                        <img src="{{ application.id_back.url }}" alt="ID Back" class="img-fluid document-image mb-3" style="max-height: 300px; border: 1px solid #ddd; border-radius: 8px; cursor: pointer;" onclick="showImageModal('{{ application.id_back.url }}', 'ID Back - {{ application.full_name }}')">
+                        <div class="mt-2">
+                            <p class="text-muted small">
+                                <i class="fas fa-file me-1"></i> Filename: {{ application.id_back.name|slice:"-30:" }}
+                            </p>
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="py-5">
+                        <i class="fas fa-id-card fa-4x text-muted mb-3"></i>
+                        <p class="text-muted">No ID back image uploaded</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Document Metadata -->
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="fas fa-info-circle me-2"></i>Document Information</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tr>
+                        <th>Application Date:</th>
+                        <td>{{ application.application_date|date:"Y-m-d H:i" }}</td>
+                    </tr>
+                    <tr>
+                        <th>Last Updated:</th>
+                        <td>{{ application.updated_at|date:"Y-m-d H:i" }}</td>
+                    </tr>
+                    <tr>
+                        <th>Documents Status:</th>
+                        <td>
+                            {% if application.passport_photo and application.id_front and application.id_back %}
+                                <span class="badge bg-success">All Documents Uploaded</span>
+                            {% else %}
+                                <span class="badge bg-warning">Incomplete</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+                
+                <hr>
+                
+                <h6 class="mt-3">Document Checklist</h6>
+                <ul class="list-unstyled">
+                    <li class="mb-2">
+                        {% if application.passport_photo %}
+                            <i class="fas fa-check-circle text-success me-2"></i>
+                        {% else %}
+                            <i class="fas fa-times-circle text-danger me-2"></i>
+                        {% endif %}
+                        Passport Photo
+                    </li>
+                    <li class="mb-2">
+                        {% if application.id_front %}
+                            <i class="fas fa-check-circle text-success me-2"></i>
+                        {% else %}
+                            <i class="fas fa-times-circle text-danger me-2"></i>
+                        {% endif %}
+                        ID Front
+                    </li>
+                    <li class="mb-2">
+                        {% if application.id_back %}
+                            <i class="fas fa-check-circle text-success me-2"></i>
+                        {% else %}
+                            <i class="fas fa-times-circle text-danger me-2"></i>
+                        {% endif %}
+                        ID Back
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Action Buttons -->
+<div class="d-flex justify-content-center gap-3 mt-4">
+    <a href="{% url 'staff:application_detail' application.id %}" class="btn btn-info">
+        <i class="fas fa-arrow-left me-2"></i>Back to Application
+    </a>
+    <a href="{% url 'staff:application_edit' application.id %}" class="btn btn-warning">
+        <i class="fas fa-edit me-2"></i>Edit Application
+    </a>
+    {% if application.status == 'pending' or application.status == 'under_review' %}
+    <a href="{% url 'staff:application_approve' application.id %}" class="btn btn-success">
+        <i class="fas fa-check me-2"></i>Approve
+    </a>
+    <a href="{% url 'staff:application_reject' application.id %}" class="btn btn-danger">
+        <i class="fas fa-times me-2"></i>Reject
+    </a>
+    {% endif %}
+</div>
+
+<!-- Image Modal for Zoom -->
+<div class="modal fade" id="imageModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="imageModalTitle"></h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center">
+                <img src="" id="modalImage" class="img-fluid" style="max-height: 80vh;">
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.document-image {
+    transition: transform 0.2s;
+}
+
+.document-image:hover {
+    transform: scale(1.02);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+/* Hover effect for document cards */
+.card {
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function showImageModal(imageUrl, title) {
+    document.getElementById('modalImage').src = imageUrl;
+    document.getElementById('imageModalTitle').textContent = title;
+    new bootstrap.Modal(document.getElementById('imageModal')).show();
+}
+
+// Add click event to all document images (already inline, but this is backup)
+document.addEventListener('DOMContentLoaded', function() {
+    const images = document.querySelectorAll('.document-image');
+    images.forEach(img => {
+        img.addEventListener('click', function() {
+            showImageModal(this.src, this.alt);
+        });
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,453 @@
+{% extends 'staff/base.html' %}
+
+{% block title %}Admin Dashboard{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-tachometer-alt me-2"></i><strong>System Overview Dashboard</strong></h2>
+        <div>
+            <span class="badge bg-primary p-2">System Administrator</span>
+        </div>
+    </div>
+
+    <!-- System Overview Cards -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card stat-card h-100 py-2">
+                <div class="card-body">
+                    <div class="stat-icon">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <div class="stat-value">{{ total_users|default:0 }}</div>
+                    <div class="stat-label">Total Users</div>
+                    <small class="text-muted">{{ total_staff|default:0 }} Staff Members</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card stat-card h-100 py-2">
+                <div class="card-body">
+                    <div class="stat-icon">
+                        <i class="fas fa-boxes"></i>
+                    </div>
+                    <div class="stat-value">{{ total_products|default:0 }}</div>
+                    <div class="stat-label">Total Products</div>
+                    <small class="text-muted">{{ total_categories|default:0 }} Categories</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card stat-card h-100 py-2">
+                <div class="card-body">
+                    <div class="stat-icon">
+                        <i class="fas fa-shopping-cart"></i>
+                    </div>
+                    <div class="stat-value">KSH {{ total_sales|default:0|floatformat:0 }}</div>
+                    <div class="stat-label">Total Sales</div>
+                    <small class="text-muted">Today: KSH {{ today_sales|default:0|floatformat:0 }}</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card stat-card h-100 py-2">
+                <div class="card-body">
+                    <div class="stat-icon">
+                        <i class="fas fa-credit-card"></i>
+                    </div>
+                    <div class="stat-value">KSH {{ total_credit|default:0|floatformat:0 }}</div>
+                    <div class="stat-label">Total Credit</div>
+                    <small class="text-muted">{{ pending_credit|default:0 }} Pending</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<!-- Management Actions Row - Single Container with Action Cards -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <i class="fas fa-cog me-1"></i>
+                Quick Management Actions
+            </div>
+            <div class="card-body">
+                <div class="row g-4">
+                    <!-- Users Management Card -->
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card h-100 border-0 shadow-sm">
+                            <div class="card-body text-center">
+                                <div class="display-4 text-primary mb-3">
+                                    <i class="fas fa-users"></i>
+                                </div>
+                                <h5 class="card-title fw-bold">Users Management</h5>
+                                <p class="card-text text-muted small">Manage system users, roles, and permissions</p>
+                                <div class="d-grid gap-2">
+                                    <a href="{% url 'staff:user_list' %}" class="btn btn-outline-primary">
+                                        <i class="fas fa-eye me-2"></i>View Users
+                                    </a>
+                                    <a href="{% url 'admin:auth_user_add' %}" class="btn btn-primary" target="_blank">
+                                        <i class="fas fa-plus me-2"></i>Add New User
+                                    </a>
+                                </div>
+                            </div>
+                            <div class="card-footer bg-transparent border-0 text-muted small text-center">
+                                {{ total_users|default:0 }} Total Users | {{ active_users|default:0 }} Active
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Sales Management Card -->
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card h-100 border-0 shadow-sm">
+                            <div class="card-body text-center">
+                                <div class="display-4 text-success mb-3">
+                                    <i class="fas fa-shopping-cart"></i>
+                                </div>
+                                <h5 class="card-title fw-bold">Sales Management</h5>
+                                <p class="card-text text-muted small">Track sales, receipts, and transaction history</p>
+                                <div class="d-grid gap-2">
+                                    <a href="{% url 'sales:sale_list' %}" class="btn btn-outline-success">
+                                        <i class="fas fa-list me-2"></i>View Sales
+                                    </a>
+                                    <a href="{% url 'sales:sale_create' %}" class="btn btn-success">
+                                        <i class="fas fa-plus me-2"></i>New Sale
+                                    </a>
+                                </div>
+                            </div>
+                            <div class="card-footer bg-transparent border-0 text-muted small text-center">
+                                Today: KSH {{ today_sales|default:0|floatformat:0 }} | {{ today_sales_count|default:0 }} Transactions
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Credit Management Card -->
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card h-100 border-0 shadow-sm">
+                            <div class="card-body text-center">
+                                <div class="display-4 text-warning mb-3">
+                                    <i class="fas fa-credit-card"></i>
+                                </div>
+                                <h5 class="card-title fw-bold">Credit Management</h5>
+                                <p class="card-text text-muted small">Manage credit transactions and customer accounts</p>
+                                <div class="d-grid gap-2">
+                                    <a href="{% url 'credit:transaction_list' %}" class="btn btn-outline-warning">
+                                        <i class="fas fa-list me-2"></i>View Credits
+                                    </a>
+                                    <a href="{% url 'credit:transaction_create' %}" class="btn btn-warning">
+                                        <i class="fas fa-plus me-2"></i>New Credit
+                                    </a>
+                                </div>
+                            </div>
+                            <div class="card-footer bg-transparent border-0 text-muted small text-center">
+                                {{ pending_credit|default:0 }} Pending | KSH {{ total_credit|default:0|floatformat:0 }}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Inventory Management Card -->
+                    <div class="col-xl-3 col-md-6">
+                        <div class="card h-100 border-0 shadow-sm">
+                            <div class="card-body text-center">
+                                <div class="display-4 text-info mb-3">
+                                    <i class="fas fa-boxes"></i>
+                                </div>
+                                <h5 class="card-title fw-bold">Inventory Management</h5>
+                                <p class="card-text text-muted small">Manage products, stock, and categories</p>
+                                <div class="d-grid gap-2">
+                                    <a href="{% url 'inventory:product_list' %}" class="btn btn-outline-info">
+                                        <i class="fas fa-list me-2"></i>View Products
+                                    </a>
+                                    <a href="{% url 'inventory:product_add' %}" class="btn btn-info">
+                                        <i class="fas fa-plus me-2"></i>Add Product
+                                    </a>
+                                </div>
+                            </div>
+                            <div class="card-footer bg-transparent border-0 text-muted small text-center">
+                                {{ total_products|default:0 }} Products | {{ total_categories|default:0 }} Categories
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+    <!-- Recent Activities Row -->
+    <div class="row">
+        <!-- Recent Sales -->
+        <div class="col-lg-4 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-shopping-cart me-1"></i>
+                    Recent Sales
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush" style="max-height: 300px; overflow-y: auto;">
+                        {% for sale in recent_sales %}
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>{{ sale.sale_id }}</strong>
+                                    <br>
+                                    <small>{{ sale.buyer_name|default:"Walk-in" }}</small>
+                                </div>
+                                <div class="text-end">
+                                    <span class="fw-bold text-success">KSH {{ sale.total_amount|floatformat:0 }}</span>
+                                    <br>
+                                    <small class="text-muted">{{ sale.sale_date|date:"H:i" }}</small>
+                                </div>
+                            </div>
+                        </div>
+                        {% empty %}
+                        <div class="list-group-item text-center text-muted">No recent sales</div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Credits -->
+        <div class="col-lg-4 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-credit-card me-1"></i>
+                    Recent Credit Transactions
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush" style="max-height: 300px; overflow-y: auto;">
+                        {% for credit in recent_credits %}
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>{{ credit.transaction_id }}</strong>
+                                    <br>
+                                    <small>{{ credit.customer.full_name|truncatechars:20 }}</small>
+                                </div>
+                                <div class="text-end">
+                                    <span class="fw-bold text-warning">KSH {{ credit.ceiling_price|floatformat:0 }}</span>
+                                    <br>
+                                    <span class="badge {% if credit.payment_status == 'paid' %}bg-success{% elif credit.payment_status == 'pending' %}bg-danger{% else %}bg-warning{% endif %}">
+                                        {{ credit.payment_status }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        {% empty %}
+                        <div class="list-group-item text-center text-muted">No recent credits</div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Users -->
+        <div class="col-lg-4 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-users me-1"></i>
+                    New Users
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush" style="max-height: 300px; overflow-y: auto;">
+                        {% for user in recent_users %}
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>{{ user.username }}</strong>
+                                    <br>
+                                    <small>{{ user.email }}</small>
+                                </div>
+                                <small class="text-muted">{{ user.date_joined|date:"d M" }}</small>
+                            </div>
+                        </div>
+                        {% empty %}
+                        <div class="list-group-item text-center text-muted">No new users</div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Chart Data - Hidden JSON Elements -->
+<div id="chartData" 
+     data-chart-labels="{{ chart_labels|safe }}"
+     data-sales-data="{{ sales_data|safe }}"
+     data-credit-data="{{ credit_data|safe }}"
+     data-staff-positions="{{ staff_by_position_json|safe }}"
+     style="display: none;"></div>
+
+<style>
+/* Fix for canvas autoscrolling */
+canvas {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 100%;
+}
+
+/* Prevent body from auto-scrolling */
+html, body {
+    overflow-x: hidden;
+    overflow-y: auto;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+.main-content {
+    overflow-y: auto;
+    height: 100vh;
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+(function() {
+    'use strict';
+    
+    // Wait for DOM to be ready
+    document.addEventListener('DOMContentLoaded', function() {
+        // Prevent any autoscrolling
+        window.scrollTo(0, 0);
+        
+        // Get chart data from hidden div
+        var chartDataElement = document.getElementById('chartData');
+        
+        if (chartDataElement) {
+            // Parse chart data
+            var chartLabels = JSON.parse(chartDataElement.dataset.chartLabels || '[]');
+            var salesData = JSON.parse(chartDataElement.dataset.salesData || '[]');
+            var creditData = JSON.parse(chartDataElement.dataset.creditData || '[]');
+            var staffPositions = JSON.parse(chartDataElement.dataset.staffPositions || '[]');
+            
+            // Overview Chart
+            var overviewChartCanvas = document.getElementById('overviewChart');
+            if (overviewChartCanvas && chartLabels.length > 0) {
+                var ctx = overviewChartCanvas.getContext('2d');
+                var overviewChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: chartLabels,
+                        datasets: [
+                            {
+                                label: 'Sales (KSH)',
+                                data: salesData,
+                                borderColor: '#28a745',
+                                backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                                tension: 0.1,
+                                fill: true,
+                                pointRadius: 3,
+                                pointHoverRadius: 5
+                            },
+                            {
+                                label: 'Credit (KSH)',
+                                data: creditData,
+                                borderColor: '#ffc107',
+                                backgroundColor: 'rgba(255, 193, 7, 0.1)',
+                                tension: 0.1,
+                                fill: true,
+                                pointRadius: 3,
+                                pointHoverRadius: 5
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        animation: {
+                            duration: 500
+                        },
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                            },
+                            tooltip: {
+                                mode: 'index',
+                                intersect: false
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: function(value) {
+                                        return 'KSH ' + value;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            } else {
+                var overviewContainer = document.getElementById('overviewChart');
+                if (overviewContainer) {
+                    overviewContainer.parentNode.innerHTML = '<div class="alert alert-info">No chart data available</div>';
+                }
+            }
+            
+            // Staff Distribution Chart
+            var staffChartCanvas = document.getElementById('staffChart');
+            if (staffChartCanvas && staffPositions.length > 0) {
+                var staffLabels = [];
+                var staffCounts = [];
+                var staffColors = ['#28a745', '#17a2b8', '#ffc107', '#dc3545', '#fd7e14', '#6f42c1', '#20c997', '#343a40'];
+                
+                for (var i = 0; i < staffPositions.length; i++) {
+                    staffLabels.push(staffPositions[i].position);
+                    staffCounts.push(staffPositions[i].count);
+                }
+                
+                var staffCtx = staffChartCanvas.getContext('2d');
+                var staffChart = new Chart(staffCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: staffLabels,
+                        datasets: [{
+                            data: staffCounts,
+                            backgroundColor: staffColors.slice(0, staffLabels.length),
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        animation: {
+                            duration: 500
+                        },
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                            }
+                        }
+                    }
+                });
+            } else {
+                var staffContainer = document.getElementById('staffChart');
+                if (staffContainer) {
+                    staffContainer.parentNode.innerHTML = '<div class="alert alert-info">No staff data available</div>';
+                }
+            }
+        }
+        
+        // Ensure canvas doesn't cause scrolling
+        var canvases = document.querySelectorAll('canvas');
+        for (var i = 0; i < canvases.length; i++) {
+            canvases[i].addEventListener('mouseenter', function() {
+                this.style.pointerEvents = 'none';
+                var self = this;
+                setTimeout(function() {
+                    self.style.pointerEvents = 'auto';
+                }, 100);
+            });
+        }
+    });
+})();
+</script>
+{% endblock %}

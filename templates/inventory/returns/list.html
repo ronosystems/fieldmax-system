@@ -1,0 +1,298 @@
+{% extends 'inventory/base.html' %}
+{% load static %}
+
+{% block title %}Return Requests{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header with Enhanced Stats -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-undo-alt me-2"></i>Return Requests</h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'inventory:dashboard' %}">Dashboard</a></li>
+                    <li class="breadcrumb-item active">Returns</li>
+                </ol>
+            </nav>
+        </div>
+        
+        <!-- Return Stats Cards (Horizontal) -->
+        <div class="d-flex gap-3">
+            <!-- Total Returns -->
+            <div class="text-center px-3 py-2 bg-light rounded">
+                <small class="text-muted d-block">Total</small>
+                <span class="fw-bold fs-5">{{ total_count|default:'0' }}</span>
+            </div>
+            
+            <!-- Pending Verification -->
+            <a href="?status=submitted" class="text-decoration-none">
+                <div class="text-center px-3 py-2 bg-info bg-opacity-10 rounded">
+                    <small class="text-info d-block">To Verify</small>
+                    <span class="fw-bold fs-5 text-info">{{ pending_verification_count|default:'0' }}</span>
+                </div>
+            </a>
+            
+            <!-- Approved -->
+            <a href="?status=approved" class="text-decoration-none">
+                <div class="text-center px-3 py-2 bg-success bg-opacity-10 rounded">
+                    <small class="text-success d-block">Approved</small>
+                    <span class="fw-bold fs-5 text-success">{{ approved_count|default:'0' }}</span>
+                </div>
+            </a>
+            
+            <!-- Rejected -->
+            <a href="?status=rejected" class="text-decoration-none">
+                <div class="text-center px-3 py-2 bg-danger bg-opacity-10 rounded">
+                    <small class="text-danger d-block">Rejected</small>
+                    <span class="fw-bold fs-5 text-danger">{{ rejected_count|default:'0' }}</span>
+                </div>
+            </a>
+        </div>
+        
+        <!-- Action Buttons -->
+        <div class="d-flex gap-2">
+            <a href="{% url 'inventory:return_product' %}" class="btn btn-warning">
+                <i class="fas fa-plus me-2"></i>New Return
+            </a>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Status</label>
+                    <select name="status" class="form-select">
+                        <option value="">All Status</option>
+                        {% for status_code, status_name in status_choices %}
+                        <option value="{{ status_code }}" {% if request.GET.status == status_code %}selected{% endif %}>
+                            {{ status_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Date From</label>
+                    <input type="date" name="date_from" class="form-control" value="{{ request.GET.date_from }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Date To</label>
+                    <input type="date" name="date_to" class="form-control" value="{{ request.GET.date_to }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Search</label>
+                    <input type="text" name="search" class="form-control" value="{{ request.GET.search }}" 
+                           placeholder="Return ID, Product, SKU...">
+                </div>
+                <div class="col-12 d-flex justify-content-end">
+                    <button type="submit" class="btn btn-primary me-2">
+                        <i class="fas fa-filter"></i> Filter
+                    </button>
+                    <a href="{% url 'inventory:return_list' %}" class="btn btn-secondary">
+                        <i class="fas fa-times"></i> Clear
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Returns Table -->
+    <div class="card">
+        <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-list me-2"></i>Return Requests</h5>
+            <span class="badge bg-dark">{{ returns.paginator.count|default:'0' }} Total</span>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Return ID</th>
+                            <th>Date</th>
+                            <th>Product</th>
+                            <th>SKU/IMEI</th>
+                            <th>Customer</th>
+                            <th>Reason</th>
+                            <th>Status</th>
+                            <th>Verification</th>
+                            <th>Requested By</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for return in returns %}
+                        <tr>
+                            <td>
+                                <span class="badge bg-secondary">{{ return.return_id|slice:":8" }}</span>
+                            </td>
+                            <td>{{ return.requested_at|date:"Y-m-d H:i" }}</td>
+                            <td>
+                                <strong>{{ return.product_name }}</strong>
+                                <br>
+                                <small class="text-muted">{{ return.product_code }}</small>
+                            </td>
+                            <td>
+                                {% if return.sku_value %}
+                                    <span class="small">{{ return.sku_value }}</span>
+                                {% else %}
+                                    <span class="text-muted">N/A</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if return.sale and return.sale.buyer_name %}
+                                    {{ return.sale.buyer_name }}
+                                {% else %}
+                                    <span class="text-muted">Unknown</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="small">{{ return.get_reason_display }}</span>
+                            </td>
+                            <td>
+                                {% if return.status == 'pending' %}
+                                    <span class="badge bg-secondary">Pending</span>
+                                {% elif return.status == 'submitted' %}
+                                    <span class="badge bg-info">Awaiting Verification</span>
+                                {% elif return.status == 'verified' %}
+                                    <span class="badge bg-primary">Verified</span>
+                                {% elif return.status == 'approved' %}
+                                    <span class="badge bg-success">Approved</span>
+                                {% elif return.status == 'rejected' %}
+                                    <span class="badge bg-danger">Rejected</span>
+                                {% elif return.status == 'processed' %}
+                                    <span class="badge bg-success">Processed</span>
+                                {% elif return.status == 'mismatch' %}
+                                    <span class="badge bg-warning text-dark">Mismatch</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">{{ return.status }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if return.verification_status == 'passed' %}
+                                    <span class="badge bg-success">✓ Passed</span>
+                                {% elif return.verification_status == 'failed' %}
+                                    <span class="badge bg-danger">✗ Failed</span>
+                                {% elif return.verification_status == 'pending' %}
+                                    <span class="badge bg-secondary">Pending</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <small>{{ return.requested_by.get_full_name|default:return.requested_by.username }}</small>
+                            </td>
+                            <td>
+                                <div class="btn-group" role="group">
+                                    <!-- View Details Button -->
+                                    <a href="{% url 'inventory:return_detail' return.id %}" 
+                                       class="btn btn-sm btn-outline-info" title="View Details">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    
+                                    <!-- Verify Button - Only for managers when status is 'submitted' -->
+                                    {% if return.status == 'submitted' and request.user.is_staff %}
+                                    <a href="{% url 'inventory:return_verify' return.id %}" 
+                                       class="btn btn-sm btn-outline-primary" title="Verify Product">
+                                        <i class="fas fa-clipboard-check"></i>
+                                    </a>
+                                    {% endif %}
+                                    
+                                    <!-- Approve Button - Only for managers when status is 'verified' -->
+                                    {% if return.status == 'verified' and request.user.is_staff %}
+                                    <a href="{% url 'inventory:return_approve' return.id %}" 
+                                       class="btn btn-sm btn-outline-success" title="Approve Return">
+                                        <i class="fas fa-check-circle"></i>
+                                    </a>
+                                    {% endif %}
+                                    
+                                    <!-- Reject Button - Only for managers when status is 'submitted' or 'verified' -->
+                                    {% if return.status == 'submitted' or return.status == 'verified' %}
+                                        {% if request.user.is_staff %}
+                                        <a href="{% url 'inventory:return_reject' return.id %}" 
+                                           class="btn btn-sm btn-outline-danger" title="Reject Return">
+                                            <i class="fas fa-times-circle"></i>
+                                        </a>
+                                        {% endif %}
+                                    {% endif %}
+                                    
+                                    <!-- Process Button - Only for managers when status is 'approved' -->
+                                    {% if return.status == 'approved' and request.user.is_staff %}
+                                    <a href="{% url 'inventory:return_process' return.id %}" 
+                                       class="btn btn-sm btn-outline-warning" title="Process Return">
+                                        <i class="fas fa-undo-alt"></i>
+                                    </a>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="10" class="text-center py-5">
+                                <i class="fas fa-undo-alt fa-4x text-muted mb-3"></i>
+                                <p class="text-muted">No return requests found</p>
+                                <a href="{% url 'inventory:return_product' %}" class="btn btn-warning">
+                                    <i class="fas fa-plus me-2"></i>Create New Return
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pagination -->
+    {% if returns.has_other_pages %}
+    <nav class="mt-4">
+        <ul class="pagination justify-content-center">
+            {% if returns.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ returns.previous_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                    Previous
+                </a>
+            </li>
+            {% endif %}
+            
+            {% for num in returns.paginator.page_range %}
+                {% if returns.number == num %}
+                <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                {% elif num > returns.number|add:'-3' and num < returns.number|add:'3' %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ num }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                        {{ num }}
+                    </a>
+                </li>
+                {% endif %}
+            {% endfor %}
+            
+            {% if returns.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ returns.next_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                    Next
+                </a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+
+<style>
+    .badge {
+        font-size: 0.85rem;
+        padding: 5px 10px;
+    }
+    .table td {
+        vertical-align: middle;
+    }
+    .btn-group .btn {
+        padding: 0.25rem 0.5rem;
+    }
+    .bg-opacity-10 {
+        --bs-bg-opacity: 0.1;
+    }
+</style>
+{% endblock %}

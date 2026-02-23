@@ -1,0 +1,360 @@
+{% extends 'inventory/base.html' %}
+{% load static %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-tachometer-alt me-2"></i>Dashboard</h2>
+    <div>
+        <span class="text-muted">Last updated: {% now "F j, Y H:i" %}</span>
+        <span class="ms-3">
+            <a href="{% url 'inventory:dashboard' %}" class="btn btn-sm btn-outline-secondary">
+                <i class="fas fa-sync-alt"></i> Refresh
+            </a>
+        </span>
+    </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="stat-card" style="border-left: 5px solid #4361ee;">
+            <div class="stat-value">{{ total_products|default:"0" }}</div>
+            <div class="stat-label">Total Products</div>
+            <i class="fas fa-box stat-icon" style="color: #4361ee;"></i>
+        </div>
+    </div>
+    
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="stat-card" style="border-left: 5px solid #2ecc71;">
+            <div class="stat-value">{{ available_products|default:"0" }}</div>
+            <div class="stat-label">Available Items</div>
+            <i class="fas fa-check-circle stat-icon" style="color: #2ecc71;"></i>
+        </div>
+    </div>
+    
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="stat-card" style="border-left: 5px solid #f39c12;">
+            <div class="stat-value">{{ low_stock_count|default:"0" }}</div>
+            <div class="stat-label">Low Stock Items</div>
+            <i class="fas fa-exclamation-triangle stat-icon" style="color: #f39c12;"></i>
+        </div>
+    </div>
+    
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="stat-card" style="border-left: 5px solid #e74c3c;">
+            <div class="stat-value">{{ out_of_stock|default:"0" }}</div>
+            <div class="stat-label">Out of Stock</div>
+            <i class="fas fa-times-circle stat-icon" style="color: #e74c3c;"></i>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row -->
+<div class="row mb-4">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-chart-line me-2"></i>Stock Movement History (Last 30 Days)
+            </div>
+            <div class="card-body">
+                <canvas id="stockChart" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-chart-pie me-2"></i>Stock Status
+            </div>
+            <div class="card-body">
+                <canvas id="statusChart" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Products and Stock Movements -->
+<div class="row">
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="fas fa-box me-2"></i>Recent Products</span>
+                <a href="{% url 'inventory:product_list' %}" class="btn btn-sm btn-primary">View All</a>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Product Code</th>
+                                <th>Name</th>
+                                <th>Price</th>
+                                <th>Stock</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for product in recent_products %}
+                            <tr>
+                                <td><span class="badge bg-secondary">{{ product.product_code }}</span></td>
+                                <td>
+                                    <a href="{% url 'inventory:product_detail' product.id %}" class="text-decoration-none">
+                                        {{ product.display_name }}
+                                    </a>
+                                </td>
+                                <td>KSH {{ product.selling_price|floatformat:0 }}</td>
+                        <!-- FIXED: Stock Column -->
+                        <td>
+                            {% if product.category.is_single_item %}
+                                {% if product.quantity > 0 and product.status == 'available' %}
+                                    <span class="badge bg-success">✓ In Stock</span>
+                                {% else %}
+                                    <span class="badge bg-danger">SOLD</span>
+                                {% endif %}
+                            {% else %}
+                                <span class="fw-bold">{{ product.quantity }}</span>
+                                {% if product.quantity <= product.reorder_level %}
+                                    <span class="badge bg-warning text-dark ms-1">Reorder</span>
+                                {% endif %}
+                            {% endif %}
+                        </td>
+                        <!-- FIXED: Status Column -->
+                        <td>
+                            {% if product.status == 'available' %}
+                                <span class="badge-available">✓ Available</span>
+                            {% elif product.status == 'sold' %}
+                                <span class="badge bg-secondary">Sold Out</span>
+                            {% elif product.status == 'lowstock' %}
+                                <span class="badge-lowstock">⚠️ Low Stock</span>
+                            {% elif product.status == 'outofstock' %}
+                                <span class="badge bg-danger">❌ Out of Stock</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ product.get_status_display }}</span>
+                            {% endif %}
+                        </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center py-4">No products found</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="fas fa-exchange-alt me-2"></i>Recent Stock Movements</span>
+                <a href="{% url 'inventory:stock_movements' %}" class="btn btn-sm btn-primary">View All</a>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Product</th>
+                                <th>Type</th>
+                                <th>Quantity</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for entry in recent_movements %}
+                            <tr>
+                                <td>
+                                    <a href="{% url 'inventory:product_detail' entry.product.id %}" class="text-decoration-none">
+                                        {{ entry.product.display_name }}
+                                    </a>
+                                </td>
+                                <td>
+                                    {% if entry.entry_type == 'purchase' %}
+                                        <span class="badge bg-success">Purchase</span>
+                                    {% elif entry.entry_type == 'sale' %}
+                                        <span class="badge bg-danger">Sale</span>
+                                    {% elif entry.entry_type == 'reversal' %}
+                                        <span class="badge bg-warning text-dark">Return</span>
+                                    {% else %}
+                                        <span class="badge bg-info">Adjust</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if entry.quantity > 0 %}
+                                        <span class="text-success fw-bold">+{{ entry.quantity }}</span>
+                                    {% else %}
+                                        <span class="text-danger fw-bold">{{ entry.quantity }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ entry.created_at|timesince }} ago</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center py-4">No movements found</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Low Stock Alerts -->
+{% if low_stock_alerts %}
+<div class="row">
+    <div class="col-12">
+        <div class="card border-warning">
+            <div class="card-header bg-warning text-dark">
+                <i class="fas fa-exclamation-triangle me-2"></i>Low Stock Alerts
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Product</th>
+                                <th>Current Stock</th>
+                                <th>Reorder Level</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for alert in low_stock_alerts %}
+                            <tr>
+                                <td>
+                                    <a href="{% url 'inventory:product_detail' alert.product.id %}">
+                                        {{ alert.product.display_name }}
+                                    </a>
+                                </td>
+                                <td><span class="fw-bold text-warning">{{ alert.product.quantity }}</span></td>
+                                <td>{{ alert.alert_level }}</td>
+                                <td>
+                                    <a href="{% url 'inventory:restock_product' alert.id %}" class="btn btn-sm btn-warning">
+                                        <i class="fas fa-plus"></i> Restock
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+/* global Chart */
+(function() {
+    'use strict';
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        // Get chart data from data attributes or window variables
+        var chartLabels = [];
+        var stockInData = [];
+        var stockOutData = [];
+        var statusData = [0, 0, 0, 0];
+        
+        {% if chart_labels %}
+            chartLabels = {{ chart_labels|safe }};
+        {% endif %}
+        
+        {% if stock_in_data %}
+            stockInData = {{ stock_in_data|safe }};
+        {% endif %}
+        
+        {% if stock_out_data %}
+            stockOutData = {{ stock_out_data|safe }};
+        {% endif %}
+        
+        {% if status_counts %}
+            statusData = [
+                {{ status_counts.available|default:0 }},
+                {{ status_counts.sold|default:0 }},
+                {{ status_counts.lowstock|default:0 }},
+                {{ status_counts.outofstock|default:0 }}
+            ];
+        {% endif %}
+        
+        // Stock Movement Chart
+        var stockChartEl = document.getElementById('stockChart');
+        if (stockChartEl && chartLabels.length > 0) {
+            var ctx1 = stockChartEl.getContext('2d');
+            new Chart(ctx1, {
+                type: 'line',
+                data: {
+                    labels: chartLabels,
+                    datasets: [
+                        {
+                            label: 'Stock In',
+                            data: stockInData,
+                            borderColor: '#2ecc71',
+                            backgroundColor: 'rgba(46, 204, 113, 0.1)',
+                            tension: 0.4,
+                            fill: true
+                        },
+                        {
+                            label: 'Stock Out',
+                            data: stockOutData,
+                            borderColor: '#e74c3c',
+                            backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                            tension: 0.4,
+                            fill: true
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Status Distribution Chart
+        var statusChartEl = document.getElementById('statusChart');
+        if (statusChartEl) {
+            var ctx2 = statusChartEl.getContext('2d');
+            new Chart(ctx2, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Available', 'Sold', 'Low Stock', 'Out of Stock'],
+                    datasets: [
+                        {
+                            data: statusData,
+                            backgroundColor: ['#2ecc71', '#e74c3c', '#f39c12', '#95a5a6'],
+                            borderWidth: 0
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+        }
+    });
+})();
+</script>
+{% endblock %}

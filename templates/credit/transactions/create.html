@@ -1,0 +1,398 @@
+{% extends 'credit/base.html' %}
+{% load static %}
+
+{% block title %}New Credit Transaction{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'credit:dashboard' %}">Dashboard</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'credit:transaction_list' %}">Transactions</a></li>
+            <li class="breadcrumb-item active">New Transaction</li>
+        </ol>
+    </nav>
+</div>
+
+<div class="card">
+    <div class="card-header bg-warning text-dark">
+        <h5 class="mb-0"><i class="fas fa-plus-circle me-2"></i>Create New Credit Transaction</h5>
+    </div>
+    <div class="card-body">
+        <form method="post" id="transactionForm" action="{% url 'credit:transaction_create' %}">
+            {% csrf_token %}
+            
+            <div class="row">
+                <!-- Company Selection -->
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Credit Company <span class="text-danger">*</span></label>
+                    <select name="company" class="form-select" required id="companySelect">
+                        <option value="">Select Company</option>
+                        {% for company in companies %}
+                        <option value="{{ company.id }}">{{ company.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <!-- Customer Selection with Popup -->
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Customer <span class="text-danger">*</span></label>
+                    <div class="input-group">
+                        <select name="customer" class="form-select" required id="customerSelect">
+                            <option value="">Select Existing Customer</option>
+                            {% for customer in customers %}
+                            <option value="{{ customer.id }}">
+                                {{ customer.full_name }} - {{ customer.phone_number }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#addCustomerModal">
+                            <i class="fas fa-user-plus"></i> New
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Product Search with Suggestions -->
+            <div class="row">
+                <div class="col-md-12 mb-3">
+                    <label class="form-label">Search Product <span class="text-danger">*</span></label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="productSearch" placeholder="Type product code or SKU..." autocomplete="off">
+                        <input type="hidden" name="product" id="selectedProductId" required>
+                        <button class="btn btn-outline-warning" type="button" id="clearProductBtn">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div id="productSuggestions" class="list-group mt-1" style="max-height: 200px; overflow-y: auto; display: none;"></div>
+                </div>
+            </div>
+            
+            <!-- Selected Product Display -->
+            <div class="row" id="selectedProductCard" style="display: none;">
+                <div class="col-md-12">
+                    <div class="card bg-light mb-3">
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <strong>Product:</strong> <span id="selectedProductName"></span><br>
+                                    <strong>Code:</strong> <span id="selectedProductCode"></span>
+                                </div>
+                                <div class="col-md-6">
+                                    <strong>Price:</strong> KSH <span id="selectedProductPrice"></span><br>
+                                    <strong>Stock:</strong> <span id="selectedProductStock"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- IMEI and Price -->
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">IMEI (if applicable)</label>
+                    <input type="text" name="imei" class="form-control" placeholder="Enter IMEI number">
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Ceiling Price (KSH) <span class="text-danger">*</span></label>
+                    <input type="number" name="ceiling_price" class="form-control" step="0.01" required id="priceInput">
+                    <small class="text-muted">Amount the credit company will pay you</small>
+                </div>
+            </div>
+            
+            <!-- Notes -->
+            <div class="row">
+                <div class="col-md-12 mb-3">
+                    <label class="form-label">Notes</label>
+                    <textarea name="notes" class="form-control" rows="2" placeholder="Any additional notes about this transaction..."></textarea>
+                </div>
+            </div>
+            
+            <div class="d-flex justify-content-end gap-2 mt-4">
+                <a href="{% url 'credit:transaction_list' %}" class="btn btn-secondary">
+                    <i class="fas fa-times"></i> Cancel
+                </a>
+                <button type="submit" class="btn btn-warning">
+                    <i class="fas fa-save"></i> Create Transaction
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Add Customer Modal with Next of Kin and Photo Uploads -->
+<div class="modal fade" id="addCustomerModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title"><i class="fas fa-user-plus me-2"></i>Add New Customer</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="post" action="{% url 'credit:customer_add' %}" id="addCustomerForm" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <!-- Personal Information Section -->
+                    <div class="row">
+                        <div class="col-md-12">
+                            <h6 class="mb-3 text-warning">
+                                <i class="fas fa-user-circle me-2"></i>Personal Information
+                            </h6>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Full Name <span class="text-danger">*</span></label>
+                            <input type="text" name="full_name" class="form-control" required 
+                                   placeholder="e.g., John Doe">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Phone Number <span class="text-danger">*</span></label>
+                            <input type="text" name="phone_number" class="form-control" required 
+                                   placeholder="e.g., 0712345678">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">ID Number <span class="text-danger">*</span></label>
+                            <input type="text" name="id_number" class="form-control" required 
+                                   placeholder="e.g., 12345678">
+                        </div>
+                    </div>
+                
+                    <!-- Next of Kin Section -->
+                    <div class="row mt-2">
+                        <div class="col-md-12">
+                            <h6 class="mb-3 text-warning">
+                                <i class="fas fa-users me-2"></i>Next of Kin Information
+                            </h6>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">NOK Full Name</label>
+                            <input type="text" name="nok_name" class="form-control">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">NOK Phone Number</label>
+                            <input type="text" name="nok_phone" class="form-control">
+                        </div>
+                    </div>
+                    
+                    <!-- Photo Upload Section -->
+                    <div class="row mt-3">
+                        <div class="col-md-12">
+                            <h6 class="mb-3 text-warning">
+                                <i class="fas fa-camera me-2"></i>Customer Photos / Documents
+                            </h6>
+                            <small class="text-muted d-block mb-3">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Upload clear photo  and ID documents to help with future verifications and claims.
+                            </small>
+                        </div>
+                        
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Passport Photo</label>
+                            <div class="input-group">
+                                <input type="file" name="passport_photo" class="form-control" accept="image/*">
+                                <span class="input-group-text bg-light">
+                                    <i class="fas fa-camera"></i>
+                                </span>
+                            </div>
+                            <small class="text-muted">Upload passport-sized photo</small>
+                        </div>
+                        
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">ID Front Photo</label>
+                            <div class="input-group">
+                                <input type="file" name="id_front_photo" class="form-control" accept="image/*">
+                                <span class="input-group-text bg-light">
+                                    <i class="fas fa-id-card"></i>
+                                </span>
+                            </div>
+                            <small class="text-muted">Front side of national ID</small>
+                        </div>
+                        
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">ID Back Photo</label>
+                            <div class="input-group">
+                                <input type="file" name="id_back_photo" class="form-control" accept="image/*">
+                                <span class="input-group-text bg-light">
+                                    <i class="fas fa-id-card"></i>
+                                </span>
+                            </div>
+                            <small class="text-muted">Back side of national ID</small>
+                        </div>
+                    </div>
+                    
+                    <input type="hidden" name="next" value="{% url 'credit:transaction_create' %}">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning">Save Customer</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Product data from server
+    const products = [
+        {% for product in products %}
+        {
+            id: {{ product.id }},
+            code: "{{ product.product_code }}",
+            name: "{{ product.display_name|escapejs }}",
+            price: {{ product.selling_price }},
+            stock: {{ product.quantity }},
+            sku: "{{ product.sku_value|default:''|escapejs }}"
+        },
+        {% endfor %}
+    ];
+    
+    // DOM Elements
+    const searchInput = document.getElementById('productSearch');
+    const suggestionsDiv = document.getElementById('productSuggestions');
+    const selectedProductId = document.getElementById('selectedProductId');
+    const selectedProductCard = document.getElementById('selectedProductCard');
+    const clearProductBtn = document.getElementById('clearProductBtn');
+    const priceInput = document.getElementById('priceInput');
+    const transactionForm = document.getElementById('transactionForm');
+    const customerForm = document.getElementById('addCustomerForm');
+    
+    // Product Search with Suggestions
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            const query = this.value.toLowerCase().trim();
+            
+            if (query.length < 2) {
+                suggestionsDiv.style.display = 'none';
+                return;
+            }
+            
+            const matches = products.filter(p => 
+                p.code.toLowerCase().includes(query) || 
+                p.sku.toLowerCase().includes(query)
+            ).slice(0, 5);
+            
+            if (matches.length > 0) {
+                suggestionsDiv.innerHTML = matches.map(p => `
+                    <a href="#" class="list-group-item list-group-item-action" 
+                       onclick="selectProduct(${p.id}, '${p.code}', '${p.name}', ${p.price}, ${p.stock}); return false;">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>${p.code}</strong> - ${p.name}
+                            </div>
+                            <small class="text-muted">Stock: ${p.stock}</small>
+                        </div>
+                        <small class="text-muted">Price: KSH ${p.price}</small>
+                    </a>
+                `).join('');
+                suggestionsDiv.style.display = 'block';
+            } else {
+                suggestionsDiv.style.display = 'none';
+            }
+        });
+        
+        // Hide suggestions when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!searchInput.contains(e.target) && !suggestionsDiv.contains(e.target)) {
+                suggestionsDiv.style.display = 'none';
+            }
+        });
+    }
+    
+    // Clear selected product
+    if (clearProductBtn) {
+        clearProductBtn.addEventListener('click', function() {
+            selectedProductId.value = '';
+            searchInput.value = '';
+            selectedProductCard.style.display = 'none';
+            priceInput.value = '';
+        });
+    }
+    
+    // Make selectProduct function global
+    window.selectProduct = function(id, code, name, price, stock) {
+        selectedProductId.value = id;
+        searchInput.value = code;
+        document.getElementById('selectedProductName').textContent = name;
+        document.getElementById('selectedProductCode').textContent = code;
+        document.getElementById('selectedProductPrice').textContent = price;
+        document.getElementById('selectedProductStock').textContent = stock;
+        document.getElementById('priceInput').value = price;
+        selectedProductCard.style.display = 'block';
+        suggestionsDiv.style.display = 'none';
+    };
+    
+    // Handle transaction form submission - standard POST (not AJAX)
+    if (transactionForm) {
+        transactionForm.addEventListener('submit', function(e) {
+            // Just validate, don't prevent default
+            if (!selectedProductId.value) {
+                e.preventDefault();
+                alert('Please select a product');
+                return;
+            }
+            
+            // Let the form submit normally
+            return true;
+        });
+    }
+    
+    // Handle customer form submission with AJAX
+    if (customerForm) {
+        customerForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(customerForm);
+            
+            fetch(customerForm.action, {
+                method: 'POST',
+                body: formData,
+                headers: {'X-Requested-With': 'XMLHttpRequest'}
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const customerSelect = document.getElementById('customerSelect');
+                    const newOption = new Option(
+                        data.customer.full_name + ' - ' + data.customer.phone_number,
+                        data.customer.id,
+                        true,
+                        true
+                    );
+                    customerSelect.add(newOption);
+                    
+                    // Close modal
+                    bootstrap.Modal.getInstance(document.getElementById('addCustomerModal')).hide();
+                    
+                    // Show success message
+                    const alertDiv = document.createElement('div');
+                    alertDiv.className = 'alert alert-success alert-dismissible fade show mt-3';
+                    alertDiv.innerHTML = `
+                        <i class="fas fa-check-circle me-2"></i>
+                        Customer "${data.customer.full_name}" added successfully!
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    `;
+                    document.querySelector('.card-body').prepend(alertDiv);
+                    
+                    // Auto-hide alert after 3 seconds
+                    setTimeout(() => {
+                        alertDiv.remove();
+                    }, 3000);
+                    
+                    // Reset the form
+                    customerForm.reset();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while adding customer.');
+            });
+        });
+    }
+});
+</script>
+{% endblock %}

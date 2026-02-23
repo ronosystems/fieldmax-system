@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FieldMax Sales - {% block title %}Sales Dashboard{% endblock %}</title>
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- DataTables -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css">
+    <!-- Custom CSS -->
+    <style>
+        :root {
+            --primary-color: #28a745;  /* Changed to green for sales */
+            --success-color: #2ecc71;
+            --danger-color: #e74c3c;
+            --warning-color: #f39c12;
+            --dark-color: #2c3e50;
+            --light-bg: #f8f9fa;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #6c757d;
+            background: #4d5457;
+        }
+        
+        .sidebar {
+            min-height: 100vh;
+            background: #247238;
+            color: white;
+            box-shadow: 2px 0 10px rgb(0, 0, 0);
+        }
+        
+        .sidebar .nav-link {
+            color: rgba(255,255,255,0.8);
+            padding: 12px 20px;
+            margin: 5px 0;
+            border-radius: 10px;
+            transition: all 0.3s;
+        }
+        
+        .sidebar .nav-link:hover {
+            background: rgba(243, 7, 7, 0.918);
+            color: white;
+            transform: translateX(5px);
+        }
+        
+        .sidebar .nav-link.active {
+            background: rgba(0, 0, 0, 0.932);
+            color: white;
+            font-weight: 600;
+        }
+        
+        .sidebar .nav-link i {
+            margin-right: 10px;
+            width: 25px;
+        }
+        
+        .main-content {
+            padding: 30px;
+            background-color: var(--light-bg);
+        }
+        
+        .stat-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.966);
+            transition: transform 0.3s;
+            border: none;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .stat-icon {
+            font-size: 3rem;
+            opacity: 0.2;
+            position: absolute;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            color: #6c757d;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+            letter-spacing: 1px;
+        }
+        
+        .card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.05);
+        }
+        
+        .card-header {
+            background: white;
+            border-bottom: 2px solid var(--light-bg);
+            padding: 20px 25px;
+            font-weight: 600;
+            border-radius: 15px 15px 0 0 !important;
+        }
+        
+        .table {
+            margin-bottom: 0;
+        }
+        
+        .table thead th {
+            border-top: none;
+            background: var(--light-bg);
+            color: var(--dark-color);
+            font-weight: 600;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .badge-available {
+            background-color: #d4edda;
+            color: #155724;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-weight: 500;
+        }
+        
+        .badge-sold {
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 5px 10px;
+            border-radius: 20px;
+        }
+        
+        .badge-lowstock {
+            background-color: #fff3cd;
+            color: #856404;
+            padding: 5px 10px;
+            border-radius: 20px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%);
+            border: none;
+            padding: 10px 25px;
+            border-radius: 10px;
+            font-weight: 600;
+        }
+        
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #1e7e34 0%, #28a745 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(40, 167, 69, 0.4);
+        }
+        
+        .footer {
+            background: rgb(111, 173, 173);
+            padding: 20px 0;
+            margin-top: 30px;
+            border-radius: 15px;
+            border: 1px solid #000000;
+        }
+        
+        .footer-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 20px;
+        }
+        
+        .footer-left {
+            color: #000000;
+        }
+        
+        .footer-right {
+            color: #0501fd;
+            font-weight: 500;
+        }
+        
+        .footer-right i {
+            color: #ff0095;
+            margin-right: 5px;
+        }
+        
+        /* Sales-specific styles */
+        .sale-card {
+            border-left: 4px solid #28a745;
+        }
+        
+        .cart-item {
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-left: 3px solid #28a745;
+        }
+        
+        .receipt {
+            font-family: 'Courier New', monospace;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            max-width: 300px;
+            margin: 0 auto;
+            border: 1px dashed #28a745;
+        }
+        
+        @media print {
+            .no-print, .sidebar, .footer, .btn {
+                display: none !important;
+            }
+            .receipt {
+                box-shadow: none;
+                margin: 0;
+                padding: 10px;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .sidebar {
+                min-height: auto;
+            }
+            .footer-content {
+                flex-direction: column;
+                gap: 10px;
+                text-align: center;
+            }
+        }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-md-3 col-lg-2 px-0 border border-dark sidebar">
+                <div class="p-4">
+                    <h4 class="text-white mb-4">
+                        <span class="brand-text"><strong>SALES DASHBOARD</strong></span>
+                    </h4>
+                    <p class="text-white-100 small mb-4">Point of Sale System</p>
+                    
+                    <nav class="nav flex-column">
+                        <!-- Overview/Dashboard Menu -->
+                        <a class="nav-link {% if request.resolver_match.url_name == 'sales_dashboard' %}active{% endif %}" href="{% url 'sales:sales_dashboard' %}">
+                            <i class="fas fa-chart-pie"></i> Overview
+                        </a>
+                        
+                        <!-- Sales Menu -->
+                        <a class="nav-link {% if request.resolver_match.url_name == 'sale_list' %}active{% endif %}" href="{% url 'sales:sale_list' %}">
+                            <i class="fas fa-shopping-cart"></i> Sales
+                        </a>
+                        
+                        <!-- New Sale Menu -->
+                        <a class="nav-link {% if request.resolver_match.url_name == 'sale_create' %}active{% endif %}" href="{% url 'sales:sale_create' %}">
+                            <i class="fas fa-plus-circle"></i> New Sale
+                        </a>
+                        
+                        <!-- Divider -->
+                        <hr class="bg-white-100 my-3">
+                        
+                        <!-- Other Apps Navigation -->
+                        <div class="text-white-100 small fw-bold mb-2">OTHER APPS</div>
+
+                        <!-- Inventory Link -->
+                        <div class="text-white-100 small fw-bold mb-2">INVENTORY</div>
+                        <a class="nav-link" href="{% url 'inventory:dashboard' %}">
+                            <i class="fas fa-boxes" style="color: #00e1ff;"></i> Inventory Dashboard
+                        </a>
+
+                        <!-- Credit Section -->
+                        <div class="text-white-100 small fw-bold mb-2 mt-2">CREDIT</div>
+                        <a class="nav-link" href="{% url 'credit:dashboard' %}">
+                            <i class="fas fa-chart-line" style="color: #f39c12;"></i> Credit Dashboard
+                        </a>
+                        
+                        <!-- Staff Link -->
+                        <div class="text-white-100 small fw-bold mb-2">HOME</div>
+                        <a class="nav-link" href="{% url 'staff:staff_dashboard' %}">
+                            <i class="fas fa-users" style="color: #ff00ff;"></i> Home Dashboard
+                        </a>
+                    </nav>
+                    
+                    <hr class="bg-white-100 mt-4">
+                    
+                    <div class="text-white-100 small">
+                        <p class="mb-1"><strong>FieldMax Sales System</strong></p>
+                        <p class="mb-0">Version 1.0.0</p>   
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Main Content -->
+            <div class="col-md-9 col-lg-10 main-content">
+                {% if messages %}
+                    {% for message in messages %}
+                        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+                
+                {% block content %}{% endblock %}
+                
+                <!-- Footer -->
+                <div class="footer">
+                    <div class="footer-content">
+                        <div class="footer-left">
+                            <p class="mb-0">&copy; {% now "Y" %} FieldMax Sales System. All rights reserved.</p>
+                        </div>
+                        <div class="footer-right">
+                            <i class="fas fa-bolt"></i> POWERED BY FIELDMAX DEV TEAM
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Scripts -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <script>
+        $(document).ready(function() {
+            // Single source of DataTables initialization
+            $('table.datatable').each(function() {
+                var $table = $(this);
+                
+                // Destroy existing instance if any
+                if ($.fn.DataTable.isDataTable(this)) {
+                    $table.DataTable().destroy();
+                }
+                
+                // Initialize with clean configuration
+                $table.DataTable({
+                    "pageLength": 25,
+                    "language": {
+                        "search": "Search:",
+                        "lengthMenu": "Show _MENU_ entries",
+                        "info": "Showing _START_ to _END_ of _TOTAL_ entries",
+                        "infoEmpty": "Showing 0 to 0 of 0 entries",
+                        "infoFiltered": "(filtered from _MAX_ total entries)",
+                        "emptyTable": "No data available",
+                        "zeroRecords": "No matching records found"
+                    }
+                });
+            });
+            
+            // Auto-hide alerts after 5 seconds
+            setTimeout(function() {
+                $('.alert').fadeOut('slow');
+            }, 5000);
+        });
+    </script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

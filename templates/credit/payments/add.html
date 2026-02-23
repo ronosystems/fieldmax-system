@@ -1,0 +1,240 @@
+{% extends 'credit/base.html' %}
+{% load static %}
+
+{% block title %}Record Company Payment{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'credit:dashboard' %}">Dashboard</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'credit:payment_list' %}">Payments</a></li>
+            <li class="breadcrumb-item active">Record Payment</li>
+        </ol>
+    </nav>
+</div>
+
+<div class="card">
+    <div class="card-header bg-warning text-dark">
+        <h5 class="mb-0"><i class="fas fa-money-bill-wave me-2"></i>Record Company Payment</h5>
+    </div>
+    <div class="card-body">
+        <form method="post" id="paymentForm">
+            {% csrf_token %}
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <h6 class="mb-3">Payment Details</h6>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Credit Company <span class="text-danger">*</span></label>
+                        <select name="company" class="form-select" required id="companySelect">
+                            <option value="">Select Company</option>
+                            {% for company in companies %}
+                            <option value="{{ company.id }}" {% if request.GET.company == company.id|stringformat:"s" %}selected{% endif %}>
+                                {{ company.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Amount (KSH) <span class="text-danger">*</span></label>
+                        <input type="number" name="amount" class="form-control" step="0.01" required id="amountInput">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Payment Method <span class="text-danger">*</span></label>
+                        <select name="payment_method" class="form-select" required>
+                            <option value="">Select Method</option>
+                            <option value="mpesa">M-Pesa</option>
+                            <option value="bank">Bank Transfer</option>
+                            <option value="cheque">Cheque</option>
+                            <option value="cash">Cash</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Payment Reference <span class="text-danger">*</span></label>
+                        <input type="text" name="payment_reference" class="form-control" required placeholder="M-Pesa code, bank ref, cheque no.">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Payment Date <span class="text-danger">*</span></label>
+                        <input type="date" name="payment_date" class="form-control" value="{% now 'Y-m-d' %}" required>
+                    </div>
+                </div>
+                
+                <div class="col-md-6">
+                    <h6 class="mb-3">Bank Details (if applicable)</h6>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Bank Name</label>
+                        <input type="text" name="bank_name" class="form-control">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Account Number</label>
+                        <input type="text" name="account_number" class="form-control">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Notes</label>
+                        <textarea name="notes" class="form-control" rows="4"></textarea>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Transactions to include -->
+            <div class="row mt-4">
+                <div class="col-12">
+                    <h6 class="mb-3">Select Pending Transactions to Include</h6>
+                    <div class="card">
+                        <div class="card-body p-0">
+                            <div class="table-responsive">
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th><input type="checkbox" id="selectAll"></th>
+                                            <th>Transaction ID</th>
+                                            <th>Customer</th>
+                                            <th>Product</th>
+                                            <th>Amount</th>
+                                            <th>Date Given</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="transactionList">
+                                        {% for transaction in pending_transactions %}
+                                        <tr data-company="{{ transaction.credit_company_id }}" data-amount="{{ transaction.ceiling_price }}">
+                                            <td>
+                                                <input type="checkbox" name="transactions" value="{{ transaction.id }}" class="transaction-checkbox">
+                                            </td>
+                                            <td><span class="badge bg-warning text-dark">{{ transaction.transaction_id }}</span></td>
+                                            <td>{{ transaction.customer.full_name }}</td>
+                                            <td>{{ transaction.product.product_code }}</td>
+                                            <td class="fw-bold">KSH {{ transaction.ceiling_price|floatformat:0 }}</td>
+                                            <td>{{ transaction.transaction_date|date:"Y-m-d" }}</td>
+                                        </tr>
+                                        {% empty %}
+                                        <tr>
+                                            <td colspan="6" class="text-center py-3">No pending transactions available</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                    <tfoot>
+                                        <tr class="table-info">
+                                            <th colspan="4" class="text-end">Total Selected:</th>
+                                            <th id="selectedTotal">KSH 0</th>
+                                            <th></th>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="d-flex justify-content-end gap-2 mt-4">
+                <a href="{% url 'credit:payment_list' %}" class="btn btn-secondary">
+                    <i class="fas fa-times"></i> Cancel
+                </a>
+                <button type="submit" class="btn btn-warning">
+                    <i class="fas fa-save"></i> Record Payment
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const selectAll = document.getElementById('selectAll');
+    const checkboxes = document.querySelectorAll('.transaction-checkbox');
+    const selectedTotal = document.getElementById('selectedTotal');
+    const amountInput = document.getElementById('amountInput');
+    const companySelect = document.getElementById('companySelect');
+    
+    // Filter transactions by company
+    companySelect.addEventListener('change', function() {
+        const companyId = this.value;
+        const rows = document.querySelectorAll('#transactionList tr');
+        
+        rows.forEach(row => {
+            if (companyId === '' || row.dataset.company === companyId) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+                const checkbox = row.querySelector('.transaction-checkbox');
+                if (checkbox) checkbox.checked = false;
+            }
+        });
+        
+        updateTotal();
+        updateSelectAll();
+    });
+    
+    // Select all functionality
+    selectAll.addEventListener('change', function() {
+        checkboxes.forEach(checkbox => {
+            const row = checkbox.closest('tr');
+            if (row.style.display !== 'none') {
+                checkbox.checked = selectAll.checked;
+            }
+        });
+        updateTotal();
+    });
+    
+    // Update total when checkboxes change
+    checkboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', updateTotal);
+    });
+    
+    // Update amount input when total changes
+    function updateTotal() {
+        let total = 0;
+        checkboxes.forEach(checkbox => {
+            if (checkbox.checked) {
+                const row = checkbox.closest('tr');
+                total += parseFloat(row.dataset.amount) || 0;
+            }
+        });
+        selectedTotal.textContent = 'KSH ' + total.toFixed(0);
+        
+        // Auto-fill amount if empty
+        if (amountInput.value === '' || amountInput.value == '0') {
+            amountInput.value = total.toFixed(0);
+        }
+        
+        updateSelectAll();
+    }
+    
+    function updateSelectAll() {
+        const visibleCheckboxes = Array.from(checkboxes).filter(cb => {
+            return cb.closest('tr').style.display !== 'none';
+        });
+        
+        const checkedVisible = visibleCheckboxes.filter(cb => cb.checked);
+        
+        if (visibleCheckboxes.length > 0) {
+            selectAll.checked = checkedVisible.length === visibleCheckboxes.length;
+            selectAll.indeterminate = checkedVisible.length > 0 && checkedVisible.length < visibleCheckboxes.length;
+        } else {
+            selectAll.checked = false;
+            selectAll.indeterminate = false;
+        }
+    }
+    
+    // Form validation
+    document.getElementById('paymentForm').addEventListener('submit', function(e) {
+        const checkedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
+        if (checkedCount === 0) {
+            e.preventDefault();
+            alert('Please select at least one transaction to include in this payment.');
+        }
+    });
+});
+</script>
+{% endblock %}
+{% endblock %}

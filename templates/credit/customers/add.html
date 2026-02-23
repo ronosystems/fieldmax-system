@@ -1,0 +1,207 @@
+{% extends 'credit/base.html' %}
+{% load static %}
+
+{% block title %}Add Customer{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'credit:dashboard' %}">Dashboard</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'credit:customer_list' %}">Customers</a></li>
+            <li class="breadcrumb-item active">Add Customer</li>
+        </ol>
+    </nav>
+</div>
+
+<div class="card">
+    <div class="card-header bg-warning text-dark">
+        <h5 class="mb-0"><i class="fas fa-user-plus me-2"></i>Add New Customer</h5>
+    </div>
+    <div class="card-body">
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            
+            <!-- Personal Information Section -->
+            <div class="row">
+                <div class="col-md-12">
+                    <h6 class="mb-3 text-warning">
+                        <i class="fas fa-user-circle me-2"></i>Personal Information
+                    </h6>
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Full Name <span class="text-danger">*</span></label>
+                    <input type="text" name="full_name" class="form-control" required 
+                           placeholder="e.g., John Doe">
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Phone Number <span class="text-danger">*</span></label>
+                    <input type="text" name="phone_number" class="form-control" required 
+                           placeholder="e.g., 0712345678">
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">ID Number <span class="text-danger">*</span></label>
+                    <input type="text" name="id_number" class="form-control" required 
+                           placeholder="e.g., 12345678">
+                </div>
+            </div>
+    
+            <!-- Next of Kin Section -->
+            <div class="row mt-3">
+                <div class="col-md-12">
+                    <h6 class="mb-3 text-warning">
+                        <i class="fas fa-users me-2"></i>Next of Kin Information
+                    </h6>
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">NOK Full Name</label>
+                    <input type="text" name="nok_name" class="form-control" 
+                           placeholder="e.g., Jane Doe">
+                </div>
+                
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">NOK Phone Number</label>
+                    <input type="text" name="nok_phone" class="form-control" 
+                           placeholder="e.g., 0723456789">
+                </div>
+            </div>
+            
+            <!-- Photo Upload Section -->
+            <div class="row mt-4">
+                <div class="col-md-12">
+                    <h6 class="mb-3 text-warning">
+                        <i class="fas fa-camera me-2"></i>Customer Photos / Documents
+                    </h6>
+                    <small class="text-muted d-block mb-3">
+                        <i class="fas fa-info-circle me-1"></i>
+                        Upload clear photos of the customer and their ID for verification purposes.
+                    </small>
+                </div>
+                
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Passport Photo</label>
+                    <div class="input-group">
+                        <input type="file" name="passport_photo" class="form-control" accept="image/*">
+                        <span class="input-group-text bg-light">
+                            <i class="fas fa-camera"></i>
+                        </span>
+                    </div>
+                    <small class="text-muted">Upload passport-sized photo</small>
+                </div>
+                
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">ID Front Photo</label>
+                    <div class="input-group">
+                        <input type="file" name="id_front_photo" class="form-control" accept="image/*">
+                        <span class="input-group-text bg-light">
+                            <i class="fas fa-id-card"></i>
+                        </span>
+                    </div>
+                    <small class="text-muted">Front side of national ID</small>
+                </div>
+                
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">ID Back Photo</label>
+                    <div class="input-group">
+                        <input type="file" name="id_back_photo" class="form-control" accept="image/*">
+                        <span class="input-group-text bg-light">
+                            <i class="fas fa-id-card"></i>
+                        </span>
+                    </div>
+                    <small class="text-muted">Back side of national ID</small>
+                </div>
+            </div>
+            
+            <div class="d-flex justify-content-end gap-2 mt-4">
+                <a href="{% url 'credit:customer_list' %}" class="btn btn-secondary">
+                    <i class="fas fa-times"></i> Cancel
+                </a>
+                <button type="submit" class="btn btn-warning">
+                    <i class="fas fa-save"></i> Save Customer
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // File input validation
+    const fileInputs = document.querySelectorAll('input[type="file"]');
+    
+    fileInputs.forEach(input => {
+        input.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            // Check file size (5MB max)
+            const maxSize = 5 * 1024 * 1024; // 5MB in bytes
+            if (file.size > maxSize) {
+                alert(`File "${file.name}" is too large. Maximum size is 5MB.`);
+                this.value = ''; // Clear the input
+                return;
+            }
+            
+            // Check file type for image inputs
+            if (this.accept.includes('image') && !file.type.startsWith('image/')) {
+                alert(`File "${file.name}" is not a valid image. Please select an image file.`);
+                this.value = ''; // Clear the input
+                return;
+            }
+            
+            // For additional document, allow PDF and images
+            if (this.name === 'additional_document') {
+                const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
+                if (!allowedTypes.includes(file.type)) {
+                    alert(`File "${file.name}" is not allowed. Please upload PDF, JPG, or PNG.`);
+                    this.value = ''; // Clear the input
+                    return;
+                }
+            }
+            
+            // Show preview for images (optional)
+            if (file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    // You could show a small preview here if desired
+                    console.log('Image loaded:', file.name);
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+    });
+    
+    // Optional: Add drag and drop styling
+    const dropZones = document.querySelectorAll('.input-group');
+    dropZones.forEach(zone => {
+        zone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            zone.classList.add('border-warning');
+        });
+        
+        zone.addEventListener('dragleave', () => {
+            zone.classList.remove('border-warning');
+        });
+        
+        zone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            zone.classList.remove('border-warning');
+            
+            const file = e.dataTransfer.files[0];
+            const input = zone.querySelector('input[type="file"]');
+            if (input && file) {
+                // Trigger change event manually
+                input.files = e.dataTransfer.files;
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

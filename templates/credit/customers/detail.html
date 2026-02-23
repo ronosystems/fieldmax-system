@@ -1,0 +1,332 @@
+{% extends 'credit/base.html' %}
+{% load static %}
+
+{% block title %}{{ customer.full_name }}{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'credit:dashboard' %}">Dashboard</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'credit:customer_list' %}">Customers</a></li>
+            <li class="breadcrumb-item active">{{ customer.full_name }}</li>
+        </ol>
+    </nav>
+</div>
+
+<div class="row">
+    <!-- Customer Details - Left Column -->
+    <div class="col-md-4">
+        <!-- Customer Photos Card -->
+        <div class="card mb-4">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0"><i class="fas fa-camera me-2"></i>Customer Photos</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <!-- Passport Photo -->
+                    <div class="col-md-12 mb-3">
+                        <label class="fw-bold mb-2">Passport Photo:</label>
+                        {% if customer.passport_photo %}
+                            <div class="text-center">
+                                <img src="{{ customer.passport_photo.url }}" alt="Passport Photo" 
+                                     class="img-fluid rounded border" style="max-height: 150px; cursor: pointer;"
+                                     onclick="showImageModal('{{ customer.passport_photo.url }}', 'Passport Photo - {{ customer.full_name }}')">
+                                <div class="mt-2">
+                                    <a href="{{ customer.passport_photo.url }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-external-link-alt"></i> View Full
+                                    </a>
+                                </div>
+                            </div>
+                        {% else %}
+                            <div class="text-center py-3 bg-light rounded">
+                                <i class="fas fa-user fa-3x text-muted"></i>
+                                <p class="text-muted mt-2">No passport photo uploaded</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- ID Photos -->
+                    <div class="col-md-12 mt-3">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="fw-bold mb-2">ID Front:</label>
+                                {% if customer.id_front_photo %}
+                                    <div class="text-center">
+                                        <img src="{{ customer.id_front_photo.url }}" alt="ID Front" 
+                                             class="img-fluid rounded border" style="max-height: 100px; cursor: pointer;"
+                                             onclick="showImageModal('{{ customer.id_front_photo.url }}', 'ID Front - {{ customer.full_name }}')">
+                                        <div class="mt-1">
+                                            <a href="{{ customer.id_front_photo.url }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                                                <i class="fas fa-eye"></i> View
+                                            </a>
+                                        </div>
+                                    </div>
+                                {% else %}
+                                    <div class="text-center py-2 bg-light rounded">
+                                        <i class="fas fa-id-card fa-2x text-muted"></i>
+                                        <p class="text-muted small mt-1">No photo</p>
+                                    </div>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="col-md-6 mb-3">
+                                <label class="fw-bold mb-2">ID Back:</label>
+                                {% if customer.id_back_photo %}
+                                    <div class="text-center">
+                                        <img src="{{ customer.id_back_photo.url }}" alt="ID Back" 
+                                             class="img-fluid rounded border" style="max-height: 100px; cursor: pointer;"
+                                             onclick="showImageModal('{{ customer.id_back_photo.url }}', 'ID Back - {{ customer.full_name }}')">
+                                        <div class="mt-1">
+                                            <a href="{{ customer.id_back_photo.url }}" target="_blank" class="btn btn-sm btn-outline-primary">
+                                                <i class="fas fa-eye"></i> View
+                                            </a>
+                                        </div>
+                                    </div>
+                                {% else %}
+                                    <div class="text-center py-2 bg-light rounded">
+                                        <i class="fas fa-id-card fa-2x text-muted"></i>
+                                        <p class="text-muted small mt-1">No photo</p>
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Additional Document -->
+                    {% if customer.additional_document %}
+                    <div class="col-md-12 mt-2">
+                        <hr>
+                        <label class="fw-bold mb-2">Additional Document:</label>
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-file-pdf fa-2x text-danger me-3"></i>
+                            <div>
+                                <p class="mb-0">Additional Document</p>
+                                <a href="{{ customer.additional_document.url }}" target="_blank" class="btn btn-sm btn-outline-danger">
+                                    <i class="fas fa-download"></i> Download
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Customer Information Card -->
+        <div class="card mb-4">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0"><i class="fas fa-user me-2"></i>Customer Information</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tr>
+                        <th>Name:</th>
+                        <td class="fw-bold">{{ customer.full_name }}</td>
+                    </tr>
+                    <tr>
+                        <th>ID Number:</th>
+                        <td><span class="badge bg-secondary">{{ customer.id_number }}</span></td>
+                    </tr>
+                    <tr>
+                        <th>Phone:</th>
+                        <td>{{ customer.phone_number }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Next of Kin Card -->
+        <div class="card mb-4">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0"><i class="fas fa-users me-2"></i>Next of Kin</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tr>
+                        <th>Name:</th>
+                        <td>{{ customer.nok_name|default:"-" }}</td>
+                    </tr>
+                    <tr>
+                        <th>Phone:</th>
+                        <td>{{ customer.nok_phone|default:"-" }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Financial Summary Card -->
+        <div class="card mb-4">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Financial Summary</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between mb-2">
+                    <span>Total Credit:</span>
+                    <span class="amount-total fw-bold">KSH {{ customer.total_credit|floatformat:0 }}</span>
+                </div>
+                <hr>
+                <div class="d-flex justify-content-between">
+                    <span>Transactions:</span>
+                    <span class="fw-bold">{{ customer.transaction_count }}</span>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <span>Pending:</span>
+                    <span class="fw-bold text-warning">{{ customer.pending_count }}</span>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <span>Paid:</span>
+                    <span class="fw-bold text-success">{{ customer.paid_count }}</span>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <span>Status:</span>
+                    <span>
+                        {% if customer.is_active %}
+                            <span class="badge bg-success">Active</span>
+                        {% else %}
+                            <span class="badge bg-danger">Inactive</span>
+                        {% endif %}
+                    </span>
+                </div>
+                {% if customer.notes %}
+                <hr>
+                <div>
+                    <small class="text-muted">Notes:</small>
+                    <p class="mb-0">{{ customer.notes }}</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Action Buttons -->
+        <div class="d-grid gap-2">
+            <a href="{% url 'credit:customer_edit' customer.id %}" class="btn btn-warning">
+                <i class="fas fa-edit me-2"></i>Edit Customer
+            </a>
+            <a href="{% url 'credit:transaction_create' %}?customer={{ customer.id }}" class="btn btn-success">
+                <i class="fas fa-plus-circle me-2"></i>Add Transaction
+            </a>
+            <a href="{% url 'credit:customer_list' %}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left me-2"></i>Back to Customers
+            </a>
+        </div>
+    </div>
+    
+    <!-- Transaction History - Right Column -->
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-history me-2"></i>Transaction History</h5>
+                <span class="badge bg-dark">{{ transactions.count }} total</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Transaction ID</th>
+                                <th>Company</th>
+                                <th>Product</th>
+                                <th>Amount</th>
+                                <th>Date Given</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for transaction in transactions %}
+                            <tr>
+                                <td><span class="badge bg-warning text-dark">{{ transaction.transaction_id }}</span></td>
+                                <td>{{ transaction.credit_company.name|default:"-" }}</td>
+                                <td>{{ transaction.product.product_code }}</td>
+                                <td class="fw-bold">KSH {{ transaction.ceiling_price|floatformat:0 }}</td>
+                                <td>{{ transaction.transaction_date|date:"Y-m-d" }}</td>
+                                <td>
+                                    {% if transaction.payment_status == 'pending' %}
+                                        <span class="badge bg-danger">Pending</span>
+                                    {% elif transaction.payment_status == 'paid' %}
+                                        <span class="badge bg-success">Paid</span>
+                                    {% elif transaction.payment_status == 'cancelled' %}
+                                        <span class="badge bg-secondary">Cancelled</span>
+                                    {% elif transaction.payment_status == 'reversed' %}
+                                        <span class="badge bg-info">Reversed</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{% url 'credit:transaction_detail' transaction.id %}" class="btn btn-sm btn-info">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="7" class="text-center py-4">
+                                    <i class="fas fa-exchange-alt fa-3x text-muted mb-3"></i>
+                                    <p class="text-muted mb-0">No transactions for this customer</p>
+                                    <a href="{% url 'credit:transaction_create' %}?customer={{ customer.id }}" class="btn btn-warning btn-sm mt-3">
+                                        <i class="fas fa-plus"></i> Create First Transaction
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Image Modal for Zoom -->
+<div class="modal fade" id="imageModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title" id="imageModalTitle"></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center">
+                <img src="" id="modalImage" class="img-fluid" style="max-height: 80vh;">
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function showImageModal(imageUrl, title) {
+    document.getElementById('modalImage').src = imageUrl;
+    document.getElementById('imageModalTitle').textContent = title;
+    new bootstrap.Modal(document.getElementById('imageModal')).show();
+}
+
+// Optional: Add tooltips to images
+document.addEventListener('DOMContentLoaded', function() {
+    const images = document.querySelectorAll('img[onclick]');
+    images.forEach(img => {
+        img.setAttribute('data-bs-toggle', 'tooltip');
+        img.setAttribute('data-bs-placement', 'bottom');
+        img.setAttribute('title', 'Click to zoom');
+    });
+    
+    // Initialize tooltips if you're using Bootstrap tooltips
+    // var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    // var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+    //     return new bootstrap.Tooltip(tooltipTriggerEl);
+    // });
+});
+</script>
+
+<style>
+/* Hover effect for images */
+img[onclick] {
+    transition: transform 0.2s;
+    cursor: pointer;
+}
+img[onclick]:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+</style>
+{% endblock %}

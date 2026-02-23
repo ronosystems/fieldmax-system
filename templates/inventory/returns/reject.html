@@ -1,0 +1,157 @@
+{% extends 'inventory/base.html' %}
+{% load static %}
+
+{% block title %}Reject Return #{{ return.return_id }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-times-circle text-danger me-2"></i>Reject Return Request</h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'inventory:dashboard' %}">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'inventory:return_list' %}">Returns</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'inventory:return_detail' return.id %}">{{ return.return_id }}</a></li>
+                    <li class="breadcrumb-item active">Reject</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <!-- Rejection Form Card -->
+            <div class="card mb-4">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0"><i class="fas fa-exclamation-triangle me-2"></i>Rejection Details</h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Important:</strong> Rejecting this return will mark it as rejected. 
+                        The product will not be restocked and the customer will be notified.
+                    </div>
+                    
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <div class="mb-3">
+                            <label class="form-label required fw-bold">Reason for Rejection</label>
+                            <textarea name="rejection_reason" class="form-control" rows="5" required 
+                                      placeholder="Explain why this return is being rejected..."></textarea>
+                            <small class="text-muted">This reason will be visible to the staff who submitted the return.</small>
+                        </div>
+                        
+                        <!-- Return Summary -->
+                        <div class="card mb-3 bg-light">
+                            <div class="card-body">
+                                <h6 class="fw-bold mb-3">Return Summary</h6>
+                                <table class="table table-sm">
+                                    <tr>
+                                        <th style="width: 150px;">Return ID:</th>
+                                        <td>{{ return.return_id }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Product:</th>
+                                        <td>{{ return.product_name }} ({{ return.product_code }})</td>
+                                    </tr>
+                                    <tr>
+                                        <th>SKU/IMEI:</th>
+                                        <td>{{ return.sku_value|default:"N/A" }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Quantity:</th>
+                                        <td>{{ return.quantity }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Reason:</th>
+                                        <td>{{ return.get_reason_display }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Current Status:</th>
+                                        <td>
+                                            {% if return.status == 'submitted' %}
+                                                <span class="badge bg-info">Awaiting Verification</span>
+                                            {% elif return.status == 'verified' %}
+                                                <span class="badge bg-primary">Verified</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <div class="d-flex justify-content-end gap-2">
+                            <a href="{% url 'inventory:return_detail' return.id %}" class="btn btn-secondary">
+                                <i class="fas fa-times me-2"></i>Cancel
+                            </a>
+                            <button type="submit" class="btn btn-danger">
+                                <i class="fas fa-times-circle me-2"></i>Reject Return
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Right Column - Information -->
+        <div class="col-md-4">
+            <!-- Warning Card -->
+            <div class="card mb-4">
+                <div class="card-header bg-danger text-white">
+                    <h6 class="mb-0"><i class="fas fa-exclamation-triangle me-2"></i>Rejection Consequences</h6>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled">
+                        <li class="mb-2">
+                            <i class="fas fa-times-circle text-danger me-2"></i>
+                            Return request will be marked as <strong>REJECTED</strong>
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-box text-muted me-2"></i>
+                            Product will NOT be restocked
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-undo-alt text-muted me-2"></i>
+                            No refund will be processed
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-envelope text-muted me-2"></i>
+                            Staff will be notified of rejection
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            
+            <!-- Return Info Card -->
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h6 class="mb-0"><i class="fas fa-info-circle me-2"></i>Return Information</h6>
+                </div>
+                <div class="card-body">
+                    <p><strong>Requested By:</strong><br>
+                        {{ return.requested_by.get_full_name|default:return.requested_by.username }}</p>
+                    <p><strong>Requested At:</strong><br>
+                        {{ return.requested_at|date:"Y-m-d H:i" }}</p>
+                    <p><strong>Current Status:</strong><br>
+                        {% if return.status == 'submitted' %}
+                            <span class="badge bg-info">Awaiting Verification</span>
+                        {% elif return.status == 'verified' %}
+                            <span class="badge bg-primary">Verified</span>
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .required:after {
+        content: " *";
+        color: #dc3545;
+    }
+</style>
+{% endblock %}

@@ -1,0 +1,173 @@
+{% extends 'inventory/base.html' %}
+{% load static %}
+
+{% block title %}Product Reviews{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-star me-2"></i>Product Reviews</h2>
+    <div>
+        <span class="text-muted">Total Reviews: {{ reviews.count }}</span>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">Rating</label>
+                <select name="rating" class="form-select">
+                    <option value="">All Ratings</option>
+                    <option value="5" {% if request.GET.rating == '5' %}selected{% endif %}>5 Stars</option>
+                    <option value="4" {% if request.GET.rating == '4' %}selected{% endif %}>4 Stars</option>
+                    <option value="3" {% if request.GET.rating == '3' %}selected{% endif %}>3 Stars</option>
+                    <option value="2" {% if request.GET.rating == '2' %}selected{% endif %}>2 Stars</option>
+                    <option value="1" {% if request.GET.rating == '1' %}selected{% endif %}>1 Star</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Status</label>
+                <select name="verified" class="form-select">
+                    <option value="">All</option>
+                    <option value="verified" {% if request.GET.verified == 'verified' %}selected{% endif %}>Verified</option>
+                    <option value="unverified" {% if request.GET.verified == 'unverified' %}selected{% endif %}>Unverified</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Product</label>
+                <input type="text" name="product" class="form-control" value="{{ request.GET.product }}" placeholder="Product name...">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Customer</label>
+                <input type="text" name="customer" class="form-control" value="{{ request.GET.customer }}" placeholder="Customer name...">
+            </div>
+            <div class="col-12 d-flex justify-content-end">
+                <button type="submit" class="btn btn-primary me-2">
+                    <i class="fas fa-filter"></i> Filter
+                </button>
+                <a href="{% url 'inventory:product_reviews' %}" class="btn btn-secondary">
+                    <i class="fas fa-times"></i> Clear
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Reviews Grid -->
+<div class="row">
+    {% for review in reviews %}
+    <div class="col-md-6 mb-4">
+        <div class="card h-100">
+            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                <div>
+                    {% for i in "12345"|make_list %}
+                        {% if forloop.counter <= review.rating %}
+                            <i class="fas fa-star text-warning"></i>
+                        {% else %}
+                            <i class="far fa-star text-warning"></i>
+                        {% endif %}
+                    {% endfor %}
+                    <span class="ms-2 fw-bold">{{ review.rating }}/5</span>
+                </div>
+                <div>
+                    {% if review.is_verified %}
+                        <span class="badge bg-success">Verified Purchase</span>
+                    {% else %}
+                        <span class="badge bg-secondary">Unverified</span>
+                    {% endif %}
+                    {% if not review.is_active %}
+                        <span class="badge bg-danger">Hidden</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted">
+                    <a href="{% url 'inventory:product_detail' review.product.id %}" class="text-decoration-none">
+                        {{ review.product.display_name }}
+                    </a>
+                </h6>
+                <h5 class="card-title">{{ review.customer_name }}</h5>
+                <p class="card-text">
+                    <i class="fas fa-quote-left text-muted me-1"></i>
+                    {{ review.comment|default:"No comment provided." }}
+                </p>
+                <div class="mt-3">
+                    <small class="text-muted">
+                        <i class="far fa-calendar-alt me-1"></i> {{ review.created_at|date:"F j, Y" }}
+                    </small>
+                </div>
+            </div>
+            <div class="card-footer bg-transparent d-flex justify-content-end gap-2">
+                <a href="{% url 'inventory:review_detail' review.id %}" class="btn btn-sm btn-info">
+                    <i class="fas fa-eye"></i> View
+                </a>
+                {% if review.is_verified %}
+                    <a href="{% url 'inventory:review_unverify' review.id %}" class="btn btn-sm btn-warning">
+                        <i class="fas fa-times-circle"></i> Unverify
+                    </a>
+                {% else %}
+                    <a href="{% url 'inventory:review_verify' review.id %}" class="btn btn-sm btn-success">
+                        <i class="fas fa-check-circle"></i> Verify
+                    </a>
+                {% endif %}
+                {% if review.is_active %}
+                    <a href="{% url 'inventory:review_hide' review.id %}" class="btn btn-sm btn-secondary">
+                        <i class="fas fa-eye-slash"></i> Hide
+                    </a>
+                {% else %}
+                    <a href="{% url 'inventory:review_show' review.id %}" class="btn btn-sm btn-primary">
+                        <i class="fas fa-eye"></i> Show
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <i class="far fa-star fa-4x text-muted mb-3"></i>
+                <h4>No Reviews Found</h4>
+                <p class="text-muted">There are no product reviews matching your criteria.</p>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Pagination -->
+{% if reviews.has_other_pages %}
+<nav class="mt-4">
+    <ul class="pagination justify-content-center">
+        {% if reviews.has_previous %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ reviews.previous_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                Previous
+            </a>
+        </li>
+        {% endif %}
+        
+        {% for num in reviews.paginator.page_range %}
+            {% if reviews.number == num %}
+            <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+            {% elif num > reviews.number|add:'-3' and num < reviews.number|add:'3' %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ num }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                    {{ num }}
+                </a>
+            </li>
+            {% endif %}
+        {% endfor %}
+        
+        {% if reviews.has_next %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ reviews.next_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                Next
+            </a>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+{% endblock %}

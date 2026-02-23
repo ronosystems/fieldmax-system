@@ -1,0 +1,187 @@
+{% extends 'inventory/base.html' %}
+{% load static %}
+
+{% block title %}Add Stock Entry{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'inventory:dashboard' %}">Dashboard</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'inventory:stock_movements' %}">Stock Movements</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'inventory:product_detail' product.id %}">{{ product.display_name }}</a></li>
+            <li class="breadcrumb-item active">Add Stock Entry</li>
+        </ol>
+    </nav>
+</div>
+
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-plus-circle me-2"></i>Add Stock Entry for {{ product.display_name }}</h5>
+            </div>
+            <div class="card-body">
+                <!-- Product Summary -->
+                <div class="alert alert-info mb-4">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <strong>Product:</strong> {{ product.display_name }}<br>
+                            <strong>Code:</strong> {{ product.product_code }}
+                        </div>
+                        <div class="col-md-6">
+                            <strong>Current Stock:</strong> 
+                            <span class="fw-bold {% if product.quantity <= product.reorder_level %}text-warning{% endif %}">
+                                {{ product.quantity }}
+                            </span><br>
+                            <strong>Category:</strong> {{ product.category.name }}
+                        </div>
+                    </div>
+                </div>
+                
+                <form method="post" id="stockEntryForm">
+                    {% csrf_token %}
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Entry Type <span class="text-danger">*</span></label>
+                            <select name="entry_type" class="form-select" required id="entryTypeSelect">
+                                <option value="">Select Entry Type</option>
+                                <option value="purchase">📥 Purchase (Stock In)</option>
+                                <option value="sale">📤 Sale (Stock Out)</option>
+                                <option value="adjustment">⚖️ Adjustment</option>
+                                <option value="reversal">🔄 Reversal</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Quantity <span class="text-danger">*</span></label>
+                            <input type="number" name="quantity" class="form-control" required id="quantityInput" step="1">
+                            <small class="text-muted" id="quantityHelp">Positive for stock in, negative for stock out</small>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Unit Price (KSH) <span class="text-danger">*</span></label>
+                            <input type="number" name="unit_price" class="form-control" step="0.01" 
+                                   value="{{ product.selling_price|default:'' }}" required id="unitPriceInput">
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Total Amount (KSH)</label>
+                            <input type="text" class="form-control" id="totalAmount" readonly>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Reference ID</label>
+                        <input type="text" name="reference_id" class="form-control" placeholder="e.g., Invoice #, Receipt #">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Notes</label>
+                        <textarea name="notes" class="form-control" rows="3" placeholder="Additional notes about this entry..."></textarea>
+                    </div>
+                    
+                    <div class="alert alert-warning" id="stockWarning" style="display: none;">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <span id="warningMessage"></span>
+                    </div>
+                    
+                    <div class="d-flex justify-content-end gap-2 mt-4">
+                        <a href="{% url 'inventory:product_detail' product.id %}" class="btn btn-secondary">
+                            <i class="fas fa-times"></i> Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Add Entry
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    'use strict';
+    
+    const entryTypeSelect = document.getElementById('entryTypeSelect');
+    const quantityInput = document.getElementById('quantityInput');
+    const unitPriceInput = document.getElementById('unitPriceInput');
+    const totalAmount = document.getElementById('totalAmount');
+    const stockWarning = document.getElementById('stockWarning');
+    const warningMessage = document.getElementById('warningMessage');
+    const currentStock = {{ product.quantity|default:0 }};
+    
+    function calculateTotal() {
+        const quantity = parseFloat(quantityInput.value) || 0;
+        const price = parseFloat(unitPriceInput.value) || 0;
+        const total = Math.abs(quantity) * price;
+        totalAmount.value = total ? `KSH ${total.toFixed(2)}` : '';
+    }
+    
+    function checkStockWarning() {
+        const entryType = entryTypeSelect.value;
+        const quantity = parseInt(quantityInput.value) || 0;
+        
+        if (entryType === 'sale' && quantity > currentStock) {
+            stockWarning.style.display = 'block';
+            warningMessage.textContent = `Warning: You are trying to sell ${quantity} units but only ${currentStock} are available in stock.`;
+        } else {
+            stockWarning.style.display = 'none';
+        }
+    }
+    
+    entryTypeSelect.addEventListener('change', function() {
+        const type = this.value;
+        if (type === 'purchase' || type === 'reversal') {
+            quantityInput.placeholder = 'Enter positive quantity';
+            quantityInput.min = '1';
+        } else if (type === 'sale') {
+            quantityInput.placeholder = 'Enter positive quantity (will be recorded as negative)';
+            quantityInput.min = '1';
+        } else if (type === 'adjustment') {
+            quantityInput.placeholder = 'Enter positive or negative quantity';
+            quantityInput.min = '';
+        }
+        checkStockWarning();
+    });
+    
+    quantityInput.addEventListener('input', function() {
+        calculateTotal();
+        checkStockWarning();
+    });
+    
+    unitPriceInput.addEventListener('input', calculateTotal);
+    
+    // Form validation
+    document.getElementById('stockEntryForm').addEventListener('submit', function(e) {
+        const entryType = entryTypeSelect.value;
+        const quantity = parseInt(quantityInput.value) || 0;
+        
+        if (!entryType) {
+            e.preventDefault();
+            alert('Please select an entry type.');
+            return;
+        }
+        
+        if (quantity === 0) {
+            e.preventDefault();
+            alert('Quantity cannot be zero.');
+            return;
+        }
+        
+        if (entryType === 'sale' && quantity > currentStock) {
+            if (!confirm(`Warning: You are selling ${quantity} units but only ${currentStock} are available. Continue anyway?`)) {
+                e.preventDefault();
+                return;
+            }
+        }
+    });
+})();
+</script>
+{% endblock %}
