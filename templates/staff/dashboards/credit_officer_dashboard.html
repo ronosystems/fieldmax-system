@@ -752,224 +752,278 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
-    <script>
-        // Update date and time
-        function updateDateTime() {
-            const now = new Date();
-            const dateString = now.toLocaleDateString('en-US', { 
-                weekday: 'long', 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric' 
-            });
-            const timeString = now.toLocaleTimeString('en-US', { 
-                hour: '2-digit', 
-                minute: '2-digit', 
-                second: '2-digit' 
-            });
-            document.getElementById('currentDate').innerHTML = dateString;
-            document.getElementById('currentTime').innerHTML = timeString;
-        }
-        updateDateTime();
-        setInterval(updateDateTime, 1000);
-        
-        // Product data from server
-        let products = [];
-        try {
-            const productsData = document.getElementById('productsData');
-            if (productsData) {
-                products = JSON.parse(productsData.textContent);
-                console.log('Products loaded:', products.length);
+  <script>
+    // Update date and time
+    function updateDateTime() {
+        const now = new Date();
+        const dateString = now.toLocaleDateString('en-US', { 
+            weekday: 'long', 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric' 
+        });
+        const timeString = now.toLocaleTimeString('en-US', { 
+            hour: '2-digit', 
+            minute: '2-digit', 
+            second: '2-digit' 
+        });
+        document.getElementById('currentDate').innerHTML = dateString;
+        document.getElementById('currentTime').innerHTML = timeString;
+    }
+    updateDateTime();
+    setInterval(updateDateTime, 1000);
+    
+    // ============================================
+    // FIXED: Product data loading with debugging
+    // ============================================
+    let products = [];
+    try {
+        const productsData = document.getElementById('productsData');
+        if (productsData) {
+            // Log the raw data for debugging
+            console.log('Raw products data:', productsData.textContent);
+            
+            // Parse the JSON
+            products = JSON.parse(productsData.textContent);
+            console.log('Products loaded successfully:', products.length);
+            
+            // Debug: Show first product structure
+            if (products.length > 0) {
+                console.log('First product structure:', products[0]);
+                console.log('Available fields:', Object.keys(products[0]));
             } else {
-                console.error('productsData element not found');
+                console.warn('No products found in the data');
             }
-        } catch (error) {
-            console.error('Error parsing products data:', error);
-            products = [];
+        } else {
+            console.error('❌ productsData element not found - check if products_json is being passed');
         }
-        
-        // DOM Elements
-        const searchInput = document.getElementById('productSearch');
-        const suggestionsDiv = document.getElementById('productSuggestions');
-        const selectedProductId = document.getElementById('selectedProductId');
-        const selectedProductCard = document.getElementById('selectedProductCard');
-        const clearProductBtn = document.getElementById('clearProductBtn');
-        const priceInput = document.getElementById('priceInput');
-        const transactionForm = document.getElementById('transactionForm');
-        const customerForm = document.getElementById('addCustomerForm');
-        const messageContainer = document.getElementById('messageContainer');
-        
-        // Product Search with Suggestions (Showing SKU)
-        if (searchInput) {
-            searchInput.addEventListener('input', function() {
-                const query = this.value.toLowerCase().trim();
+    } catch (error) {
+        console.error('❌ Error parsing products data:', error);
+        console.log('Raw content that failed:', document.getElementById('productsData')?.textContent);
+        products = [];
+    }
+    
+    // DOM Elements
+    const searchInput = document.getElementById('productSearch');
+    const suggestionsDiv = document.getElementById('productSuggestions');
+    const selectedProductId = document.getElementById('selectedProductId');
+    const selectedProductCard = document.getElementById('selectedProductCard');
+    const clearProductBtn = document.getElementById('clearProductBtn');
+    const priceInput = document.getElementById('priceInput');
+    const transactionForm = document.getElementById('transactionForm');
+    const customerForm = document.getElementById('addCustomerForm');
+    const messageContainer = document.getElementById('messageContainer');
+    
+    // ============================================
+    // FIXED: Product Search with better matching
+    // ============================================
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            const query = this.value.toLowerCase().trim();
+            console.log('Searching for:', query); // Debug
+            
+            if (query.length < 2) {
+                suggestionsDiv.style.display = 'none';
+                return;
+            }
+            
+            // Check if products array has data
+            if (products.length === 0) {
+                console.warn('No products in array to search');
+                suggestionsDiv.innerHTML = '<div class="list-group-item text-danger">No products loaded. Check console for errors.</div>';
+                suggestionsDiv.style.display = 'block';
+                return;
+            }
+            
+            // Search in product fields with null checks
+            const matches = products.filter(p => {
+                const code = (p.code || p.product_code || '').toLowerCase();
+                const name = (p.name || p.product_name || '').toLowerCase();
+                const sku = (p.sku || p.sku_value || '').toLowerCase();
                 
-                if (query.length < 2) {
-                    suggestionsDiv.style.display = 'none';
-                    return;
-                }
-                
-                const matches = products.filter(p => 
-                    p.code.toLowerCase().includes(query) || 
-                    p.name.toLowerCase().includes(query) ||
-                    (p.sku && p.sku.toLowerCase().includes(query))
-                ).slice(0, 5);
-                
-                if (matches.length > 0) {
-                    suggestionsDiv.innerHTML = matches.map(p => `
+                return code.includes(query) || name.includes(query) || sku.includes(query);
+            }).slice(0, 5);
+            
+            console.log('Matches found:', matches.length); // Debug
+            
+            if (matches.length > 0) {
+                suggestionsDiv.innerHTML = matches.map(p => {
+                    // Use safe field access with fallbacks
+                    const productCode = p.code || p.product_code || 'N/A';
+                    const productName = p.name || p.product_name || 'Unknown';
+                    const productPrice = p.price || p.selling_price || 0;
+                    const productStock = p.stock || p.quantity || 0;
+                    const productSku = p.sku || p.sku_value || '';
+                    
+                    return `
                         <a href="#" class="list-group-item list-group-item-action" 
-                           onclick="selectProduct(${p.id}, '${p.code}', '${p.name}', ${p.price}, ${p.stock}, '${p.sku || ''}'); return false;">
+                           onclick="selectProduct(${p.id}, '${productCode}', '${productName.replace(/'/g, "\\'")}', ${productPrice}, ${productStock}, '${productSku}'); return false;">
                             <div class="d-flex justify-content-between align-items-center">
                                 <div>
-                                    <strong>${p.code}</strong> - ${p.name}
+                                    <strong>${productCode}</strong> - ${productName}
                                     <br>
                                     <small class="text-muted">
-                                        <i class="fas fa-qrcode me-1"></i>SKU: ${p.sku || 'N/A'}
+                                        <i class="fas fa-qrcode me-1"></i>SKU: ${productSku || 'N/A'}
                                     </small>
                                 </div>
                                 <div class="text-end">
-                                    <span class="badge bg-info">Stock: ${p.stock}</span>
+                                    <span class="badge bg-info">Stock: ${productStock}</span>
                                     <br>
-                                    <small class="text-warning fw-bold">KSH ${p.price}</small>
+                                    <small class="text-warning fw-bold">KSH ${productPrice}</small>
                                 </div>
                             </div>
                         </a>
-                    `).join('');
-                    suggestionsDiv.style.display = 'block';
-                } else {
-                    suggestionsDiv.style.display = 'none';
-                }
-            });
-            
-            // Hide suggestions when clicking outside
-            document.addEventListener('click', function(e) {
-                if (!searchInput.contains(e.target) && !suggestionsDiv.contains(e.target)) {
-                    suggestionsDiv.style.display = 'none';
-                }
-            });
+                    `;
+                }).join('');
+                suggestionsDiv.style.display = 'block';
+            } else {
+                suggestionsDiv.innerHTML = '<div class="list-group-item text-muted">No matching products found</div>';
+                suggestionsDiv.style.display = 'block';
+            }
+        });
+        
+        // Hide suggestions when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!searchInput.contains(e.target) && !suggestionsDiv.contains(e.target)) {
+                suggestionsDiv.style.display = 'none';
+            }
+        });
+    }
+    
+    // Clear selected product
+    if (clearProductBtn) {
+        clearProductBtn.addEventListener('click', function() {
+            selectedProductId.value = '';
+            searchInput.value = '';
+            selectedProductCard.style.display = 'none';
+            priceInput.value = '';
+        });
+    }
+    
+    // ============================================
+    // FIXED: Global selectProduct function with debugging
+    // ============================================
+    window.selectProduct = function(id, code, name, price, stock, sku) {
+        console.log('Product selected:', {id, code, name, price, stock, sku}); // Debug
+        
+        selectedProductId.value = id;
+        searchInput.value = code;
+        
+        // Update display elements with null checks
+        const nameEl = document.getElementById('selectedProductName');
+        const codeEl = document.getElementById('selectedProductCode');
+        const priceEl = document.getElementById('selectedProductPrice');
+        const stockEl = document.getElementById('selectedProductStock');
+        
+        if (nameEl) nameEl.textContent = name;
+        if (codeEl) codeEl.textContent = code;
+        if (priceEl) priceEl.textContent = price;
+        if (stockEl) stockEl.textContent = stock;
+        
+        // Set price input
+        if (priceInput) priceInput.value = price;
+        
+        // Show SKU in selected product card
+        const skuElement = document.getElementById('selectedProductSku');
+        const skuContainer = document.getElementById('selectedProductSkuContainer');
+        
+        if (skuElement && skuContainer) {
+            skuElement.textContent = sku || 'N/A';
+            skuContainer.style.display = 'block';
         }
         
-        // Clear selected product
-        if (clearProductBtn) {
-            clearProductBtn.addEventListener('click', function() {
-                selectedProductId.value = '';
-                searchInput.value = '';
-                selectedProductCard.style.display = 'none';
-                priceInput.value = '';
-            });
-        }
+        selectedProductCard.style.display = 'block';
+        suggestionsDiv.style.display = 'none';
         
-        // Make selectProduct function global (updated to include SKU)
-        window.selectProduct = function(id, code, name, price, stock, sku) {
-            selectedProductId.value = id;
-            searchInput.value = code;
-            document.getElementById('selectedProductName').textContent = name;
-            document.getElementById('selectedProductCode').textContent = code;
-            document.getElementById('selectedProductPrice').textContent = price;
-            document.getElementById('selectedProductStock').textContent = stock;
-            document.getElementById('priceInput').value = price;
-            
-            // Show SKU in selected product card
-            const skuElement = document.getElementById('selectedProductSku');
-            const skuContainer = document.getElementById('selectedProductSkuContainer');
-            
-            if (skuElement && skuContainer) {
-                if (sku) {
-                    skuElement.textContent = sku;
-                    skuContainer.style.display = 'block';
-                } else {
-                    skuElement.textContent = 'N/A';
-                    skuContainer.style.display = 'block';
-                }
+        showMessage(`Product "${name}" selected successfully`, 'success');
+    };
+    
+    // Handle transaction form submission
+    if (transactionForm) {
+        transactionForm.addEventListener('submit', function(e) {
+            if (!selectedProductId.value) {
+                e.preventDefault();
+                showMessage('Please select a product', 'danger');
+                return;
             }
             
-            selectedProductCard.style.display = 'block';
-            suggestionsDiv.style.display = 'none';
-        };
-        
-        // Handle transaction form submission
-        if (transactionForm) {
-            transactionForm.addEventListener('submit', function(e) {
-                if (!selectedProductId.value) {
-                    e.preventDefault();
-                    showMessage('Please select a product', 'danger');
-                    return;
-                }
-                
-                if (!document.getElementById('companySelect').value) {
-                    e.preventDefault();
-                    showMessage('Please select a credit company', 'danger');
-                    return;
-                }
-                
-                if (!document.getElementById('customerSelect').value) {
-                    e.preventDefault();
-                    showMessage('Please select a customer', 'danger');
-                    return;
-                }
-            });
-        }
-        
-        // Handle customer form submission with AJAX
-        if (customerForm) {
-            customerForm.addEventListener('submit', function(e) {
+            if (!document.getElementById('companySelect').value) {
                 e.preventDefault();
-                
-                const formData = new FormData(customerForm);
-                
-                fetch(customerForm.action, {
-                    method: 'POST',
-                    body: formData,
-                    headers: {'X-Requested-With': 'XMLHttpRequest'}
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        const customerSelect = document.getElementById('customerSelect');
-                        const newOption = new Option(
-                            data.customer.full_name + ' - ' + data.customer.phone_number,
-                            data.customer.id,
-                            true,
-                            true
-                        );
-                        customerSelect.add(newOption);
-                        
-                        // Close modal
-                        bootstrap.Modal.getInstance(document.getElementById('addCustomerModal')).hide();
-                        
-                        // Show success message
-                        showMessage(`Customer "${data.customer.full_name}" added successfully!`, 'success');
-                        
-                        // Reset the form
-                        customerForm.reset();
-                    } else {
-                        showMessage('Error: ' + data.error, 'danger');
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    showMessage('An error occurred while adding customer.', 'danger');
-                });
-            });
-        }
-        
-        // Show message function
-        function showMessage(message, type) {
-            const alertDiv = document.createElement('div');
-            alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
-            alertDiv.innerHTML = `
-                <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'} me-2"></i>
-                ${message}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            `;
-            messageContainer.innerHTML = '';
-            messageContainer.appendChild(alertDiv);
+                showMessage('Please select a credit company', 'danger');
+                return;
+            }
             
-            // Auto-hide after 3 seconds
-            setTimeout(() => {
-                alertDiv.remove();
-            }, 3000);
-        }
-    </script>
+            if (!document.getElementById('customerSelect').value) {
+                e.preventDefault();
+                showMessage('Please select a customer', 'danger');
+                return;
+            }
+        });
+    }
+    
+    // Handle customer form submission with AJAX
+    if (customerForm) {
+        customerForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(customerForm);
+            
+            fetch(customerForm.action, {
+                method: 'POST',
+                body: formData,
+                headers: {'X-Requested-With': 'XMLHttpRequest'}
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const customerSelect = document.getElementById('customerSelect');
+                    const newOption = new Option(
+                        data.customer.full_name + ' - ' + data.customer.phone_number,
+                        data.customer.id,
+                        true,
+                        true
+                    );
+                    customerSelect.add(newOption);
+                    
+                    // Close modal
+                    bootstrap.Modal.getInstance(document.getElementById('addCustomerModal')).hide();
+                    
+                    // Show success message
+                    showMessage(`Customer "${data.customer.full_name}" added successfully!`, 'success');
+                    
+                    // Reset the form
+                    customerForm.reset();
+                } else {
+                    showMessage('Error: ' + data.error, 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showMessage('An error occurred while adding customer.', 'danger');
+            });
+        });
+    }
+    
+    // Show message function
+    function showMessage(message, type) {
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+        alertDiv.innerHTML = `
+            <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'} me-2"></i>
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        messageContainer.innerHTML = '';
+        messageContainer.appendChild(alertDiv);
+        
+        // Auto-hide after 3 seconds
+        setTimeout(() => {
+            alertDiv.remove();
+        }, 3000);
+    }
+    
+    // Debug helper - press F12 to see console output
+    console.log('Search initialized with', products.length, 'products');
+</script>
 </body>
 </html>

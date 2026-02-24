@@ -18,7 +18,7 @@ class Command(BaseCommand):
             'Store Manager',
             'Credit Officer',
             'Assistant Manager',
-            'Inventory Manager',
+            'Credit Manager',
             'Customer Service',
             'Security Officer',
             'Sales Agent',

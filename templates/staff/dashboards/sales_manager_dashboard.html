@@ -1,0 +1,362 @@
+<!-- templates/staff/dashboards/sales_manager_dashboard.html -->
+{% extends 'sales/staff_base.html' %}
+{% load static %}
+
+{% block title %}Sales Manager Dashboard - FieldMax{% endblock %}
+
+{% block page_icon %}fas fa-users-cog{% endblock %}
+{% block page_title %}Sales Manager Dashboard{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'staff:store_manager_dashboard' %}">Home</a></li>
+<li class="breadcrumb-item"><a href="{% url 'sales:sales_dashboard' %}">Sales</a></li>
+<li class="breadcrumb-item active">Manager Dashboard</li>
+{% endblock %}
+
+{% block page_actions %}
+<div class="btn-group">
+    <a href="{% url 'sales:sale_list' %}?seller={{ request.user.username }}" class="btn btn-primary-custom btn-custom">
+        <i class="fas fa-history me-2"></i>My Sales
+    </a>
+    <button type="button" class="btn btn-outline-custom btn-custom dropdown-toggle" data-bs-toggle="dropdown">
+        <i class="fas fa-download"></i>
+    </button>
+    <ul class="dropdown-menu dropdown-menu-end">
+        <li><h6 class="dropdown-header">Team Reports</h6></li>
+        <li><a class="dropdown-item" href="#"><i class="fas fa-file-pdf me-2 text-danger"></i>Team Performance</a></li>
+        <li><a class="dropdown-item" href="#"><i class="fas fa-file-excel me-2 text-success"></i>Sales by Agent</a></li>
+        <li><a class="dropdown-item" href="#"><i class="fas fa-print me-2 text-secondary"></i>Print Report</a></li>
+    </ul>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Welcome Section -->
+<div class="welcome-card animate__animated animate__fadeIn">
+    <div class="row align-items-center">
+        <div class="col-lg-8">
+            <h1 class="welcome-title">
+                <i class="fas fa-users-cog me-3"></i>Sales Manager Dashboard
+            </h1>
+            <p class="welcome-subtitle">
+                <i class="fas fa-calendar-alt me-2"></i>{{ today|date:"l, F j, Y" }}
+                <span class="mx-2">|</span>
+                <i class="fas fa-users me-2"></i>{{ sales_team|default:"0" }} Team Members
+            </p>
+            
+            <div class="date-badge">
+                <i class="fas fa-chart-line me-2"></i>
+                <strong>KES {{ team_sales_today.total|default:"0"|floatformat:0 }}</strong> today |
+                <strong>{{ team_sales_today.count|default:"0" }}</strong> transactions |
+                <strong>KES {{ avg_ticket_today|default:"0"|floatformat:0 }}</strong> avg ticket
+            </div>
+        </div>
+        <div class="col-lg-4 text-lg-end mt-4 mt-lg-0">
+            <i class="fas fa-users fa-5x" style="opacity: 0.5;"></i>
+        </div>
+    </div>
+</div>
+
+<!-- Team Performance Stats -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon primary">
+            <i class="fas fa-users"></i>
+        </div>
+        <div class="stat-value">{{ sales_team|default:"0" }}</div>
+        <div class="stat-label">Team Members</div>
+        <div class="stat-trend">
+            <i class="fas fa-user-check me-1"></i>Active today
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon success">
+            <i class="fas fa-money-bill-wave"></i>
+        </div>
+        <div class="stat-value">KES {{ team_sales_today.total|default:"0"|floatformat:0 }}</div>
+        <div class="stat-label">Today's Sales</div>
+        <div class="stat-trend">
+            <i class="fas fa-arrow-up me-1"></i>{{ team_sales_week.total|default:"0"|floatformat:0 }} this week
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon warning">
+            <i class="fas fa-credit-card"></i>
+        </div>
+        <div class="stat-value">{{ credit_sales_today.count|default:"0" }}</div>
+        <div class="stat-label">Credit Sales</div>
+        <div class="stat-trend down">
+            <i class="fas fa-clock me-1"></i>KES {{ credit_sales_today.total|default:"0"|floatformat:0 }}
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon danger">
+            <i class="fas fa-chart-line"></i>
+        </div>
+        <div class="stat-value">{{ team_sales_today.count|default:"0" }}</div>
+        <div class="stat-label">Transactions</div>
+        <div class="stat-trend">
+            <i class="fas fa-calendar me-1"></i>{{ team_sales_month.count|default:"0" }} this month
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row -->
+<div class="row g-4 mb-4">
+    <!-- Hourly Sales Chart -->
+    <div class="col-xl-8">
+        <div class="chart-container">
+            <div class="chart-header">
+                <h5 class="chart-title">
+                    <i class="fas fa-chart-line"></i>Hourly Sales Today
+                </h5>
+                <span class="badge bg-light text-dark">Team Performance</span>
+            </div>
+            <div class="chart-wrapper">
+                <canvas id="hourlySalesChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Payment Methods -->
+    <div class="col-xl-4">
+        <div class="chart-container">
+            <div class="chart-header">
+                <h5 class="chart-title">
+                    <i class="fas fa-chart-pie"></i>Payment Methods
+                </h5>
+                <span class="badge bg-light text-dark">Today</span>
+            </div>
+            <div class="chart-wrapper">
+                <canvas id="paymentChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Team Performance Tables -->
+<div class="row g-4 mb-4">
+    <!-- Today's Top Performers -->
+    <div class="col-xl-6">
+        <div class="table-container">
+            <div class="table-header">
+                <h5 class="table-title">
+                    <i class="fas fa-crown text-warning"></i>Today's Top Performers
+                </h5>
+                <span class="badge bg-light text-dark">{{ today|date:"M d" }}</span>
+            </div>
+            
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Sales Agent</th>
+                            <th>Transactions</th>
+                            <th>Total Sales</th>
+                            <th>Avg Ticket</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for member in sales_by_member_today %}
+                        <tr>
+                            <td>
+                                <div class="fw-bold">{{ member.seller__first_name|default:member.seller__username }}</div>
+                                <small class="text-muted">{{ member.seller__username }}</small>
+                            </td>
+                            <td>{{ member.transaction_count }}</td>
+                            <td class="fw-bold text-success">KES {{ member.total_sales|floatformat:0 }}</td>
+                            <td>KES {{ member.avg_ticket|floatformat:0 }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="text-center py-4 text-muted">
+                                <i class="fas fa-users fa-2x mb-2"></i>
+                                <p class="mb-0">No sales today</p>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Products Today -->
+    <div class="col-xl-6">
+        <div class="table-container">
+            <div class="table-header">
+                <h5 class="table-title">
+                    <i class="fas fa-box"></i>Top Products Today
+                </h5>
+                <span class="badge bg-light text-dark">Best Sellers</span>
+            </div>
+            
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th>Code</th>
+                            <th>Qty Sold</th>
+                            <th>Revenue</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for product in top_products_today %}
+                        <tr>
+                            <td>
+                                <div class="fw-bold">{{ product.product_name|truncatechars:25 }}</div>
+                            </td>
+                            <td><span class="badge bg-secondary">{{ product.product_code|default:"N/A" }}</span></td>
+                            <td><span class="badge bg-success rounded-pill">{{ product.total_qty }}</span></td>
+                            <td class="fw-bold">KES {{ product.total_value|floatformat:0 }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="text-center py-4 text-muted">
+                                <i class="fas fa-box-open fa-2x mb-2"></i>
+                                <p class="mb-0">No sales today</p>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Team Sales -->
+<div class="table-container">
+    <div class="table-header">
+        <h5 class="table-title">
+            <i class="fas fa-clock"></i>Recent Team Sales
+        </h5>
+        <a href="{% url 'sales:sale_list' %}" class="view-all-link">View All <i class="fas fa-arrow-right ms-2"></i></a>
+    </div>
+    
+    <div class="table-responsive">
+        <table class="table table-hover">
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Sale ID</th>
+                    <th>Agent</th>
+                    <th>Customer</th>
+                    <th>Items</th>
+                    <th>Payment</th>
+                    <th>Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for sale in recent_sales %}
+                <tr>
+                    <td>
+                        <div class="small fw-bold">{{ sale.sale_date|date:"H:i" }}</div>
+                        <small class="text-muted">{{ sale.sale_date|timesince }} ago</small>
+                    </td>
+                    <td>
+                        <a href="{% url 'sales:sale_detail' sale.sale_id %}" class="text-primary">
+                            {{ sale.sale_id }}
+                        </a>
+                    </td>
+                    <td>
+                        <div class="fw-bold">{{ sale.seller.username }}</div>
+                    </td>
+                    <td>{{ sale.buyer_name|default:"Walk-in" }}</td>
+                    <td>{{ sale.items.count }}</td>
+                    <td>
+                        <span class="payment-badge {{ sale.payment_method|lower }}">
+                            {{ sale.payment_method }}
+                        </span>
+                        {% if sale.is_credit %}
+                        <span class="badge bg-warning ms-1">Credit</span>
+                        {% endif %}
+                    </td>
+                    <td class="fw-bold text-success">KES {{ sale.total_amount|floatformat:0 }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" class="text-center py-4 text-muted">
+                        <i class="fas fa-receipt fa-2x mb-2"></i>
+                        <p class="mb-0">No recent sales</p>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    $(document).ready(function() {
+        // Hourly Sales Chart
+        var ctx1 = document.getElementById('hourlySalesChart').getContext('2d');
+        new Chart(ctx1, {
+            type: 'line',
+            data: {
+                labels: {{ chart_labels|safe }},
+                datasets: [{
+                    label: 'Sales (KES)',
+                    data: {{ chart_data|safe }},
+                    borderColor: '#11998e',
+                    backgroundColor: 'rgba(17, 153, 142, 0.1)',
+                    borderWidth: 3,
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                }
+            }
+        });
+
+        // Payment Methods Chart
+        var ctx2 = document.getElementById('paymentChart').getContext('2d');
+        var paymentLabels = [];
+        var paymentData = [];
+        
+        {% for method in payment_methods_today %}
+            paymentLabels.push('{{ method.payment_method }}');
+            paymentData.push({{ method.total }});
+        {% endfor %}
+        
+        new Chart(ctx2, {
+            type: 'doughnut',
+            data: {
+                labels: paymentLabels,
+                datasets: [{
+                    data: paymentData,
+                    backgroundColor: [
+                        '#28a745',
+                        '#007bff',
+                        '#ffc107',
+                        '#dc3545'
+                    ],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                },
+                cutout: '70%'
+            }
+        });
+</script>
+{% endblock %}

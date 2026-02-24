@@ -22,6 +22,7 @@ urlpatterns = [
     path('sales-manager-dashboard/', views.sales_manager_dashboard, name='sales_manager_dashboard'),
     path('cashier-dashboard/', views.cashier_dashboard, name='cashier_dashboard'),
     path('store-manager-dashboard/', views.store_manager_dashboard, name='store_manager_dashboard'),
+    path('credit-manager-dashboard/', views.credit_manager_dashboard, name='credit_manager_dashboard'),
     path('credit-officer-dashboard/', views.credit_officer_dashboard, name='credit_officer_dashboard'),
     path('customer-service-dashboard/', views.customer_service_dashboard, name='customer_service_dashboard'),
     path('supervisor-dashboard/', views.supervisor_dashboard, name='supervisor_dashboard'),
