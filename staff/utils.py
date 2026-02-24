@@ -111,7 +111,7 @@ def get_user_role(user):
         'Store Manager',
         'Credit Officer',
         'Assistant Manager',
-        'Inventory Manager',
+        'Credit Manager',
         'Customer Service',
         'Security Officer',
         'Sales Agent',
@@ -137,7 +137,7 @@ def requires_otp(user):
         'Sales Manager',
         'Store Manager',
         'Assistant Manager',
-        'Inventory Manager',
+        'Credit Manager',
     ]
     
     user_groups = user.groups.values_list('name', flat=True)

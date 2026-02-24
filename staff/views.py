@@ -9,7 +9,7 @@ from django.core.mail import send_mail
 from django.template.loader import render_to_string
 from django.contrib.auth import get_user_model
 from django.contrib.admin.views.decorators import staff_member_required
-from django.db.models import Count, Sum, Q
+from django.db.models import Sum, Count, Q, Avg
 from datetime import timedelta
 from .models import StaffApplication
 from django.contrib.auth import logout
@@ -19,7 +19,7 @@ from .utils import send_otp_email, requires_otp, get_user_role
 from django.db.models import F
 import logging
 import os
-
+from decimal import Decimal
 
 
 
@@ -263,9 +263,10 @@ def admin_dashboard(request):
 @login_required
 def store_manager_dashboard(request):
     """Dashboard for store manager"""
-    from inventory.models import Product, Category, StockMovement
+    from inventory.models import Product, Category
     from sales.models import SaleItem
     from django.db.models import Sum, Count, Q
+    from django.contrib import messages
     
     today = timezone.now().date()
     week_ago = today - timedelta(days=7)
@@ -274,10 +275,12 @@ def store_manager_dashboard(request):
     total_products = Product.objects.count()
     total_categories = Category.objects.count()
     
-    # Stock value calculation (if you have buying_price)
-    total_stock_value = Product.objects.aggregate(
-        total=Sum('quantity') * Sum('buying_price')
-    )['total'] or 0
+    # Stock value calculation - Fixed the aggregation
+    products = Product.objects.all()
+    total_stock_value = 0
+    for product in products:
+        if hasattr(product, 'buying_price') and product.buying_price and product.quantity:
+            total_stock_value += product.buying_price * product.quantity
     
     # Stock alerts
     low_stock_products = Product.objects.filter(quantity__lt=10, quantity__gt=0).count()
@@ -285,30 +288,42 @@ def store_manager_dashboard(request):
     overstock = Product.objects.filter(quantity__gt=100).count()
     
     # Products by status
-    available_products = Product.objects.filter(status='available').count()
-    sold_products = Product.objects.filter(status='sold').count()
+    available_products = Product.objects.filter(status='available').count() if hasattr(Product, 'status') else 0
+    sold_products = Product.objects.filter(status='sold').count() if hasattr(Product, 'status') else 0
     
-    # Recent Stock Movements (if you have StockMovement model)
+    # Recent Stock Movements - Using Product history or empty list if not available
     recent_movements = []
-    try:
-        recent_movements = StockMovement.objects.select_related('product').order_by('-timestamp')[:10]
-    except:
-        recent_movements = []
+    # If you have a different model for stock tracking, use it here
+    # For now, we'll leave it empty
     
     # Category-wise Stock
-    stock_by_category = Category.objects.annotate(
-        product_count=Count('products'),
-        total_stock=Sum('products__quantity')
-    ).order_by('-total_stock')[:10]
+    stock_by_category = []
+    for category in Category.objects.all():
+        category_products = category.products.all()
+        product_count = category_products.count()
+        total_stock = category_products.aggregate(Sum('quantity'))['quantity__sum'] or 0
+        stock_by_category.append({
+            'name': category.name,
+            'product_count': product_count,
+            'total_stock': total_stock
+        })
+    # Sort by total_stock descending
+    stock_by_category = sorted(stock_by_category, key=lambda x: x['total_stock'], reverse=True)[:10]
     
     # Top selling products (from sales)
-    top_selling = SaleItem.objects.values('product_name', 'product_code').annotate(
-        total_sold=Sum('quantity'),
-        total_revenue=Sum('total_price')
-    ).order_by('-total_sold')[:10]
+    try:
+        top_selling = SaleItem.objects.values('product_name', 'product_code').annotate(
+            total_sold=Sum('quantity'),
+            total_revenue=Sum('total_price')
+        ).order_by('-total_sold')[:10]
+    except:
+        top_selling = []
     
     # Products added this week
     new_products_week = Product.objects.filter(created_at__date__gte=week_ago).count()
+    
+    # Recent products (as alternative to stock movements)
+    recent_products = Product.objects.order_by('-created_at')[:10]
     
     context = {
         'total_products': total_products,
@@ -320,12 +335,13 @@ def store_manager_dashboard(request):
         'available_products': available_products,
         'sold_products': sold_products,
         'recent_movements': recent_movements,
+        'recent_products': recent_products,  # Added this
         'stock_by_category': stock_by_category,
         'top_selling': top_selling,
         'new_products_week': new_products_week,
+        'today': today,
     }
     return render(request, 'staff/dashboards/store_manager_dashboard.html', context)
-
 
 
 
@@ -397,57 +413,193 @@ def sales_officer_dashboard(request):
     return render(request, 'staff/dashboards/sales_officer_dashboard.html', context)
 
 
+
+
+
+
+
 # ============================================
-# SALES MANAGER DASHBOARD
+# SALES MANAGER DASHBOARD - CORRECTED VERSION
 # ============================================
 @login_required
 def sales_manager_dashboard(request):
     """Dashboard for sales manager - oversees all sales team"""
     from sales.models import Sale, SaleItem
     from django.contrib.auth import get_user_model
+    from django.db.models import Sum, Count
+    from django.utils import timezone
+    from datetime import timedelta
     
     User = get_user_model()
     
     today = timezone.now().date()
+    week_ago = today - timedelta(days=7)
+    month_ago = today - timedelta(days=30)
     
-    # Team Overview
-    sales_team = StaffApplication.objects.filter(
-        status='approved',
-        position__in=['sales_agent', 'cashier']
-    ).count()
+    # Team Overview - FIXED: Added import for StaffApplication
+    try:
+        from staff.models import StaffApplication
+        sales_team = StaffApplication.objects.filter(
+            status='approved',
+            position__in=['sales_agent', 'cashier']
+        ).count()
+    except:
+        # Fallback if StaffApplication doesn't exist
+        sales_team = User.objects.filter(
+            groups__name__in=['Sales Agent', 'Cashier']
+        ).count()
     
-    # Team Performance Today
+    # Team Performance Today - FIXED: Changed Count('id') to Count('sale_id')
     team_sales_today = Sale.objects.filter(
         sale_date__date=today
     ).aggregate(
         total=Sum('total_amount'),
-        count=Count('id')
+        count=Count('sale_id')  # FIXED: Use sale_id instead of id
     )
     
-    # Sales by team member
-    sales_by_member = Sale.objects.filter(
-        sale_date__date=today
-    ).values('seller__username').annotate(
+    # Team Performance This Week
+    team_sales_week = Sale.objects.filter(
+        sale_date__date__gte=week_ago
+    ).aggregate(
         total=Sum('total_amount'),
-        count=Count('id')
-    ).order_by('-total')[:10]
+        count=Count('sale_id')
+    )
     
-    # Top selling products company-wide
-    top_products = SaleItem.objects.filter(
+    # Team Performance This Month
+    team_sales_month = Sale.objects.filter(
+        sale_date__date__gte=month_ago
+    ).aggregate(
+        total=Sum('total_amount'),
+        count=Count('sale_id')
+    )
+    
+    # Sales by team member (today) - FIXED: Use correct field names
+    sales_by_member_today = Sale.objects.filter(
+        sale_date__date=today
+    ).values('seller__username', 'seller__first_name', 'seller__last_name').annotate(
+        total_sales=Sum('total_amount'),
+        transaction_count=Count('sale_id'),  # FIXED: Use sale_id
+        avg_ticket=Sum('total_amount') / Count('sale_id')
+    ).order_by('-total_sales')[:10]
+    
+    # Sales by team member (this week)
+    sales_by_member_week = Sale.objects.filter(
+        sale_date__date__gte=week_ago
+    ).values('seller__username').annotate(
+        total_sales=Sum('total_amount'),
+        transaction_count=Count('sale_id')
+    ).order_by('-total_sales')[:10]
+    
+    # Payment method distribution (today)
+    payment_methods_today = Sale.objects.filter(
+        sale_date__date=today
+    ).values('payment_method').annotate(
+        count=Count('sale_id'),
+        total=Sum('total_amount')
+    )
+    
+    # Top selling products company-wide (today) - FIXED: Use correct field names
+    top_products_today = SaleItem.objects.filter(
         sale__sale_date__date=today
+    ).values('product_name', 'product_code').annotate(
+        total_qty=Sum('quantity'),
+        total_value=Sum('total_price'),
+        transaction_count=Count('sale__sale_id')  # FIXED: Use sale__sale_id
+    ).order_by('-total_qty')[:10]
+    
+    # Top selling products (this week)
+    top_products_week = SaleItem.objects.filter(
+        sale__sale_date__date__gte=week_ago
     ).values('product_name').annotate(
         total_qty=Sum('quantity'),
         total_value=Sum('total_price')
     ).order_by('-total_qty')[:10]
     
+    # Recent sales (last 10)
+    recent_sales = Sale.objects.select_related('seller').order_by('-sale_date')[:10]
+    
+    # Credit sales today
+    credit_sales_today = Sale.objects.filter(
+        sale_date__date=today,
+        is_credit=True
+    ).aggregate(
+        count=Count('sale_id'),
+        total=Sum('total_amount')
+    )
+    
+    # Cash sales today
+    cash_sales_today = Sale.objects.filter(
+        sale_date__date=today,
+        is_credit=False
+    ).aggregate(
+        count=Count('sale_id'),
+        total=Sum('total_amount')
+    )
+    
+    # Hourly sales data for chart
+    hourly_sales = []
+    for hour in range(8, 21):  # 8 AM to 8 PM
+        hour_sales = Sale.objects.filter(
+            sale_date__date=today,
+            sale_date__hour=hour
+        ).aggregate(
+            total=Sum('total_amount'),
+            count=Count('sale_id')
+        )
+        hourly_sales.append({
+            'hour': hour,
+            'amount': float(hour_sales['total'] or 0),
+            'count': hour_sales['count'] or 0,
+            'percentage': (float(hour_sales['total'] or 0) / float(team_sales_today['total'] or 1)) * 100
+        })
+    
+    # Chart labels and data
+    chart_labels = [f"{h}:00" for h in range(8, 21)]
+    chart_data = [s['amount'] for s in hourly_sales]
+    
+    # Top performing team member
+    top_performer = sales_by_member_today[0] if sales_by_member_today else None
+    
     context = {
+        'today': today,
+        
+        # Team stats
         'sales_team': sales_team,
         'team_sales_today': team_sales_today,
-        'sales_by_member': sales_by_member,
-        'top_products': top_products,
+        'team_sales_week': team_sales_week,
+        'team_sales_month': team_sales_month,
+        
+        # Sales by member
+        'sales_by_member_today': sales_by_member_today,
+        'sales_by_member_week': sales_by_member_week,
+        
+        # Payment methods
+        'payment_methods_today': payment_methods_today,
+        
+        # Top products
+        'top_products_today': top_products_today,
+        'top_products_week': top_products_week,
+        
+        # Recent sales
+        'recent_sales': recent_sales,
+        
+        # Credit/Cash stats
+        'credit_sales_today': credit_sales_today,
+        'cash_sales_today': cash_sales_today,
+        
+        # Chart data
+        'chart_labels': chart_labels,
+        'chart_data': chart_data,
+        'hourly_sales': hourly_sales,
+        
+        # Top performer
+        'top_performer': top_performer,
+        
+        # Averages
+        'avg_ticket_today': team_sales_today['total'] / team_sales_today['count'] if team_sales_today['count'] else 0,
     }
+    
     return render(request, 'staff/dashboards/sales_manager_dashboard.html', context)
-
 
 
 
@@ -495,6 +647,299 @@ def cashier_dashboard(request):
         'recent_transactions': recent_transactions,
     }
     return render(request, 'staff/dashboards/cashier_dashboard.html', context)
+
+
+
+
+
+
+
+
+# ============================================
+# CREDIT MANAGER DASHBOARD
+# ============================================
+
+@login_required
+def credit_manager_dashboard(request):
+    """Dashboard for Credit Manager - oversees all credit operations"""
+    
+    today = timezone.now().date()
+    week_ago = today - timedelta(days=7)
+    month_ago = today - timedelta(days=30)
+    
+    # Import credit models
+    try:
+        from credit.models import CreditCompany, CreditCustomer, CreditTransaction, CompanyPayment
+    except ImportError as e:
+        logger.error(f"Failed to import credit models: {e}")
+        return render(request, 'staff/dashboards/credit_manager_dashboard.html', {
+            'error': "Credit app not installed or models not found"
+        })
+    
+    # ============================================
+    # OVERALL CREDIT STATISTICS
+    # ============================================
+    
+    # Total transactions
+    total_transactions = CreditTransaction.objects.count()
+    
+    # Total amount (ceiling_price sum)
+    total_amount = CreditTransaction.objects.aggregate(
+        total=Sum('ceiling_price')
+    )['total'] or Decimal('0.00')
+    
+    # Active transactions (pending payment)
+    active_credits = CreditTransaction.objects.filter(
+        payment_status='pending'
+    ).count()
+    
+    # Total outstanding (pending amounts)
+    total_outstanding = CreditTransaction.objects.filter(
+        payment_status='pending'
+    ).aggregate(
+        total=Sum('ceiling_price')
+    )['total'] or Decimal('0.00')
+    
+    # This month stats
+    this_month_count = CreditTransaction.objects.filter(
+        transaction_date__date__gte=month_ago
+    ).count()
+    
+    this_month_total = CreditTransaction.objects.filter(
+        transaction_date__date__gte=month_ago
+    ).aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
+    
+    # ============================================
+    # STATUS BREAKDOWN
+    # ============================================
+    
+    pending_approval = CreditTransaction.objects.filter(payment_status='pending').count()
+    paid_count = CreditTransaction.objects.filter(payment_status='paid').count()
+    cancelled_count = CreditTransaction.objects.filter(payment_status='cancelled').count()
+    reversed_count = CreditTransaction.objects.filter(payment_status='reversed').count()
+    
+    # Overdue is not a status in your model, so we'll calculate based on date
+    # Assuming transactions older than 30 days without payment are "overdue"
+    overdue_count = CreditTransaction.objects.filter(
+        payment_status='pending',
+        transaction_date__date__lte=today - timedelta(days=30)
+    ).count()
+    
+    # ============================================
+    # OVERDUE ANALYSIS
+    # ============================================
+    
+    high_risk = CreditTransaction.objects.filter(
+        payment_status='pending',
+        transaction_date__date__lte=today - timedelta(days=60)
+    ).count()
+    
+    medium_risk = CreditTransaction.objects.filter(
+        payment_status='pending',
+        transaction_date__date__lte=today - timedelta(days=30),
+        transaction_date__date__gt=today - timedelta(days=60)
+    ).count()
+    
+    low_risk = CreditTransaction.objects.filter(
+        payment_status='pending',
+        transaction_date__date__lte=today - timedelta(days=15),
+        transaction_date__date__gt=today - timedelta(days=30)
+    ).count()
+    
+    # ============================================
+    # COLLECTIONS TODAY
+    # ============================================
+    
+    # Payments recorded today (CompanyPayment)
+    collected_today = CompanyPayment.objects.filter(
+        payment_date=today
+    ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+    
+    # ============================================
+    # DUE PAYMENTS
+    # ============================================
+    
+    # Since there's no due_date field, we'll consider transactions older than 30 days as "due"
+    due_today = CreditTransaction.objects.filter(
+        payment_status='pending',
+        transaction_date__date__lte=today - timedelta(days=30)
+    ).count()
+    
+    # ============================================
+    # CREDIT COMPANIES PERFORMANCE
+    # ============================================
+    
+    companies = []
+    for company in CreditCompany.objects.filter(is_active=True)[:5]:
+        # Company statistics
+        company_total = CreditTransaction.objects.filter(
+            credit_company=company
+        ).aggregate(total=Sum('ceiling_price'))['total'] or 0
+        
+        company_pending = CreditTransaction.objects.filter(
+            credit_company=company,
+            payment_status='pending'
+        ).count()
+        
+        company_paid = CreditTransaction.objects.filter(
+            credit_company=company,
+            payment_status='paid'
+        ).count()
+        
+        company_overdue = CreditTransaction.objects.filter(
+            credit_company=company,
+            payment_status='pending',
+            transaction_date__date__lte=today - timedelta(days=30)
+        ).count()
+        
+        company_customers = CreditTransaction.objects.filter(
+            credit_company=company
+        ).values('customer').distinct().count()
+        
+        # Calculate utilization based on total vs limit (if you have limit field)
+        utilization = 0
+        if hasattr(company, 'credit_limit') and company.credit_limit and company.credit_limit > 0:
+            utilization = min(int((company_total / company.credit_limit) * 100), 100)
+        
+        companies.append({
+            'id': company.id,
+            'name': company.name,
+            'code': company.code if hasattr(company, 'code') else 'CRD',
+            'total_credit': company_total,
+            'active': company_pending,
+            'overdue': company_overdue,
+            'customers': company_customers,
+            'paid': company_paid,
+            'utilization': utilization
+        })
+    
+    # ============================================
+    # DUE PAYMENTS LIST
+    # ============================================
+    
+    due_payments_list = []
+    # Get pending transactions older than 30 days
+    due_payments = CreditTransaction.objects.filter(
+        payment_status='pending',
+        transaction_date__date__lte=today - timedelta(days=30)
+    ).select_related('customer', 'credit_company').order_by('transaction_date')[:10]
+    
+    for payment in due_payments:
+        due_payments_list.append({
+            'id': payment.id,
+            'customer_name': payment.customer.full_name if payment.customer else "Unknown",
+            'amount': payment.ceiling_price,
+            'company': payment.credit_company.name if payment.credit_company else "N/A",
+            'due_date': payment.transaction_date,  # Using transaction_date as reference
+            'customer_phone': payment.customer.phone_number if payment.customer else "",
+        })
+    
+    # ============================================
+    # RECENT TRANSACTIONS
+    # ============================================
+    
+    recent_transactions_list = []
+    recent_transactions = CreditTransaction.objects.select_related(
+        'customer', 'credit_company', 'dealer'
+    ).order_by('-transaction_date')[:10]
+    
+    for tx in recent_transactions:
+        recent_transactions_list.append({
+            'id': tx.id,
+            'reference': tx.transaction_id,
+            'customer_name': tx.customer.full_name if tx.customer else "Unknown",
+            'customer_phone': tx.customer.phone_number if tx.customer else "",
+            'amount': tx.ceiling_price,
+            'company_name': tx.credit_company.name if tx.credit_company else "N/A",
+            'status': tx.payment_status,
+            'date': tx.transaction_date,
+        })
+    
+    # ============================================
+    # OVERDUE ACCOUNTS LIST
+    # ============================================
+    
+    overdue_accounts_list = []
+    overdue_accounts = CreditTransaction.objects.filter(
+        payment_status='pending',
+        transaction_date__date__lte=today - timedelta(days=30)
+    ).select_related('customer', 'credit_company').order_by('transaction_date')[:10]
+    
+    for acc in overdue_accounts:
+        days_overdue = (today - acc.transaction_date.date()).days
+        overdue_accounts_list.append({
+            'id': acc.id,
+            'customer_name': acc.customer.full_name if acc.customer else "Unknown",
+            'phone': acc.customer.phone_number if acc.customer else "",
+            'amount': acc.ceiling_price,
+            'days_overdue': days_overdue,
+            'company': acc.credit_company.name if acc.credit_company else "N/A",
+        })
+    
+    # ============================================
+    # CHART DATA
+    # ============================================
+    
+    chart_labels = []
+    credit_data = []
+    
+    for i in range(30):
+        date = month_ago + timedelta(days=i)
+        day_total = CreditTransaction.objects.filter(
+            transaction_date__date=date
+        ).aggregate(total=Sum('ceiling_price'))['total'] or 0
+        chart_labels.append(f"'{date.strftime('%d %b')}'")
+        credit_data.append(float(day_total))
+    
+    context = {
+        # Date info
+        'today': today,
+        
+        # Overall stats
+        'total_transactions': total_transactions,
+        'total_outstanding': total_outstanding,
+        'active_credits': active_credits,
+        'total_amount': total_amount,
+        
+        # Monthly stats
+        'this_month_total': this_month_total,
+        'this_month_count': this_month_count,
+        
+        # Status breakdown
+        'pending_approval': pending_approval,  # pending payments
+        'approved_count': 0,  # Not applicable
+        'active_count': active_credits,
+        'overdue_count': overdue_count,
+        'defaulted_count': 0,  # Not applicable
+        'paid_count': paid_count,
+        'rejected_count': cancelled_count + reversed_count,
+        
+        # Overdue breakdown
+        'high_risk': high_risk,
+        'medium_risk': medium_risk,
+        'low_risk': low_risk,
+        
+        # Collections
+        'collected_today': collected_today,
+        
+        # Due payments
+        'due_today': due_today,
+        
+        # Companies
+        'companies': companies,
+        
+        # Lists
+        'due_payments': due_payments_list,
+        'recent_transactions': recent_transactions_list,
+        'overdue_accounts': overdue_accounts_list,
+        
+        # Chart data
+        'chart_labels': chart_labels,
+        'credit_data': credit_data,
+    }
+    
+    return render(request, 'staff/dashboards/credit_manager_dashboard.html', context)
+
 
 
 
