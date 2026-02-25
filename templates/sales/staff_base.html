@@ -124,6 +124,7 @@
             transition: all 0.3s;
             margin: 4px 8px;
             border-radius: 8px;
+            position: relative;
         }
         
         .menu-item:hover {
@@ -152,6 +153,19 @@
             padding: 2px 8px;
             border-radius: 50px;
             font-size: 0.7rem;
+        }
+        
+        .badge-pending {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: #ffc107;
+            color: #1a1a2e;
+            padding: 2px 8px;
+            border-radius: 50px;
+            font-size: 0.7rem;
+            font-weight: 600;
         }
         
         /* Main Content */
@@ -538,6 +552,9 @@
         .badge-mpesa { background: #cce5ff; color: #004085; }
         .badge-card { background: #fff3cd; color: #856404; }
         .badge-credit { background: #f8d7da; color: #721c24; }
+        .badge-pending-order { background: #fff3cd; color: #856404; }
+        .badge-completed-order { background: #d4edda; color: #155724; }
+        .badge-rejected-order { background: #f8d7da; color: #721c24; }
         
         /* Buttons */
         .btn-custom {
@@ -741,6 +758,50 @@
             margin-top: 20px;
         }
         
+        /* Order Cards */
+        .order-card {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-left: 4px solid #11998e;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        
+        .order-card.pending {
+            border-left-color: #ffc107;
+        }
+        
+        .order-card.completed {
+            border-left-color: #28a745;
+        }
+        
+        .order-card.rejected {
+            border-left-color: #dc3545;
+        }
+        
+        .order-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .order-id {
+            font-weight: 700;
+            color: #11998e;
+        }
+        
+        .order-customer {
+            font-weight: 600;
+        }
+        
+        .order-total {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #11998e;
+        }
+        
         /* Responsive */
         @media (max-width: 768px) {
             .sidebar {
@@ -816,6 +877,70 @@
                 <a href="{% url 'sales:sale_list' %}" class="menu-item {% if 'list' in request.path %}active{% endif %}">
                     <i class="fas fa-list"></i>
                     <span class="menu-text">Sales History</span>
+                </a>
+            </div>
+            
+            <!-- ============================================ -->
+            <!-- FIXED: PENDING ORDERS SECTION with correct URLs -->
+            <!-- ============================================ -->
+            <div class="menu-section">
+                <div class="menu-section-title">PENDING ORDERS</div>
+                <a href="{% url 'pending-orders-list' %}" class="menu-item {% if 'pending-orders' in request.path %}active{% endif %}">
+                    <i class="fas fa-clock"></i>
+                    <span class="menu-text">All Pending Orders</span>
+                    {% if pending_orders_count %}
+                    <span class="badge-pending">{{ pending_orders_count }}</span>
+                    {% endif %}
+                </a>
+                <a href="{% url 'shop' %}" class="menu-item">
+                    <i class="fas fa-plus-circle"></i>
+                    <span class="menu-text">Create Order</span>
+                </a>
+            </div>
+            
+            <!-- ============================================ -->
+            <!-- FIXED: CUSTOMER MANAGEMENT SECTION -->
+            <!-- ============================================ -->
+            <div class="menu-section">
+                <div class="menu-section-title">CUSTOMERS</div>
+                <a href="#" class="menu-item">
+                    <i class="fas fa-users"></i>
+                    <span class="menu-text">All Customers</span>
+                </a>
+                <a href="#" class="menu-item">
+                    <i class="fas fa-user-plus"></i>
+                    <span class="menu-text">Add Customer</span>
+                </a>
+            </div>
+            
+            <!-- ============================================ -->
+            <!-- FIXED: ORDER SEARCH SECTION -->
+            <!-- ============================================ -->
+            <div class="menu-section">
+                <div class="menu-section-title">ORDER SEARCH</div>
+                <a href="{% url 'order_search_page' %}" class="menu-item {% if 'order_search' in request.path %}active{% endif %}">
+                    <i class="fas fa-search"></i>
+                    <span class="menu-text">Search Orders</span>
+                </a>
+                <a href="{% url 'checkout' %}" class="menu-item">
+                    <i class="fas fa-credit-card"></i>
+                    <span class="menu-text">Checkout</span>
+                </a>
+            </div>
+            
+            <!-- ============================================ -->
+            <!-- FIXED: CART MANAGEMENT SECTION -->
+            <!-- ============================================ -->
+            <div class="menu-section">
+                <div class="menu-section-title">CART</div>
+                <a href="{% url 'shopping-cart' %}" class="menu-item">
+                    <i class="fas fa-shopping-cart"></i>
+                    <span class="menu-text">View Cart</span>
+                    <span class="badge-pending" id="cartCount">0</span>
+                </a>
+                <a href="{% url 'shop' %}" class="menu-item">
+                    <i class="fas fa-store"></i>
+                    <span class="menu-text">Continue Shopping</span>
                 </a>
             </div>
             
@@ -1006,6 +1131,22 @@
             }
         });
 
+        // Function to get pending orders count
+        function updatePendingCount() {
+            $.ajax({
+                url: '{% url "pending_orders_count" %}',
+                method: 'GET',
+                success: function(data) {
+                    if (data.count > 0) {
+                        $('.badge-pending').first().text(data.count).show();
+                    }
+                }
+            });
+        }
+
+        // Call on page load
+        updatePendingCount();
+
         // Confirm actions
         function confirmAction(message, url) {
             if (confirm(message)) {
@@ -1020,7 +1161,7 @@
 
         // Handle AJAX requests with CSRF
         function getCSRFToken() {
-            return document.querySelector('[name=csrfmiddlewaretoken]').value;
+            return document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
         }
 
         // Responsive sidebar on mobile

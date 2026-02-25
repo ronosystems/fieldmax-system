@@ -125,6 +125,7 @@ def staff_dashboard(request):
             'Sales Agent': 'staff:sales_officer_dashboard',
             'Cashier': 'staff:cashier_dashboard',
             'Store Manager': 'staff:store_manager_dashboard',
+            'Credit Manager': 'staff:credit_manager_dashboard',
             'Credit Officer': 'staff:credit_officer_dashboard',
             'Customer Service': 'staff:customer_service_dashboard',
             'Supervisor': 'staff:supervisor_dashboard',
