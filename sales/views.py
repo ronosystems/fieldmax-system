@@ -171,12 +171,6 @@ def sale_list(request):
     from django.db.models import Q, Count
     from django.core.paginator import Paginator
     
-    # Debug: Check unique payment methods in database
-    payment_methods = Sale.objects.values_list('payment_method', flat=True).distinct()
-    print("=== PAYMENT METHODS IN DATABASE ===")
-    for method in payment_methods:
-        print(f"'{method}'")
-    
     # Base queryset
     sales = Sale.objects.all().order_by('-sale_date')
     
@@ -193,11 +187,20 @@ def sale_list(request):
     if date_to:
         sales = sales.filter(sale_date__date__lte=date_to)
     
-    # Payment method filter - FIXED: Use iexact for case-insensitive matching
+    # ============================================
+    # PAYMENT METHOD FILTER - FIXED: More robust
+    # ============================================
     payment_method = request.GET.get('payment_method')
     if payment_method:
-        # Use iexact for case-insensitive matching
-        sales = sales.filter(payment_method__iexact=payment_method)
+        if payment_method == 'M-Pesa':
+            # Handle both 'M-Pesa' and 'Mpesa' variations
+            sales = sales.filter(
+                Q(payment_method__iexact='M-Pesa') | 
+                Q(payment_method__iexact='Mpesa')
+            )
+        else:
+            # For other methods, use case-insensitive exact match
+            sales = sales.filter(payment_method__iexact=payment_method)
     
     # Sale type filter (cash vs credit)
     sale_type = request.GET.get('sale_type')
@@ -216,6 +219,11 @@ def sale_list(request):
         )
     
     # ============================================
+    # Get distinct payment methods for dropdown
+    # ============================================
+    available_methods = Sale.objects.values_list('payment_method', flat=True).distinct().order_by('payment_method')
+    
+    # ============================================
     # Pagination
     # ============================================
     paginator = Paginator(sales, 20)
@@ -225,6 +233,7 @@ def sale_list(request):
     # Pass the current filter values to template for maintaining selections
     context = {
         'sales': page_obj,
+        'available_methods': available_methods,  # Add this for dynamic dropdown
         'current_filters': {
             'date_from': date_from,
             'date_to': date_to,
@@ -234,6 +243,7 @@ def sale_list(request):
         }
     }
     return render(request, 'sales/list.html', context)
+
 
 
 
