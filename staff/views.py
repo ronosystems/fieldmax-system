@@ -142,14 +142,14 @@ def staff_dashboard(request):
                 intended_url = dashboard_url
                 break
     
-    # Check if user requires OTP
-    if requires_otp(request.user):
-        # Check if already verified in this session
-        if not request.session.get('otp_verified'):
-            # Store intended URL and redirect to OTP page
-            request.session['intended_dashboard_url'] = intended_url
-            return redirect('staff:otp_verify')
-    
+    ## Check if user requires OTP
+    #if requires_otp(request.user):
+    #    # Check if already verified in this session
+    #    if not request.session.get('otp_verified'):
+    #        # Store intended URL and redirect to OTP page
+    #        request.session['intended_dashboard_url'] = intended_url
+    #        return redirect('staff:otp_verify')
+    #
     # If OTP not required or already verified, redirect directly
     return redirect(intended_url)
 
