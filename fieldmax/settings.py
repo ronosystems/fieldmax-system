@@ -116,16 +116,27 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'fieldmax.wsgi.application'
 
-# Database - Works with both SQLite and PostgreSQL
-# For SQLite: DATABASE_URL=sqlite:///db.sqlite3
-# For PostgreSQL: DATABASE_URL=postgresql://user:pass@host/dbname
+
+# Database - Optimized for Neon PostgreSQL free tier
 DATABASES = {
     'default': dj_database_url.config(
         default=config('DATABASE_URL', default='sqlite:///db.sqlite3'),
-        conn_max_age=600,
-        ssl_require=not DEBUG  # Only require SSL in production
+        conn_max_age=0,  # Disable persistent connections - crucial for Neon free tier
+        ssl_require=not DEBUG,
+        conn_health_checks=True,  # Add health checks
     )
 }
+
+# Add PostgreSQL-specific options
+if not DEBUG and 'postgres' in config('DATABASE_URL', ''):
+    DATABASES['default']['OPTIONS'] = {
+        'sslmode': 'require',
+        'connect_timeout': 30,  # Increase timeout for cold starts
+        'keepalives': 1,
+        'keepalives_idle': 30,
+        'keepalives_interval': 10,
+        'keepalives_count': 5,
+    }
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
