@@ -31,10 +31,20 @@ from .models import CreditTransaction, CreditCompany, CreditCustomer, CompanyPay
 from decimal import Decimal
 from datetime import timedelta, date
 
+from django.db.models import Sum, Count, Avg, Q, F, Value, DecimalField
+from django.db.models.functions import Coalesce
+from django.utils import timezone
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import render
+from .models import CreditTransaction, CreditCompany, CreditCustomer, CompanyPayment
+from decimal import Decimal
+from datetime import timedelta, date
+
 
 
 
 logger = logging.getLogger(__name__)
+
 
 
 
@@ -122,17 +132,32 @@ def credit_statistics(request):
     company_stats.sort(key=lambda x: x['total_value'], reverse=True)
     
     # ============================================
-    # TOP CUSTOMERS
+    # TOP CUSTOMERS (FIXED with output_field)
     # ============================================
     
+    # Use different names for annotated fields to avoid conflict with model properties
+    # IMPORTANT: Set output_field=DecimalField() for all Sum aggregations
     top_customers = CreditCustomer.objects.filter(
         transactions__payment_status__in=['pending', 'paid']
     ).annotate(
-        transaction_count=Count('transactions'),
-        total_value=Sum('transactions__ceiling_price'),
-        pending_value=Sum('transactions__ceiling_price', filter=Q(transactions__payment_status='pending')),
-        paid_value=Sum('transactions__ceiling_price', filter=Q(transactions__payment_status='paid'))
-    ).order_by('-total_value')[:10]
+        txn_count=Count('transactions'),
+        total_credit_value=Coalesce(
+            Sum('transactions__ceiling_price', output_field=DecimalField()), 
+            Value(0, output_field=DecimalField())
+        ),
+        pending_credit_value=Coalesce(
+            Sum('transactions__ceiling_price', 
+                filter=Q(transactions__payment_status='pending'),
+                output_field=DecimalField()), 
+            Value(0, output_field=DecimalField())
+        ),
+        paid_credit_value=Coalesce(
+            Sum('transactions__ceiling_price', 
+                filter=Q(transactions__payment_status='paid'),
+                output_field=DecimalField()), 
+            Value(0, output_field=DecimalField())
+        )
+    ).order_by('-total_credit_value')[:10]
     
     # ============================================
     # MONTHLY TREND (Last 6 months)
@@ -228,7 +253,7 @@ def credit_statistics(request):
         'company_stats': company_stats,
         'total_companies': CreditCompany.objects.filter(is_active=True).count(),
         
-        # Customers
+        # Customers (using the annotated fields with output_field set)
         'top_customers': top_customers,
         'total_customers': CreditCustomer.objects.filter(is_active=True).count(),
         
