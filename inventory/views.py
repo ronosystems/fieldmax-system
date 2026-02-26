@@ -1131,11 +1131,211 @@ def reverse_entry(request, pk):
     
     return render(request, 'inventory/stock/reverse.html', {'entry': entry})
 
+
+
+
+
 @login_required
 def stock_alerts(request):
-    """List all stock alerts"""
-    alerts = StockAlert.objects.select_related('product').filter(is_active=True)
-    return render(request, 'inventory/stock/alerts.html', {'alerts': alerts})
+    """List all stock alerts with counts and dismissed alerts"""
+    
+    # Get active alerts
+    active_alerts = StockAlert.objects.select_related(
+        'product', 
+        'product__category',
+        'dismissed_by'
+    ).filter(
+        is_active=True,
+        is_dismissed=False
+    ).order_by(
+        '-severity',  # Critical first
+        'alert_type',
+        'product__name'
+    )
+    
+    # Get dismissed alerts (last 50)
+    dismissed_alerts = StockAlert.objects.select_related(
+        'product',
+        'product__category',
+        'dismissed_by'
+    ).filter(
+        is_dismissed=True
+    ).order_by('-dismissed_at')[:50]
+    
+    # Calculate counts by type
+    alert_counts = {
+        'needs_reorder': active_alerts.filter(alert_type='needs_reorder').count(),
+        'lowstock': active_alerts.filter(alert_type='lowstock').count(),
+        'outofstock': active_alerts.filter(alert_type='outofstock').count(),
+        'damaged': active_alerts.filter(alert_type='damaged').count(),
+        'total': active_alerts.count()
+    }
+    
+    # Count dismissed
+    dismissed_count = StockAlert.objects.filter(is_dismissed=True).count()
+    
+    context = {
+        'alerts': active_alerts,
+        'dismissed_alerts': dismissed_alerts,
+        'alert_counts': alert_counts,
+        'dismissed_count': dismissed_count,
+        'page_title': 'Stock Alerts',
+        'show_dismissed': False
+    }
+    
+    return render(request, 'inventory/stock/alerts_list.html', context)
+
+
+
+
+
+
+@login_required
+def alert_detail(request, pk):
+    """View details of a specific alert"""
+    alert = get_object_or_404(
+        StockAlert.objects.select_related(
+            'product', 
+            'product__category',
+            'dismissed_by'
+        ),
+        pk=pk
+    )
+    
+    context = {
+        'alert': alert,
+        'page_title': f'Alert: {alert.product.display_name}'
+    }
+    
+    return render(request, 'inventory/stock/alert_detail.html', context)
+
+
+
+
+@login_required
+def reactivate_alert(request, pk):
+    """Reactivate a dismissed alert"""
+    alert = get_object_or_404(StockAlert, pk=pk, is_dismissed=True)
+    
+    if request.method == 'POST':
+        alert.reactivate()
+        messages.success(request, f'Alert for {alert.product.display_name} reactivated.')
+        return redirect('inventory:stock_alerts')
+    
+    return render(request, 'inventory/stock/reactivate_alert.html', {
+        'alert': alert
+    })
+
+
+@login_required
+def restock_from_alert(request, pk):
+    """Quick restock from alert page"""
+    alert = get_object_or_404(StockAlert, pk=pk, is_active=True)
+    product = alert.product
+    
+    if request.method == 'POST':
+        quantity = int(request.POST.get('quantity', 1))
+        notes = request.POST.get('notes', '')
+        
+        if quantity > 0:
+            from inventory.models import StockEntry
+            from decimal import Decimal
+            
+            # Create stock entry
+            stock_entry = StockEntry.objects.create(
+                product=product,
+                quantity=quantity,
+                entry_type='purchase',
+                unit_price=product.buying_price or Decimal('0.00'),
+                total_amount=(product.buying_price or Decimal('0.00')) * quantity,
+                reference_id=f"ALERT-{alert.id}",
+                notes=notes or f"Restocked from alert - {alert.get_alert_type_display()}",
+                created_by=request.user
+            )
+            
+            # Update product quantity (signal will handle this)
+            product.quantity += quantity
+            product.save()
+            
+            messages.success(request, f'Successfully added {quantity} units to {product.display_name}')
+            
+            # Check if alert should be auto-dismissed
+            if product.quantity > alert.threshold:
+                alert.dismiss(user=request.user, reason=f"Restocked with {quantity} units. New stock: {product.quantity}")
+                messages.info(request, 'Alert automatically dismissed as stock is now above threshold.')
+            
+            return redirect('inventory:stock_alerts')
+    
+    return render(request, 'inventory/stock/restock_from_alert.html', {
+        'alert': alert,
+        'product': product
+    })
+
+
+@login_required
+def export_alerts(request):
+    """Export alerts to CSV"""
+    import csv
+    from django.http import HttpResponse
+    
+    # Create HttpResponse with CSV header
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="stock_alerts_{timezone.now().strftime("%Y%m%d_%H%M%S")}.csv"'
+    
+    writer = csv.writer(response)
+    writer.writerow(['Product Code', 'Product Name', 'Category', 'Alert Type', 'Severity', 
+                    'Current Stock', 'Threshold', 'Reorder Level', 'Last Alerted', 'Status'])
+    
+    alerts = StockAlert.objects.select_related('product', 'product__category').filter(is_active=True)
+    
+    for alert in alerts:
+        writer.writerow([
+            alert.product.product_code,
+            alert.product.display_name,
+            alert.product.category.name if alert.product.category else '',
+            alert.get_alert_type_display(),
+            alert.get_severity_display(),
+            alert.current_stock,
+            alert.threshold,
+            alert.reorder_level or '',
+            alert.last_alerted.strftime('%Y-%m-%d %H:%M') if alert.last_alerted else '',
+            'Active' if alert.is_active and not alert.is_dismissed else 'Dismissed'
+        ])
+    
+    return response
+
+
+@login_required
+def bulk_dismiss_alerts(request):
+    """Dismiss multiple alerts at once"""
+    if request.method == 'POST':
+        alert_ids = request.POST.getlist('alert_ids')
+        reason = request.POST.get('reason', 'Bulk dismiss')
+        
+        if alert_ids:
+            alerts = StockAlert.objects.filter(id__in=alert_ids, is_active=True, is_dismissed=False)
+            count = alerts.count()
+            
+            for alert in alerts:
+                alert.dismiss(user=request.user, reason=reason)
+            
+            messages.success(request, f'Successfully dismissed {count} alerts.')
+        else:
+            messages.warning(request, 'No alerts selected.')
+        
+        return redirect('inventory:stock_alerts')
+    
+    # GET request - show selection page
+    alerts = StockAlert.objects.filter(is_active=True, is_dismissed=False).select_related('product')
+    
+    return render(request, 'inventory/stock/bulk_dismiss.html', {
+        'alerts': alerts
+    })
+
+
+
+
+
 
 @login_required
 def restock_product(request, pk):

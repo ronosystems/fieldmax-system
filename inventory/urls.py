@@ -55,6 +55,15 @@ urlpatterns = [
     path('alerts/', views.stock_alerts, name='stock_alerts'),
     path('alerts/<int:pk>/restock/', views.restock_product, name='restock_product'),
     path('alerts/<int:pk>/dismiss/', views.dismiss_alert, name='dismiss_alert'),
+
+    # Stock Alert URLs
+    path('stock-alerts/', views.stock_alerts, name='stock_alerts'),
+    path('stock-alerts/<int:pk>/', views.alert_detail, name='alert_detail'),
+    path('stock-alerts/<int:pk>/dismiss/', views.dismiss_alert, name='dismiss_alert'),
+    path('stock-alerts/<int:pk>/reactivate/', views.reactivate_alert, name='reactivate_alert'),
+    path('stock-alerts/<int:pk>/restock/', views.restock_from_alert, name='restock_from_alert'),
+    path('stock-alerts/export/', views.export_alerts, name='export_alerts'),
+    path('stock-alerts/bulk-dismiss/', views.bulk_dismiss_alerts, name='bulk_dismiss_alerts'),
     
     # Reviews
     path('reviews/', views.product_reviews, name='product_reviews'),

@@ -1,0 +1,139 @@
+{% extends 'inventory/staff_base.html' %}
+{% load static %}
+
+{% block title %}Bulk Dismiss Alerts{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>
+            <i class="fas fa-check-double me-2 text-success"></i>
+            Bulk Dismiss Alerts
+        </h2>
+        <a href="{% url 'inventory:stock_alerts' %}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left me-2"></i>Back to Alerts
+        </a>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-header bg-white">
+            <h5 class="mb-0">Select alerts to dismiss</h5>
+        </div>
+        <div class="card-body">
+            <form method="POST" id="bulkDismissForm">
+                {% csrf_token %}
+                
+                <div class="mb-3">
+                    <label for="reason" class="form-label">Dismissal Reason</label>
+                    <input type="text" class="form-control" id="reason" name="reason" 
+                           value="Bulk dismiss" required>
+                </div>
+                
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th width="50">
+                                    <input type="checkbox" id="selectAll">
+                                </th>
+                                <th>Product</th>
+                                <th>Alert Type</th>
+                                <th>Severity</th>
+                                <th>Current Stock</th>
+                                <th>Threshold</th>
+                                <th>Last Alerted</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for alert in alerts %}
+                            <tr>
+                                <td>
+                                    <input type="checkbox" name="alert_ids" value="{{ alert.id }}" class="alert-checkbox">
+                                </td>
+                                <td>
+                                    <strong>{{ alert.product.display_name }}</strong><br>
+                                    <small class="text-muted">{{ alert.product.product_code }}</small>
+                                </td>
+                                <td>
+                                    <span class="badge 
+                                        {% if alert.alert_type == 'needs_reorder' %}bg-danger
+                                        {% elif alert.alert_type == 'lowstock' %}bg-warning text-dark
+                                        {% elif alert.alert_type == 'outofstock' %}bg-secondary
+                                        {% elif alert.alert_type == 'damaged' %}bg-dark{% endif %}">
+                                        {{ alert.get_alert_type_display }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="badge 
+                                        {% if alert.severity == 'critical' %}bg-danger
+                                        {% elif alert.severity == 'danger' %}bg-danger
+                                        {% elif alert.severity == 'warning' %}bg-warning text-dark
+                                        {% else %}bg-info{% endif %}">
+                                        {{ alert.get_severity_display }}
+                                    </span>
+                                </td>
+                                <td>{{ alert.current_stock }}</td>
+                                <td>{{ alert.threshold }}</td>
+                                <td>{{ alert.last_alerted|timesince }} ago</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="7" class="text-center py-4">
+                                    <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+                                    <h5>No active alerts to dismiss</h5>
+                                    <p class="text-muted">All stock levels are healthy!</p>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                {% if alerts %}
+                <div class="mt-3 d-flex justify-content-between align-items-center">
+                    <div>
+                        <span id="selectedCount" class="text-muted">0 alerts selected</span>
+                    </div>
+                    <div>
+                        <button type="button" class="btn btn-outline-secondary me-2" onclick="window.history.back()">
+                            Cancel
+                        </button>
+                        <button type="submit" class="btn btn-success" id="dismissBtn" disabled>
+                            <i class="fas fa-check-circle me-2"></i>Dismiss Selected
+                        </button>
+                    </div>
+                </div>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const selectAll = document.getElementById('selectAll');
+    const checkboxes = document.querySelectorAll('.alert-checkbox');
+    const selectedCount = document.getElementById('selectedCount');
+    const dismissBtn = document.getElementById('dismissBtn');
+    
+    function updateSelectedCount() {
+        const checked = document.querySelectorAll('.alert-checkbox:checked').length;
+        selectedCount.textContent = checked + ' alert' + (checked !== 1 ? 's' : '') + ' selected';
+        dismissBtn.disabled = checked === 0;
+    }
+    
+    selectAll.addEventListener('change', function() {
+        checkboxes.forEach(cb => cb.checked = this.checked);
+        updateSelectedCount();
+    });
+    
+    checkboxes.forEach(cb => {
+        cb.addEventListener('change', updateSelectedCount);
+    });
+    
+    updateSelectedCount();
+});
+</script>
+{% endblock %}
