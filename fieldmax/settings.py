@@ -75,6 +75,7 @@ INSTALLED_APPS = [
     
     # Fieldmax apps
     'django_dbconn_retry',
+    #'django_cron',
     'website',
     'inventory',
     'sales',

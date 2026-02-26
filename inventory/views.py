@@ -1146,18 +1146,34 @@ def restock_product(request, pk):
         pass
     return render(request, 'inventory/stock/restock.html', {'alert': alert})
 
+
+
+
+
 @login_required
 def dismiss_alert(request, pk):
     """Dismiss a stock alert"""
     alert = get_object_or_404(StockAlert, pk=pk)
     
     if request.method == 'POST':
-        alert.is_active = False
-        alert.save()
+        reason = request.POST.get('reason', '')
+        alert.dismiss(user=request.user, reason=reason)
         messages.success(request, f'Alert for {alert.product.display_name} dismissed.')
-        return redirect('inventory:stock_alerts')
+        
+        # Check if we should redirect to a specific page
+        next_url = request.GET.get('next', 'inventory:stock_alerts')
+        return redirect(next_url)
     
-    return render(request, 'inventory/stock/dismiss_alert.html', {'alert': alert})
+    return render(request, 'inventory/stock/dismiss_alert.html', {
+        'alert': alert,
+        'next': request.GET.get('next', '')
+    })
+
+
+
+
+
+
 
 @login_required
 def product_reviews(request):
@@ -1167,7 +1183,12 @@ def product_reviews(request):
 
 
 
-    from django.contrib.auth import get_user_model
+
+
+
+
+
+from django.contrib.auth import get_user_model
 from django.http import JsonResponse
 
 User = get_user_model()

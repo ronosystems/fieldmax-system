@@ -671,26 +671,58 @@ class StockEntryAdmin(admin.ModelAdmin):
 
 @admin.register(StockAlert)
 class StockAlertAdmin(admin.ModelAdmin):
-    list_display = ['product_name', 'alert_level', 'is_active', 'last_alerted_display']
-    list_filter = ['is_active', 'alert_level']
-    search_fields = ['product__name', 'product__product_code']
-    readonly_fields = ['last_alerted', 'created_at', 'updated_at']
+    list_display = [
+        'product', 
+        'alert_type', 
+        'severity', 
+        'current_stock', 
+        'threshold', 
+        'is_active', 
+        'is_dismissed',
+        'last_alerted'
+    ]
+    list_filter = [
+        'alert_type', 
+        'severity', 
+        'is_active', 
+        'is_dismissed'
+    ]
+    search_fields = [
+        'product__name', 
+        'product__product_code',
+        'product__sku_value'
+    ]
+    readonly_fields = [
+        'current_stock', 
+        'alert_count', 
+        'created_at', 
+        'updated_at', 
+        'last_alerted'
+    ]
+    list_editable = ['is_active']
     
-    def product_name(self, obj):
-        try:
-            return obj.product.display_name if obj.product else "-"
-        except:
-            return "-"
-    product_name.short_description = 'Product'
+    fieldsets = (
+        ('Product Information', {
+            'fields': ('product', 'alert_type', 'severity')
+        }),
+        ('Stock Levels', {
+            'fields': ('current_stock', 'threshold', 'reorder_level')
+        }),
+        ('Alert Status', {
+            'fields': ('is_active', 'is_dismissed', 'dismissed_by', 'dismissed_at', 'dismissed_reason')
+        }),
+        ('Tracking', {
+            'fields': ('alert_count', 'last_alerted', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
     
-    def last_alerted_display(self, obj):
-        try:
-            return obj.last_alerted if obj.last_alerted else "Never"
-        except:
-            return "Never"
-    last_alerted_display.short_description = 'Last Alerted'
-
-
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('product', 'dismissed_by')
+    
+    def has_delete_permission(self, request, obj=None):
+        # Allow deletion for superusers only
+        return request.user.is_superuser
 
 
 

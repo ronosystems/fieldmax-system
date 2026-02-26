@@ -1,162 +1,242 @@
-{% extends 'inventory/staff_base.html' %}
-{% load static %}
-
-{% block title %}Stock Alerts{% endblock %}
-
-{% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2><i class="fas fa-exclamation-triangle me-2"></i>Stock Alerts</h2>
-    <div>
-        <span class="text-muted">Active Alerts: {{ alerts.count }}</span>
-    </div>
-</div>
-
-<div class="row">
-    {% for alert in alerts %}
-    <div class="col-md-6 mb-4">
-        <div class="card border-warning">
-            <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
-                <h6 class="mb-0"><i class="fas fa-exclamation-triangle me-2"></i>Low Stock Alert</h6>
-                <span class="badge bg-dark">{{ alert.product.product_code }}</span>
-            </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-8">
-                        <h5 class="mb-1">{{ alert.product.display_name }}</h5>
-                        <p class="text-muted small mb-2">{{ alert.product.category.name }}</p>
-                        
-                        <div class="mt-3">
-                            <div class="d-flex justify-content-between mb-2">
-                                <span>Current Stock:</span>
-                                <span class="fw-bold text-warning">{{ alert.product.quantity }}</span>
-                            </div>
-                            <div class="d-flex justify-content-between mb-2">
-                                <span>Alert Level:</span>
-                                <span class="fw-bold">{{ alert.alert_level }}</span>
-                            </div>
-                            {% if alert.product.reorder_level %}
-                            <div class="d-flex justify-content-between mb-2">
-                                <span>Reorder Level:</span>
-                                <span class="fw-bold">{{ alert.product.reorder_level }}</span>
-                            </div>
-                            {% endif %}
-                            <div class="d-flex justify-content-between mb-2">
-                                <span>Last Alerted:</span>
-                                <span class="fw-bold">{{ alert.last_alerted|timesince|default:"Never" }} ago</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-4 text-center">
-                        <div class="p-3 bg-light rounded">
-                            <div class="display-4 text-warning">{{ alert.product.quantity }}</div>
-                            <small class="text-muted">Current Stock</small>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Progress bar using widthratio -->
-                <div class="progress mt-3 mb-3" style="height: 10px;">
-                    {% with total=alert.alert_level current=alert.product.quantity %}
-                        {% if total > 0 %}
-                            <div class="progress-bar bg-warning" 
-                                 role="progressbar" 
-                                 style="width: {% widthratio current total 100 %}%;"
-                                 aria-valuenow="{{ current }}" 
-                                 aria-valuemin="0" 
-                                 aria-valuemax="{{ total }}">
-                            </div>
-                        {% else %}
-                            <div class="progress-bar bg-warning" 
-                                 role="progressbar" 
-                                 style="width: 0%;">
-                            </div>
-                        {% endif %}
-                    {% endwith %}
-                </div>
-                
-                <div class="d-flex gap-2">
-                    <a href="{% url 'inventory:product_detail' alert.product.id %}" 
-                       class="btn btn-sm btn-info flex-grow-1">
-                        <i class="fas fa-eye"></i> View Product
-                    </a>
-                    <a href="{% url 'inventory:restock_product' alert.id %}" 
-                       class="btn btn-sm btn-warning flex-grow-1">
-                        <i class="fas fa-plus"></i> Restock
-                    </a>
-                    <button type="button" 
-                            class="btn btn-sm btn-secondary" 
-                            title="Dismiss Alert"
-                            onclick="dismissAlert({{ alert.id }})">
-                        <i class="fas fa-check"></i>
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-    {% empty %}
-    <div class="col-12">
-        <div class="card">
-            <div class="card-body text-center py-5">
-                <i class="fas fa-check-circle fa-4x text-success mb-3"></i>
-                <h4>All Good!</h4>
-                <p class="text-muted">No active stock alerts at the moment.</p>
-                <a href="{% url 'inventory:product_list' %}" class="btn btn-primary mt-3">
-                    <i class="fas fa-box"></i> View Products
-                </a>
-            </div>
-        </div>
-    </div>
-    {% endfor %}
-</div>
-
-<!-- Dismiss Alert Modal -->
-<div class="modal fade" id="dismissModal" tabindex="-1" aria-labelledby="dismissModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header bg-success text-white">
-                <h5 class="modal-title" id="dismissModalLabel">
-                    <i class="fas fa-check-circle me-2"></i>Dismiss Alert
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <p>Are you sure you want to dismiss this alert?</p>
-                <p class="text-muted">The alert can be re-activated if stock levels drop again.</p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <a href="#" id="confirmDismissBtn" class="btn btn-success">Dismiss</a>
-            </div>
-        </div>
-    </div>
-</div>
-{% endblock %}
-
-{% block extra_js %}
-<script>
-(function() {
-    'use strict';
-    
-    // Global function for dismissing alerts
-    window.dismissAlert = function(alertId) {
-        // Get modal element
-        var modalElement = document.getElementById('dismissModal');
-        if (!modalElement) return;
-        
-        // Create modal instance
-        var modal = new bootstrap.Modal(modalElement);
-        
-        // Update confirm button URL
-        var confirmBtn = document.getElementById('confirmDismissBtn');
-        if (confirmBtn) {
-            var baseUrl = "{% url 'inventory:dismiss_alert' 0 %}";
-            var dismissUrl = baseUrl.replace('0', alertId.toString());
-            confirmBtn.setAttribute('href', dismissUrl);
+{% load inventory_tags %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
         }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+            border-radius: 10px 10px 0 0;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+        }
+        .header p {
+            margin: 10px 0 0;
+            opacity: 0.9;
+        }
+        .summary {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .summary-card {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .summary-card.critical { border-left: 4px solid #dc3545; }
+        .summary-card.warning { border-left: 4px solid #ffc107; }
+        .summary-card.info { border-left: 4px solid #17a2b8; }
         
-        // Show modal
-        modal.show();
-    };
-})();
-</script>
-{% endblock %}
+        .number {
+            font-size: 32px;
+            font-weight: bold;
+            display: block;
+        }
+        .label {
+            font-size: 14px;
+            color: #666;
+            text-transform: uppercase;
+        }
+        .alert-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        .alert-table th {
+            background: #667eea;
+            color: white;
+            padding: 12px;
+            text-align: left;
+        }
+        .alert-table td {
+            padding: 12px;
+            border-bottom: 1px solid #ddd;
+        }
+        .alert-table tr:hover {
+            background: #f5f5f5;
+        }
+        .severity-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .severity-critical { background: #dc3545; color: white; }
+        .severity-danger { background: #fd7e14; color: white; }
+        .severity-warning { background: #ffc107; color: #333; }
+        .severity-info { background: #17a2b8; color: white; }
+        
+        .alert-type {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        .type-needs_reorder { background: #dc3545; color: white; }
+        .type-lowstock { background: #ffc107; color: #333; }
+        .type-outofstock { background: #6c757d; color: white; }
+        .type-damaged { background: #343a40; color: white; }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #eee;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 5px 0;
+        }
+        .progress-fill {
+            height: 100%;
+            background: #667eea;
+            border-radius: 4px;
+        }
+        .button {
+            display: inline-block;
+            padding: 12px 24px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            margin: 20px 0;
+        }
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+            font-size: 12px;
+            border-top: 1px solid #ddd;
+        }
+        @media (max-width: 600px) {
+            .summary-grid {
+                grid-template-columns: 1fr;
+            }
+            .alert-table {
+                font-size: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🚨 Stock Alert Report</h1>
+        <p>{{ date|date:"l, F j, Y" }} | {{ date|time:"g:i A" }}</p>
+    </div>
+
+    <!-- Summary Section -->
+    <div class="summary">
+        <h2>📊 Summary</h2>
+        <div class="summary-grid">
+            <div class="summary-card critical">
+                <span class="number">{{ alert_counts.needs_reorder }}</span>
+                <span class="label">Needs Reorder</span>
+            </div>
+            <div class="summary-card warning">
+                <span class="number">{{ alert_counts.lowstock }}</span>
+                <span class="label">Low Stock</span>
+            </div>
+            <div class="summary-card critical">
+                <span class="number">{{ alert_counts.outofstock }}</span>
+                <span class="label">Out of Stock</span>
+            </div>
+            <div class="summary-card info">
+                <span class="number">{{ alert_counts.damaged }}</span>
+                <span class="label">Damaged</span>
+            </div>
+        </div>
+    </div>
+
+    {% if alerts %}
+        <!-- Detailed Alerts Table -->
+        <h2>📋 Detailed Alerts</h2>
+        <table class="alert-table">
+            <thead>
+                <tr>
+                    <th>Product</th>
+                    <th>Code</th>
+                    <th>Type</th>
+                    <th>Severity</th>
+                    <th>Current Stock</th>
+                    <th>Threshold</th>
+                    <th>Progress</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for alert in alerts %}
+                <tr>
+                    <td>
+                        <strong>{{ alert.product.display_name }}</strong><br>
+                        <small>{{ alert.product.category.name }}</small>
+                    </td>
+                    <td>{{ alert.product.product_code }}</td>
+                    <td>
+                        <span class="alert-type type-{{ alert.alert_type }}">
+                            {{ alert.get_alert_type_display }}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="severity-badge severity-{{ alert.severity }}">
+                            {{ alert.get_severity_display }}
+                        </span>
+                    </td>
+                    <td>
+                        <strong>{{ alert.current_stock }}</strong>
+                    </td>
+                    <td>{{ alert.threshold }}</td>
+                    <td style="width: 150px;">
+                        <div class="progress-bar">
+                            {% with percentage=alert.current_stock|div:alert.threshold|multiply:100 %}
+                                <div class="progress-fill" style="width: {{ percentage|floatformat:0 }}%;"></div>
+                            {% endwith %}
+                        </div>
+                        <small>{{ alert.current_stock }} / {{ alert.threshold }}</small>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <!-- Action Button -->
+        <div style="text-align: center;">
+            <a href="{{ site_url }}/inventory/stock-alerts/" class="button">
+                View All Alerts & Take Action →
+            </a>
+        </div>
+    {% else %}
+        <div style="text-align: center; padding: 40px; background: #d4edda; border-radius: 8px; margin: 20px 0;">
+            <h2 style="color: #155724;">✅ All Stock Levels Healthy!</h2>
+            <p style="color: #155724;">No alerts to display at this time.</p>
+        </div>
+    {% endif %}
+
+    <div class="footer">
+        <p>This is an automated message from your Inventory Management System.</p>
+        <p>© {% now "Y" %} FieldMax. All rights reserved.</p>
+    </div>
+</body>
+</html>
