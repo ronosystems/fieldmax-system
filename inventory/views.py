@@ -26,6 +26,13 @@ from sales.models import Sale, SaleItem
 import json
 import logging
 from sales.models import Sale
+from django.contrib.auth.models import User, Group
+from django.db.models import Sum, Count, Q, F
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import render
+from decimal import Decimal
+import csv
+from django.http import HttpResponse
 
 
 
@@ -33,6 +40,198 @@ from sales.models import Sale
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
+
+
+
+
+@login_required
+def export_statistics(request):
+    """Export store statistics to CSV"""
+    
+    # Create HttpResponse with CSV header
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="store_statistics_{timezone.now().strftime("%Y%m%d_%H%M%S")}.csv"'
+    
+    writer = csv.writer(response)
+    
+    # Write headers
+    writer.writerow(['Store Statistics Report', f'Generated: {timezone.now().strftime("%Y-%m-%d %H:%M")}'])
+    writer.writerow([])
+    
+    # Overview Section
+    writer.writerow(['OVERVIEW'])
+    products = Product.objects.filter(is_active=True)
+    total_products = products.count()
+    total_items = products.aggregate(total=Sum('quantity'))['total'] or 0
+    total_categories = Category.objects.filter(is_active=True).count()
+    
+    writer.writerow(['Total Products', total_products])
+    writer.writerow(['Total Items', total_items])
+    writer.writerow(['Total Categories', total_categories])
+    writer.writerow([])
+    
+    # Financial Section
+    writer.writerow(['FINANCIAL SUMMARY'])
+    total_value = sum(p.selling_price * p.quantity for p in products)
+    total_cost = sum(p.buying_price * p.quantity for p in products)
+    available_products = products.filter(status='available')
+    available_value = sum(p.selling_price * p.quantity for p in available_products)
+    available_cost = sum(p.buying_price * p.quantity for p in available_products)
+    
+    writer.writerow(['Total Value (Selling Price)', f'KES {total_value:,.2f}'])
+    writer.writerow(['Total Cost (Buying Price)', f'KES {total_cost:,.2f}'])
+    writer.writerow(['Available Items Value', f'KES {available_value:,.2f}'])
+    writer.writerow(['Available Items Cost', f'KES {available_cost:,.2f}'])
+    writer.writerow(['Potential Profit', f'KES {total_value - total_cost:,.2f}'])
+    writer.writerow([])
+    
+    # Stock Status Section
+    writer.writerow(['STOCK STATUS'])
+    writer.writerow(['Low Stock Items', products.filter(status='lowstock').count()])
+    writer.writerow(['Needs Reorder', products.filter(Q(status='lowstock') | Q(quantity__lte=F('reorder_level'))).distinct().count()])
+    writer.writerow(['Out of Stock', products.filter(status='outofstock').count()])
+    writer.writerow(['Damaged Items', products.filter(status='damaged').count()])
+    writer.writerow([])
+    
+    # Category Breakdown
+    writer.writerow(['CATEGORY BREAKDOWN'])
+    writer.writerow(['Category', 'Products', 'Total Items', 'Total Value', 'Total Cost', 'Profit'])
+    
+    for category in Category.objects.filter(is_active=True):
+        cat_products = products.filter(category=category)
+        cat_total_items = cat_products.aggregate(total=Sum('quantity'))['total'] or 0
+        cat_total_value = sum(p.selling_price * p.quantity for p in cat_products)
+        cat_total_cost = sum(p.buying_price * p.quantity for p in cat_products)
+        
+        writer.writerow([
+            category.name,
+            cat_products.count(),
+            cat_total_items,
+            f'KES {cat_total_value:,.2f}',
+            f'KES {cat_total_cost:,.2f}',
+            f'KES {cat_total_value - cat_total_cost:,.2f}'
+        ])
+    
+    return response
+
+
+
+
+
+
+
+
+@login_required
+def store_statistics(request):
+    """Store statistics dashboard"""
+    
+    # Total products (unique SKUs)
+    total_products = Product.objects.filter(is_active=True).count()
+    
+    # Total items (sum of quantities)
+    total_items = Product.objects.filter(is_active=True).aggregate(
+        total=Sum('quantity')
+    )['total'] or 0
+    
+    # Total categories
+    total_categories = Category.objects.filter(is_active=True).count()
+    
+    # ===== FIXED: STORE MANAGERS COUNT =====
+    # Count users in Store Manager group (note: singular "Store Manager" not "Store Managers")
+    store_manager_group = Group.objects.filter(name='Store Manager').first()
+    if store_manager_group:
+        store_managers = store_manager_group.user_set.filter(is_active=True).count()
+    else:
+        store_managers = 0
+    
+    # Alternative: Count users with store_manager position in applications
+    # store_managers_from_apps = StaffApplication.objects.filter(
+    #     position='store_manager',
+    #     status='approved',
+    #     created_user__is_active=True
+    # ).count()
+    
+    # Financial calculations
+    products = Product.objects.filter(is_active=True)
+    
+    total_value = sum(p.selling_price * p.quantity for p in products)
+    total_cost = sum(p.buying_price * p.quantity for p in products)
+    
+    # Available items only (status = 'available')
+    available_products = products.filter(status='available')
+    available_items = available_products.aggregate(total=Sum('quantity'))['total'] or 0
+    
+    available_value = sum(p.selling_price * p.quantity for p in available_products)
+    available_cost = sum(p.buying_price * p.quantity for p in available_products)
+    
+    # Percentages
+    available_percentage = (available_value / total_value * 100) if total_value > 0 else 0
+    available_cost_percentage = (available_cost / total_cost * 100) if total_cost > 0 else 0
+    
+    # Stock status counts
+    low_stock_items = products.filter(status='lowstock').count()
+    needs_reorder_items = products.filter(
+        Q(status='lowstock') | 
+        Q(quantity__lte=F('reorder_level'))
+    ).distinct().count()
+    out_of_stock_items = products.filter(status='outofstock').count()
+    damaged_items = products.filter(status='damaged').count()
+    active_suppliers = Supplier.objects.filter(is_active=True).count()
+    
+    # Profit calculations
+    total_potential_profit = total_value - total_cost
+    avg_margin = total_potential_profit / total_products if total_products > 0 else 0
+    avg_margin_percentage = (total_potential_profit / total_cost * 100) if total_cost > 0 else 0
+    
+    # Category breakdown
+    category_stats = []
+    for category in Category.objects.filter(is_active=True):
+        cat_products = products.filter(category=category)
+        cat_total_items = cat_products.aggregate(total=Sum('quantity'))['total'] or 0
+        cat_total_value = sum(p.selling_price * p.quantity for p in cat_products)
+        cat_total_cost = sum(p.buying_price * p.quantity for p in cat_products)
+        
+        category_stats.append({
+            'name': category.name,
+            'code': category.category_code,
+            'product_count': cat_products.count(),
+            'total_items': cat_total_items,
+            'total_value': cat_total_value,
+            'total_cost': cat_total_cost,
+            'profit': cat_total_value - cat_total_cost
+        })
+    
+    # Debug print to verify count
+    print(f"Store Manager Group: {store_manager_group}")
+    print(f"Store Managers Count: {store_managers}")
+    
+    context = {
+        'total_products': total_products,
+        'total_items': total_items,
+        'total_categories': total_categories,
+        'store_managers': store_managers,  # This will now show 1
+        'total_value': total_value,
+        'total_cost': total_cost,
+        'available_value': available_value,
+        'available_cost': available_cost,
+        'available_percentage': available_percentage,
+        'available_cost_percentage': available_cost_percentage,
+        'available_products': available_products.count(),
+        'available_items': available_items,
+        'low_stock_items': low_stock_items,
+        'needs_reorder_items': needs_reorder_items,
+        'out_of_stock_items': out_of_stock_items,
+        'damaged_items': damaged_items,
+        'active_suppliers': active_suppliers,
+        'total_potential_profit': total_potential_profit,
+        'avg_margin': avg_margin,
+        'avg_margin_percentage': avg_margin_percentage,
+        'category_stats': category_stats,
+    }
+    
+    return render(request, 'inventory/statistics.html', context)
+
+
 
 
 

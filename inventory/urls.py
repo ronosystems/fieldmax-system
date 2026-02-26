@@ -6,6 +6,8 @@ app_name = 'inventory'
 urlpatterns = [
     # Dashboard
     path('', views.dashboard, name='dashboard'),
+    path('statistics/', views.store_statistics, name='store_statistics'),
+    path('statistics/export/', views.export_statistics, name='export_statistics'),
     
     # Products
     path('products/', views.product_list, name='product_list'),

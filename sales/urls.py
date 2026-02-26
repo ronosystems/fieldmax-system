@@ -6,6 +6,7 @@ app_name = 'sales'
 urlpatterns = [
     # Dashboard
     path('', views.sales_dashboard, name='sales_dashboard'),
+    path('statistics/', views.sales_statistics, name='sales_statistics'),
     
     # Sales list and create
     path('sales/', views.sale_list, name='sale_list'),

@@ -9,12 +9,245 @@ from django.utils import timezone
 from decimal import Decimal
 import json
 import logging
-
 from inventory.models import Product, StockEntry
 from .models import Sale, SaleItem, generate_custom_sale_id
+from django.db.models import Sum, Count, Avg, Q, F
+from django.utils import timezone
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import render
+from .models import Sale, SaleItem
+from decimal import Decimal
+from datetime import timedelta
+from django.contrib.auth.models import User
+
+
+
+
+
 
 logger = logging.getLogger(__name__)
 
+
+
+
+
+@login_required
+def sales_statistics(request):
+    """Sales statistics dashboard"""
+    
+    # Date ranges
+    today = timezone.now().date()
+    start_of_day = timezone.make_aware(timezone.datetime.combine(today, timezone.datetime.min.time()))
+    end_of_day = timezone.make_aware(timezone.datetime.combine(today, timezone.datetime.max.time()))
+    
+    start_of_week = timezone.make_aware(timezone.datetime.combine(today - timedelta(days=today.weekday()), timezone.datetime.min.time()))
+    start_of_month = timezone.make_aware(timezone.datetime.combine(today.replace(day=1), timezone.datetime.min.time()))
+    start_of_year = timezone.make_aware(timezone.datetime.combine(today.replace(month=1, day=1), timezone.datetime.min.time()))
+    
+    # Base queryset - exclude reversed sales
+    sales_qs = Sale.objects.filter(is_reversed=False)
+    
+    # ============================================
+    # OVERVIEW STATISTICS
+    # ============================================
+    
+    # All time totals
+    total_sales = sales_qs.count()
+    total_revenue = sales_qs.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+    total_items_sold = SaleItem.objects.filter(sale__is_reversed=False).aggregate(
+        total=Sum('quantity')
+    )['total'] or 0
+    
+    # Today's sales
+    today_sales = sales_qs.filter(sale_date__range=[start_of_day, end_of_day])
+    today_count = today_sales.count()
+    today_revenue = today_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+    
+    # This week's sales
+    week_sales = sales_qs.filter(sale_date__gte=start_of_week)
+    week_count = week_sales.count()
+    week_revenue = week_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+    
+    # This month's sales
+    month_sales = sales_qs.filter(sale_date__gte=start_of_month)
+    month_count = month_sales.count()
+    month_revenue = month_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+    
+    # This year's sales
+    year_sales = sales_qs.filter(sale_date__gte=start_of_year)
+    year_count = year_sales.count()
+    year_revenue = year_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+    
+    # Average values
+    avg_transaction_value = total_revenue / total_sales if total_sales > 0 else 0
+    avg_items_per_sale = total_items_sold / total_sales if total_sales > 0 else 0
+    
+    # ============================================
+    # PAYMENT METHOD BREAKDOWN
+    # ============================================
+    
+    payment_methods = []
+    for method, _ in Sale._meta.get_field('payment_method').choices:
+        method_sales = sales_qs.filter(payment_method=method)
+        count = method_sales.count()
+        revenue = method_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+        percentage = (revenue / total_revenue * 100) if total_revenue > 0 else 0
+        
+        payment_methods.append({
+            'name': method,
+            'count': count,
+            'revenue': revenue,
+            'percentage': percentage,
+            'color': get_payment_method_color(method)
+        })
+    
+    # ============================================
+    # TOP SELLING PRODUCTS
+    # ============================================
+    
+    top_products = SaleItem.objects.filter(sale__is_reversed=False).values(
+        'product_code', 'product_name'
+    ).annotate(
+        total_quantity=Sum('quantity'),
+        total_revenue=Sum('total_price'),
+        avg_price=Avg('unit_price')
+    ).order_by('-total_quantity')[:10]
+    
+    # ============================================
+    # SALES BY SELLER
+    # ============================================
+    
+    top_sellers = User.objects.filter(sales_made__is_reversed=False).annotate(
+        sales_count=Count('sales_made'),
+        total_revenue=Sum('sales_made__total_amount'),
+        avg_sale_value=Avg('sales_made__total_amount')
+    ).order_by('-total_revenue')[:10]
+    
+    # ============================================
+    # DAILY SALES CHART DATA (Last 30 days)
+    # ============================================
+    
+    daily_sales = []
+    for i in range(30, 0, -1):
+        day = today - timedelta(days=i)
+        day_start = timezone.make_aware(timezone.datetime.combine(day, timezone.datetime.min.time()))
+        day_end = timezone.make_aware(timezone.datetime.combine(day, timezone.datetime.max.time()))
+        
+        day_sales = sales_qs.filter(sale_date__range=[day_start, day_end])
+        day_revenue = day_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+        day_count = day_sales.count()
+        
+        daily_sales.append({
+            'date': day.strftime('%Y-%m-%d'),
+            'display_date': day.strftime('%d %b'),
+            'revenue': float(day_revenue),
+            'count': day_count
+        })
+    
+    # ============================================
+    # CREDIT SALES STATISTICS
+    # ============================================
+    
+    credit_sales = sales_qs.filter(is_credit=True)
+    credit_count = credit_sales.count()
+    credit_revenue = credit_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+    credit_percentage = (credit_revenue / total_revenue * 100) if total_revenue > 0 else 0
+    
+    # ============================================
+    # ETR RECEIPT STATISTICS
+    # ============================================
+    
+    etr_processed = sales_qs.filter(etr_status='processed').count()
+    etr_pending = sales_qs.filter(etr_status='pending').count()
+    etr_failed = sales_qs.filter(etr_status='failed').count()
+    
+    # ============================================
+    # HOURLY SALES DISTRIBUTION
+    # ============================================
+    
+    hourly_sales = []
+    for hour in range(7, 22):  # 7 AM to 10 PM
+        hour_sales = sales_qs.filter(
+            sale_date__hour=hour,
+            sale_date__date=today
+        )
+        hour_revenue = hour_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+        hour_count = hour_sales.count()
+        
+        hourly_sales.append({
+            'hour': f"{hour:02d}:00",
+            'revenue': float(hour_revenue),
+            'count': hour_count
+        })
+    
+    # ============================================
+    # REVERSAL STATISTICS
+    # ============================================
+    
+    reversed_sales = Sale.objects.filter(is_reversed=True)
+    reversed_count = reversed_sales.count()
+    reversed_amount = reversed_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+    reversal_percentage = (reversed_count / (total_sales + reversed_count) * 100) if (total_sales + reversed_count) > 0 else 0
+    
+    context = {
+        # Overview
+        'total_sales': total_sales,
+        'total_revenue': total_revenue,
+        'total_items_sold': total_items_sold,
+        'avg_transaction_value': avg_transaction_value,
+        'avg_items_per_sale': avg_items_per_sale,
+        
+        # Time periods
+        'today_count': today_count,
+        'today_revenue': today_revenue,
+        'week_count': week_count,
+        'week_revenue': week_revenue,
+        'month_count': month_count,
+        'month_revenue': month_revenue,
+        'year_count': year_count,
+        'year_revenue': year_revenue,
+        
+        # Payment methods
+        'payment_methods': payment_methods,
+        
+        # Top products
+        'top_products': top_products,
+        
+        # Top sellers
+        'top_sellers': top_sellers,
+        
+        # Charts
+        'daily_sales': daily_sales,
+        'hourly_sales': hourly_sales,
+        
+        # Credit sales
+        'credit_count': credit_count,
+        'credit_revenue': credit_revenue,
+        'credit_percentage': credit_percentage,
+        
+        # ETR stats
+        'etr_processed': etr_processed,
+        'etr_pending': etr_pending,
+        'etr_failed': etr_failed,
+        
+        # Reversals
+        'reversed_count': reversed_count,
+        'reversed_amount': reversed_amount,
+        'reversal_percentage': reversal_percentage,
+    }
+    
+    return render(request, 'sales/statistics.html', context)
+
+def get_payment_method_color(method):
+    """Get color for payment method"""
+    colors = {
+        'Cash': 'success',
+        'M-Pesa': 'info',
+        'Card': 'primary',
+        'Points': 'warning',
+        'Credit': 'danger',
+    }
+    return colors.get(method, 'secondary')
 
 
 

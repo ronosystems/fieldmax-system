@@ -1,0 +1,485 @@
+{% extends 'staff/base.html' %}
+{% load static %}
+{% load humanize %}
+{% load inventory_tags %}
+
+{% block title %}Sales Statistics{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4" style="max-height: calc(100vh - 100px); overflow-y: auto;">
+    <!-- Header - Fixed at top -->
+    <div class="sticky-top bg-light pt-2 pb-3 mb-3" style="top: 0; z-index: 100; background-color: #f8f9fa !important;">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2 class="mb-1">
+                    <i class="fas fa-chart-line me-2 text-primary"></i>
+                    Sales Statistics
+                </h2>
+                <p class="text-muted mb-0">Real-time sales performance metrics</p>
+            </div>
+            <div class="btn-group">
+                <button class="btn btn-outline-primary" onclick="location.reload()">
+                    <i class="fas fa-sync-alt me-2"></i>Refresh
+                </button>
+                <a href="{% url 'sales:sales_dashboard' %}" class="btn btn-outline-secondary">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scrollable Content -->
+    <div class="scrollable-content">
+        <!-- Summary Cards -->
+        <div class="row mb-4">
+            <div class="col-xl-3 col-md-6 mb-4">
+                <div class="card border-left-primary shadow h-100 py-2">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                    <i class="fas fa-shopping-cart me-1"></i> Total Sales
+                                </div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_sales|intcomma }}</div>
+                                <div class="small text-muted mt-2">
+                                    All time transactions
+                                </div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-receipt fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-3 col-md-6 mb-4">
+                <div class="card border-left-success shadow h-100 py-2">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                    <i class="fas fa-dollar-sign me-1"></i> Total Revenue
+                                </div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">KES {{ total_revenue|floatformat:2|intcomma }}</div>
+                                <div class="small text-muted mt-2">
+                                    Gross sales amount
+                                </div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-money-bill-wave fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-3 col-md-6 mb-4">
+                <div class="card border-left-info shadow h-100 py-2">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                    <i class="fas fa-cubes me-1"></i> Items Sold
+                                </div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_items_sold|intcomma }}</div>
+                                <div class="small text-muted mt-2">
+                                    Total units sold
+                                </div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-boxes fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-xl-3 col-md-6 mb-4">
+                <div class="card border-left-warning shadow h-100 py-2">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                    <i class="fas fa-chart-line me-1"></i> Avg Transaction
+                                </div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">KES {{ avg_transaction_value|floatformat:2|intcomma }}</div>
+                                <div class="small text-muted mt-2">
+                                    {{ avg_items_per_sale|floatformat:1 }} items per sale
+                                </div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-calculator fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Time Period Cards - Compact Row -->
+        <div class="row mb-4">
+            <div class="col-md-3 mb-3">
+                <div class="card bg-gradient-success text-white">
+                    <div class="card-body py-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="text-white-50 mb-1">Today</h6>
+                                <h4 class="mb-0">KES {{ today_revenue|floatformat:0|intcomma }}</h4>
+                                <small>{{ today_count }} transactions</small>
+                            </div>
+                            <i class="fas fa-calendar-day fa-2x text-white-50"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="card bg-gradient-info text-white">
+                    <div class="card-body py-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="text-white-50 mb-1">This Week</h6>
+                                <h4 class="mb-0">KES {{ week_revenue|floatformat:0|intcomma }}</h4>
+                                <small>{{ week_count }} transactions</small>
+                            </div>
+                            <i class="fas fa-calendar-week fa-2x text-white-50"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="card bg-gradient-primary text-white">
+                    <div class="card-body py-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="text-white-50 mb-1">This Month</h6>
+                                <h4 class="mb-0">KES {{ month_revenue|floatformat:0|intcomma }}</h4>
+                                <small>{{ month_count }} transactions</small>
+                            </div>
+                            <i class="fas fa-calendar-alt fa-2x text-white-50"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="card bg-gradient-warning text-white">
+                    <div class="card-body py-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="text-white-50 mb-1">This Year</h6>
+                                <h4 class="mb-0">KES {{ year_revenue|floatformat:0|intcomma }}</h4>
+                                <small>{{ year_count }} transactions</small>
+                            </div>
+                            <i class="fas fa-calendar fa-2x text-white-50"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Row - Fixed Height -->
+        <div class="row mb-4">
+            <div class="col-lg-8 mb-4">
+                <div class="card shadow" style="height: 300px;">
+                    <div class="card-header bg-white py-2">
+                        <h6 class="m-0 font-weight-bold text-primary">
+                            <i class="fas fa-chart-line me-2"></i>Daily Sales (Last 30 Days)
+                        </h6>
+                    </div>
+                    <div class="card-body p-2" style="height: 250px;">
+                        <canvas id="dailySalesChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4 mb-4">
+                <div class="card shadow" style="height: 300px;">
+                    <div class="card-header bg-white py-2">
+                        <h6 class="m-0 font-weight-bold text-primary">
+                            <i class="fas fa-chart-pie me-2"></i>Payment Methods
+                        </h6>
+                    </div>
+                    <div class="card-body p-2" style="height: 250px;">
+                        <canvas id="paymentMethodChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tables Row - Compact -->
+        <div class="row mb-4">
+            <div class="col-lg-6 mb-4">
+                <div class="card shadow" style="max-height: 400px;">
+                    <div class="card-header bg-white py-2">
+                        <h6 class="m-0 font-weight-bold text-primary">
+                            <i class="fas fa-crown me-2 text-warning"></i>Top Selling Products
+                        </h6>
+                    </div>
+                    <div class="card-body p-0" style="overflow-y: auto; max-height: 350px;">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light sticky-top" style="top: 0;">
+                                <tr>
+                                    <th>Product</th>
+                                    <th class="text-end">Qty</th>
+                                    <th class="text-end">Revenue</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for product in top_products %}
+                                <tr>
+                                    <td>
+                                        <small>{{ product.product_name|truncatechars:30 }}</small>
+                                    </td>
+                                    <td class="text-end">{{ product.total_quantity|intcomma }}</td>
+                                    <td class="text-end text-success">KES {{ product.total_revenue|floatformat:0|intcomma }}</td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="3" class="text-center py-3">
+                                        <small class="text-muted">No sales data yet</small>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-6 mb-4">
+                <div class="card shadow" style="max-height: 400px;">
+                    <div class="card-header bg-white py-2">
+                        <h6 class="m-0 font-weight-bold text-primary">
+                            <i class="fas fa-user-tie me-2"></i>Top Performers
+                        </h6>
+                    </div>
+                    <div class="card-body p-0" style="overflow-y: auto; max-height: 350px;">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light sticky-top" style="top: 0;">
+                                <tr>
+                                    <th>Seller</th>
+                                    <th class="text-end">Sales</th>
+                                    <th class="text-end">Revenue</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for seller in top_sellers %}
+                                <tr>
+                                    <td>
+                                        <small>{{ seller.get_full_name|default:seller.username|truncatechars:20 }}</small>
+                                    </td>
+                                    <td class="text-end">{{ seller.sales_count }}</td>
+                                    <td class="text-end text-success">KES {{ seller.total_revenue|floatformat:0|intcomma }}</td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="3" class="text-center py-3">
+                                        <small class="text-muted">No seller data yet</small>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Section -->
+        <div class="row">
+            <div class="col-lg-6 mb-4">
+                <div class="card shadow" style="height: 300px;">
+                    <div class="card-header bg-white py-2">
+                        <h6 class="m-0 font-weight-bold text-primary">
+                            <i class="fas fa-clock me-2"></i>Hourly Sales (Today)
+                        </h6>
+                    </div>
+                    <div class="card-body p-2" style="height: 250px;">
+                        <canvas id="hourlySalesChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-6 mb-4">
+                <div class="card shadow" style="height: 300px;">
+                    <div class="card-header bg-white py-2">
+                        <h6 class="m-0 font-weight-bold text-primary">
+                            <i class="fas fa-info-circle me-2"></i>Additional Stats
+                        </h6>
+                    </div>
+                    <div class="card-body" style="overflow-y: auto; height: 250px;">
+                        <div class="list-group list-group-flush">
+                            <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
+                                <div>
+                                    <i class="fas fa-credit-card text-danger me-2"></i>
+                                    <small>Credit Sales</small>
+                                </div>
+                                <div>
+                                    <span class="fw-bold text-danger">{{ credit_count }}</span>
+                                    <small class="text-muted ms-2">KES {{ credit_revenue|floatformat:0|intcomma }}</small>
+                                </div>
+                            </div>
+                            <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
+                                <div>
+                                    <i class="fas fa-receipt text-info me-2"></i>
+                                    <small>ETR Processed</small>
+                                </div>
+                                <div>
+                                    <span class="fw-bold text-success">{{ etr_processed }}</span>
+                                    <small class="text-muted ms-2">P:{{ etr_pending }}</small>
+                                </div>
+                            </div>
+                            <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
+                                <div>
+                                    <i class="fas fa-undo-alt text-warning me-2"></i>
+                                    <small>Reversals</small>
+                                </div>
+                                <div>
+                                    <span class="fw-bold text-warning">{{ reversed_count }}</span>
+                                    <small class="text-muted ms-2">KES {{ reversed_amount|floatformat:0|intcomma }}</small>
+                                </div>
+                            </div>
+                            <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-2">
+                                <div>
+                                    <i class="fas fa-chart-bar text-primary me-2"></i>
+                                    <small>Daily Average</small>
+                                </div>
+                                <div>
+                                    <span class="fw-bold">KES {{ month_revenue|div:30|floatformat:0|intcomma }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Daily Sales Chart
+    const dailyCtx = document.getElementById('dailySalesChart').getContext('2d');
+    new Chart(dailyCtx, {
+        type: 'line',
+        data: {
+            labels: [{% for day in daily_sales %}'{{ day.display_date }}',{% endfor %}],
+            datasets: [{
+                data: [{% for day in daily_sales %}{{ day.revenue }},{% endfor %}],
+                borderColor: '#4e73df',
+                backgroundColor: 'rgba(78, 115, 223, 0.05)',
+                borderWidth: 2,
+                tension: 0.3,
+                fill: true,
+                pointRadius: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) { return 'KES ' + (value/1000) + 'k'; }
+                    }
+                }
+            }
+        }
+    });
+
+    // Payment Method Chart
+    const paymentCtx = document.getElementById('paymentMethodChart').getContext('2d');
+    new Chart(paymentCtx, {
+        type: 'doughnut',
+        data: {
+            labels: [{% for method in payment_methods %}'{{ method.name }}',{% endfor %}],
+            datasets: [{
+                data: [{% for method in payment_methods %}{{ method.revenue }},{% endfor %}],
+                backgroundColor: ['#1cc88a', '#36b9cc', '#4e73df', '#f6c23e', '#e74a3b'],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'bottom' } },
+            cutout: '60%'
+        }
+    });
+
+    // Hourly Sales Chart
+    const hourlyCtx = document.getElementById('hourlySalesChart').getContext('2d');
+    new Chart(hourlyCtx, {
+        type: 'bar',
+        data: {
+            labels: [{% for hour in hourly_sales %}'{{ hour.hour }}',{% endfor %}],
+            datasets: [{
+                data: [{% for hour in hourly_sales %}{{ hour.revenue }},{% endfor %}],
+                backgroundColor: '#36b9cc',
+                borderRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) { return 'KES ' + (value/1000) + 'k'; }
+                    }
+                }
+            }
+        }
+    });
+});
+</script>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .container-fluid {
+        max-height: 100vh;
+        overflow: hidden;
+    }
+    .scrollable-content {
+        overflow-y: auto;
+        max-height: calc(100vh - 160px);
+        padding-right: 5px;
+    }
+    .scrollable-content::-webkit-scrollbar {
+        width: 6px;
+    }
+    .scrollable-content::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 10px;
+    }
+    .scrollable-content::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 10px;
+    }
+    .scrollable-content::-webkit-scrollbar-thumb:hover {
+        background: #555;
+    }
+    .border-left-primary { border-left: 4px solid #4e73df !important; }
+    .border-left-success { border-left: 4px solid #1cc88a !important; }
+    .border-left-info { border-left: 4px solid #36b9cc !important; }
+    .border-left-warning { border-left: 4px solid #f6c23e !important; }
+    .bg-gradient-success { background: linear-gradient(135deg, #1cc88a 0%, #13855c 100%); }
+    .bg-gradient-info { background: linear-gradient(135deg, #36b9cc 0%, #258391 100%); }
+    .bg-gradient-primary { background: linear-gradient(135deg, #4e73df 0%, #224abe 100%); }
+    .bg-gradient-warning { background: linear-gradient(135deg, #f6c23e 0%, #dda20a 100%); }
+    .card { transition: transform 0.2s; border: none; box-shadow: 0 0.15rem 1.75rem 0 rgba(58,59,69,0.15) !important; }
+    .card:hover { transform: translateY(-2px); }
+    .text-gray-300 { color: #dddfeb !important; }
+    .text-white-50 { color: rgba(255,255,255,0.5) !important; }
+    .table thead th { border-top: none; border-bottom: 1px solid #e3e6f0; font-size: 0.75rem; }
+    .list-group-item { border: none; border-bottom: 1px solid #e3e6f0; padding: 0.5rem 0; }
+    .list-group-item:last-child { border-bottom: none; }
+</style>
+{% endblock %}
