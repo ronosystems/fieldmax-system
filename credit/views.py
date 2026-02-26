@@ -23,7 +23,13 @@ from .models import (
     CompanyPayment, CreditTransactionLog
 )
 from inventory.models import Product
-
+from django.db.models import Sum, Count, Avg, Q, F
+from django.utils import timezone
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import render
+from .models import CreditTransaction, CreditCompany, CreditCustomer, CompanyPayment
+from decimal import Decimal
+from datetime import timedelta, date
 
 
 
@@ -33,6 +39,222 @@ logger = logging.getLogger(__name__)
 
 
 
+
+@login_required
+def credit_statistics(request):
+    """Credit statistics dashboard"""
+    
+    # Date ranges
+    today = timezone.now().date()
+    start_of_day = timezone.make_aware(timezone.datetime.combine(today, timezone.datetime.min.time()))
+    end_of_day = timezone.make_aware(timezone.datetime.combine(today, timezone.datetime.max.time()))
+    
+    start_of_week = timezone.make_aware(timezone.datetime.combine(today - timedelta(days=today.weekday()), timezone.datetime.min.time()))
+    start_of_month = timezone.make_aware(timezone.datetime.combine(today.replace(day=1), timezone.datetime.min.time()))
+    start_of_year = timezone.make_aware(timezone.datetime.combine(today.replace(month=1, day=1), timezone.datetime.min.time()))
+    
+    # Base queryset - exclude reversed transactions
+    transactions_qs = CreditTransaction.objects.exclude(payment_status='reversed')
+    
+    # ============================================
+    # OVERVIEW STATISTICS
+    # ============================================
+    
+    # All time totals
+    total_transactions = transactions_qs.count()
+    total_value = transactions_qs.aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
+    
+    # Pending payments (company hasn't paid yet)
+    pending_transactions = transactions_qs.filter(payment_status='pending')
+    pending_count = pending_transactions.count()
+    pending_value = pending_transactions.aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
+    
+    # Paid transactions
+    paid_transactions = transactions_qs.filter(payment_status='paid')
+    paid_count = paid_transactions.count()
+    paid_value = paid_transactions.aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
+    
+    # Cancelled transactions
+    cancelled_count = CreditTransaction.objects.filter(payment_status='cancelled').count()
+    reversed_count = CreditTransaction.objects.filter(payment_status='reversed').count()
+    
+    # Today's transactions
+    today_transactions = transactions_qs.filter(transaction_date__range=[start_of_day, end_of_day])
+    today_count = today_transactions.count()
+    today_value = today_transactions.aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
+    
+    # This month's transactions
+    month_transactions = transactions_qs.filter(transaction_date__gte=start_of_month)
+    month_count = month_transactions.count()
+    month_value = month_transactions.aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
+    
+    # Average values
+    avg_transaction_value = total_value / total_transactions if total_transactions > 0 else 0
+    
+    # ============================================
+    # COMPANY BREAKDOWN
+    # ============================================
+    
+    company_stats = []
+    for company in CreditCompany.objects.filter(is_active=True):
+        company_transactions = transactions_qs.filter(credit_company=company)
+        company_pending = company_transactions.filter(payment_status='pending')
+        company_paid = company_transactions.filter(payment_status='paid')
+        
+        total = company_transactions.aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
+        pending = company_pending.aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
+        paid = company_paid.aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
+        
+        company_stats.append({
+            'name': company.name,
+            'code': company.code,
+            'total_count': company_transactions.count(),
+            'total_value': total,
+            'pending_count': company_pending.count(),
+            'pending_value': pending,
+            'paid_count': company_paid.count(),
+            'paid_value': paid,
+            'pending_percentage': (pending / total * 100) if total > 0 else 0,
+            'paid_percentage': (paid / total * 100) if total > 0 else 0,
+        })
+    
+    # Sort by total value descending
+    company_stats.sort(key=lambda x: x['total_value'], reverse=True)
+    
+    # ============================================
+    # TOP CUSTOMERS
+    # ============================================
+    
+    top_customers = CreditCustomer.objects.filter(
+        transactions__payment_status__in=['pending', 'paid']
+    ).annotate(
+        transaction_count=Count('transactions'),
+        total_value=Sum('transactions__ceiling_price'),
+        pending_value=Sum('transactions__ceiling_price', filter=Q(transactions__payment_status='pending')),
+        paid_value=Sum('transactions__ceiling_price', filter=Q(transactions__payment_status='paid'))
+    ).order_by('-total_value')[:10]
+    
+    # ============================================
+    # MONTHLY TREND (Last 6 months)
+    # ============================================
+    
+    monthly_trend = []
+    for i in range(5, -1, -1):
+        month_date = today.replace(day=1) - timedelta(days=30*i)
+        month_start = timezone.make_aware(timezone.datetime.combine(month_date, timezone.datetime.min.time()))
+        
+        if i > 0:
+            next_month = month_date.replace(day=28) + timedelta(days=4)
+            month_end = timezone.make_aware(timezone.datetime.combine(next_month.replace(day=1) - timedelta(days=1), timezone.datetime.max.time()))
+        else:
+            month_end = end_of_day
+        
+        month_trans = transactions_qs.filter(transaction_date__range=[month_start, month_end])
+        month_paid = paid_transactions.filter(transaction_date__range=[month_start, month_end])
+        
+        monthly_trend.append({
+            'month': month_date.strftime('%b %Y'),
+            'total_value': month_trans.aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00'),
+            'total_count': month_trans.count(),
+            'paid_value': month_paid.aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00'),
+            'paid_count': month_paid.count(),
+        })
+    
+    # ============================================
+    # PAYMENT METHOD BREAKDOWN
+    # ============================================
+    
+    payment_methods = []
+    payments_qs = CompanyPayment.objects.all()
+    total_payments = payments_qs.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+    
+    for method, _ in CompanyPayment.PAYMENT_METHODS:
+        method_payments = payments_qs.filter(payment_method=method)
+        amount = method_payments.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        count = method_payments.count()
+        percentage = (amount / total_payments * 100) if total_payments > 0 else 0
+        
+        payment_methods.append({
+            'name': method,
+            'amount': amount,
+            'count': count,
+            'percentage': percentage,
+            'color': get_payment_method_color(method)
+        })
+    
+    # ============================================
+    # AGING ANALYSIS (How long pending)
+    # ============================================
+    
+    aging = {
+        '0_30': 0,
+        '31_60': 0,
+        '61_90': 0,
+        '90_plus': 0,
+        'total': 0
+    }
+    
+    for transaction in pending_transactions:
+        days = transaction.days_since_given
+        if days <= 30:
+            aging['0_30'] += 1
+        elif days <= 60:
+            aging['31_60'] += 1
+        elif days <= 90:
+            aging['61_90'] += 1
+        else:
+            aging['90_plus'] += 1
+        aging['total'] += 1
+    
+    context = {
+        # Overview
+        'total_transactions': total_transactions,
+        'total_value': total_value,
+        'pending_count': pending_count,
+        'pending_value': pending_value,
+        'paid_count': paid_count,
+        'paid_value': paid_value,
+        'cancelled_count': cancelled_count,
+        'reversed_count': reversed_count,
+        'avg_transaction_value': avg_transaction_value,
+        
+        # Time periods
+        'today_count': today_count,
+        'today_value': today_value,
+        'month_count': month_count,
+        'month_value': month_value,
+        
+        # Companies
+        'company_stats': company_stats,
+        'total_companies': CreditCompany.objects.filter(is_active=True).count(),
+        
+        # Customers
+        'top_customers': top_customers,
+        'total_customers': CreditCustomer.objects.filter(is_active=True).count(),
+        
+        # Trends
+        'monthly_trend': monthly_trend,
+        
+        # Payments
+        'payment_methods': payment_methods,
+        'total_payments': total_payments,
+        'payment_count': payments_qs.count(),
+        
+        # Aging
+        'aging': aging,
+    }
+    
+    return render(request, 'credit/statistics.html', context)
+
+def get_payment_method_color(method):
+    """Get color for payment method"""
+    colors = {
+        'mpesa': 'success',
+        'bank': 'primary',
+        'cheque': 'warning',
+        'cash': 'info',
+    }
+    return colors.get(method, 'secondary')
 
 
 

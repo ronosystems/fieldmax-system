@@ -34,3 +34,26 @@ def filter_by_type(alerts, alert_type):
     if alerts is None:
         return []
     return [alert for alert in alerts if alert.alert_type == alert_type]
+
+
+
+# In inventory/templatetags/inventory_tags.py
+from django import template
+
+register = template.Library()
+
+@register.filter
+def div(value, arg):
+    """Divide value by arg"""
+    try:
+        return float(value) / float(arg)
+    except (ValueError, ZeroDivisionError, TypeError):
+        return 0
+
+@register.filter
+def mul(value, arg):
+    """Multiply value by arg"""
+    try:
+        return float(value) * float(arg)
+    except (ValueError, TypeError):
+        return 0

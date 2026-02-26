@@ -1,0 +1,509 @@
+{% extends 'staff/base.html' %}
+{% load static %}
+{% load humanize %}
+{% load inventory_tags %}
+
+{% block title %}Credit Statistics{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4" style="max-height: calc(100vh - 100px); overflow-y: auto;">
+    <!-- Header -->
+    <div class="sticky-top bg-light pt-2 pb-3 mb-3" style="top: 0; z-index: 100; background-color: #f8f9fa !important;">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2 class="mb-1">
+                    <i class="fas fa-credit-card me-2 text-primary"></i>
+                    Credit Statistics
+                </h2>
+                <p class="text-muted mb-0">Credit sales and company payment analytics</p>
+            </div>
+            <div class="btn-group">
+                <button class="btn btn-outline-primary" onclick="location.reload()">
+                    <i class="fas fa-sync-alt me-2"></i>Refresh
+                </button>
+                <a href="{% url 'credit:dashboard' %}" class="btn btn-outline-secondary">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                <i class="fas fa-chart-line me-1"></i> Total Credit
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_transactions|intcomma }}</div>
+                            <div class="small text-muted mt-2">
+                                KES {{ total_value|floatformat:2|intcomma }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-credit-card fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                <i class="fas fa-clock me-1"></i> Pending
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-warning">{{ pending_count|intcomma }}</div>
+                            <div class="small text-muted mt-2">
+                                KES {{ pending_value|floatformat:2|intcomma }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-hourglass-half fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                <i class="fas fa-check-circle me-1"></i> Paid
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-success">{{ paid_count|intcomma }}</div>
+                            <div class="small text-muted mt-2">
+                                KES {{ paid_value|floatformat:2|intcomma }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-money-bill-wave fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                <i class="fas fa-building me-1"></i> Companies
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-info">{{ total_companies|intcomma }}</div>
+                            <div class="small text-muted mt-2">
+                                {{ total_customers }} customers
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-building fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Today/Month Cards -->
+    <div class="row mb-4">
+        <div class="col-md-6 mb-3">
+            <div class="card bg-gradient-info text-white">
+                <div class="card-body py-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-white-50 mb-1">Today's Credit Sales</h6>
+                            <h4 class="mb-0">KES {{ today_value|floatformat:0|intcomma }}</h4>
+                            <small>{{ today_count }} transactions</small>
+                        </div>
+                        <i class="fas fa-calendar-day fa-2x text-white-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 mb-3">
+            <div class="card bg-gradient-primary text-white">
+                <div class="card-body py-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-white-50 mb-1">This Month</h6>
+                            <h4 class="mb-0">KES {{ month_value|floatformat:0|intcomma }}</h4>
+                            <small>{{ month_count }} transactions</small>
+                        </div>
+                        <i class="fas fa-calendar-alt fa-2x text-white-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="row mb-4">
+        <div class="col-lg-8 mb-4">
+            <div class="card shadow" style="height: 300px;">
+                <div class="card-header bg-white py-2">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-chart-line me-2"></i>Monthly Trend (Last 6 Months)
+                    </h6>
+                </div>
+                <div class="card-body p-2" style="height: 250px;">
+                    <canvas id="monthlyTrendChart"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4 mb-4">
+            <div class="card shadow" style="height: 300px;">
+                <div class="card-header bg-white py-2">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-chart-pie me-2"></i>Payment Status
+                    </h6>
+                </div>
+                <div class="card-body p-2" style="height: 250px;">
+                    <canvas id="statusChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Company Breakdown -->
+    <div class="row mb-4">
+        <div class="col-12 mb-4">
+            <div class="card shadow" style="max-height: 400px;">
+                <div class="card-header bg-white py-2">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-building me-2"></i>Company Performance
+                    </h6>
+                </div>
+                <div class="card-body p-0" style="overflow-y: auto; max-height: 350px;">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light sticky-top" style="top: 0;">
+                            <tr>
+                                <th>Company</th>
+                                <th class="text-end">Total</th>
+                                <th class="text-end">Pending</th>
+                                <th class="text-end">Paid</th>
+                                <th class="text-end">Collection Rate</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for company in company_stats %}
+                            <tr>
+                                <td>
+                                    <strong>{{ company.name }}</strong>
+                                    <br>
+                                    <small class="text-muted">{{ company.code }}</small>
+                                </td>
+                                <td class="text-end">
+                                    <span class="fw-bold">KES {{ company.total_value|floatformat:0|intcomma }}</span>
+                                    <br>
+                                    <small class="text-muted">{{ company.total_count }} txns</small>
+                                </td>
+                                <td class="text-end">
+                                    <span class="text-warning fw-bold">KES {{ company.pending_value|floatformat:0|intcomma }}</span>
+                                    <br>
+                                    <small class="text-muted">{{ company.pending_count }} pending</small>
+                                </td>
+                                <td class="text-end">
+                                    <span class="text-success fw-bold">KES {{ company.paid_value|floatformat:0|intcomma }}</span>
+                                    <br>
+                                    <small class="text-muted">{{ company.paid_count }} paid</small>
+                                </td>
+                                <td class="text-end">
+                                    <div class="d-flex align-items-center justify-content-end">
+                                        <span class="fw-bold me-2">{{ company.paid_percentage|floatformat:1 }}%</span>
+                                        <div class="progress" style="width: 60px; height: 6px;">
+                                            <div class="progress-bar bg-success" role="progressbar" 
+                                                 style="width: {{ company.paid_percentage|floatformat:0 }}%"></div>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center py-3">
+                                    <small class="text-muted">No company data yet</small>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Section - Two Columns -->
+    <div class="row">
+        <!-- Top Customers -->
+        <div class="col-lg-6 mb-4">
+            <div class="card shadow" style="max-height: 400px;">
+                <div class="card-header bg-white py-2">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-crown me-2 text-warning"></i>Top Customers
+                    </h6>
+                </div>
+                <div class="card-body p-0" style="overflow-y: auto; max-height: 350px;">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light sticky-top" style="top: 0;">
+                            <tr>
+                                <th>Customer</th>
+                                <th class="text-end">Transactions</th>
+                                <th class="text-end">Total</th>
+                                <th class="text-end">Pending</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for customer in top_customers %}
+                            <tr>
+                                <td>
+                                    <strong>{{ customer.full_name|truncatechars:25 }}</strong>
+                                    <br>
+                                    <small class="text-muted">{{ customer.id_number }}</small>
+                                </td>
+                                <td class="text-end">{{ customer.transaction_count }}</td>
+                                <td class="text-end text-primary">KES {{ customer.total_value|floatformat:0|intcomma }}</td>
+                                <td class="text-end text-warning">KES {{ customer.pending_value|floatformat:0|intcomma }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center py-3">
+                                    <small class="text-muted">No customer data yet</small>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Aging Analysis & Payment Methods -->
+        <div class="col-lg-6 mb-4">
+            <div class="row">
+                <div class="col-12 mb-4">
+                    <div class="card shadow">
+                        <div class="card-header bg-white py-2">
+                            <h6 class="m-0 font-weight-bold text-primary">
+                                <i class="fas fa-clock me-2"></i>Aging Analysis (Pending)
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span>0-30 days</span>
+                                    <span class="fw-bold">{{ aging.0_30 }} ({% widthratio aging.0_30 aging.total 100 %}%)</span>
+                                </div>
+                                <div class="progress" style="height: 8px;">
+                                    <div class="progress-bar bg-success" style="width: {% widthratio aging.0_30 aging.total 100 %}%"></div>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span>31-60 days</span>
+                                    <span class="fw-bold">{{ aging.31_60 }} ({% widthratio aging.31_60 aging.total 100 %}%)</span>
+                                </div>
+                                <div class="progress" style="height: 8px;">
+                                    <div class="progress-bar bg-warning" style="width: {% widthratio aging.31_60 aging.total 100 %}%"></div>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span>61-90 days</span>
+                                    <span class="fw-bold">{{ aging.61_90 }} ({% widthratio aging.61_90 aging.total 100 %}%)</span>
+                                </div>
+                                <div class="progress" style="height: 8px;">
+                                    <div class="progress-bar bg-orange" style="background-color: #fd7e14; width: {% widthratio aging.61_90 aging.total 100 %}%"></div>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span>90+ days</span>
+                                    <span class="fw-bold">{{ aging.90_plus }} ({% widthratio aging.90_plus aging.total 100 %}%)</span>
+                                </div>
+                                <div class="progress" style="height: 8px;">
+                                    <div class="progress-bar bg-danger" style="width: {% widthratio aging.90_plus aging.total 100 %}%"></div>
+                                </div>
+                            </div>
+                            <div class="mt-3 text-muted small">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Total pending: {{ aging.total }} transactions
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-12">
+                    <div class="card shadow">
+                        <div class="card-header bg-white py-2">
+                            <h6 class="m-0 font-weight-bold text-primary">
+                                <i class="fas fa-money-bill-wave me-2"></i>Payment Methods
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            {% for method in payment_methods %}
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span>
+                                    <span class="badge bg-{{ method.color }} me-2" style="width: 70px;">{{ method.name }}</span>
+                                </span>
+                                <span class="fw-bold">KES {{ method.amount|floatformat:0|intcomma }}</span>
+                                <span class="text-muted small">{{ method.percentage|floatformat:1 }}%</span>
+                            </div>
+                            {% endfor %}
+                            <hr>
+                            <div class="d-flex justify-content-between">
+                                <span class="fw-bold">Total Payments</span>
+                                <span class="fw-bold">KES {{ total_payments|floatformat:0|intcomma }}</span>
+                            </div>
+                            <small class="text-muted">{{ payment_count }} payments received</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cancelled/Reversed Summary -->
+    <div class="row mt-2">
+        <div class="col-12">
+            <div class="card shadow bg-light">
+                <div class="card-body py-2">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <i class="fas fa-times-circle text-danger me-2"></i>
+                            <span>Cancelled: <strong>{{ cancelled_count }}</strong></span>
+                        </div>
+                        <div>
+                            <i class="fas fa-undo-alt text-warning me-2"></i>
+                            <span>Reversed: <strong>{{ reversed_count }}</strong></span>
+                        </div>
+                        <div>
+                            <i class="fas fa-chart-bar text-info me-2"></i>
+                            <span>Avg Transaction: <strong>KES {{ avg_transaction_value|floatformat:0|intcomma }}</strong></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Monthly Trend Chart
+    const monthlyCtx = document.getElementById('monthlyTrendChart').getContext('2d');
+    new Chart(monthlyCtx, {
+        type: 'bar',
+        data: {
+            labels: [{% for month in monthly_trend %}'{{ month.month }}',{% endfor %}],
+            datasets: [
+                {
+                    label: 'Total Credit',
+                    data: [{% for month in monthly_trend %}{{ month.total_value }},{% endfor %}],
+                    backgroundColor: '#4e73df',
+                    borderRadius: 4,
+                    yAxisID: 'y'
+                },
+                {
+                    label: 'Paid',
+                    data: [{% for month in monthly_trend %}{{ month.paid_value }},{% endfor %}],
+                    backgroundColor: '#1cc88a',
+                    borderRadius: 4,
+                    yAxisID: 'y'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'top' }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) { return 'KES ' + (value/1000) + 'k'; }
+                    }
+                }
+            }
+        }
+    });
+
+    // Status Chart
+    const statusCtx = document.getElementById('statusChart').getContext('2d');
+    new Chart(statusCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Pending', 'Paid'],
+            datasets: [{
+                data: [{{ pending_value }}, {{ paid_value }}],
+                backgroundColor: ['#f6c23e', '#1cc88a'],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom' }
+            },
+            cutout: '60%'
+        }
+    });
+});
+</script>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .container-fluid {
+        max-height: 100vh;
+        overflow: hidden;
+    }
+    .scrollable-content {
+        overflow-y: auto;
+        max-height: calc(100vh - 160px);
+        padding-right: 5px;
+    }
+    .scrollable-content::-webkit-scrollbar {
+        width: 6px;
+    }
+    .scrollable-content::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 10px;
+    }
+    .scrollable-content::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 10px;
+    }
+    .scrollable-content::-webkit-scrollbar-thumb:hover {
+        background: #555;
+    }
+    .border-left-primary { border-left: 4px solid #4e73df !important; }
+    .border-left-success { border-left: 4px solid #1cc88a !important; }
+    .border-left-info { border-left: 4px solid #36b9cc !important; }
+    .border-left-warning { border-left: 4px solid #f6c23e !important; }
+    .bg-gradient-info { background: linear-gradient(135deg, #36b9cc 0%, #258391 100%); }
+    .bg-gradient-primary { background: linear-gradient(135deg, #4e73df 0%, #224abe 100%); }
+    .card { transition: transform 0.2s; border: none; box-shadow: 0 0.15rem 1.75rem 0 rgba(58,59,69,0.15) !important; }
+    .card:hover { transform: translateY(-2px); }
+    .text-gray-300 { color: #dddfeb !important; }
+    .text-white-50 { color: rgba(255,255,255,0.5) !important; }
+    .table thead th { border-top: none; border-bottom: 1px solid #e3e6f0; font-size: 0.75rem; }
+    .bg-orange { background-color: #fd7e14; }
+    .progress { background-color: #eaecf4; }
+</style>
+{% endblock %}
