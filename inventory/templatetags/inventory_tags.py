@@ -27,3 +27,10 @@ def floatformat(value, arg):
         return f"{float(value):.{arg}f}"
     except (ValueError, TypeError):
         return value
+
+@register.filter
+def filter_by_type(alerts, alert_type):
+    """Filter alerts by type"""
+    if alerts is None:
+        return []
+    return [alert for alert in alerts if alert.alert_type == alert_type]

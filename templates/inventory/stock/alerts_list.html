@@ -1,0 +1,358 @@
+{% extends 'inventory/staff_base.html' %}
+{% load static %}
+{% load inventory_tags %}
+
+{% block title %}Stock Alerts{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header Section -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="mb-1">
+                <i class="fas fa-exclamation-triangle text-warning me-2"></i>
+                Stock Alerts
+            </h2>
+            <p class="text-muted mb-0">Monitor and manage low stock items</p>
+        </div>
+        <div>
+            <button class="btn btn-outline-primary me-2" onclick="refreshAlerts()">
+                <i class="fas fa-sync-alt me-2"></i>Refresh
+            </button>
+            <a href="{% url 'inventory:product_list' %}" class="btn btn-primary">
+                <i class="fas fa-box me-2"></i>View Products
+            </a>
+        </div>
+    </div>
+
+    <!-- Alert Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="card bg-gradient-danger text-white h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-white-50 mb-2">Needs Reorder</h6>
+                            <h2 class="mb-0">{{ alert_counts.needs_reorder|default:0 }}</h2>
+                        </div>
+                        <div class="icon-shape bg-white bg-opacity-25 rounded-circle p-3">
+                            <i class="fas fa-exclamation-circle fa-2x"></i>
+                        </div>
+                    </div>
+                    <small class="text-white-50">Critical - Order immediately</small>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3 mb-3">
+            <div class="card bg-gradient-warning text-white h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-white-50 mb-2">Low Stock</h6>
+                            <h2 class="mb-0">{{ alert_counts.lowstock|default:0 }}</h2>
+                        </div>
+                        <div class="icon-shape bg-white bg-opacity-25 rounded-circle p-3">
+                            <i class="fas fa-exclamation-triangle fa-2x"></i>
+                        </div>
+                    </div>
+                    <small class="text-white-50">Below threshold - Plan restock</small>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3 mb-3">
+            <div class="card bg-gradient-secondary text-white h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-white-50 mb-2">Out of Stock</h6>
+                            <h2 class="mb-0">{{ alert_counts.outofstock|default:0 }}</h2>
+                        </div>
+                        <div class="icon-shape bg-white bg-opacity-25 rounded-circle p-3">
+                            <i class="fas fa-times-circle fa-2x"></i>
+                        </div>
+                    </div>
+                    <small class="text-white-50">Sold out - Restock urgently</small>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3 mb-3">
+            <div class="card bg-gradient-dark text-white h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-white-50 mb-2">Damaged</h6>
+                            <h2 class="mb-0">{{ alert_counts.damaged|default:0 }}</h2>
+                        </div>
+                        <div class="icon-shape bg-white bg-opacity-25 rounded-circle p-3">
+                            <i class="fas fa-tools fa-2x"></i>
+                        </div>
+                    </div>
+                    <small class="text-white-50">Damaged items - Review</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Tabs -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white">
+            <ul class="nav nav-tabs card-header-tabs" id="alertTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="all-tab" data-bs-toggle="tab" data-bs-target="#all" type="button" role="tab">
+                        All Alerts <span class="badge bg-secondary ms-2">{{ alerts.count }}</span>
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="reorder-tab" data-bs-toggle="tab" data-bs-target="#reorder" type="button" role="tab">
+                        <span class="text-danger">●</span> Needs Reorder 
+                        <span class="badge bg-danger ms-2">{{ alert_counts.needs_reorder|default:0 }}</span>
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="lowstock-tab" data-bs-toggle="tab" data-bs-target="#lowstock" type="button" role="tab">
+                        <span class="text-warning">●</span> Low Stock
+                        <span class="badge bg-warning ms-2">{{ alert_counts.lowstock|default:0 }}</span>
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="outofstock-tab" data-bs-toggle="tab" data-bs-target="#outofstock" type="button" role="tab">
+                        <span class="text-secondary">●</span> Out of Stock
+                        <span class="badge bg-secondary ms-2">{{ alert_counts.outofstock|default:0 }}</span>
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="damaged-tab" data-bs-toggle="tab" data-bs-target="#damaged" type="button" role="tab">
+                        <span class="text-dark">●</span> Damaged
+                        <span class="badge bg-dark ms-2">{{ alert_counts.damaged|default:0 }}</span>
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="dismissed-tab" data-bs-toggle="tab" data-bs-target="#dismissed" type="button" role="tab">
+                        <i class="far fa-check-circle me-1"></i> Dismissed
+                        <span class="badge bg-light text-dark ms-2">{{ dismissed_count|default:0 }}</span>
+                    </button>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Tab Content -->
+    <div class="tab-content" id="alertTabsContent">
+        <!-- All Alerts Tab -->
+        <div class="tab-pane fade show active" id="all" role="tabpanel">
+            {% include "inventory/stock/_alerts_list.html" with alerts=alerts show_dismissed=False %}
+        </div>
+        
+        <!-- Needs Reorder Tab -->
+        <div class="tab-pane fade" id="reorder" role="tabpanel">
+            {% with filtered=alerts|filter_by_type:'needs_reorder' %}
+                {% include "inventory/stock/_alerts_list.html" with alerts=filtered show_dismissed=False %}
+            {% endwith %}
+        </div>
+        
+        <!-- Low Stock Tab -->
+        <div class="tab-pane fade" id="lowstock" role="tabpanel">
+            {% with filtered=alerts|filter_by_type:'lowstock' %}
+                {% include "inventory/stock/_alerts_list.html" with alerts=filtered show_dismissed=False %}
+            {% endwith %}
+        </div>
+        
+        <!-- Out of Stock Tab -->
+        <div class="tab-pane fade" id="outofstock" role="tabpanel">
+            {% with filtered=alerts|filter_by_type:'outofstock' %}
+                {% include "inventory/stock/_alerts_list.html" with alerts=filtered show_dismissed=False %}
+            {% endwith %}
+        </div>
+        
+        <!-- Damaged Tab -->
+        <div class="tab-pane fade" id="damaged" role="tabpanel">
+            {% with filtered=alerts|filter_by_type:'damaged' %}
+                {% include "inventory/stock/_alerts_list.html" with alerts=filtered show_dismissed=False %}
+            {% endwith %}
+        </div>
+        
+        <!-- Dismissed Tab -->
+        <div class="tab-pane fade" id="dismissed" role="tabpanel">
+            {% include "inventory/stock/_alerts_list.html" with alerts=dismissed_alerts show_dismissed=True %}
+        </div>
+    </div>
+</div>
+
+<!-- Dismiss Alert Modal -->
+<div class="modal fade" id="dismissModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-check-circle me-2"></i>Dismiss Alert
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="" id="dismissForm">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <p>Are you sure you want to dismiss this alert?</p>
+                    <div class="mb-3">
+                        <label for="reason" class="form-label">Reason (optional):</label>
+                        <textarea class="form-control" id="reason" name="reason" rows="2" placeholder="e.g., Restocked, Ordered, etc."></textarea>
+                    </div>
+                    <p class="text-muted small">
+                        <i class="fas fa-info-circle me-1"></i>
+                        The alert can be re-activated if stock levels drop again.
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-check-circle me-2"></i>Dismiss
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Restock Modal -->
+<div class="modal fade" id="restockModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-plus-circle me-2"></i>Restock Product
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="" id="restockForm">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Product</label>
+                        <input type="text" class="form-control" id="restockProductName" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Current Stock</label>
+                        <input type="text" class="form-control" id="restockCurrentStock" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label for="quantity" class="form-label">Quantity to Add</label>
+                        <input type="number" class="form-control" id="quantity" name="quantity" min="1" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="notes" class="form-label">Notes</label>
+                        <textarea class="form-control" id="notes" name="notes" rows="2" placeholder="e.g., New shipment received"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-plus-circle me-2"></i>Restock
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    'use strict';
+    
+    // Dismiss Alert Function
+    window.dismissAlert = function(alertId, productName) {
+        var modal = new bootstrap.Modal(document.getElementById('dismissModal'));
+        var form = document.getElementById('dismissForm');
+        var baseUrl = "{% url 'inventory:dismiss_alert' 0 %}";
+        form.action = baseUrl.replace('0', alertId);
+        modal.show();
+    };
+    
+    // Restock Function
+    window.restockProduct = function(productId, productName, currentStock) {
+        var modal = new bootstrap.Modal(document.getElementById('restockModal'));
+        var form = document.getElementById('restockForm');
+        var baseUrl = "{% url 'inventory:restock_product' 0 %}";
+        form.action = baseUrl.replace('0', productId);
+        document.getElementById('restockProductName').value = productName;
+        document.getElementById('restockCurrentStock').value = currentStock;
+        modal.show();
+    };
+    
+    // Refresh Alerts
+    window.refreshAlerts = function() {
+        location.reload();
+    };
+    
+    // Auto-refresh every 5 minutes (optional)
+    setTimeout(function() {
+        location.reload();
+    }, 300000); // 5 minutes
+    
+})();
+</script>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .bg-gradient-danger {
+        background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+    }
+    .bg-gradient-warning {
+        background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);
+    }
+    .bg-gradient-secondary {
+        background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
+    }
+    .bg-gradient-dark {
+        background: linear-gradient(135deg, #343a40 0%, #23272b 100%);
+    }
+    .bg-gradient-info {
+        background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+    }
+    .icon-shape {
+        width: 48px;
+        height: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .alert-card {
+        transition: transform 0.2s;
+    }
+    .alert-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    .progress {
+        background-color: #e9ecef;
+        border-radius: 4px;
+        height: 8px;
+    }
+    .progress-bar {
+        border-radius: 4px;
+    }
+    .badge-severity {
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+    .nav-tabs .nav-link {
+        color: #495057;
+    }
+    .nav-tabs .nav-link.active {
+        font-weight: 600;
+    }
+    .dismissed-alert {
+        opacity: 0.7;
+    }
+    .dismissed-alert:hover {
+        opacity: 1;
+    }
+</style>
+{% endblock %}

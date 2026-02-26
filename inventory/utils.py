@@ -54,7 +54,7 @@ def send_stock_alert_email(alerts_data):
     
     # Render HTML email
 
-    html_message = render_to_string('inventory/stock/alerts.html', { 
+    html_message = render_to_string('inventory/stock/email_alerts.html', { 
         'alerts': alerts_data,
         'alert_counts': alert_counts,
         'date': timezone.now(),

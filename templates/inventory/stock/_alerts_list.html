@@ -1,0 +1,190 @@
+{% load inventory_tags %}
+
+{% if alerts %}
+    <div class="row">
+        {% for alert in alerts %}
+        <div class="col-xl-6 mb-4">
+            <div class="card alert-card shadow-sm {% if show_dismissed %}dismissed-alert{% endif %}">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <div>
+                        <span class="badge 
+                            {% if alert.severity == 'critical' %}bg-danger
+                            {% elif alert.severity == 'danger' %}bg-danger
+                            {% elif alert.severity == 'warning' %}bg-warning text-dark
+                            {% else %}bg-info{% endif %} 
+                            badge-severity me-2">
+                            {{ alert.get_severity_display|upper }}
+                        </span>
+                        <span class="badge bg-light text-dark">
+                            {{ alert.product.product_code }}
+                        </span>
+                    </div>
+                    <div>
+                        {% if not show_dismissed %}
+                        <span class="badge 
+                            {% if alert.alert_type == 'needs_reorder' %}bg-danger
+                            {% elif alert.alert_type == 'lowstock' %}bg-warning text-dark
+                            {% elif alert.alert_type == 'outofstock' %}bg-secondary
+                            {% elif alert.alert_type == 'damaged' %}bg-dark{% endif %}">
+                            {{ alert.get_alert_type_display }}
+                        </span>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-8">
+                            <h5 class="mb-1">{{ alert.product.display_name }}</h5>
+                            <p class="text-muted small mb-2">{{ alert.product.category.name }}</p>
+                            
+                            <div class="mt-3">
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span class="text-muted">Current Stock:</span>
+                                    <span class="fw-bold 
+                                        {% if alert.current_stock == 0 %}text-danger
+                                        {% elif alert.current_stock <= alert.threshold %}text-warning
+                                        {% else %}text-success{% endif %}">
+                                        {{ alert.current_stock }}
+                                    </span>
+                                </div>
+                                
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span class="text-muted">Threshold:</span>
+                                    <span class="fw-bold">{{ alert.threshold }}</span>
+                                </div>
+                                
+                                {% if alert.reorder_level %}
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span class="text-muted">Reorder Level:</span>
+                                    <span class="fw-bold">{{ alert.reorder_level }}</span>
+                                </div>
+                                {% endif %}
+                                
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span class="text-muted">Alert Count:</span>
+                                    <span class="fw-bold">{{ alert.alert_count }}</span>
+                                </div>
+                                
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span class="text-muted">Last Alerted:</span>
+                                    <span class="fw-bold">{{ alert.last_alerted|timesince|default:"Never" }} ago</span>
+                                </div>
+                                
+                                {% if show_dismissed and alert.dismissed_by %}
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span class="text-muted">Dismissed By:</span>
+                                    <span class="fw-bold">{{ alert.dismissed_by.username }}</span>
+                                </div>
+                                <div class="d-flex justify-content-between mb-2">
+                                    <span class="text-muted">Dismissed At:</span>
+                                    <span class="fw-bold">{{ alert.dismissed_at|date:"M d, Y H:i" }}</span>
+                                </div>
+                                {% if alert.dismissed_reason %}
+                                <div class="mt-2 p-2 bg-light rounded">
+                                    <small><strong>Reason:</strong> {{ alert.dismissed_reason }}</small>
+                                </div>
+                                {% endif %}
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <div class="col-4 text-center">
+                            <div class="p-3 bg-light rounded-circle mx-auto" style="width: 80px; height: 80px; display: flex; align-items: center; justify-content: center;">
+                                <span class="display-6 fw-bold 
+                                    {% if alert.current_stock == 0 %}text-danger
+                                    {% elif alert.current_stock <= alert.threshold %}text-warning
+                                    {% else %}text-success{% endif %}">
+                                    {{ alert.current_stock }}
+                                </span>
+                            </div>
+                            <small class="text-muted d-block mt-2">Current Stock</small>
+                            
+                            <!-- Progress Circle -->
+                            <div class="mt-2">
+                                {% if alert.threshold > 0 %}
+                                    {% with percentage=alert.current_stock|div:alert.threshold|multiply:100 %}
+                                        <small class="text-muted">
+                                            {% if percentage > 100 %}100{% else %}{{ percentage|floatformat:0 }}{% endif %}% of threshold
+                                        </small>
+                                    {% endwith %}
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Progress Bar -->
+                    <div class="mt-3">
+                        <div class="progress">
+                            {% if alert.threshold > 0 %}
+                                {% with percentage=alert.current_stock|div:alert.threshold|multiply:100 %}
+                                    <div class="progress-bar 
+                                        {% if alert.severity == 'critical' %}bg-danger
+                                        {% elif alert.severity == 'danger' %}bg-danger
+                                        {% elif alert.severity == 'warning' %}bg-warning
+                                        {% else %}bg-info{% endif %}" 
+                                         role="progressbar" 
+                                         style="width: {% if percentage > 100 %}100{% else %}{{ percentage|floatformat:0 }}{% endif %}%"
+                                         aria-valuenow="{{ alert.current_stock }}" 
+                                         aria-valuemin="0" 
+                                         aria-valuemax="{{ alert.threshold }}">
+                                    </div>
+                                {% endwith %}
+                            {% endif %}
+                        </div>
+                        <div class="d-flex justify-content-between mt-1">
+                            <small class="text-muted">0</small>
+                            <small class="text-muted">Threshold: {{ alert.threshold }}</small>
+                        </div>
+                    </div>
+                    
+                    <!-- Action Buttons -->
+                    {% if not show_dismissed %}
+                    <div class="d-flex gap-2 mt-3">
+                        <a href="{% url 'inventory:product_detail' alert.product.id %}" 
+                           class="btn btn-sm btn-outline-info flex-grow-1">
+                            <i class="fas fa-eye me-1"></i> View
+                        </a>
+                        
+                        {% if alert.alert_type != 'outofstock' and alert.alert_type != 'damaged' %}
+                        <button type="button" 
+                                class="btn btn-sm btn-outline-primary flex-grow-1"
+                                onclick="restockProduct('{{ alert.product.id }}', '{{ alert.product.display_name|escapejs }}', '{{ alert.current_stock }}')">
+                            <i class="fas fa-plus me-1"></i> Restock
+                        </button>
+                        {% endif %}
+                        
+                        <button type="button" 
+                                class="btn btn-sm btn-outline-success"
+                                onclick="dismissAlert('{{ alert.id }}', '{{ alert.product.display_name|escapejs }}')"
+                                title="Dismiss Alert">
+                            <i class="fas fa-check"></i>
+                        </button>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                {% if show_dismissed %}
+                <div class="card-footer bg-light">
+                    <small class="text-muted">
+                        <i class="fas fa-info-circle me-1"></i>
+                        Dismissed on {{ alert.dismissed_at|date:"M d, Y H:i" }}
+                    </small>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+{% else %}
+    <div class="text-center py-5">
+        <div class="mb-4">
+            <i class="fas fa-check-circle fa-4x text-success"></i>
+        </div>
+        <h4 class="text-success">All Clear!</h4>
+        <p class="text-muted">No alerts to display in this category.</p>
+        <a href="{% url 'inventory:product_list' %}" class="btn btn-primary mt-3">
+            <i class="fas fa-box me-2"></i>View Products
+        </a>
+    </div>
+{% endif %}
