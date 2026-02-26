@@ -129,12 +129,15 @@ class Category(models.Model):
 # ====================================
 # INVENTORY PRODUCT MODEL 📦
 # ====================================
+# ====================================
+# INVENTORY PRODUCT MODEL 📦
+# ====================================
 class Product(models.Model):
     """
     Represents inventory items.
     - Single items: Each unit gets its own Product record with unique SKU (IMEI/Serial)
     - Bulk items: Multiple units share one Product record with same SKU
-    - Auto generates product code (FSL format)
+    - Auto generates product code (FSL format starting from FSL00200)
     - Auto generates barcode when blank
     """
     
@@ -282,7 +285,7 @@ class Product(models.Model):
     def save(self, *args, **kwargs):
         """
         Override save to:
-        1. Auto-generate product_code (FSL format)
+        1. Auto-generate product_code (FSL format starting from FSL00200)
         2. Auto-generate name from brand/model if blank
         3. Auto-generate barcode if not provided (for ALL products)
         4. Enforce single item quantity = 1
@@ -301,7 +304,7 @@ class Product(models.Model):
                     spec_str = f" ({' '.join(specs)})"
             self.name = f"{self.brand} {self.model}{spec_str}"
         
-        # Auto-generate unique product_code
+        # Auto-generate unique product_code starting from FSL00200
         if not self.product_code:
             self.product_code = self._generate_product_code()
 
@@ -325,7 +328,8 @@ class Product(models.Model):
         """
         Generate unique sequential product code
         Format: FSL + 5-digit sequential number
-        Examples: FSL00001, FSL00002, FSL00003
+        Starting from FSL00200
+        Examples: FSL00200, FSL00201, FSL00202
         """
         try:
             # Get the highest existing product code that starts with 'FSL'
@@ -335,13 +339,15 @@ class Product(models.Model):
             
             if max_code and max_code.startswith('FSL'):
                 try:
-                    # Extract number from last code (FSL00001 -> 1)
+                    # Extract number from last code (FSL00200 -> 200)
                     last_number = int(max_code[3:])
                     new_number = last_number + 1
                 except (ValueError, IndexError):
-                    new_number = 1
+                    # If existing code is invalid format, start from 200
+                    new_number = 200
             else:
-                new_number = 1
+                # No existing products, start from 200
+                new_number = 200
             
             return f"FSL{str(new_number).zfill(5)}"
         except Exception:
@@ -358,6 +364,7 @@ class Product(models.Model):
         """
         import time
         import hashlib
+        import random
         
         # Get base for uniqueness
         base = f"{self.product_code or 'NEW'}{time.time()}{random.randint(1000, 9999)}"
@@ -603,6 +610,60 @@ class Product(models.Model):
             return self.selling_price - self.best_price
         return Decimal('0.00')
     
+    # Add these methods to your existing Product class
+
+    @property
+    def stock_status(self):
+        """Get detailed stock status"""
+        if not self.category:
+            return 'unknown'
+    
+        if self.category.is_single_item:
+            if self.quantity == 0:
+                return 'outofstock'
+            elif self.status == 'reserved':
+                return 'reserved'
+            elif self.status == 'damaged':
+                return 'damaged'
+            else:
+                return 'available'
+        else:
+        # Bulk items
+            if self.quantity <= 0:
+                return 'outofstock'
+            elif self.reorder_level and self.quantity <= self.reorder_level:
+                return 'needs_reorder'
+            elif self.quantity <= 5:  # Low stock threshold
+                return 'lowstock'
+            else:
+                return 'available'
+
+    @property
+    def stock_status_badge(self):
+        """Get Bootstrap badge class for stock status"""
+        status_map = {
+            'available': 'success',
+            'lowstock': 'warning',
+            'needs_reorder': 'danger',
+            'outofstock': 'secondary',
+            'reserved': 'info',
+            'damaged': 'dark',
+        }
+        return status_map.get(self.stock_status, 'light')
+
+    @property
+    def stock_status_icon(self):
+        """Get icon for stock status"""
+        icon_map = {
+            'available': 'fa-check-circle',
+            'lowstock': 'fa-exclamation-triangle',
+            'needs_reorder': 'fa-exclamation-circle',
+            'outofstock': 'fa-times-circle',
+            'reserved': 'fa-clock',
+            'damaged': 'fa-exclamation-triangle',
+        }
+        return icon_map.get(self.stock_status, 'fa-box')
+
     @property
     def can_be_used_for_credit(self):
         """
@@ -793,38 +854,142 @@ class StockEntry(models.Model):
     def absolute_quantity(self):
         return abs(self.quantity)
 
+
+
+
+
+
 # ====================================
 # INVENTORY STOCK ALERT MODEL  📦
 # ====================================
 class StockAlert(models.Model):
-    """Alert when products are running low"""
+    """Alert when products are running low or out of stock"""
+    
+    ALERT_TYPE_CHOICES = [
+        ('lowstock', 'Low Stock'),
+        ('needs_reorder', 'Needs Reorder'),
+        ('outofstock', 'Out of Stock'),
+        ('expiring', 'Expiring Soon'),
+        ('damaged', 'Damaged Stock'),
+    ]
+    
+    SEVERITY_CHOICES = [
+        ('info', 'Info'),
+        ('warning', 'Warning'),
+        ('danger', 'Danger'),
+        ('critical', 'Critical'),
+    ]
+    
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='alerts')
-    alert_level = models.PositiveIntegerField(default=5)
+    alert_type = models.CharField(max_length=20, choices=ALERT_TYPE_CHOICES, default='lowstock')
+    severity = models.CharField(max_length=20, choices=SEVERITY_CHOICES, default='warning')
+    
+    # Thresholds
+    current_stock = models.PositiveIntegerField(default=0)
+    threshold = models.PositiveIntegerField(default=5)
+    reorder_level = models.PositiveIntegerField(null=True, blank=True)
+    
+    # Alert management
     is_active = models.BooleanField(default=True)
+    is_dismissed = models.BooleanField(default=False)
+    dismissed_by = models.ForeignKey(
+        User, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True,
+        related_name='dismissed_alerts'
+    )
+    dismissed_at = models.DateTimeField(null=True, blank=True)
+    dismissed_reason = models.TextField(blank=True, null=True)
+    
+    # Tracking
     last_alerted = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-
+    alert_count = models.PositiveIntegerField(default=0)
+    
     class Meta:
-        ordering = ['-created_at']
-        unique_together = ['product', 'alert_level']
+        ordering = ['-severity', '-created_at']
+        indexes = [
+            models.Index(fields=['product', 'is_active']),
+            models.Index(fields=['alert_type']),
+            models.Index(fields=['severity']),
+        ]
 
     def __str__(self):
         """Safe string representation"""
         try:
             product_name = self.product.display_name if self.product else "Unknown Product"
-            return f"Alert: {product_name} (Level: {self.alert_level})"
+            return f"{self.get_alert_type_display()}: {product_name}"
         except Exception:
             return f"StockAlert #{self.id}"
 
     def check_and_alert(self):
-        """Check if product needs alert and update last_alerted"""
-        if self.is_active and self.product and self.product.quantity is not None and self.product.quantity <= self.alert_level:
-            from django.utils import timezone
+        """Check if product needs alert and update"""
+        if not self.is_active or self.is_dismissed:
+            return False
+            
+        if not self.product:
+            return False
+        
+        # Update current stock
+        self.current_stock = self.product.quantity or 0
+        
+        # Determine if alert should trigger
+        should_alert = False
+        new_alert_type = self.alert_type
+        
+        if self.product.category and self.product.category.is_bulk_item:
+            # Bulk items logic
+            if self.product.quantity <= 0:
+                should_alert = True
+                new_alert_type = 'outofstock'
+                self.severity = 'critical'
+            elif self.product.reorder_level and self.product.quantity <= self.product.reorder_level:
+                should_alert = True
+                new_alert_type = 'needs_reorder'
+                self.severity = 'danger'
+            elif self.product.quantity <= self.threshold:
+                should_alert = True
+                new_alert_type = 'lowstock'
+                self.severity = 'warning'
+        else:
+            # Single items logic
+            if self.product.quantity == 0:
+                should_alert = True
+                new_alert_type = 'outofstock'
+                self.severity = 'critical'
+            elif self.product.status == 'damaged':
+                should_alert = True
+                new_alert_type = 'damaged'
+                self.severity = 'danger'
+        
+        if should_alert:
+            self.alert_type = new_alert_type
             self.last_alerted = timezone.now()
+            self.alert_count += 1
             self.save()
             return True
+        
         return False
+
+    def dismiss(self, user=None, reason=""):
+        """Dismiss this alert"""
+        self.is_dismissed = True
+        self.is_active = False
+        self.dismissed_by = user
+        self.dismissed_at = timezone.now()
+        self.dismissed_reason = reason
+        self.save()
+
+    def reactivate(self):
+        """Reactivate a dismissed alert"""
+        self.is_dismissed = False
+        self.is_active = True
+        self.dismissed_by = None
+        self.dismissed_at = None
+        self.dismissed_reason = ""
+        self.save()
 
 # ====================================
 # INVENTORY PRODUCT REVIEW MODEL 📦
@@ -927,6 +1092,9 @@ def validate_stock_entry(sender, instance, **kwargs):
     except Exception as e:
         logger.error(f"❌ Stock entry validation error: {str(e)}")
 
+
+
+
 @receiver(post_save, sender=StockEntry)
 def update_product_quantity_from_entries(sender, instance, created, **kwargs):
     """Update product quantity based on all stock entries"""
@@ -945,6 +1113,81 @@ def update_product_quantity_from_entries(sender, instance, created, **kwargs):
             logger.info(f"📦 STOCK UPDATE: {product.product_code} - New quantity: {total}")
         except Exception as e:
             logger.error(f"❌ Error updating product quantity: {str(e)}")
+
+
+
+
+# =========================================
+# NEW SIGNAL - Auto-create stock alerts
+# =========================================
+@receiver(post_save, sender=Product)
+def create_stock_alerts(sender, instance, created, **kwargs):
+    """Auto-create or update stock alerts for products"""
+    try:
+        if not instance.category:
+            return
+        
+        # Determine alert type and threshold
+        alert_type = 'lowstock'
+        threshold = 5
+        severity = 'warning'
+        
+        if instance.category.is_bulk_item:
+            if instance.quantity <= 0:
+                alert_type = 'outofstock'
+                severity = 'critical'
+            elif instance.reorder_level and instance.quantity <= instance.reorder_level:
+                alert_type = 'needs_reorder'
+                severity = 'danger'
+            elif instance.quantity <= threshold:
+                alert_type = 'lowstock'
+                severity = 'warning'
+            else:
+                # Stock is fine, deactivate any existing alerts
+                StockAlert.objects.filter(product=instance, is_active=True).update(
+                    is_active=False,
+                    is_dismissed=True
+                )
+                return
+        else:
+            # Single items
+            if instance.quantity == 0:
+                alert_type = 'outofstock'
+                severity = 'critical'
+            elif instance.status == 'damaged':
+                alert_type = 'damaged'
+                severity = 'danger'
+            else:
+                # Available, deactivate alerts
+                StockAlert.objects.filter(product=instance, is_active=True).update(
+                    is_active=False,
+                    is_dismissed=True
+                )
+                return
+        
+        # Create or update alert
+        alert, created = StockAlert.objects.update_or_create(
+            product=instance,
+            is_dismissed=False,
+            defaults={
+                'alert_type': alert_type,
+                'severity': severity,
+                'current_stock': instance.quantity,
+                'threshold': threshold,
+                'reorder_level': instance.reorder_level,
+                'is_active': True,
+                'last_alerted': timezone.now(),
+            }
+        )
+        
+        if created:
+            logger.info(f"✅ Created {alert_type} alert for {instance.product_code}")
+        else:
+            logger.info(f"✅ Updated {alert_type} alert for {instance.product_code}")
+            
+    except Exception as e:
+        logger.error(f"❌ Error creating stock alert: {str(e)}")
+
 
 
 
