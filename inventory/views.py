@@ -242,10 +242,13 @@ def dashboard(request):
     # Basic stats
     total_products = Product.objects.count()
     available_products = Product.objects.filter(status='available').count()
+    
+    # Fixed: Using F('reorder_level') instead of F('alert_level')
     low_stock_count = Product.objects.filter(
         category__item_type='bulk',
-        quantity__lte=F('reorder_level')  # Fixed: using F instead of models.F
+        quantity__lte=F('reorder_level')  # Fixed: reorder_level instead of alert_level
     ).count()
+    
     out_of_stock = Product.objects.filter(
         Q(category__item_type='bulk', quantity=0) |
         Q(category__item_type='single', status='sold')
@@ -257,10 +260,11 @@ def dashboard(request):
     # Recent stock movements
     recent_movements = StockEntry.objects.select_related('product', 'created_by').order_by('-created_at')[:5]
     
-    # Low stock alerts
+    # Fixed: Use threshold instead of alert_level, and use current_stock instead of product__quantity
     low_stock_alerts = StockAlert.objects.filter(
         is_active=True,
-        product__quantity__lte=F('alert_level')  # Fixed: using F instead of models.F
+        is_dismissed=False,
+        current_stock__lte=F('threshold')  # Fixed: using threshold and current_stock
     ).select_related('product')[:10]
     
     # Chart data (last 30 days)
@@ -302,6 +306,13 @@ def dashboard(request):
     }
     
     return render(request, 'inventory/dashboard.html', context)
+
+
+
+
+
+
+
 
 @login_required
 def product_list(request):
@@ -396,7 +407,14 @@ def product_add(request):
             # Inventory - Convert to int
             try:
                 quantity = int(request.POST.get('quantity', 1))
-                reorder_level = int(request.POST.get('reorder_level', 5))
+                
+                # ===== FIXED: Properly handle reorder_level =====
+                reorder_level_raw = request.POST.get('reorder_level')
+                if reorder_level_raw and reorder_level_raw.strip():
+                    reorder_level = int(reorder_level_raw)
+                else:
+                    reorder_level = 5  # Default value
+                
                 warranty_months = int(request.POST.get('warranty_months', 12))
             except (ValueError, TypeError) as e:
                 messages.error(request, f'Invalid number format: {str(e)}')
@@ -435,7 +453,7 @@ def product_add(request):
                 sku_value=sku_value if sku_value else None,
                 barcode=barcode if barcode else None,
                 quantity=quantity,
-                reorder_level=reorder_level,
+                reorder_level=reorder_level,  # Now properly set
                 condition=condition,
                 warranty_months=warranty_months,
                 specifications=specifications,
@@ -448,9 +466,7 @@ def product_add(request):
                 product.supplier = supplier
                 product.save()
             
-            # ============================================
-            # SEND ADMIN NOTIFICATION
-            # ============================================
+            # Send admin notification
             try:
                 from utils.notifications import AdminNotifier
                 AdminNotifier.notify_product_added(product, request.user)
@@ -459,9 +475,8 @@ def product_add(request):
                 logger.warning("AdminNotifier not available - skipping notification")
             except Exception as e:
                 logger.error(f"Failed to send admin notification: {str(e)}")
-                # Don't fail the product creation if notification fails
             
-            messages.success(request, f'Product "{name}" created successfully.')
+            messages.success(request, f'Product "{name}" created successfully with reorder level {reorder_level}.')
             return redirect('inventory:product_detail', pk=product.id)
             
         except Category.DoesNotExist:
@@ -667,7 +682,14 @@ def product_edit(request, pk):
             # Inventory - Convert to int
             try:
                 product.quantity = int(request.POST.get('quantity', 1))
-                product.reorder_level = int(request.POST.get('reorder_level', 5))
+                
+                # ===== FIXED: Properly handle reorder_level =====
+                reorder_level_raw = request.POST.get('reorder_level')
+                if reorder_level_raw and reorder_level_raw.strip():
+                    product.reorder_level = int(reorder_level_raw)
+                else:
+                    product.reorder_level = 5  # Default if empty
+                
                 product.warranty_months = int(request.POST.get('warranty_months', 12))
             except (ValueError, TypeError) as e:
                 messages.error(request, f'Invalid number format: {str(e)}')
@@ -697,7 +719,7 @@ def product_edit(request, pk):
                 return redirect('inventory:product_edit', pk=product.pk)
             
             product.save()
-            messages.success(request, f'Product "{product.name}" updated successfully.')
+            messages.success(request, f'Product "{product.name}" updated successfully. Reorder level: {product.reorder_level}')
             return redirect('inventory:product_detail', pk=product.pk)
             
         except Category.DoesNotExist:
@@ -716,7 +738,6 @@ def product_edit(request, pk):
         'suppliers': suppliers,
     }
     return render(request, 'inventory/products/edit.html', context)
-
 
 
 
