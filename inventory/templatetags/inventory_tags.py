@@ -33,27 +33,16 @@ def filter_by_type(alerts, alert_type):
     """Filter alerts by type"""
     if alerts is None:
         return []
-    return [alert for alert in alerts if alert.alert_type == alert_type]
-
-
-
-# In inventory/templatetags/inventory_tags.py
-from django import template
-
-register = template.Library()
-
-@register.filter
-def div(value, arg):
-    """Divide value by arg"""
+    # Check if it's a queryset or list
     try:
-        return float(value) / float(arg)
-    except (ValueError, ZeroDivisionError, TypeError):
-        return 0
+        # If it's a queryset, we can filter it
+        return alerts.filter(alert_type=alert_type)
+    except AttributeError:
+        # If it's a list, use list comprehension
+        return [alert for alert in alerts if alert.alert_type == alert_type]
 
+# Alias for mul (if you need both names)
 @register.filter
 def mul(value, arg):
-    """Multiply value by arg"""
-    try:
-        return float(value) * float(arg)
-    except (ValueError, TypeError):
-        return 0
+    """Alias for multiply"""
+    return multiply(value, arg)

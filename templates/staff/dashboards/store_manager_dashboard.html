@@ -547,9 +547,9 @@
     </div>
 </div>
 
-<!-- Stock Alerts and Top Selling -->
+<!-- Stock Alerts and Top Selling (FIXED) -->
 <div class="row g-4 mb-4">
-    <!-- Stock Alerts -->
+    <!-- Stock Alerts - UPDATED with new StockAlert fields -->
     <div class="col-xl-6">
         <div class="table-container">
             <div class="table-header">
@@ -565,7 +565,7 @@
             
             <div style="max-height: 350px; overflow-y: auto;">
                 {% for alert in low_stock_alerts %}
-                <div class="alert-item {% if alert.product.quantity == 0 %}danger{% else %}warning{% endif %}">
+                <div class="alert-item {% if alert.alert_type == 'outofstock' or alert.alert_type == 'needs_reorder' %}danger{% else %}warning{% endif %}">
                     <div class="d-flex justify-content-between align-items-start">
                         <div>
                             <h6 class="mb-1 fw-bold">{{ alert.product.display_name }}</h6>
@@ -577,29 +577,49 @@
                             </div>
                             <div class="d-flex gap-3">
                                 <span class="badge bg-dark">
-                                    Stock: {{ alert.product.quantity }}
+                                    Stock: {{ alert.current_stock }}
                                 </span>
-                                <span class="badge bg-secondary">
-                                    Alert: {{ alert.alert_level }}
+                                <span class="badge {% if alert.alert_type == 'needs_reorder' %}bg-danger{% elif alert.alert_type == 'lowstock' %}bg-warning{% elif alert.alert_type == 'outofstock' %}bg-secondary{% else %}bg-info{% endif %}">
+                                    {{ alert.get_alert_type_display }}
+                                </span>
+                                <span class="badge {% if alert.severity == 'critical' %}bg-danger{% elif alert.severity == 'danger' %}bg-danger{% elif alert.severity == 'warning' %}bg-warning{% else %}bg-info{% endif %}">
+                                    {{ alert.get_severity_display }}
                                 </span>
                             </div>
                         </div>
                         <div class="btn-group">
-                            <a href="{% url 'inventory:product_restock' %}?product={{ alert.product.id }}" 
+                            {% if alert.alert_type != 'outofstock' and alert.alert_type != 'damaged' %}
+                            <a href="{% url 'inventory:restock_product' alert.id %}" 
                                class="btn btn-sm btn-warning" title="Restock">
                                 <i class="fas fa-truck"></i>
                             </a>
+                            {% endif %}
                             <a href="{% url 'inventory:product_detail' alert.product.id %}" 
                                class="btn btn-sm btn-outline-secondary" title="View">
                                 <i class="fas fa-eye"></i>
                             </a>
+                            <button type="button" 
+                                    class="btn btn-sm btn-outline-success" 
+                                    onclick="dismissAlert({{ alert.id }})"
+                                    title="Dismiss Alert">
+                                <i class="fas fa-check"></i>
+                            </button>
                         </div>
                     </div>
                     <div class="mt-2">
+                        <div class="d-flex justify-content-between small mb-1">
+                            <span>Threshold: {{ alert.threshold }}</span>
+                            <span>{{ alert.current_stock }} / {{ alert.threshold }}</span>
+                        </div>
                         <div class="progress-custom">
-                            {% with percentage=alert.product.quantity|default:0 %}
-                            <div class="progress-bar-custom" style="width: {% widthratio percentage alert.alert_level 100 %}%"></div>
-                            {% endwith %}
+                            {% if alert.threshold > 0 %}
+                                {% widthratio alert.current_stock alert.threshold 100 as percentage %}
+                                {% if percentage > 100 %}
+                                    <div class="progress-bar-custom" style="width: 100%"></div>
+                                {% else %}
+                                    <div class="progress-bar-custom" style="width: {{ percentage }}%"></div>
+                                {% endif %}
+                            {% endif %}
                         </div>
                     </div>
                 </div>
@@ -686,14 +706,22 @@
             <div class="return-card">
                 <div class="d-flex justify-content-between align-items-start mb-3">
                     <div>
-                        <span class="return-status status-{{ return_request.status }}"></span>
+                        <span class="return-status 
+                            {% if return_request.status == 'submitted' %}status-pending
+                            {% elif return_request.status == 'verified' %}status-verified
+                            {% elif return_request.status == 'approved' %}status-approved
+                            {% elif return_request.status == 'rejected' %}status-rejected
+                            {% elif return_request.status == 'mismatch' %}status-pending
+                            {% endif %}"></span>
                         <span class="fw-bold">#{{ return_request.return_id|truncatechars:8 }}</span>
                     </div>
                     <span class="badge-status 
                         {% if return_request.status == 'submitted' %}badge-pending
-                        {% elif return_request.status == 'verified' %}badge-info
+                        {% elif return_request.status == 'verified' %}badge-review
                         {% elif return_request.status == 'approved' %}badge-approved
                         {% elif return_request.status == 'rejected' %}badge-rejected
+                        {% elif return_request.status == 'mismatch' %}badge-review
+                        {% else %}badge-pending
                         {% endif %}">
                         {{ return_request.get_status_display }}
                     </span>
@@ -792,7 +820,7 @@
                     <td>{{ product.category.name }}</td>
                     <td>
                         {% if product.category.is_single_item %}
-                            <span class="badge bg-info">Single</span>
+                            <span class="badge bg-info">Single Item</span>
                         {% else %}
                             <span class="badge {% if product.quantity < 10 %}bg-warning{% else %}bg-success{% endif %}">
                                 {{ product.quantity }} units
@@ -800,11 +828,13 @@
                         {% endif %}
                     </td>
                     <td>
-                        <span class="badge-status 
-                            {% if product.status == 'available' %}badge-available
-                            {% elif product.status == 'lowstock' %}badge-lowstock
-                            {% elif product.status == 'outofstock' %}badge-outofstock
-                            {% elif product.status == 'sold' %}badge-sold
+                        <span class="badge 
+                            {% if product.status == 'available' %}bg-success
+                            {% elif product.status == 'lowstock' %}bg-warning text-dark
+                            {% elif product.status == 'outofstock' %}bg-secondary
+                            {% elif product.status == 'sold' %}bg-secondary
+                            {% elif product.status == 'damaged' %}bg-dark
+                            {% elif product.status == 'reserved' %}bg-info
                             {% endif %}">
                             {{ product.get_status_display }}
                         </span>
@@ -834,10 +864,53 @@
         </table>
     </div>
 </div>
+
+<!-- Dismiss Alert Modal (FIXED) -->
+<div class="modal fade" id="dismissModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-check-circle me-2"></i>Dismiss Alert
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="" id="dismissForm">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <p>Are you sure you want to dismiss this alert?</p>
+                    <div class="mb-3">
+                        <label for="reason" class="form-label">Reason (optional):</label>
+                        <textarea class="form-control" id="reason" name="reason" rows="2" placeholder="e.g., Restocked, Ordered, etc."></textarea>
+                    </div>
+                    <p class="text-muted small">
+                        <i class="fas fa-info-circle me-1"></i>
+                        The alert can be re-activated if stock levels drop again.
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-check-circle me-2"></i>Dismiss
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
+    // Dismiss Alert Function
+    window.dismissAlert = function(alertId) {
+        var modal = new bootstrap.Modal(document.getElementById('dismissModal'));
+        var form = document.getElementById('dismissForm');
+        var baseUrl = "{% url 'inventory:dismiss_alert' 0 %}";
+        form.action = baseUrl.replace('0', alertId);
+        modal.show();
+    };
+
     $(document).ready(function() {
         // Initialize tooltips
         var tooltipTriggerList = [].slice.call(document.querySelectorAll('[title]'))

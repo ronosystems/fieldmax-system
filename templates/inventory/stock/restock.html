@@ -1,0 +1,529 @@
+{% extends 'inventory/staff_base.html' %}
+{% load static %}
+
+{% block title %}Restock Products{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-boxes me-2"></i>Restock Products</h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'inventory:dashboard' %}">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'inventory:product_list' %}">Products</a></li>
+                    <li class="breadcrumb-item active">Restock</li>
+                </ol>
+            </nav>
+        </div>
+        <a href="{% url 'inventory:product_list' %}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left me-2"></i>Back to Products
+        </a>
+    </div>
+
+    <!-- Search Section -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0"><i class="fas fa-search me-2"></i>Search Bulk Items to Restock</h5>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-info mb-3">
+                <i class="fas fa-info-circle me-2"></i>
+                <strong>Note:</strong> Only bulk items can be restocked. Single items (phones, electronics with IMEI) must be added individually.
+            </div>
+            <div class="row">
+                <div class="col-md-8">
+                    <div class="input-group mb-3">
+                        <span class="input-group-text"><i class="fas fa-barcode"></i></span>
+                        <input type="text" id="productSearch" class="form-control form-control-lg" 
+                               placeholder="Enter bulk product code, name or SKU..." autocomplete="off">
+                        <button class="btn btn-primary" type="button" id="searchBtn">
+                            <i class="fas fa-search me-2"></i>Search Bulk Items
+                        </button>
+                    </div>
+                    <div id="searchResults" class="list-group mt-2" style="max-height: 300px; overflow-y: auto; display: none;"></div>
+                    <div id="searchMessage" class="alert" style="display: none;"></div>
+                </div>
+                <div class="col-md-4">
+                    <select class="form-select form-select-lg" id="categoryFilter">
+                        <option value="">All Bulk Categories</option>
+                        {% for category in bulk_categories %}
+                        <option value="{{ category.id }}">{{ category.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Multiple Results Section -->
+    <div id="multipleResultsSection" class="card mb-4" style="display: none;">
+        <div class="card-header bg-info text-white">
+            <h5 class="mb-0"><i class="fas fa-list me-2"></i>Multiple Bulk Items Found</h5>
+        </div>
+        <div class="card-body">
+            <p class="mb-3">Please select the bulk item you want to restock:</p>
+            <div id="productsList" class="list-group"></div>
+        </div>
+    </div>
+
+    <!-- Single Item Alert -->
+    <div id="singleItemAlert" class="alert alert-warning" style="display: none;">
+        <i class="fas fa-exclamation-triangle me-2"></i>
+        <strong>Single items cannot be restocked.</strong> 
+        <span id="singleItemMessage"></span>
+        <button class="btn btn-sm btn-outline-warning ms-3" onclick="clearSingleItemAlert()">
+            <i class="fas fa-times"></i> Dismiss
+        </button>
+    </div>
+
+    <!-- Restock Form Section -->
+    <div id="restockFormSection" class="card" style="display: none;">
+        <div class="card-header bg-success text-white">
+            <h5 class="mb-0"><i class="fas fa-plus-circle me-2"></i>Restock Bulk Item</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <!-- Product Details Column -->
+                <div class="col-md-6">
+                    <div class="card bg-light mb-3">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <h6 class="fw-bold" id="productName"></h6>
+                                <span class="badge bg-success">Bulk Item</span>
+                            </div>
+                            <hr>
+                            <table class="table table-sm">
+                                <tr>
+                                    <th>Code:</th>
+                                    <td id="productCode"></td>
+                                </tr>
+                                <tr>
+                                    <th>Category:</th>
+                                    <td id="productCategory"></td>
+                                </tr>
+                                <tr>
+                                    <th>Current Stock:</th>
+                                    <td><span class="badge bg-info fs-6" id="currentStock">0</span></td>
+                                </tr>
+                                <tr>
+                                    <th>Reorder Level:</th>
+                                    <td><span id="reorderLevel">0</span></td>
+                                </tr>
+                                <tr>
+                                    <th>Current Buying Price:</th>
+                                    <td>KSH <span id="currentBuying">0</span></td>
+                                </tr>
+                                <tr>
+                                    <th>Current Selling Price:</th>
+                                    <td>KSH <span id="currentSelling">0</span></td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Restock Form Column -->
+                <div class="col-md-6">
+                    <form id="restockForm">
+                        {% csrf_token %}
+                        <input type="hidden" name="product_id" id="productId">
+                        
+                        <div class="mb-3">
+                            <label class="form-label required">Quantity to Add</label>
+                            <input type="number" name="quantity" id="quantity" class="form-control" min="1" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label required">Buying Price (KSH)</label>
+                            <input type="number" name="buying_price" id="buyingPrice" class="form-control" step="0.01" min="0" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Selling Price (KSH)</label>
+                            <input type="number" name="selling_price" id="sellingPrice" class="form-control" step="0.01" min="0">
+                            <small class="text-muted">Leave blank to keep current price</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Notes</label>
+                            <textarea name="notes" id="notes" class="form-control" rows="2" placeholder="Optional notes about this restock"></textarea>
+                        </div>
+                        
+                        <!-- Preview Section -->
+                        <div class="card bg-info text-white mb-3" id="previewCard" style="display: none;">
+                            <div class="card-body">
+                                <h6>Restock Preview</h6>
+                                <div class="row">
+                                    <div class="col-6">
+                                        <small>New Stock Level:</small>
+                                        <h5 id="previewNewStock">0</h5>
+                                    </div>
+                                    <div class="col-6">
+                                        <small>Total Cost:</small>
+                                        <h5>KSH <span id="previewTotalCost">0</span></h5>
+                                    </div>
+                                </div>
+                                <small class="mt-2 d-block">After restock, you can adjust selling price if needed</small>
+                            </div>
+                        </div>
+                        
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-success flex-grow-1" id="submitBtn">
+                                <i class="fas fa-save me-2"></i>Process Restock
+                            </button>
+                            <button type="button" class="btn btn-secondary" id="cancelBtn">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        
+                        <div id="formMessage" class="mt-3" style="display: none;"></div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Empty State -->
+    <div id="emptyState" class="text-center py-5">
+        <i class="fas fa-box-open fa-4x text-muted mb-3"></i>
+        <h5 class="text-muted">No Bulk Item Selected</h5>
+        <p class="text-muted">Search for a bulk item above to begin restocking</p>
+        <small class="text-muted">Bulk items include accessories, cables, chargers, and other stock items.</small>
+    </div>
+</div>
+
+<style>
+    .required:after {
+        content: " *";
+        color: #dc3545;
+    }
+    .search-result-item {
+        cursor: pointer;
+        padding: 12px 15px;
+        border: 1px solid #dee2e6;
+        margin-bottom: 5px;
+        border-radius: 8px;
+        transition: all 0.2s;
+    }
+    .search-result-item:hover {
+        background: #e9ecef;
+        transform: translateX(5px);
+    }
+    .low-stock {
+        color: #dc3545;
+        font-weight: bold;
+    }
+    .bulk-badge {
+        background-color: #28a745;
+        color: white;
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        margin-left: 8px;
+    }
+    .single-badge {
+        background-color: #dc3545;
+        color: white;
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        margin-left: 8px;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // DOM Elements
+    const searchInput = document.getElementById('productSearch');
+    const searchBtn = document.getElementById('searchBtn');
+    const searchResults = document.getElementById('searchResults');
+    const searchMessage = document.getElementById('searchMessage');
+    const multipleResults = document.getElementById('multipleResultsSection');
+    const productsList = document.getElementById('productsList');
+    const restockFormSection = document.getElementById('restockFormSection');
+    const emptyState = document.getElementById('emptyState');
+    const cancelBtn = document.getElementById('cancelBtn');
+    const restockForm = document.getElementById('restockForm');
+    const singleItemAlert = document.getElementById('singleItemAlert');
+    const singleItemMessage = document.getElementById('singleItemMessage');
+    
+    // Form fields
+    const productId = document.getElementById('productId');
+    const quantity = document.getElementById('quantity');
+    const buyingPrice = document.getElementById('buyingPrice');
+    const sellingPrice = document.getElementById('sellingPrice');
+    const notes = document.getElementById('notes');
+    const submitBtn = document.getElementById('submitBtn');
+    const previewCard = document.getElementById('previewCard');
+    const previewNewStock = document.getElementById('previewNewStock');
+    const previewTotalCost = document.getElementById('previewTotalCost');
+    const formMessage = document.getElementById('formMessage');
+    
+    // Display fields
+    const productName = document.getElementById('productName');
+    const productCode = document.getElementById('productCode');
+    const productCategory = document.getElementById('productCategory');
+    const currentStock = document.getElementById('currentStock');
+    const reorderLevel = document.getElementById('reorderLevel');
+    const currentBuying = document.getElementById('currentBuying');
+    const currentSelling = document.getElementById('currentSelling');
+    
+    let searchTimer;
+    
+    // Clear single item alert
+    window.clearSingleItemAlert = function() {
+        singleItemAlert.style.display = 'none';
+    };
+    
+    // Search function
+    function performSearch() {
+        const query = searchInput.value.trim();
+        const category = document.getElementById('categoryFilter').value;
+        
+        if (query.length < 2) {
+            searchResults.style.display = 'none';
+            return;
+        }
+        
+        searchResults.innerHTML = '<div class="text-center py-3"><div class="spinner-border text-primary"></div><p>Searching bulk items...</p></div>';
+        searchResults.style.display = 'block';
+        searchMessage.style.display = 'none';
+        singleItemAlert.style.display = 'none';
+        
+        let url = `/inventory/restock/search/?search=${encodeURIComponent(query)}`;
+        if (category) {
+            url += `&category=${encodeURIComponent(category)}`;
+        }
+        
+        fetch(url, {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            searchResults.style.display = 'none';
+            
+            if (data.success) {
+                if (data.multiple) {
+                    // Filter out single items from multiple results
+                    const bulkProducts = data.products.filter(p => !p.is_single_item);
+                    
+                    if (bulkProducts.length > 0) {
+                        showMultipleResults(bulkProducts);
+                    } else {
+                        // All results were single items
+                        searchMessage.className = 'alert alert-warning';
+                        searchMessage.innerHTML = 'Found only single items. Single items cannot be restocked.';
+                        searchMessage.style.display = 'block';
+                        hideAllSections();
+                    }
+                } else {
+                    // Single product found - check if it's bulk
+                    if (data.product.is_single_item) {
+                        // Show single item alert
+                        singleItemMessage.textContent = `"${data.product.name}" is a single item. Single items cannot be restocked.`;
+                        singleItemAlert.style.display = 'block';
+                        hideAllSections();
+                    } else {
+                        selectProduct(data.product);
+                    }
+                }
+            } else {
+                // Error or no results
+                searchMessage.className = 'alert alert-warning';
+                searchMessage.innerHTML = data.message || 'No bulk items found';
+                searchMessage.style.display = 'block';
+                hideAllSections();
+            }
+        })
+        .catch(error => {
+            console.error('Search error:', error);
+            searchMessage.className = 'alert alert-danger';
+            searchMessage.innerHTML = 'Error searching bulk items';
+            searchMessage.style.display = 'block';
+            searchResults.style.display = 'none';
+            hideAllSections();
+        });
+    }
+    
+    function showMultipleResults(products) {
+        hideAllSections();
+        multipleResults.style.display = 'block';
+        emptyState.style.display = 'none';
+        
+        let html = '';
+        products.forEach(p => {
+            const stockClass = p.current_quantity <= 5 ? 'bg-warning' : 'bg-info';
+            html += `
+                <button class="list-group-item list-group-item-action search-result-item" 
+                        onclick="selectProductFromList(${p.id}, '${p.name.replace(/'/g, "\\'")}', '${p.product_code}', '${p.category}', ${p.current_quantity}, ${p.buying_price}, ${p.selling_price}, ${p.reorder_level || 5})">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>${p.name}</strong>
+                            <span class="badge bg-secondary ms-2">${p.product_code}</span>
+                            <span class="bulk-badge ms-2">BULK</span>
+                        </div>
+                        <div>
+                            <span class="badge ${stockClass}">Stock: ${p.current_quantity}</span>
+                        </div>
+                    </div>
+                </button>
+            `;
+        });
+        productsList.innerHTML = html;
+    }
+    
+    window.selectProductFromList = function(id, name, code, category, stock, buying, selling, reorder) {
+        selectProduct({
+            id: id,
+            name: name,
+            product_code: code,
+            category: category,
+            current_quantity: stock,
+            buying_price: buying,
+            selling_price: selling,
+            reorder_level: reorder
+        });
+    };
+    
+    function selectProduct(product) {
+        // Hide other sections
+        multipleResults.style.display = 'none';
+        searchResults.style.display = 'none';
+        searchMessage.style.display = 'none';
+        singleItemAlert.style.display = 'none';
+        emptyState.style.display = 'none';
+        
+        // Show form
+        restockFormSection.style.display = 'block';
+        
+        // Set form values
+        productId.value = product.id;
+        
+        // Update display
+        productName.textContent = product.name;
+        productCode.textContent = product.product_code;
+        productCategory.textContent = product.category;
+        currentStock.textContent = product.current_quantity;
+        reorderLevel.textContent = product.reorder_level || 5;
+        currentBuying.textContent = product.buying_price.toFixed(0);
+        currentSelling.textContent = product.selling_price.toFixed(0);
+        
+        // Set default buying price
+        buyingPrice.value = product.buying_price;
+        
+        // Clear other fields
+        quantity.value = '';
+        sellingPrice.value = '';
+        notes.value = '';
+        previewCard.style.display = 'none';
+        
+        // Clear search input
+        searchInput.value = '';
+    }
+    
+    function hideAllSections() {
+        multipleResults.style.display = 'none';
+        restockFormSection.style.display = 'none';
+        emptyState.style.display = 'block';
+    }
+    
+    // Cancel button
+    cancelBtn.addEventListener('click', function() {
+        hideAllSections();
+        restockForm.reset();
+        searchInput.focus();
+    });
+    
+    // Calculate preview
+    function updatePreview() {
+        const qty = parseInt(quantity.value) || 0;
+        const price = parseFloat(buyingPrice.value) || 0;
+        const currentQty = parseInt(currentStock.textContent) || 0;
+        
+        if (qty > 0 && price > 0) {
+            const newStock = currentQty + qty;
+            const totalCost = qty * price;
+            
+            previewNewStock.textContent = newStock;
+            previewTotalCost.textContent = totalCost.toFixed(0);
+            previewCard.style.display = 'block';
+        } else {
+            previewCard.style.display = 'none';
+        }
+    }
+    
+    quantity.addEventListener('input', updatePreview);
+    buyingPrice.addEventListener('input', updatePreview);
+    
+    // Search events
+    searchInput.addEventListener('input', function() {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(performSearch, 500);
+    });
+    
+    searchBtn.addEventListener('click', performSearch);
+    
+    // Form submission
+    restockForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(this);
+        
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Processing...';
+        
+        fetch('/inventory/restock/process/', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Update stock display
+                currentStock.textContent = data.product.new_quantity;
+                currentBuying.textContent = data.product.buying_price.toFixed(0);
+                currentSelling.textContent = data.product.selling_price.toFixed(0);
+                
+                // Show success message
+                formMessage.className = 'alert alert-success';
+                formMessage.innerHTML = '<i class="fas fa-check-circle me-2"></i>' + data.message;
+                formMessage.style.display = 'block';
+                
+                // Clear form
+                quantity.value = '';
+                sellingPrice.value = '';
+                notes.value = '';
+                previewCard.style.display = 'none';
+                
+                setTimeout(() => {
+                    formMessage.style.display = 'none';
+                }, 3000);
+            } else {
+                formMessage.className = 'alert alert-danger';
+                formMessage.innerHTML = '<i class="fas fa-exclamation-circle me-2"></i>' + data.message;
+                formMessage.style.display = 'block';
+            }
+        })
+        .catch(error => {
+            console.error('Restock error:', error);
+            formMessage.className = 'alert alert-danger';
+            formMessage.innerHTML = '<i class="fas fa-exclamation-circle me-2"></i>Error processing restock';
+            formMessage.style.display = 'block';
+        })
+        .finally(() => {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-save me-2"></i>Process Restock';
+        });
+    });
+});
+</script>
+{% endblock %}

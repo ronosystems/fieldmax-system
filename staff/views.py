@@ -259,45 +259,81 @@ def admin_dashboard(request):
 
 
 # ============================================
-# STORE MANAGER DASHBOARD
+# STORE MANAGER DASHBOARD - FIXED WITH STOCK ALERTS
 # ============================================
 @login_required
 def store_manager_dashboard(request):
     """Dashboard for store manager"""
-    from inventory.models import Product, Category
+    from inventory.models import Product, Category, StockAlert, StockEntry
     from sales.models import SaleItem
-    from django.db.models import Sum, Count, Q
+    from django.db.models import Sum, Count, Q, F
     from django.contrib import messages
+    from django.utils import timezone
+    from datetime import timedelta
     
     today = timezone.now().date()
     week_ago = today - timedelta(days=7)
     
-    # Inventory Overview
+    # ============================================
+    # INVENTORY OVERVIEW
+    # ============================================
     total_products = Product.objects.count()
     total_categories = Category.objects.count()
     
-    # Stock value calculation - Fixed the aggregation
+    # Stock value calculation
     products = Product.objects.all()
     total_stock_value = 0
     for product in products:
         if hasattr(product, 'buying_price') and product.buying_price and product.quantity:
             total_stock_value += product.buying_price * product.quantity
     
-    # Stock alerts
-    low_stock_products = Product.objects.filter(quantity__lt=10, quantity__gt=0).count()
-    out_of_stock = Product.objects.filter(quantity=0).count()
-    overstock = Product.objects.filter(quantity__gt=100).count()
+    # ============================================
+    # STOCK ALERTS - USING STOCKALERT MODEL
+    # ============================================
+    # Get active alerts that are not dismissed
+    active_alerts = StockAlert.objects.filter(
+        is_active=True,
+        is_dismissed=False
+    ).select_related('product').order_by(
+        '-severity',  # Critical first
+        '-last_alerted'
+    )
     
-    # Products by status
-    available_products = Product.objects.filter(status='available').count() if hasattr(Product, 'status') else 0
-    sold_products = Product.objects.filter(status='sold').count() if hasattr(Product, 'status') else 0
+    # Count alerts by type for the badge
+    low_stock_alerts_count = active_alerts.filter(alert_type='lowstock').count()
+    needs_reorder_count = active_alerts.filter(alert_type='needs_reorder').count()
+    out_of_stock_count = active_alerts.filter(alert_type='outofstock').count()
+    damaged_count = active_alerts.filter(alert_type='damaged').count()
     
-    # Recent Stock Movements - Using Product history or empty list if not available
-    recent_movements = []
-    # If you have a different model for stock tracking, use it here
-    # For now, we'll leave it empty
+    # Get low stock alerts for display (limit to 10)
+    low_stock_alerts = active_alerts[:10]
     
-    # Category-wise Stock
+    # ============================================
+    # PRODUCT STATUS COUNTS (using actual status field)
+    # ============================================
+    available_products = Product.objects.filter(status='available').count()
+    low_stock_products = Product.objects.filter(status='lowstock').count()
+    out_of_stock = Product.objects.filter(status='outofstock').count()
+    sold_products = Product.objects.filter(status='sold').count()
+    damaged_products = Product.objects.filter(status='damaged').count()
+    reserved_products = Product.objects.filter(status='reserved').count()
+    
+    # Alternative low stock count using quantity threshold
+    low_stock_by_quantity = Product.objects.filter(
+        quantity__gt=0,
+        quantity__lte=F('reorder_level')
+    ).count()
+    
+    # ============================================
+    # RECENT STOCK MOVEMENTS
+    # ============================================
+    recent_movements = StockEntry.objects.select_related(
+        'product', 'created_by'
+    ).order_by('-created_at')[:10]
+    
+    # ============================================
+    # CATEGORY-WISE STOCK
+    # ============================================
     stock_by_category = []
     for category in Category.objects.all():
         category_products = category.products.all()
@@ -311,38 +347,94 @@ def store_manager_dashboard(request):
     # Sort by total_stock descending
     stock_by_category = sorted(stock_by_category, key=lambda x: x['total_stock'], reverse=True)[:10]
     
-    # Top selling products (from sales)
+    # ============================================
+    # TOP SELLING PRODUCTS
+    # ============================================
     try:
-        top_selling = SaleItem.objects.values('product_name', 'product_code').annotate(
+        top_selling = SaleItem.objects.values(
+            'product_name', 'product_code'
+        ).annotate(
             total_sold=Sum('quantity'),
             total_revenue=Sum('total_price')
         ).order_by('-total_sold')[:10]
     except:
         top_selling = []
     
-    # Products added this week
+    # ============================================
+    # RECENT PRODUCTS & NEW THIS WEEK
+    # ============================================
     new_products_week = Product.objects.filter(created_at__date__gte=week_ago).count()
+    recent_products = Product.objects.select_related('category').order_by('-created_at')[:10]
     
-    # Recent products (as alternative to stock movements)
-    recent_products = Product.objects.order_by('-created_at')[:10]
+    # ============================================
+    # PENDING RETURNS
+    # ============================================
+    try:
+        from inventory.models import ReturnRequest
+        pending_returns = ReturnRequest.objects.filter(
+            status__in=['submitted', 'verified']
+        ).order_by('-requested_at')[:8]
+        pending_returns_count = ReturnRequest.objects.filter(
+            status__in=['submitted', 'verified']
+        ).count()
+        verified_returns_count = ReturnRequest.objects.filter(status='verified').count()
+    except:
+        pending_returns = []
+        pending_returns_count = 0
+        verified_returns_count = 0
+    
+    # ============================================
+    # OVERSTOCK (products with quantity > 100)
+    # ============================================
+    overstock = Product.objects.filter(quantity__gt=100).count()
     
     context = {
+        # Basic counts
         'total_products': total_products,
         'total_categories': total_categories,
         'total_stock_value': total_stock_value,
+        
+        # Stock alerts - FIXED: These are what the template expects
+        'low_stock_alerts': low_stock_alerts,  # This will now show actual alerts
+        'low_stock_alerts_count': low_stock_alerts_count,
+        'needs_reorder_count': needs_reorder_count,
+        'out_of_stock_count': out_of_stock_count,
+        'damaged_count': damaged_count,
+        
+        # Product status counts
         'low_stock_products': low_stock_products,
         'out_of_stock': out_of_stock,
-        'overstock': overstock,
         'available_products': available_products,
         'sold_products': sold_products,
+        'damaged_products': damaged_products,
+        'reserved_products': reserved_products,
+        'overstock': overstock,
+        'low_stock_by_quantity': low_stock_by_quantity,
+        
+        # Recent data
         'recent_movements': recent_movements,
-        'recent_products': recent_products,  # Added this
+        'recent_products': recent_products,
+        'new_products_week': new_products_week,
+        
+        # Category and sales data
         'stock_by_category': stock_by_category,
         'top_selling': top_selling,
-        'new_products_week': new_products_week,
+        
+        # Return data
+        'pending_returns': pending_returns,
+        'pending_returns_count': pending_returns_count,
+        'verified_returns_count': verified_returns_count,
+        
+        # Date
         'today': today,
     }
+    
     return render(request, 'staff/dashboards/store_manager_dashboard.html', context)
+
+
+
+
+
 
 
 
