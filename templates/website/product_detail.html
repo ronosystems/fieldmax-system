@@ -1,0 +1,39 @@
+{% extends 'website/base.html' %}
+{% load static %}
+
+{% block title %}{{ product.name }} - FieldMax{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row">
+        <div class="col-md-6">
+            {% if product.image %}
+                <img src="{{ product.image.url }}" class="img-fluid rounded" alt="{{ product.name }}">
+            {% else %}
+                <img src="{% static 'images/no-image.jpg' %}" class="img-fluid rounded" alt="No image">
+            {% endif %}
+        </div>
+        <div class="col-md-6">
+            <h1>{{ product.name }}</h1>
+            <p class="lead text-primary">Price: KSh {{ product.price }}</p>
+            <p class="text-muted">SKU: {{ product.sku|default:"N/A" }}</p>
+            <hr>
+            <p>{{ product.description }}</p>
+            
+            {% if product.stock > 0 %}
+                <p class="text-success">In Stock: {{ product.stock }}</p>
+                <a href="{% url 'add_to_cart' product.id %}" class="btn btn-primary btn-lg">
+                    <i class="fas fa-cart-plus"></i> Add to Cart
+                </a>
+            {% else %}
+                <p class="text-danger">Out of Stock</p>
+                <button class="btn btn-secondary btn-lg" disabled>Out of Stock</button>
+            {% endif %}
+            
+            <a href="{% url 'product_list' %}" class="btn btn-outline-secondary btn-lg">
+                <i class="fas fa-arrow-left"></i> Back to Products
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
