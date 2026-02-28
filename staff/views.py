@@ -22,6 +22,11 @@ import os
 from decimal import Decimal
 from .models import Staff 
 from .utils.email_verification import send_itp_verification_email, generate_verification_code 
+import threading
+
+
+
+
 
 
 logger = logging.getLogger(__name__)
@@ -29,6 +34,29 @@ logger = logging.getLogger(__name__)
 
 
 User = get_user_model()
+
+
+
+
+
+
+# ============================================
+# Async Email Helper
+# ============================================
+def send_email_async(subject, message, recipient_list, html_message=None):
+    """Send email in background thread to prevent timeout"""
+    try:
+        send_mail(
+            subject=subject,
+            message=message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=recipient_list,
+            html_message=html_message,
+            fail_silently=True,
+        )
+        logger.info(f"Background email sent to {recipient_list}")
+    except Exception as e:
+        logger.error(f"Background email error: {e}")
 
 
 
@@ -65,10 +93,69 @@ def otp_verify(request):
         else:
             messages.error(request, message)
     
-    # Generate new OTP if needed
+    # Generate new OTP if needed - WITH ASYNC EMAIL
     if request.method == 'GET' or 'resend' in request.GET:
         otp = OTPVerification.generate_otp(request.user, purpose='dashboard_access')
-        send_otp_email(request.user, otp.otp_code)
+        
+        # Prepare email content
+        user_name = request.user.get_full_name() or request.user.username
+        subject = 'FieldMax - Your Dashboard Access Code'
+        message = f"""
+        Dear {user_name},
+        
+        Your One-Time Password (OTP) for dashboard access is: {otp.otp_code}
+        
+        This code will expire in 5 minutes.
+        
+        If you did not request this code, please contact your system administrator immediately.
+        
+        Regards,
+        FieldMax Security Team
+        """
+        
+        # Create HTML email
+        html_message = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background: linear-gradient(135deg, #17a2b8 0%, #138496 100%); color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }}
+                .content {{ background: #f8f9fa; padding: 30px; border: 1px solid #dee2e6; }}
+                .otp-code {{ font-size: 32px; font-weight: bold; color: #17a2b8; text-align: center; padding: 20px; background: white; border-radius: 10px; margin: 20px 0; letter-spacing: 5px; }}
+                .footer {{ text-align: center; padding: 20px; color: #6c757d; font-size: 12px; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h2>FieldMax Dashboard Access</h2>
+                </div>
+                <div class="content">
+                    <p>Dear <strong>{user_name}</strong>,</p>
+                    <p>Your One-Time Password (OTP) for dashboard access is:</p>
+                    <div class="otp-code">{otp.otp_code}</div>
+                    <p>This code will expire in <strong>5 minutes</strong>.</p>
+                    <p><small>If you did not request this code, please contact your system administrator.</small></p>
+                </div>
+                <div class="footer">
+                    <p>&copy; {timezone.now().year} FieldMax. All rights reserved.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        
+        # Send email in background thread
+        thread = threading.Thread(
+            target=send_email_async,
+            args=(subject, message, [request.user.email]),
+            kwargs={'html_message': html_message}
+        )
+        thread.daemon = True
+        thread.start()
+        
         messages.info(request, f'A 6-digit OTP has been sent to your email: {request.user.email}')
     
     context = {
@@ -85,14 +172,38 @@ def otp_resend(request):
     """Resend OTP code"""
     if request.method == 'POST':
         otp = OTPVerification.generate_otp(request.user, purpose='dashboard_access')
-        sent = send_otp_email(request.user, otp.otp_code)
         
-        if sent:
-            return JsonResponse({'success': True, 'message': 'OTP resent successfully'})
-        else:
-            return JsonResponse({'success': False, 'message': 'Failed to send OTP'})
+        # Prepare email content
+        user_name = request.user.get_full_name() or request.user.username
+        subject = 'FieldMax - Your Dashboard Access Code'
+        message = f"""
+        Dear {user_name},
+        
+        Your One-Time Password (OTP) for dashboard access is: {otp.otp_code}
+        
+        This code will expire in 5 minutes.
+        
+        Regards,
+        FieldMax Security Team
+        """
+        
+        # Send email in background thread (NON-BLOCKING)
+        thread = threading.Thread(
+            target=send_email_async,
+            args=(subject, message, [request.user.email])
+        )
+        thread.daemon = True
+        thread.start()
+        
+        return JsonResponse({'success': True, 'message': 'OTP resent successfully'})
     
     return JsonResponse({'success': False, 'message': 'Invalid request'})
+
+
+
+
+
+
 
 
 
