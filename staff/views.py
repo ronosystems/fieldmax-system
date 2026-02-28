@@ -22,41 +22,55 @@ import os
 from decimal import Decimal
 from .models import Staff 
 from .utils.email_verification import send_itp_verification_email, generate_verification_code 
+import queue
 import threading
-
-
-
+import time
 
 
 
 logger = logging.getLogger(__name__)
-
-
-
 User = get_user_model()
 
 
 
+# Create a global queue and worker thread
+email_queue = queue.Queue()
+worker_running = True
 
+def email_worker():
+    """Single worker thread that processes emails from queue"""
+    while worker_running:
+        try:
+            # Get email task from queue (timeout after 1 second)
+            task = email_queue.get(timeout=1)
+            if task:
+                subject, message, recipient_list, html_message = task
+                try:
+                    send_mail(
+                        subject=subject,
+                        message=message,
+                        from_email=settings.DEFAULT_FROM_EMAIL,
+                        recipient_list=recipient_list,
+                        html_message=html_message,
+                        fail_silently=True,
+                    )
+                    logger.info(f"Queue email sent to {recipient_list}")
+                except Exception as e:
+                    logger.error(f"Queue email error: {e}")
+                email_queue.task_done()
+        except queue.Empty:
+            continue
+        except Exception as e:
+            logger.error(f"Worker error: {e}")
+            time.sleep(1)
 
+# Start the worker thread once when module loads
+worker_thread = threading.Thread(target=email_worker, daemon=True)
+worker_thread.start()
 
-# ============================================
-# Async Email Helper
-# ============================================
-def send_email_async(subject, message, recipient_list, html_message=None):
-    """Send email in background thread to prevent timeout"""
-    try:
-        send_mail(
-            subject=subject,
-            message=message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=recipient_list,
-            html_message=html_message,
-            fail_silently=True,
-        )
-        logger.info(f"Background email sent to {recipient_list}")
-    except Exception as e:
-        logger.error(f"Background email error: {e}")
+def queue_email(subject, message, recipient_list, html_message=None):
+    """Add email to queue instead of creating new thread"""
+    email_queue.put((subject, message, recipient_list, html_message))
 
 
 
@@ -93,14 +107,14 @@ def otp_verify(request):
         else:
             messages.error(request, message)
     
-    # Generate new OTP if needed - WITH ASYNC EMAIL
+    # Generate new OTP if needed - WITH QUEUE-BASED EMAIL
     if request.method == 'GET' or 'resend' in request.GET:
         otp = OTPVerification.generate_otp(request.user, purpose='dashboard_access')
         
         # Prepare email content
         user_name = request.user.get_full_name() or request.user.username
         subject = 'FieldMax - Your Dashboard Access Code'
-        message = f"""
+        plain_message = f"""
         Dear {user_name},
         
         Your One-Time Password (OTP) for dashboard access is: {otp.otp_code}
@@ -137,7 +151,7 @@ def otp_verify(request):
                     <p>Your One-Time Password (OTP) for dashboard access is:</p>
                     <div class="otp-code">{otp.otp_code}</div>
                     <p>This code will expire in <strong>5 minutes</strong>.</p>
-                    <p><small>If you did not request this code, please contact your system administrator.</small></p>
+                    <p><small>If you did not request this code, please contact your system administrator immediately.</small></p>
                 </div>
                 <div class="footer">
                     <p>&copy; {timezone.now().year} FieldMax. All rights reserved.</p>
@@ -147,14 +161,8 @@ def otp_verify(request):
         </html>
         """
         
-        # Send email in background thread
-        thread = threading.Thread(
-            target=send_email_async,
-            args=(subject, message, [request.user.email]),
-            kwargs={'html_message': html_message}
-        )
-        thread.daemon = True
-        thread.start()
+        # Send email via queue (non-blocking)
+        queue_email(subject, plain_message, [request.user.email], html_message)
         
         messages.info(request, f'A 6-digit OTP has been sent to your email: {request.user.email}')
     
@@ -176,7 +184,7 @@ def otp_resend(request):
         # Prepare email content
         user_name = request.user.get_full_name() or request.user.username
         subject = 'FieldMax - Your Dashboard Access Code'
-        message = f"""
+        plain_message = f"""
         Dear {user_name},
         
         Your One-Time Password (OTP) for dashboard access is: {otp.otp_code}
@@ -187,13 +195,8 @@ def otp_resend(request):
         FieldMax Security Team
         """
         
-        # Send email in background thread (NON-BLOCKING)
-        thread = threading.Thread(
-            target=send_email_async,
-            args=(subject, message, [request.user.email])
-        )
-        thread.daemon = True
-        thread.start()
+        # Send email via queue (non-blocking)
+        queue_email(subject, plain_message, [request.user.email])
         
         return JsonResponse({'success': True, 'message': 'OTP resent successfully'})
     
@@ -201,6 +204,19 @@ def otp_resend(request):
 
 
 
+
+
+@login_required
+def email_queue_status(request):
+    """Check email queue status (admin only)"""
+    if not request.user.is_superuser:
+        return JsonResponse({'error': 'Unauthorized'}, status=403)
+    
+    return JsonResponse({
+        'queue_size': email_queue.qsize(),
+        'worker_running': worker_running,
+        'worker_alive': worker_thread.is_alive(),
+    })
 
 
 
