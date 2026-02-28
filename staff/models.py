@@ -1,13 +1,18 @@
-
-from django.contrib.auth.models import User
-from django.utils import timezone
-from django.db import models
 from django.contrib.auth import get_user_model
+from django.db import models
+from django.utils import timezone
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 from datetime import timedelta
 import random
 import string
 import os
 
+User = get_user_model()
+
+# ============================================
+# File Upload Path Functions
+# ============================================
 def passport_upload_path(instance, filename):
     # Upload to: staff_documents/passport/{application_id}/{filename}
     return f'staff_documents/passport/{instance.id}/{filename}'
@@ -18,6 +23,9 @@ def id_front_upload_path(instance, filename):
 def id_back_upload_path(instance, filename):
     return f'staff_documents/id_back/{instance.id}/{filename}'
 
+# ============================================
+# Staff Application Model
+# ============================================
 class StaffApplication(models.Model):
     STATUS_CHOICES = [
         ('pending', 'Pending Review'),
@@ -27,15 +35,18 @@ class StaffApplication(models.Model):
     ]
     
     POSITION_CHOICES = [
-        ('sales_agent', 'Sales Officer'),
-        ('cashier', 'Cashier Desk'),
-        ('store_manager', 'Store Manager'),
+        ('administrator', 'Administrator'),
         ('sales_manager', 'Sales Manager'),
+        ('sales_agent', 'Sales Agent'),
+        ('cashier', 'Cashier'),
+        ('store_manager', 'Store Manager'),
         ('credit_manager', 'Credit Manager'),
-        ('customer_service', 'Customer Care Service'),
+        ('credit_officer', 'Credit Officer'),
+        ('customer_service', 'Customer Service'),
         ('supervisor', 'Supervisor'),
         ('security', 'Security Officer'),
-        ('cleaner', 'Office Cleaner'),
+        ('cleaner', 'Cleaner'),
+        ('inventory_manager', 'Inventory Manager'),
     ]
     
     # Personal Information
@@ -58,7 +69,10 @@ class StaffApplication(models.Model):
     # Status Tracking
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     application_date = models.DateTimeField(default=timezone.now)
-    reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='reviewed_applications')
+    reviewed_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, 
+        related_name='reviewed_applications'
+    )
     review_date = models.DateTimeField(null=True, blank=True)
     review_notes = models.TextField(blank=True, null=True, help_text='Notes from the review process')
     
@@ -69,7 +83,6 @@ class StaffApplication(models.Model):
     # System Fields
     ip_address = models.GenericIPAddressField(null=True, blank=True)
     user_agent = models.TextField(blank=True)
-
     created_user = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
@@ -99,13 +112,59 @@ class StaffApplication(models.Model):
         verbose_name = 'Staff Application'
         verbose_name_plural = 'Staff Applications'
 
+# ============================================
+# Staff Model (for verified staff members)
+# ============================================
+class Staff(models.Model):
+    """Staff member profile linked to User account"""
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='staff_profile')
+    staff_id = models.CharField(max_length=20, unique=True)
+    position = models.CharField(max_length=50, choices=StaffApplication.POSITION_CHOICES)
+    department = models.CharField(max_length=100, blank=True)
+    
+    # ITP Verification fields
+    verification_code = models.CharField(max_length=10, blank=True, null=True)
+    verification_sent_at = models.DateTimeField(blank=True, null=True)
+    verification_submitted_at = models.DateTimeField(blank=True, null=True)
+    verified_at = models.DateTimeField(blank=True, null=True)
+    verified_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, 
+        related_name='verified_staff'
+    )
+    verification_attempts = models.IntegerField(default=0)
+    is_identity_verified = models.BooleanField(default=False)
+    verification_notes = models.TextField(blank=True)
+    
+    # Document uploads for verification
+    id_front = models.ImageField(upload_to='verification/ids/', blank=True, null=True)
+    id_back = models.ImageField(upload_to='verification/ids/', blank=True, null=True)
+    passport_photo = models.ImageField(upload_to='verification/photos/', blank=True, null=True)
+    live_photo = models.ImageField(upload_to='verification/live/', blank=True, null=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.user.get_full_name()} - {self.staff_id}"
+    
+    def generate_staff_id(self):
+        """Generate a unique staff ID"""
+        prefix = 'FM'
+        random_part = ''.join(random.choices(string.digits, k=6))
+        return f"{prefix}{random_part}"
+    
+    def save(self, *args, **kwargs):
+        if not self.staff_id:
+            self.staff_id = self.generate_staff_id()
+        super().save(*args, **kwargs)
+    
+    class Meta:
+        verbose_name = 'Staff Member'
+        verbose_name_plural = 'Staff Members'
 
-
-
-
-
-User = get_user_model()
-
+# ============================================
+# OTP Verification Model
+# ============================================
 class OTPVerification(models.Model):
     """Store OTP codes for role-based access verification"""
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='otp_verifications')
@@ -170,16 +229,10 @@ class OTPVerification(models.Model):
                 return False, "OTP has expired"
         except cls.DoesNotExist:
             return False, "Invalid OTP code"
-        
 
-
-
-from django.contrib.auth.models import AbstractUser
-from django.db import models
-
-# Add this to your User model (if using custom User model)
-# Or add a profile model to track password change
-
+# ============================================
+# User Profile Model
+# ============================================
 class UserProfile(models.Model):
     """Extended profile for User to track password change"""
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
@@ -190,17 +243,30 @@ class UserProfile(models.Model):
     def __str__(self):
         return f"{self.user.username}'s profile"
 
-# Signal to auto-create profile when user is created
-from django.db.models.signals import post_save
-from django.dispatch import receiver
-
+# ============================================
+# Signals
+# ============================================
 @receiver(post_save, sender=User)
 def create_user_profile(sender, instance, created, **kwargs):
+    """Create UserProfile when User is created"""
     if created:
         UserProfile.objects.create(user=instance)
 
 @receiver(post_save, sender=User)
 def save_user_profile(sender, instance, **kwargs):
+    """Save UserProfile when User is saved"""
     if not hasattr(instance, 'profile'):
         UserProfile.objects.create(user=instance)
-    instance.profile.save()
+    else:
+        instance.profile.save()
+
+@receiver(post_save, sender=User)
+def create_staff_profile_for_staff_users(sender, instance, created, **kwargs):
+    """Create Staff profile for users that are staff members"""
+    if created and instance.is_staff:
+        # Check if staff profile already exists
+        if not hasattr(instance, 'staff_profile'):
+            Staff.objects.create(
+                user=instance,
+                position='staff',  # Default position, will be updated later
+            )

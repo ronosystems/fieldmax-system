@@ -20,7 +20,8 @@ from django.db.models import F
 import logging
 import os
 from decimal import Decimal
-
+from .models import Staff 
+from .utils.email_verification import send_itp_verification_email, generate_verification_code 
 
 
 logger = logging.getLogger(__name__)
@@ -111,7 +112,86 @@ def custom_logout(request):
 def staff_dashboard(request):
     """Main dashboard that redirects to role-specific dashboard"""
     
-    # Superuser goes to admin dashboard
+    # ============================================
+    # STEP 1: Check if user has staff profile
+    # ============================================
+    try:
+        staff_profile = request.user.staff_profile
+    except AttributeError:
+        # User doesn't have a staff profile
+        messages.error(request, "Staff profile not found. Please contact administrator.")
+        return redirect('logout')
+    
+    # ============================================
+    # STEP 2: Check if user is active
+    # ============================================
+    if not request.user.is_active:
+        messages.error(request, "Your account is inactive. Please contact administrator.")
+        return redirect('logout')
+    
+    # ============================================
+    # STEP 3: Check ITP Verification Status
+    # ============================================
+    if not staff_profile.is_identity_verified:
+        # Check if verification is pending (documents submitted but not verified by admin)
+        if staff_profile.verification_submitted_at and not staff_profile.is_identity_verified:
+            # Documents submitted, pending admin approval
+            messages.info(request, "Your identity verification is pending admin approval. You'll be notified once verified.")
+            return render(request, 'staff/pending_approval.html', {
+                'staff_profile': staff_profile,
+                'message': 'Your documents are under review. This usually takes 24-48 hours.'
+            })
+        
+        # Check if verification code exists and is not expired (24 hours)
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        if staff_profile.verification_code and staff_profile.verification_sent_at:
+            # Check if verification is expired (24 hours)
+            time_diff = timezone.now() - staff_profile.verification_sent_at
+            is_expired = time_diff > timedelta(hours=24)
+            
+            if is_expired:
+                # Generate new verification code
+                staff_profile.verification_code = generate_verification_code()
+                staff_profile.verification_sent_at = timezone.now()
+                staff_profile.verification_attempts = 0
+                staff_profile.save(update_fields=['verification_code', 'verification_sent_at', 'verification_attempts'])
+                
+                # Send new verification email
+                from .utils.email_verification import send_itp_verification_email
+                send_itp_verification_email(staff_profile, request)
+                
+                messages.warning(request, "Your previous verification code has expired. A new 6-digit code has been sent to your email.")
+            else:
+                hours_remaining = 24 - (time_diff.seconds // 3600)
+                minutes_remaining = (time_diff.seconds % 3600) // 60
+                messages.warning(
+                    request, 
+                    f"Please complete identity verification to access the dashboard. "
+                    f"Your verification code expires in {hours_remaining}h {minutes_remaining}m."
+                )
+        else:
+            # First time - generate and send verification code
+            from .utils.email_verification import send_itp_verification_email
+            from django.utils import timezone
+            
+            staff_profile.verification_code = generate_verification_code()
+            staff_profile.verification_sent_at = timezone.now()
+            staff_profile.verification_attempts = 0
+            staff_profile.save(update_fields=['verification_code', 'verification_sent_at', 'verification_attempts'])
+            
+            # Send verification email
+            send_itp_verification_email(staff_profile, request)
+            messages.info(request, "Welcome! Please verify your identity to access the dashboard. A 6-digit verification code has been sent to your email.")
+        
+        # Store intended URL and redirect to verification page
+        request.session['intended_dashboard_url'] = request.path
+        return redirect('staff:verify_identity', staff_id=staff_profile.id)
+    
+    # ============================================
+    # STEP 4: Superuser goes to admin dashboard
+    # ============================================
     if request.user.is_superuser:
         intended_url = 'staff:admin_dashboard'
     else:
@@ -142,16 +222,443 @@ def staff_dashboard(request):
                 intended_url = dashboard_url
                 break
     
-    ## Check if user requires OTP
-    #if requires_otp(request.user):
-    #    # Check if already verified in this session
-    #    if not request.session.get('otp_verified'):
-    #        # Store intended URL and redirect to OTP page
-    #        request.session['intended_dashboard_url'] = intended_url
-    #        return redirect('staff:otp_verify')
-    #
-    # If OTP not required or already verified, redirect directly
+    # ============================================
+    # STEP 5: Check if user requires OTP
+    # ============================================
+    if requires_otp(request.user):
+        # Check if already verified in this session
+        if not request.session.get('otp_verified'):
+            # Store intended URL and redirect to OTP page
+            request.session['intended_dashboard_url'] = intended_url
+            return redirect('staff:otp_verify')
+    
+    # ============================================
+    # STEP 6: If all checks passed, redirect directly
+    # ============================================
     return redirect(intended_url)
+
+
+
+# ============================================
+# Identity Verification View
+# ============================================
+@login_required
+def verify_identity(request, staff_id):
+    """ITP Identity Verification View"""
+    staff = get_object_or_404(Staff, id=staff_id, user=request.user)
+    
+    # Check if already verified
+    if staff.is_identity_verified:
+        messages.success(request, "Your identity is already verified! Redirecting to dashboard...")
+        return redirect('staff:staff_dashboard')
+    
+    # Check if verification is pending approval
+    if staff.verification_submitted_at and not staff.is_identity_verified:
+        messages.info(request, "Your verification documents have been submitted and are pending admin approval. You'll be notified once verified.")
+        return render(request, 'staff/pending_approval.html', {
+            'staff': staff,
+            'pending_approval': True
+        })
+    
+    # Check if verification code exists and is not expired
+    from django.utils import timezone
+    from datetime import timedelta
+    
+    is_expired = False
+    time_remaining = None
+    
+    if staff.verification_code and staff.verification_sent_at:
+        time_diff = timezone.now() - staff.verification_sent_at
+        is_expired = time_diff > timedelta(hours=24)
+        
+        if not is_expired:
+            expiry_time = staff.verification_sent_at + timedelta(hours=24)
+            remaining = expiry_time - timezone.now()
+            hours = remaining.seconds // 3600
+            minutes = (remaining.seconds % 3600) // 60
+            time_remaining = f"{hours}h {minutes}m"
+    
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        
+        # Handle resend verification code
+        if action == 'resend':
+            staff.verification_code = generate_verification_code()
+            staff.verification_sent_at = timezone.now()
+            staff.verification_attempts = 0
+            staff.save(update_fields=['verification_code', 'verification_sent_at', 'verification_attempts'])
+            
+            from .utils.email_verification import send_itp_verification_email
+            send_itp_verification_email(staff, request)
+            
+            messages.success(request, "A new 6-digit verification code has been sent to your email!")
+            return redirect('staff:verify_identity', staff_id=staff.id)
+        
+        # Handle verification submission
+        verification_code = request.POST.get('verification_code', '').strip()
+        id_front = request.FILES.get('id_front')
+        id_back = request.FILES.get('id_back')
+        live_photo = request.FILES.get('live_photo')
+        
+        # Check expiration
+        if is_expired:
+            messages.error(request, "Verification code has expired. Please request a new one.")
+            return render(request, 'staff/verify_identity.html', {
+                'staff': staff,
+                'is_expired': True,
+                'time_remaining': time_remaining
+            })
+        
+        # Verify code
+        if verification_code != staff.verification_code:
+            staff.verification_attempts += 1
+            staff.save(update_fields=['verification_attempts'])
+            
+            if staff.verification_attempts >= 5:
+                messages.error(request, "Too many failed attempts. Please request a new verification code.")
+                return redirect('staff:resend_verification')
+            else:
+                remaining_attempts = 5 - staff.verification_attempts
+                messages.error(request, f"Invalid verification code. {remaining_attempts} attempts remaining.")
+                return render(request, 'staff/verify_identity.html', {
+                    'staff': staff,
+                    'is_expired': is_expired,
+                    'time_remaining': time_remaining,
+                    'remaining_attempts': remaining_attempts
+                })
+        
+        # Validate required files
+        if not all([id_front, id_back, live_photo]):
+            messages.error(request, "Please upload all required documents: ID Front, ID Back, and Live Photo.")
+            return render(request, 'staff/verify_identity.html', {
+                'staff': staff,
+                'is_expired': is_expired,
+                'time_remaining': time_remaining
+            })
+        
+        # Validate file types and sizes
+        from django.core.exceptions import ValidationError
+        from django.core.validators import FileExtensionValidator
+        
+        valid_extensions = ['.jpg', '.jpeg', '.png', '.webp']
+        max_size = 5 * 1024 * 1024  # 5MB
+        
+        for file in [id_front, id_back, live_photo]:
+            # Check extension
+            ext = os.path.splitext(file.name)[1].lower()
+            if ext not in valid_extensions:
+                messages.error(request, f"Invalid file type: {file.name}. Only JPG, PNG, and WEBP are allowed.")
+                return render(request, 'staff/verify_identity.html', {
+                    'staff': staff,
+                    'is_expired': is_expired,
+                    'time_remaining': time_remaining
+                })
+            
+            # Check size
+            if file.size > max_size:
+                messages.error(request, f"File too large: {file.name}. Maximum size is 5MB.")
+                return render(request, 'staff/verify_identity.html', {
+                    'staff': staff,
+                    'is_expired': is_expired,
+                    'time_remaining': time_remaining
+                })
+        
+        # Save documents
+        staff.id_front = id_front
+        staff.id_back = id_back
+        staff.live_photo = live_photo
+        staff.verification_submitted_at = timezone.now()
+        staff.verification_attempts += 1
+        staff.save()
+        
+        # Send admin notification
+        send_verification_admin_notification(staff, request)
+        
+        messages.success(
+            request, 
+            "✅ Documents uploaded successfully! Your verification is pending admin review. "
+            "You'll receive an email notification once verified. This usually takes 24-48 hours."
+        )
+        
+        return render(request, 'staff/pending_approval.html', {
+            'staff': staff,
+            'pending_approval': True
+        })
+    
+    # GET request - show verification form
+    context = {
+        'staff': staff,
+        'verification_code': staff.verification_code,
+        'is_expired': is_expired,
+        'time_remaining': time_remaining,
+        'attempts_remaining': max(0, 5 - staff.verification_attempts) if staff.verification_attempts else 5,
+    }
+    return render(request, 'staff/verify_identity.html', context)
+
+
+# ============================================
+# Resend Verification Code
+# ============================================
+@login_required
+def resend_verification(request):
+    """Resend verification email"""
+    if request.method == 'POST':
+        try:
+            staff = request.user.staff_profile
+            
+            # Generate new code
+            staff.verification_code = generate_verification_code()
+            staff.verification_sent_at = timezone.now()
+            staff.verification_attempts = 0
+            staff.save(update_fields=['verification_code', 'verification_sent_at', 'verification_attempts'])
+            
+            # Send email
+            from .utils.email_verification import send_itp_verification_email
+            if send_itp_verification_email(staff, request):
+                messages.success(request, "✅ New 6-digit verification code sent to your email!")
+                return JsonResponse({
+                    'success': True,
+                    'message': 'Verification code resent successfully'
+                })
+            else:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Failed to send verification email. Please try again.'
+                })
+            
+        except Exception as e:
+            logger.error(f"Error resending verification: {str(e)}")
+            return JsonResponse({
+                'success': False,
+                'message': f'Error: {str(e)}'
+            })
+    
+    return JsonResponse({'success': False, 'message': 'Invalid request method'})
+
+
+# ============================================
+# Send admin notification
+# ============================================
+def send_verification_admin_notification(staff, request=None):
+    """Notify admins about pending verification"""
+    try:
+        from django.urls import reverse
+        
+        # Get admin review URL
+        if request:
+            admin_url = request.build_absolute_uri(
+                reverse('admin:staff_staff_change', args=[staff.id])
+            )
+        else:
+            admin_url = f"{settings.SITE_URL}/admin/staff/staff/{staff.id}/change/"
+        
+        subject = f"🔐 PENDING VERIFICATION: {staff.user.get_full_name()} - {staff.staff_id}"
+        
+        # Get attempt info
+        attempt_info = f"Attempt {staff.verification_attempts} of 5"
+        
+        html_message = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                body {{ font-family: Arial, sans-serif; line-height: 1.6; }}
+                .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                .header {{ background: #dc3545; color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }}
+                .content {{ background: #f8f9fa; padding: 30px; border: 1px solid #dee2e6; }}
+                .info {{ background: white; padding: 20px; border-radius: 5px; margin: 20px 0; }}
+                .label {{ font-weight: bold; color: #495057; }}
+                .button {{ display: inline-block; background: #007bff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin-top: 20px; }}
+                .footer {{ text-align: center; padding: 20px; color: #6c757d; font-size: 12px; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h2>🔐 Identity Verification Pending</h2>
+                </div>
+                <div class="content">
+                    <p>A staff member has submitted identity verification documents for review.</p>
+                    
+                    <div class="info">
+                        <h3>Staff Details:</h3>
+                        <p><span class="label">Name:</span> {staff.user.get_full_name()}</p>
+                        <p><span class="label">Staff ID:</span> {staff.staff_id}</p>
+                        <p><span class="label">Email:</span> {staff.user.email}</p>
+                        <p><span class="label">Position:</span> {staff.position}</p>
+                        <p><span class="label">Submitted:</span> {staff.verification_submitted_at.strftime('%Y-%m-%d %H:%M')}</p>
+                        <p><span class="label">Attempt:</span> {attempt_info}</p>
+                    </div>
+                    
+                    <div class="info">
+                        <h3>Documents Submitted:</h3>
+                        <ul>
+                            <li>✅ ID Front</li>
+                            <li>✅ ID Back</li>
+                            <li>✅ Live Photo</li>
+                        </ul>
+                    </div>
+                    
+                    <div style="text-align: center;">
+                        <a href="{admin_url}" class="button">🔍 Review Documents</a>
+                    </div>
+                    
+                    <p style="margin-top: 30px; padding: 15px; background: #fff3cd; border-left: 4px solid #ffc107;">
+                        <strong>⏰ Time Sensitive:</strong> Please review within 24-48 hours to ensure good user experience.
+                    </p>
+                </div>
+                <div class="footer">
+                    <p>This is an automated notification from FieldMax Staff Portal</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        
+        plain_message = f"""
+        PENDING VERIFICATION: {staff.user.get_full_name()}
+        
+        Staff Details:
+        - Name: {staff.user.get_full_name()}
+        - Staff ID: {staff.staff_id}
+        - Email: {staff.user.email}
+        - Position: {staff.position}
+        - Submitted: {staff.verification_submitted_at.strftime('%Y-%m-%d %H:%M')}
+        - Attempt: {attempt_info}
+        
+        Documents Submitted:
+        - ID Front
+        - ID Back
+        - Live Photo
+        
+        Review at: {admin_url}
+        
+        Please review within 24-48 hours.
+        """
+        
+        # Send to all admins
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        
+        # Get all admin users
+        admins = User.objects.filter(is_superuser=True, is_active=True)
+        
+        for admin in admins:
+            try:
+                send_mail(
+                    subject=subject,
+                    message=plain_message,
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    recipient_list=[admin.email],
+                    html_message=html_message,
+                    fail_silently=True,
+                )
+                logger.info(f"Admin notification sent to {admin.email}")
+            except Exception as e:
+                logger.error(f"Failed to send admin notification to {admin.email}: {str(e)}")
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"Failed to send admin verification notification: {str(e)}")
+        return False
+
+
+# ============================================
+# Admin verification approval view
+# ============================================
+@staff_member_required
+def admin_verify_staff(request, staff_id):
+    """Admin view to verify staff identity"""
+    staff = get_object_or_404(Staff, id=staff_id)
+    
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        notes = request.POST.get('notes', '')
+        
+        if action == 'approve':
+            staff.is_identity_verified = True
+            staff.verified_at = timezone.now()
+            staff.verified_by = request.user
+            staff.verification_notes = notes
+            staff.save()
+            
+            # Send approval email to staff
+            send_verification_result_email(staff, approved=True, notes=notes)
+            
+            messages.success(request, f"✅ {staff.user.get_full_name()} has been verified successfully!")
+            
+        elif action == 'reject':
+            staff.is_identity_verified = False
+            staff.verified_at = None
+            staff.verified_by = request.user
+            staff.verification_notes = notes
+            staff.verification_submitted_at = None  # Allow resubmission
+            staff.save()
+            
+            # Send rejection email to staff
+            send_verification_result_email(staff, approved=False, notes=notes)
+            
+            messages.warning(request, f"⚠️ Verification rejected for {staff.user.get_full_name()}. Notes: {notes}")
+        
+        return redirect('admin:staff_staff_changelist')
+    
+    context = {
+        'staff': staff,
+    }
+    return render(request, 'staff/admin_verify.html', context)
+
+
+# ============================================
+# Send verification result email to staff
+# ============================================
+def send_verification_result_email(staff, approved=True, notes=''):
+    """Send verification result notification to staff"""
+    try:
+        if approved:
+            subject = "✅ FieldMax - Your Identity Has Been Verified!"
+            template = 'staff/email/verification_approved.html'
+        else:
+            subject = "⚠️ FieldMax - Identity Verification Update"
+            template = 'staff/email/verification_rejected.html'
+        
+        context = {
+            'staff': staff,
+            'staff_name': staff.user.get_full_name(),
+            'notes': notes,
+            'login_url': f"{settings.SITE_URL}/staff/login/",
+            'support_email': settings.SUPPORT_EMAIL,
+        }
+        
+        html_message = render_to_string(template, context)
+        plain_message = f"""
+        Dear {staff.user.get_full_name()},
+        
+        {'Your identity has been verified! You can now access the staff portal.' if approved else 'Your identity verification was not approved.'}
+        
+        {'Reason: ' + notes if notes else ''}
+        
+        {'Login here: ' + settings.SITE_URL + '/staff/login/' if approved else 'Please contact support for assistance.'}
+        
+        Regards,
+        FieldMax HR Team
+        """
+        
+        send_mail(
+            subject=subject,
+            message=plain_message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[staff.user.email],
+            html_message=html_message,
+            fail_silently=False,
+        )
+        
+        logger.info(f"Verification result email sent to {staff.user.email}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Failed to send verification result email: {str(e)}")
+        return False
 
 
 
