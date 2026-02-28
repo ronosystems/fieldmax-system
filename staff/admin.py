@@ -114,3 +114,15 @@ class StaffApplicationAdmin(admin.ModelAdmin):
         )
         self.message_user(request, f'{updated} applications marked under review.')
     mark_under_review.short_description = "Mark as under review"
+
+
+# staff/admin.py
+from django.contrib import admin
+from .models import StaffApplication, Staff, OTPVerification, UserProfile
+
+@admin.register(Staff)
+class StaffAdmin(admin.ModelAdmin):
+    list_display = ['staff_id', 'user', 'position', 'is_identity_verified', 'created_at']
+    list_filter = ['is_identity_verified', 'position']
+    search_fields = ['staff_id', 'user__username', 'user__email']
+    readonly_fields = ['created_at', 'updated_at']
