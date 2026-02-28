@@ -3,29 +3,30 @@
 {% if alerts %}
     <div class="row">
         {% for alert in alerts %}
-        <div class="col-xl-6 mb-4">
-            <div class="card alert-card shadow-sm {% if show_dismissed %}dismissed-alert{% endif %}">
-                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <div class="col-md-3 mb-4">
+            <div class="card alert-card shadow-sm h-100 {% if show_dismissed %}dismissed-alert{% endif %}">
+                <!-- Card Header -->
+                <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
                     <div>
                         <span class="badge 
                             {% if alert.severity == 'critical' %}bg-danger
                             {% elif alert.severity == 'danger' %}bg-danger
                             {% elif alert.severity == 'warning' %}bg-warning text-dark
                             {% else %}bg-info{% endif %} 
-                            badge-severity me-2">
+                            badge-severity me-1">
                             {{ alert.get_severity_display|upper }}
                         </span>
-                        <span class="badge bg-light text-dark">
-                            {{ alert.product.product_code }}
-                        </span>
                     </div>
-                    <div>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge bg-light text-dark small">
+                            {{ alert.product.product_code|truncatechars:8 }}
+                        </span>
                         {% if not show_dismissed %}
                         <span class="badge 
                             {% if alert.alert_type == 'needs_reorder' %}bg-danger
                             {% elif alert.alert_type == 'lowstock' %}bg-warning text-dark
                             {% elif alert.alert_type == 'outofstock' %}bg-secondary
-                            {% elif alert.alert_type == 'damaged' %}bg-dark{% endif %}">
+                            {% elif alert.alert_type == 'damaged' %}bg-dark{% endif %} small">
                             {{ alert.get_alert_type_display }}
                         </span>
                         {% endif %}
@@ -33,89 +34,84 @@
                 </div>
                 
                 <div class="card-body">
-                    <div class="row">
-                        <div class="col-8">
-                            <h5 class="mb-1">{{ alert.product.display_name }}</h5>
-                            <p class="text-muted small mb-2">{{ alert.product.category.name }}</p>
-                            
-                            <div class="mt-3">
-                                <div class="d-flex justify-content-between mb-2">
-                                    <span class="text-muted">Current Stock:</span>
-                                    <span class="fw-bold 
-                                        {% if alert.current_stock == 0 %}text-danger
-                                        {% elif alert.current_stock <= alert.threshold %}text-warning
-                                        {% else %}text-success{% endif %}">
-                                        {{ alert.current_stock }}
-                                    </span>
-                                </div>
-                                
-                                <div class="d-flex justify-content-between mb-2">
-                                    <span class="text-muted">Threshold:</span>
-                                    <span class="fw-bold">{{ alert.threshold }}</span>
-                                </div>
-                                
-                                {% if alert.reorder_level %}
-                                <div class="d-flex justify-content-between mb-2">
-                                    <span class="text-muted">Reorder Level:</span>
-                                    <span class="fw-bold">{{ alert.reorder_level }}</span>
-                                </div>
-                                {% endif %}
-                                
-                                <div class="d-flex justify-content-between mb-2">
-                                    <span class="text-muted">Alert Count:</span>
-                                    <span class="fw-bold">{{ alert.alert_count }}</span>
-                                </div>
-                                
-                                <div class="d-flex justify-content-between mb-2">
-                                    <span class="text-muted">Last Alerted:</span>
-                                    <span class="fw-bold">{{ alert.last_alerted|timesince|default:"Never" }} ago</span>
-                                </div>
-                                
-                                {% if show_dismissed and alert.dismissed_by %}
-                                <div class="d-flex justify-content-between mb-2">
-                                    <span class="text-muted">Dismissed By:</span>
-                                    <span class="fw-bold">{{ alert.dismissed_by.username }}</span>
-                                </div>
-                                <div class="d-flex justify-content-between mb-2">
-                                    <span class="text-muted">Dismissed At:</span>
-                                    <span class="fw-bold">{{ alert.dismissed_at|date:"M d, Y H:i" }}</span>
-                                </div>
-                                {% if alert.dismissed_reason %}
-                                <div class="mt-2 p-2 bg-light rounded">
-                                    <small><strong>Reason:</strong> {{ alert.dismissed_reason }}</small>
-                                </div>
-                                {% endif %}
-                                {% endif %}
-                            </div>
-                        </div>
-                        
-                        <div class="col-4 text-center">
-                            <div class="p-3 bg-light rounded-circle mx-auto" style="width: 80px; height: 80px; display: flex; align-items: center; justify-content: center;">
-                                <span class="display-6 fw-bold 
+                    <!-- Product Name and Category -->
+                    <h6 class="card-title text-center mb-1">{{ alert.product.display_name|truncatechars:25 }}</h6>
+                    <p class="text-muted text-center small mb-3">{{ alert.product.category.name|default:"Uncategorized" }}</p>
+                    
+                    <!-- Stock Circle Display -->
+                    <div class="text-center mb-3">
+                        <div class="position-relative d-inline-block">
+                            <div class="rounded-circle d-flex align-items-center justify-content-center mx-auto" 
+                                 style="width: 70px; height: 70px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);">
+                                <span class="h3 mb-0 fw-bold 
                                     {% if alert.current_stock == 0 %}text-danger
                                     {% elif alert.current_stock <= alert.threshold %}text-warning
                                     {% else %}text-success{% endif %}">
                                     {{ alert.current_stock }}
                                 </span>
                             </div>
-                            <small class="text-muted d-block mt-2">Current Stock</small>
-                            
-                            <!-- Progress Circle -->
-                            <div class="mt-2">
-                                {% if alert.threshold > 0 %}
-                                    {% with percentage=alert.current_stock|div:alert.threshold|multiply:100 %}
-                                        <small class="text-muted">
-                                            {% if percentage > 100 %}100{% else %}{{ percentage|floatformat:0 }}{% endif %}% of threshold
-                                        </small>
-                                    {% endwith %}
-                                {% endif %}
-                            </div>
+                            <small class="text-muted d-block mt-1">Current Stock</small>
                         </div>
+                    </div>
+                    
+                    <!-- Stock Information -->
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between mb-2 small">
+                            <span class="text-muted">Threshold:</span>
+                            <span class="fw-bold">{{ alert.threshold }}</span>
+                        </div>
+                        
+                        {% if alert.reorder_level %}
+                        <div class="d-flex justify-content-between mb-2 small">
+                            <span class="text-muted">Reorder Level:</span>
+                            <span class="fw-bold">{{ alert.reorder_level }}</span>
+                        </div>
+                        {% endif %}
+                        
+                        <div class="d-flex justify-content-between mb-2 small">
+                            <span class="text-muted">Alert Count:</span>
+                            <span class="fw-bold">{{ alert.alert_count }}</span>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between mb-2 small">
+                            <span class="text-muted">Last Alerted:</span>
+                            <span class="fw-bold">{{ alert.last_alerted|timesince|default:"Never" }}</span>
+                        </div>
+                        
+                        <!-- Dismissed Information (if shown) -->
+                        {% if show_dismissed and alert.dismissed_by %}
+                        <div class="border-top pt-2 mt-2">
+                            <div class="d-flex justify-content-between mb-1 small">
+                                <span class="text-muted">Dismissed By:</span>
+                                <span class="fw-bold">{{ alert.dismissed_by.username }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-1 small">
+                                <span class="text-muted">Dismissed At:</span>
+                                <span class="fw-bold">{{ alert.dismissed_at|date:"M d, Y" }}</span>
+                            </div>
+                            {% if alert.dismissed_reason %}
+                            <div class="mt-2 p-2 bg-light rounded small">
+                                <i class="fas fa-quote-left text-muted me-1"></i>
+                                {{ alert.dismissed_reason|truncatechars:40 }}
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% endif %}
                     </div>
                     
                     <!-- Progress Bar -->
                     <div class="mt-3">
-                        <div class="progress">
+                        <div class="d-flex justify-content-between mb-1 small">
+                            <span class="text-muted">Stock Level</span>
+                            <span class="fw-bold">
+                                {% if alert.threshold > 0 %}
+                                    {% with percentage=alert.current_stock|div:alert.threshold|multiply:100 %}
+                                        {% if percentage > 100 %}100+{% else %}{{ percentage|floatformat:0 }}{% endif %}%
+                                    {% endwith %}
+                                {% endif %}
+                            </span>
+                        </div>
+                        <div class="progress" style="height: 6px;">
                             {% if alert.threshold > 0 %}
                                 {% with percentage=alert.current_stock|div:alert.threshold|multiply:100 %}
                                     <div class="progress-bar 
@@ -134,16 +130,19 @@
                         </div>
                         <div class="d-flex justify-content-between mt-1">
                             <small class="text-muted">0</small>
-                            <small class="text-muted">Threshold: {{ alert.threshold }}</small>
+                            <small class="text-muted">{{ alert.threshold }}</small>
                         </div>
                     </div>
-                    
-                    <!-- Action Buttons -->
+                </div>
+                
+                <!-- Card Footer with Actions -->
+                <div class="card-footer bg-white border-top-0 pt-0 pb-3">
                     {% if not show_dismissed %}
-                    <div class="d-flex gap-2 mt-3">
+                    <div class="d-flex gap-2">
                         <a href="{% url 'inventory:product_detail' alert.product.id %}" 
-                           class="btn btn-sm btn-outline-info flex-grow-1">
-                            <i class="fas fa-eye me-1"></i> View
+                           class="btn btn-sm btn-outline-info" 
+                           title="View Details">
+                            <i class="fas fa-eye"></i>
                         </a>
                         
                         {% if alert.alert_type != 'outofstock' and alert.alert_type != 'damaged' %}
@@ -161,17 +160,21 @@
                             <i class="fas fa-check"></i>
                         </button>
                     </div>
+                    {% else %}
+                    <div class="d-grid">
+                        <a href="{% url 'inventory:product_detail' alert.product.id %}" 
+                           class="btn btn-sm btn-outline-primary">
+                            <i class="fas fa-eye me-1"></i> View Product
+                        </a>
+                    </div>
+                    <div class="text-center mt-2">
+                        <small class="text-muted">
+                            <i class="far fa-clock me-1"></i>
+                            Dismissed: {{ alert.dismissed_at|date:"M d, Y" }}
+                        </small>
+                    </div>
                     {% endif %}
                 </div>
-                
-                {% if show_dismissed %}
-                <div class="card-footer bg-light">
-                    <small class="text-muted">
-                        <i class="fas fa-info-circle me-1"></i>
-                        Dismissed on {{ alert.dismissed_at|date:"M d, Y H:i" }}
-                    </small>
-                </div>
-                {% endif %}
             </div>
         </div>
         {% endfor %}
@@ -179,12 +182,56 @@
 {% else %}
     <div class="text-center py-5">
         <div class="mb-4">
-            <i class="fas fa-check-circle fa-4x text-success"></i>
+            <i class="fas fa-check-circle fa-4x text-success opacity-50"></i>
         </div>
-        <h4 class="text-success">All Clear!</h4>
+        <h5 class="text-success">All Clear!</h5>
         <p class="text-muted">No alerts to display in this category.</p>
         <a href="{% url 'inventory:product_list' %}" class="btn btn-primary mt-3">
             <i class="fas fa-box me-2"></i>View Products
         </a>
     </div>
 {% endif %}
+
+<!-- Add this CSS to make cards more compact -->
+<style>
+.alert-card {
+    transition: transform 0.2s, box-shadow 0.2s;
+    border: 1px solid rgba(0,0,0,.05);
+}
+.alert-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1) !important;
+}
+.badge-severity {
+    font-size: 10px;
+    padding: 4px 6px;
+}
+.progress {
+    background-color: #e9ecef;
+    border-radius: 4px;
+}
+.card-footer {
+    border-top: none !important;
+}
+.dismissed-alert {
+    opacity: 0.7;
+}
+.dismissed-alert:hover {
+    opacity: 1;
+}
+/* Adjust spacing for compact cards */
+.card-body {
+    padding: 1rem;
+}
+.card-footer {
+    padding: 0 1rem 1rem 1rem;
+}
+/* Small text adjustments */
+.small {
+    font-size: 11px;
+}
+.btn-sm {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+}
+</style>
