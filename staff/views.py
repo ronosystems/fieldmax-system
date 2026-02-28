@@ -118,7 +118,7 @@ def otp_verify(request):
         else:
             messages.error(request, message)
     
-    # Generate new OTP if needed - WITH QUEUE-BASED EMAIL
+    # Generate new OTP if needed - WITH QUEUE-BASED EMAIL (PAUSED)
     if request.method == 'GET' or 'resend' in request.GET:
         otp = OTPVerification.generate_otp(request.user, purpose='dashboard_access')
         
@@ -172,10 +172,13 @@ def otp_verify(request):
         </html>
         """
         
+        # 🚫 EMAIL PAUSED - Commented out for now
         # Send email via queue (non-blocking)
-        queue_email(subject, plain_message, [request.user.email], html_message)
+        # queue_email(subject, plain_message, [request.user.email], html_message)
+        # messages.info(request, f'A 6-digit OTP has been sent to your email: {request.user.email}')
         
-        messages.info(request, f'A 6-digit OTP has been sent to your email: {request.user.email}')
+        # ✅ TEMPORARY: Show OTP in message instead
+        messages.info(request, f'🔧 DEV MODE - Your OTP is: {otp.otp_code}')
     
     context = {
         'user_role': get_user_role(request.user),
@@ -243,12 +246,19 @@ def otp_resend(request):
         logger.info(f"📧 OTP Code: {otp.otp_code}")
         logger.info(f"📧 Queue size before add: {email_queue.qsize()}")
 
-        # ✅ SINGLE CALL to queue_email
-        queue_email(subject, plain_message, [request.user.email], html_message)
+        # 🚫 EMAIL PAUSED - Commented out for now
+        # SINGLE CALL to queue_email
+        # queue_email(subject, plain_message, [request.user.email], html_message)
         
-        logger.info(f"📧 Email added to queue. New queue size: {email_queue.qsize()}")
+        logger.info(f"📧 Email sending paused. New queue size: {email_queue.qsize()}")
         
-        return JsonResponse({'success': True, 'message': 'OTP resent successfully'})
+        # ✅ TEMPORARY: Return OTP in JSON response
+        return JsonResponse({
+            'success': True, 
+            'message': 'OTP generated (email disabled)', 
+            'otp_code': otp.otp_code,
+            'dev_mode': True
+        })
     
     return JsonResponse({'success': False, 'message': 'Invalid request'})
 
@@ -401,12 +411,17 @@ def staff_dashboard(request):
     # ============================================
     # STEP 5: Check if user requires OTP
     # ============================================
-    if requires_otp(request.user):
+#    if requires_otp(request.user):
         # Check if already verified in this session
-        if not request.session.get('otp_verified'):
+#        if not request.session.get('otp_verified'):
             # Store intended URL and redirect to OTP page
-            request.session['intended_dashboard_url'] = intended_url
-            return redirect('staff:otp_verify')
+#            request.session['intended_dashboard_url'] = intended_url
+#            return redirect('staff:otp_verify')
+
+
+        # ✅ TEMPORARY: Auto-verify OTP
+        request.session['otp_verified'] = True
+        messages.info(request, '🔧 DEV MODE - OTP verification auto-approved')
     
     # ============================================
     # STEP 6: If all checks passed, redirect directly
@@ -588,19 +603,29 @@ def resend_verification(request):
             staff.verification_attempts = 0
             staff.save(update_fields=['verification_code', 'verification_sent_at', 'verification_attempts'])
             
+            # 🚫 EMAIL PAUSED - Commented out for now
             # Send email
-            from .utils.email_verification import send_itp_verification_email
-            if send_itp_verification_email(staff, request):
-                messages.success(request, "✅ New 6-digit verification code sent to your email!")
-                return JsonResponse({
-                    'success': True,
-                    'message': 'Verification code resent successfully'
-                })
-            else:
-                return JsonResponse({
-                    'success': False,
-                    'message': 'Failed to send verification email. Please try again.'
-                })
+            # from .utils.email_verification import send_itp_verification_email
+            # if send_itp_verification_email(staff, request):
+            #     messages.success(request, "✅ New 6-digit verification code sent to your email!")
+            #     return JsonResponse({
+            #         'success': True,
+            #         'message': 'Verification code resent successfully'
+            #     })
+            # else:
+            #     return JsonResponse({
+            #         'success': False,
+            #         'message': 'Failed to send verification email. Please try again.'
+            #     })
+            
+            # ✅ TEMPORARY: Show code in response
+            messages.success(request, f"🔧 DEV MODE - Verification code: {staff.verification_code}")
+            return JsonResponse({
+                'success': True,
+                'message': 'Verification code generated',
+                'verification_code': staff.verification_code,
+                'dev_mode': True
+            })
             
         except Exception as e:
             logger.error(f"Error resending verification: {str(e)}")
