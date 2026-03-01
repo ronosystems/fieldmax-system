@@ -1,39 +1,549 @@
-{% extends 'website/base.html' %}
-{% load static %}
-
-{% block title %}{{ product.name }} - FieldMax{% endblock %}
-
-{% block content %}
-<div class="container py-5">
-    <div class="row">
-        <div class="col-md-6">
-            {% if product.image %}
-                <img src="{{ product.image.url }}" class="img-fluid rounded" alt="{{ product.name }}">
-            {% else %}
-                <img src="{% static 'images/no-image.jpg' %}" class="img-fluid rounded" alt="No image">
-            {% endif %}
-        </div>
-        <div class="col-md-6">
-            <h1>{{ product.name }}</h1>
-            <p class="lead text-primary">Price: KSh {{ product.price }}</p>
-            <p class="text-muted">SKU: {{ product.sku|default:"N/A" }}</p>
-            <hr>
-            <p>{{ product.description }}</p>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ product.name }} - Fieldmax</title>
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome 6 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        * {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #002fff 0%, #00eeff 100%);
+            min-height: 100vh;
+        }
+        
+        /* Navbar */
+        .navbar {
+            background: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 15px 0;
+        }
+        
+        .navbar-brand {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #667eea;
+        }
+        
+        .navbar-brand i {
+            margin-right: 10px;
+        }
+        
+        /* Main Container */
+        .main-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 30px 20px;
+        }
+        
+        /* Breadcrumb */
+        .breadcrumb {
+            background: white;
+            padding: 15px 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+        
+        .breadcrumb-item a {
+            color: #667eea;
+            text-decoration: none;
+        }
+        
+        .breadcrumb-item.active {
+            color: #666;
+        }
+        
+        /* Product Card */
+        .product-card {
+            background: white;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            margin-bottom: 30px;
+        }
+        
+        .product-image-section {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            padding: 40px;
+            text-align: center;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .product-emoji {
+            font-size: 8rem;
+            filter: drop-shadow(0 20px 40px rgba(102, 126, 234, 0.3));
+        }
+        
+        .product-info-section {
+            padding: 40px;
+        }
+        
+        .product-category {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 8px 20px;
+            border-radius: 50px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+        
+        .product-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        .product-code {
+            color: #999;
+            font-size: 1rem;
+            margin-bottom: 20px;
+        }
+        
+        .product-price {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+        
+        .product-price small {
+            font-size: 1rem;
+            color: #999;
+            font-weight: 400;
+        }
+        
+        .product-status {
+            display: inline-block;
+            padding: 8px 20px;
+            border-radius: 50px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+        
+        .status-available {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status-lowstock {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .status-outofstock {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .product-description {
+            color: #666;
+            line-height: 1.8;
+            margin-bottom: 30px;
+        }
+        
+        .product-meta {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .meta-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .meta-item:last-child {
+            border-bottom: none;
+        }
+        
+        .meta-label {
+            color: #666;
+            font-weight: 500;
+        }
+        
+        .meta-value {
+            font-weight: 600;
+            color: #333;
+        }
+        
+        /* Action Buttons */
+        .action-buttons {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        
+        .btn {
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+            flex: 2;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-outline-primary {
+            border: 2px solid #667eea;
+            color: #667eea;
+            background: transparent;
+            flex: 1;
+        }
+        
+        .btn-outline-primary:hover {
+            background: #667eea;
+            color: white;
+        }
+        
+        .btn-outline-secondary {
+            border: 2px solid #6c757d;
+            color: #6c757d;
+            background: transparent;
+            flex: 1;
+        }
+        
+        .btn-outline-secondary:hover {
+            background: #6c757d;
+            color: white;
+        }
+        
+        /* Related Products */
+        .related-products {
+            margin-top: 50px;
+        }
+        
+        .section-title {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: white;
+            margin-bottom: 30px;
+        }
+        
+        .related-card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            transition: all 0.3s;
+            height: 100%;
+            text-decoration: none;
+            color: #333;
+            display: block;
+        }
+        
+        .related-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+            color: #667eea;
+        }
+        
+        .related-emoji {
+            font-size: 3rem;
+            margin-bottom: 10px;
+        }
+        
+        .related-name {
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        
+        .related-price {
+            color: #667eea;
+            font-weight: 700;
+        }
+        
+        /* Footer */
+        .footer {
+            background: white;
+            padding: 30px 0;
+            margin-top: 50px;
+            text-align: center;
+            color: #666;
+        }
+        
+        @media (max-width: 768px) {
+            .product-image-section {
+                padding: 30px;
+            }
             
-            {% if product.stock > 0 %}
-                <p class="text-success">In Stock: {{ product.stock }}</p>
-                <a href="{% url 'add_to_cart' product.id %}" class="btn btn-primary btn-lg">
-                    <i class="fas fa-cart-plus"></i> Add to Cart
-                </a>
-            {% else %}
-                <p class="text-danger">Out of Stock</p>
-                <button class="btn btn-secondary btn-lg" disabled>Out of Stock</button>
-            {% endif %}
+            .product-emoji {
+                font-size: 6rem;
+            }
             
-            <a href="{% url 'product_list' %}" class="btn btn-outline-secondary btn-lg">
-                <i class="fas fa-arrow-left"></i> Back to Products
+            .product-info-section {
+                padding: 30px;
+            }
+            
+            .product-title {
+                font-size: 2rem;
+            }
+            
+            .product-price {
+                font-size: 2rem;
+            }
+            
+            .action-buttons {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="container">
+            <a href="{% url 'website:home' %}" class="navbar-brand">
+                <i class="fas fa-store"></i>
+                FIELDMAX
             </a>
+            <div class="ms-auto">
+                <a href="{% url 'website:shop' %}" class="btn btn-outline-primary me-2">
+                    <i class="fas fa-shopping-bag me-2"></i>Shop
+                </a>
+                <a href="{% url 'website:shopping-cart' %}" class="btn btn-primary">
+                    <i class="fas fa-shopping-cart"></i>
+                </a>
+            </div>
         </div>
+    </nav>
+
+    <!-- Main Container -->
+    <div class="main-container">
+        <!-- Breadcrumb -->
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'website:home' %}">Home</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'website:shop' %}">Shop</a></li>
+                {% if product.category %}
+                <li class="breadcrumb-item"><a href="{% url 'website:shop' %}?category={{ product.category.id }}">{{ product.category.name }}</a></li>
+                {% endif %}
+                <li class="breadcrumb-item active" aria-current="page">{{ product.name|truncatechars:30 }}</li>
+            </ol>
+        </nav>
+
+        <!-- Product Card -->
+        <div class="product-card">
+            <div class="row g-0">
+                <div class="col-md-5">
+                    <div class="product-image-section">
+                        <div class="product-emoji">
+                            {% if product.category %}
+                                {% if 'phone' in product.category.name.lower %}📱
+                                {% elif 'headphone' in product.category.name.lower %}🎧
+                                {% elif 'watch' in product.category.name.lower %}⌚
+                                {% elif 'charger' in product.category.name.lower %}🔌
+                                {% elif 'case' in product.category.name.lower %}📦
+                                {% else %}📦{% endif %}
+                            {% else %}📦{% endif %}
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-7">
+                    <div class="product-info-section">
+                        <span class="product-category">{{ product.category.name|default:'Uncategorized' }}</span>
+                        <h1 class="product-title">{{ product.name }}</h1>
+                        <div class="product-code">SKU: {{ product.product_code }}</div>
+                        
+                        <div class="product-price">
+                            KSh {{ product.selling_price|floatformat:2 }}
+                            {% if product.buying_price %}
+                            <small><s>KSh {{ product.buying_price|floatformat:2 }}</s></small>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="product-status 
+                            {% if product.status == 'available' %}status-available
+                            {% elif product.status == 'lowstock' %}status-lowstock
+                            {% else %}status-outofstock{% endif %}">
+                            <i class="fas 
+                                {% if product.status == 'available' %}fa-check-circle
+                                {% elif product.status == 'lowstock' %}fa-exclamation-triangle
+                                {% else %}fa-times-circle{% endif %} me-2"></i>
+                            {{ product.get_status_display }}
+                        </div>
+                        
+                        {% if product.description %}
+                        <div class="product-description">
+                            {{ product.description|linebreaks }}
+                        </div>
+                        {% endif %}
+                        
+                        <div class="product-meta">
+                            {% if product.brand %}
+                            <div class="meta-item">
+                                <span class="meta-label"><i class="fas fa-tag me-2 text-primary"></i>Brand:</span>
+                                <span class="meta-value">{{ product.brand }}</span>
+                            </div>
+                            {% endif %}
+                            
+                            {% if product.model %}
+                            <div class="meta-item">
+                                <span class="meta-label"><i class="fas fa-cube me-2 text-primary"></i>Model:</span>
+                                <span class="meta-value">{{ product.model }}</span>
+                            </div>
+                            {% endif %}
+                            
+                            <div class="meta-item">
+                                <span class="meta-label"><i class="fas fa-boxes me-2 text-primary"></i>Available Stock:</span>
+                                <span class="meta-value">{{ product.quantity }}</span>
+                            </div>
+                            
+                            {% if product.sku_value %}
+                            <div class="meta-item">
+                                <span class="meta-label"><i class="fas fa-barcode me-2 text-primary"></i>SKU Value:</span>
+                                <span class="meta-value">{{ product.sku_value }}</span>
+                            </div>
+                            {% endif %}
+                            
+                            {% if product.warranty_months %}
+                            <div class="meta-item">
+                                <span class="meta-label"><i class="fas fa-shield-alt me-2 text-primary"></i>Warranty:</span>
+                                <span class="meta-value">{{ product.warranty_months }} months</span>
+                            </div>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Action Buttons - FIXED URLS HERE -->
+                        <div class="action-buttons">
+                            {% if product.quantity > 0 %}
+                                <a href="#" class="btn btn-primary" onclick="addToCart({{ product.id }})">
+                                    <i class="fas fa-cart-plus me-2"></i>Add to Cart
+                                </a>
+                                <a href="{% url 'website:checkout' %}?product={{ product.id }}" class="btn btn-outline-primary">
+                                    <i class="fas fa-bolt me-2"></i>Buy Now
+                                </a>
+                            {% else %}
+                                <button class="btn btn-secondary" disabled>
+                                    <i class="fas fa-times-circle me-2"></i>Out of Stock
+                                </button>
+                            {% endif %}
+                            <a href="{% url 'website:shop' %}" class="btn btn-outline-secondary">
+                                <i class="fas fa-arrow-left me-2"></i>Back
+                            </a>
+                        </div>
+                        
+                        <!-- Share buttons -->
+                        <div class="mt-4 pt-3 border-top">
+                            <small class="text-muted me-3">Share this product:</small>
+                            <a href="#" class="text-primary me-2" onclick="shareOnFacebook()"><i class="fab fa-facebook fa-lg"></i></a>
+                            <a href="#" class="text-info me-2" onclick="shareOnTwitter()"><i class="fab fa-twitter fa-lg"></i></a>
+                            <a href="#" class="text-success me-2" onclick="shareOnWhatsApp()"><i class="fab fa-whatsapp fa-lg"></i></a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Related Products -->
+        {% if related_products %}
+        <div class="related-products">
+            <h2 class="section-title">Related Products</h2>
+            <div class="row g-4">
+                {% for related in related_products %}
+                <div class="col-md-3">
+                    <a href="{% url 'website:product_detail' related.id %}" class="related-card">
+                        <div class="related-emoji">
+                            {% if related.category %}
+                                {% if 'phone' in related.category.name.lower %}📱
+                                {% elif 'headphone' in related.category.name.lower %}🎧
+                                {% elif 'watch' in related.category.name.lower %}⌚
+                                {% else %}📦{% endif %}
+                            {% else %}📦{% endif %}
+                        </div>
+                        <div class="related-name">{{ related.name|truncatechars:20 }}</div>
+                        <div class="related-price">KSh {{ related.selling_price|floatformat:2 }}</div>
+                        <small class="text-muted">{{ related.get_status_display }}</small>
+                    </a>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
     </div>
-</div>
-{% endblock %}
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p class="mb-0">&copy; {% now "Y" %} Fieldmax. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // Add to cart function
+        function addToCart(productId) {
+            // You can implement AJAX add to cart here
+            alert('Product added to cart!');
+            // Redirect to cart or show success message
+        }
+        
+        // Share functions
+        function shareOnFacebook() {
+            let url = encodeURIComponent(window.location.href);
+            let shareUrl = `https://www.facebook.com/sharer/sharer.php?u=${url}`;
+            window.open(shareUrl, '_blank', 'width=600,height=400');
+        }
+        
+        function shareOnTwitter() {
+            let text = encodeURIComponent('Check out this product: {{ product.name }}');
+            let url = encodeURIComponent(window.location.href);
+            let shareUrl = `https://twitter.com/intent/tweet?text=${text}&url=${url}`;
+            window.open(shareUrl, '_blank', 'width=600,height=400');
+        }
+        
+        function shareOnWhatsApp() {
+            let text = encodeURIComponent('Check out this product: {{ product.name }} - ' + window.location.href);
+            let shareUrl = `https://wa.me/?text=${text}`;
+            window.open(shareUrl, '_blank');
+        }
+        
+        // Auto-dismiss alerts if any
+        setTimeout(function() {
+            document.querySelectorAll('.alert').forEach(function(alert) {
+                alert.style.transition = 'opacity 0.5s';
+                alert.style.opacity = '0';
+                setTimeout(function() {
+                    alert.remove();
+                }, 500);
+            });
+        }, 5000);
+    </script>
+</body>
+</html>

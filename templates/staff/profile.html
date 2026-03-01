@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Profile - FieldMax Staff Portal</title>
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome 6 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        * {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #002efa 0%, #1900ff 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .profile-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .profile-card {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+            animation: slideUp 0.5s ease-out;
+        }
+        
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .profile-header {
+            background: linear-gradient(135deg, #000000 0%, #000000 100%);
+            color: white;
+            padding: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .profile-header h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin: 0;
+        }
+        
+        .profile-header h1 i {
+            margin-right: 15px;
+        }
+        
+        .back-btn {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 50px;
+            text-decoration: none;
+            transition: all 0.3s;
+            border: 1px solid rgba(255,255,255,0.3);
+        }
+        
+        .back-btn:hover {
+            background: white;
+            color: #667eea;
+            transform: translateY(-2px);
+        }
+        
+        .profile-body {
+            padding: 40px;
+        }
+        
+        /* Avatar Circle */
+        .avatar-circle {
+            width: 120px;
+            height: 120px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            border: 4px solid white;
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+        }
+        
+        .avatar-initials {
+            font-size: 48px;
+            font-weight: 700;
+            color: white;
+            text-transform: uppercase;
+        }
+        
+        /* Info Card */
+        .info-card {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 20px;
+            height: 100%;
+            border-left: 4px solid #667eea;
+            transition: transform 0.3s;
+        }
+        
+        .info-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        
+        .info-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        
+        .info-title i {
+            margin-right: 10px;
+        }
+        
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px dashed #e0e0e0;
+        }
+        
+        .info-row:last-child {
+            border-bottom: none;
+        }
+        
+        .info-label {
+            color: #666;
+            font-weight: 500;
+        }
+        
+        .info-value {
+            font-weight: 600;
+            color: #333;
+        }
+        
+        /* Badges */
+        .badge {
+            padding: 8px 15px;
+            border-radius: 50px;
+            font-weight: 500;
+            margin-right: 8px;
+            margin-bottom: 8px;
+        }
+        
+        .badge-superuser { background: #dc3545; color: white; }
+        .badge-staff { background: #17a2b8; color: white; }
+        .badge-group { background: #6c757d; color: white; }
+        
+        /* Alert */
+        .alert {
+            border-radius: 10px;
+            border: none;
+            padding: 15px 20px;
+            margin-bottom: 20px;
+        }
+        
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .profile-header {
+                flex-direction: column;
+                text-align: center;
+                gap: 15px;
+            }
+            
+            .profile-body {
+                padding: 20px;
+            }
+            
+            .info-row {
+                flex-direction: column;
+                gap: 5px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="profile-container">
+        <!-- Messages/Alerts -->
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }} alert-dismissible fade show animate__animated animate__fadeIn" role="alert">
+                    <i class="fas 
+                        {% if message.tags == 'success' %}fa-check-circle
+                        {% elif message.tags == 'error' %}fa-exclamation-circle
+                        {% else %}fa-info-circle{% endif %} me-2">
+                    </i>
+                    {{ message }}
+                    <button type="button" class="btn-close float-end" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+
+        <!-- Profile Card -->
+        <div class="profile-card">
+            <!-- Header -->
+            <div class="profile-header">
+                <h1>
+                    <i class="fas fa-user-circle"></i>
+                    My Profile
+                </h1>
+                <a href="javascript:history.back()" class="back-btn">
+                    <i class="fas fa-arrow-left me-2"></i>Back
+                </a>
+            </div>
+
+            <!-- Body -->
+            <div class="profile-body">
+                <div class="row">
+                    <!-- Left Column - Avatar & Summary -->
+                    <div class="col-lg-4 mb-4">
+                        <div class="info-card">
+                            <div class="text-center">
+                                <div class="avatar-circle">
+                                    <span class="avatar-initials">
+                                        {{ request.user.get_full_name|first|default:request.user.username|first|upper }}
+                                    </span>
+                                </div>
+                                <h3 class="mb-1">{{ request.user.get_full_name|default:request.user.username }}</h3>
+                                <p class="text-muted mb-3">{{ request.user.email }}</p>
+                                
+                                {% if request.user.staff_profile %}
+                                <div class="mb-3">
+                                    <span class="badge bg-primary">Staff ID: {{ request.user.staff_profile.staff_id }}</span>
+                                </div>
+                                {% endif %}
+                            </div>
+                            
+                            <hr>
+                            
+                            <div class="info-row">
+                                <span class="info-label"><i class="fas fa-calendar-alt text-primary me-2"></i>Member Since:</span>
+                                <span class="info-value">{{ request.user.date_joined|date:"M d, Y" }}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label"><i class="fas fa-clock text-primary me-2"></i>Last Login:</span>
+                                <span class="info-value">{{ request.user.last_login|date:"M d, Y H:i" }}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label"><i class="fas fa-tag text-primary me-2"></i>Status:</span>
+                                <span class="info-value"><span class="badge bg-success">Active</span></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right Column - Details -->
+                    <div class="col-lg-8">
+                        <!-- Profile Details -->
+                        <div class="info-card">
+                            <div class="info-title">
+                                <i class="fas fa-info-circle"></i>
+                                Profile Details
+                            </div>
+                            
+                            <div class="row g-4">
+                                <!-- Username -->
+                                <div class="col-md-6">
+                                    <div class="info-row">
+                                        <span class="info-label"><i class="fas fa-user me-2"></i>Username:</span>
+                                        <span class="info-value">{{ request.user.username }}</span>
+                                    </div>
+                                </div>
+
+                                <!-- Email -->
+                                <div class="col-md-6">
+                                    <div class="info-row">
+                                        <span class="info-label"><i class="fas fa-envelope me-2"></i>Email:</span>
+                                        <span class="info-value">{{ request.user.email }}</span>
+                                    </div>
+                                </div>
+
+                                <!-- First Name -->
+                                <div class="col-md-6">
+                                    <div class="info-row">
+                                        <span class="info-label"><i class="fas fa-user-circle me-2"></i>First Name:</span>
+                                        <span class="info-value">{{ request.user.first_name|default:'Not provided' }}</span>
+                                    </div>
+                                </div>
+
+                                <!-- Last Name -->
+                                <div class="col-md-6">
+                                    <div class="info-row">
+                                        <span class="info-label"><i class="fas fa-user-circle me-2"></i>Last Name:</span>
+                                        <span class="info-value">{{ request.user.last_name|default:'Not provided' }}</span>
+                                    </div>
+                                </div>
+
+                                <!-- Staff Profile Fields (if available) -->
+                                {% if request.user.staff_profile %}
+                                <div class="col-md-6">
+                                    <div class="info-row">
+                                        <span class="info-label"><i class="fas fa-phone me-2"></i>Phone:</span>
+                                        <span class="info-value">{{ request.user.staff_profile.phone|default:'Not provided' }}</span>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <div class="info-row">
+                                        <span class="info-label"><i class="fas fa-briefcase me-2"></i>Position:</span>
+                                        <span class="info-value">{{ request.user.staff_profile.position|title|default:'Staff' }}</span>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <div class="info-row">
+                                        <span class="info-label"><i class="fas fa-id-card me-2"></i>Staff ID:</span>
+                                        <span class="info-value">{{ request.user.staff_profile.staff_id }}</span>
+                                    </div>
+                                </div>
+                                {% endif %}
+
+                                <!-- Roles & Permissions -->
+                                <div class="col-12 mt-3">
+                                    <div class="info-row" style="border-bottom: none;">
+                                        <span class="info-label"><i class="fas fa-tags me-2"></i>Roles:</span>
+                                        <div class="info-value text-end">
+                                            {% if request.user.is_superuser %}
+                                                <span class="badge badge-superuser">Superuser</span>
+                                            {% endif %}
+                                            {% if request.user.is_staff %}
+                                                <span class="badge badge-staff">Staff</span>
+                                            {% endif %}
+                                            {% for group in request.user.groups.all %}
+                                                <span class="badge badge-group">{{ group.name }}</span>
+                                            {% empty %}
+                                                <span class="text-muted">No specific roles</span>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Change Password Card -->
+                        <div class="info-card mt-4">
+                            <div class="info-title">
+                                <i class="fas fa-lock"></i>
+                                Security
+                            </div>
+                            
+                            <div class="row align-items-center">
+                                <div class="col-md-8">
+                                    <h6 class="fw-bold mb-2">Change Your Password</h6>
+                                    <p class="text-muted mb-md-0">Regularly updating your password helps keep your account secure.</p>
+                                </div>
+                                <div class="col-md-4 text-md-end">
+                                    <a href="{% url 'staff:password_change' %}" class="btn btn-outline-primary">
+                                        <i class="fas fa-key me-2"></i>Change Password
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Action Buttons -->
+                        <div class="mt-4 text-center">
+                            <a href="{% url 'staff:staff_dashboard' %}" class="btn btn-primary">
+                                <i class="fas fa-tachometer-alt me-2"></i>Go to Dashboard
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // Auto-dismiss alerts after 5 seconds
+        setTimeout(function() {
+            document.querySelectorAll('.alert').forEach(function(alert) {
+                alert.style.transition = 'opacity 0.5s';
+                alert.style.opacity = '0';
+                setTimeout(function() {
+                    alert.remove();
+                }, 500);
+            });
+        }, 5000);
+    </script>
+</body>
+</html>

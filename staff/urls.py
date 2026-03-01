@@ -15,6 +15,15 @@ urlpatterns = [
     path('password-change/', views.password_change, name='password_change'),
     
     # ============================================
+    # ITP VERIFICATION URLS - ADD THESE LINES
+    # ============================================
+    path('verify/<int:staff_id>/', views.verify_identity, name='verify_identity'),
+    path('resend-verification/', views.resend_verification, name='resend_verification'),
+    path('email-status/', views.email_queue_status, name='email_queue_status'),
+    path('admin-verify/', views.admin_verify_list, name='admin_verify_list'),
+    path('admin-verify/<int:staff_id>/', views.admin_verify_staff, name='admin_verify_staff'),
+    
+    # ============================================
     # ROLE-SPECIFIC DASHBOARDS
     # ============================================
     path('admin-dashboard/', views.admin_dashboard, name='admin_dashboard'),

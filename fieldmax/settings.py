@@ -110,6 +110,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'staff.context_processors.pending_counts', 
             ],
         },
     },
@@ -196,7 +197,7 @@ ALLOWED_UPLOAD_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.pdf', '.webp']
 # Authentication settings
 LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'staff:staff_dashboard'
-LOGOUT_REDIRECT_URL = 'home'
+LOGOUT_REDIRECT_URL = 'website:home'
 
 # Cloudinary settings - Always use cloudinary, works in both environments
 cloudinary.config(

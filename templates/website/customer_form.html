@@ -1,0 +1,341 @@
+{% extends 'sales/staff_base.html' %}
+{% load static %}
+
+{% block title %}{% if form_action == 'create' %}Add New Customer{% else %}Edit Customer{% endif %} - Fieldmax{% endblock %}
+
+{% block page_title %}{% if form_action == 'create' %}Add New Customer{% else %}Edit Customer{% endif %}{% endblock %}
+{% block page_icon %}fas fa-user-plus{% endblock %}
+
+{% block page_actions %}
+<div class="btn-group">
+    <a href="{% url 'website:customer-list' %}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left me-2"></i>Back to Customers
+    </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-user-plus text-primary me-2"></i>
+                        {% if form_action == 'create' %}Customer Information{% else %}Edit Customer Details{% endif %}
+                    </h5>
+                </div>
+                
+                <div class="card-body">
+                    <form method="POST" action="
+                        {% if form_action == 'create' %}
+                            {% url 'website:customer-create' %}
+                        {% else %}
+                            {% url 'website:customer-edit' customer.id %}
+                        {% endif %}
+                    " class="needs-validation" novalidate>
+                        {% csrf_token %}
+                        
+                        {% if messages %}
+                            {% for message in messages %}
+                                <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                                    {{ message }}
+                                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+
+                        <div class="row g-4">
+                            <!-- Full Name -->
+                            <div class="col-md-12">
+                                <label for="full_name" class="form-label fw-bold">
+                                    <i class="fas fa-user text-primary me-2"></i>Full Name *
+                                </label>
+                                <input type="text" 
+                                       class="form-control form-control-lg" 
+                                       id="full_name" 
+                                       name="full_name" 
+                                       value="{{ customer.full_name|default:'' }}"
+                                       placeholder="Enter customer's full name"
+                                       required>
+                                <div class="invalid-feedback">
+                                    Please enter customer's full name.
+                                </div>
+                            </div>
+
+                            <!-- Phone -->
+                            <div class="col-md-6">
+                                <label for="phone" class="form-label fw-bold">
+                                    <i class="fas fa-phone text-primary me-2"></i>Phone Number *
+                                </label>
+                                <input type="tel" 
+                                       class="form-control form-control-lg" 
+                                       id="phone" 
+                                       name="phone" 
+                                       value="{{ customer.phone|default:'' }}"
+                                       placeholder="e.g., 0712345678"
+                                       required>
+                                <div class="form-text">Enter phone number with country code if available</div>
+                                <div class="invalid-feedback">
+                                    Please enter customer's phone number.
+                                </div>
+                            </div>
+
+                            <!-- Email -->
+                            <div class="col-md-6">
+                                <label for="email" class="form-label fw-bold">
+                                    <i class="fas fa-envelope text-primary me-2"></i>Email Address
+                                </label>
+                                <input type="email" 
+                                       class="form-control form-control-lg" 
+                                       id="email" 
+                                       name="email" 
+                                       value="{{ customer.email|default:'' }}"
+                                       placeholder="customer@example.com">
+                                <div class="form-text">Optional but recommended for order notifications</div>
+                            </div>
+
+                            <!-- Address -->
+                            <div class="col-12">
+                                <label for="address" class="form-label fw-bold">
+                                    <i class="fas fa-map-marker-alt text-primary me-2"></i>Address
+                                </label>
+                                <textarea class="form-control" 
+                                          id="address" 
+                                          name="address" 
+                                          rows="2" 
+                                          placeholder="Street address, building, etc.">{{ customer.address|default:'' }}</textarea>
+                            </div>
+
+                            <!-- City -->
+                            <div class="col-md-6">
+                                <label for="city" class="form-label fw-bold">
+                                    <i class="fas fa-city text-primary me-2"></i>City
+                                </label>
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="city" 
+                                       name="city" 
+                                       value="{{ customer.city|default:'' }}"
+                                       placeholder="e.g., Nairobi">
+                            </div>
+
+                            <!-- Postal Code -->
+                            <div class="col-md-6">
+                                <label for="postal_code" class="form-label fw-bold">
+                                    <i class="fas fa-mail-bulk text-primary me-2"></i>Postal Code
+                                </label>
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="postal_code" 
+                                       name="postal_code" 
+                                       value="{{ customer.postal_code|default:'' }}"
+                                       placeholder="e.g., 00100">
+                            </div>
+
+                            <!-- Status (for edit mode) -->
+                            {% if form_action == 'edit' %}
+                            <div class="col-12">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" 
+                                           type="checkbox" 
+                                           id="is_active" 
+                                           name="is_active" 
+                                           {% if customer.is_active %}checked{% endif %}>
+                                    <label class="form-check-label fw-bold" for="is_active">
+                                        <i class="fas fa-check-circle text-success me-2"></i>Active Customer
+                                    </label>
+                                    <div class="form-text">Inactive customers won't appear in dropdowns or search</div>
+                                </div>
+                            </div>
+                            {% endif %}
+
+                            <!-- Notes -->
+                            <div class="col-12">
+                                <label for="notes" class="form-label fw-bold">
+                                    <i class="fas fa-sticky-note text-primary me-2"></i>Notes (Optional)
+                                </label>
+                                <textarea class="form-control" 
+                                          id="notes" 
+                                          name="notes" 
+                                          rows="2" 
+                                          placeholder="Any additional information about this customer">{{ customer.notes|default:'' }}</textarea>
+                            </div>
+                        </div>
+
+                        <!-- Form Actions -->
+                        <div class="d-flex justify-content-end gap-2 mt-5 pt-3 border-top">
+                            <a href="{% url 'website:customer-list' %}" class="btn btn-outline-secondary px-4">
+                                <i class="fas fa-times me-2"></i>Cancel
+                            </a>
+                            <button type="reset" class="btn btn-outline-warning px-4">
+                                <i class="fas fa-undo me-2"></i>Reset
+                            </button>
+                            <button type="submit" class="btn btn-primary px-5">
+                                <i class="fas fa-save me-2"></i>
+                                {% if form_action == 'create' %}Create Customer{% else %}Save Changes{% endif %}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Quick Tips Card -->
+            <div class="card mt-4 bg-light">
+                <div class="card-body">
+                    <h6 class="fw-bold mb-3">
+                        <i class="fas fa-lightbulb text-warning me-2"></i>Quick Tips
+                    </h6>
+                    <ul class="list-unstyled mb-0">
+                        <li class="mb-2">
+                            <i class="fas fa-check-circle text-success me-2"></i>
+                            <strong>Phone number</strong> is required and should be unique
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-check-circle text-success me-2"></i>
+                            <strong>Email</strong> helps with order notifications and tracking
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-check-circle text-success me-2"></i>
+                            Customers can be found by <strong>phone, name, or email</strong> in the system
+                        </li>
+                        <li>
+                            <i class="fas fa-check-circle text-success me-2"></i>
+                            Adding <strong>address and city</strong> helps with delivery arrangements
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Form validation
+(function() {
+    'use strict';
+    
+    // Fetch all forms that need validation
+    var forms = document.querySelectorAll('.needs-validation');
+    
+    // Loop over them and prevent submission
+    Array.prototype.slice.call(forms).forEach(function(form) {
+        form.addEventListener('submit', function(event) {
+            if (!form.checkValidity()) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            form.classList.add('was-validated');
+        }, false);
+    });
+})();
+
+// Phone number formatting (optional)
+document.getElementById('phone')?.addEventListener('input', function(e) {
+    let value = e.target.value.replace(/\D/g, '');
+    if (value.length > 0) {
+        // Format as Kenyan phone number if it starts with 0 or 254
+        if (value.startsWith('0')) {
+            value = '254' + value.substring(1);
+        }
+        if (value.length > 12) {
+            value = value.substring(0, 12);
+        }
+    }
+    e.target.value = value;
+});
+
+// Email validation on the fly
+document.getElementById('email')?.addEventListener('input', function(e) {
+    let email = e.target.value;
+    let isValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    if (email && !isValid) {
+        e.target.setCustomValidity('Please enter a valid email address');
+    } else {
+        e.target.setCustomValidity('');
+    }
+});
+
+// Prevent form resubmission on refresh
+if (window.history.replaceState) {
+    window.history.replaceState(null, null, window.location.href);
+}
+
+// Auto-dismiss alerts after 5 seconds
+setTimeout(function() {
+    document.querySelectorAll('.alert').forEach(function(alert) {
+        alert.style.transition = 'opacity 0.5s';
+        alert.style.opacity = '0';
+        setTimeout(function() {
+            alert.remove();
+        }, 500);
+    });
+}, 5000);
+</script>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Form styling */
+    .form-control:focus, .form-select:focus {
+        border-color: #11998e;
+        box-shadow: 0 0 0 0.25rem rgba(17, 153, 142, 0.25);
+    }
+    
+    .form-control-lg {
+        padding: 0.75rem 1rem;
+    }
+    
+    /* Required field indicator */
+    label.fw-bold:after {
+        color: #dc3545;
+    }
+    
+    /* Card hover effect */
+    .card {
+        transition: transform 0.2s;
+    }
+    
+    .card:hover {
+        transform: translateY(-2px);
+    }
+    
+    /* Button styles */
+    .btn {
+        padding: 0.6rem 1.5rem;
+        font-weight: 500;
+    }
+    
+    .btn-primary {
+        background: linear-gradient(135deg, #11998e, #38ef7d);
+        border: none;
+    }
+    
+    .btn-primary:hover {
+        background: linear-gradient(135deg, #0f8b7e, #2ed46b);
+    }
+    
+    /* Tip list styling */
+    .fa-check-circle {
+        font-size: 1.1rem;
+    }
+    
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+        .btn {
+            width: 100%;
+            margin: 5px 0;
+        }
+        
+        .d-flex.justify-content-end {
+            flex-direction: column;
+        }
+        
+        .d-flex.justify-content-end .btn {
+            margin-left: 0 !important;
+        }
+    }
+</style>
+{% endblock %}

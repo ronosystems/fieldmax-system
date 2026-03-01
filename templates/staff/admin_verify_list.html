@@ -1,0 +1,232 @@
+{% extends 'staff/base.html' %}
+{% load static %}
+
+{% block title %}Staff Verification Requests{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header Section -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="mb-1">
+                <i class="fas fa-shield-alt text-primary me-2"></i>
+                Identity Verification Requests
+            </h2>
+            <p class="text-muted mb-0">Review and verify staff identity documents</p>
+        </div>
+        <div>
+            <button class="btn btn-outline-primary me-2" onclick="location.reload()">
+                <i class="fas fa-sync-alt me-2"></i>Refresh
+            </button>
+            <a href="{% url 'admin:index' %}" class="btn btn-primary">
+                <i class="fas fa-cog me-2"></i>Admin Panel
+            </a>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="stat-card">
+                <div class="stat-value">{{ pending_count|default:0 }}</div>
+                <div class="stat-label">Pending Verification</div>
+                <i class="fas fa-clock stat-icon text-warning"></i>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="stat-card">
+                <div class="stat-value">{{ verified_today|default:0 }}</div>
+                <div class="stat-label">Verified Today</div>
+                <i class="fas fa-check-circle stat-icon text-success"></i>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="stat-card">
+                <div class="stat-value">{{ total_verified|default:0 }}</div>
+                <div class="stat-label">Total Verified</div>
+                <i class="fas fa-users stat-icon text-info"></i>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="stat-card">
+                <div class="stat-value">{{ rejected_count|default:0 }}</div>
+                <div class="stat-label">Rejected</div>
+                <i class="fas fa-times-circle stat-icon text-danger"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-3">
+                    <label for="status" class="form-label">Status</label>
+                    <select name="status" id="status" class="form-select">
+                        <option value="">All</option>
+                        <option value="pending" {% if request.GET.status == 'pending' %}selected{% endif %}>Pending</option>
+                        <option value="verified" {% if request.GET.status == 'verified' %}selected{% endif %}>Verified</option>
+                        <option value="rejected" {% if request.GET.status == 'rejected' %}selected{% endif %}>Rejected</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="date_from" class="form-label">From Date</label>
+                    <input type="date" class="form-control" id="date_from" name="date_from" value="{{ request.GET.date_from }}">
+                </div>
+                <div class="col-md-3">
+                    <label for="date_to" class="form-label">To Date</label>
+                    <input type="date" class="form-control" id="date_to" name="date_to" value="{{ request.GET.date_to }}">
+                </div>
+                <div class="col-md-3">
+                    <label for="search" class="form-label">Search</label>
+                    <input type="text" class="form-control" id="search" name="search" placeholder="Name, Email, Staff ID..." value="{{ request.GET.search }}">
+                </div>
+                <div class="col-12 text-end">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-filter me-2"></i>Apply Filters
+                    </button>
+                    <a href="." class="btn btn-outline-secondary">
+                        <i class="fas fa-times me-2"></i>Clear
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Staff Verification List -->
+    <div class="card shadow-sm">
+        <div class="card-header bg-white">
+            <h5 class="mb-0">
+                <i class="fas fa-list me-2"></i>
+                Staff Requiring Verification
+            </h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover datatable mb-0">
+                    <thead>
+                        <tr>
+                            <th>Staff ID</th>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Position</th>
+                            <th>Submitted</th>
+                            <th>Documents</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for staff in staff_list %}
+                        <tr>
+                            <td><strong>{{ staff.staff_id }}</strong></td>
+                            <td>{{ staff.user.get_full_name }}</td>
+                            <td>{{ staff.user.email }}</td>
+                            <td>
+                                <span class="role-badge role-{{ staff.position|lower|cut:' ' }}">
+                                    {{ staff.position|title }}
+                                </span>
+                            </td>
+                            <td>{{ staff.verification_submitted_at|date:"Y-m-d H:i" }}</td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    {% if staff.id_front %}
+                                    <a href="{{ staff.id_front.url }}" target="_blank" class="btn btn-outline-info" title="ID Front">
+                                        <i class="fas fa-id-card"></i>
+                                    </a>
+                                    {% endif %}
+                                    {% if staff.id_back %}
+                                    <a href="{{ staff.id_back.url }}" target="_blank" class="btn btn-outline-info" title="ID Back">
+                                        <i class="fas fa-id-card"></i>
+                                    </a>
+                                    {% endif %}
+                                    {% if staff.live_photo %}
+                                    <a href="{{ staff.live_photo.url }}" target="_blank" class="btn btn-outline-info" title="Live Photo">
+                                        <i class="fas fa-camera"></i>
+                                    </a>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td>
+                                {% if staff.is_identity_verified %}
+                                    <span class="badge-approved">
+                                        <i class="fas fa-check-circle me-1"></i>Verified
+                                    </span>
+                                {% elif staff.verification_submitted_at %}
+                                    <span class="badge-pending">
+                                        <i class="fas fa-clock me-1"></i>Pending
+                                    </span>
+                                {% else %}
+                                    <span class="badge-secondary">
+                                        <i class="fas fa-minus-circle me-1"></i>Not Submitted
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{% url 'staff:admin_verify_staff' staff.id %}" class="btn btn-sm btn-primary">
+                                    <i class="fas fa-check-circle me-1"></i>Review
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="8" class="text-center py-4">
+                                <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+                                <h5>No pending verifications</h5>
+                                <p class="text-muted">All staff members have been verified</p>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% if staff_list.paginator %}
+        <div class="card-footer bg-white">
+            <nav aria-label="Page navigation">
+                <ul class="pagination justify-content-center mb-0">
+                    {% if staff_list.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ staff_list.previous_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                            <i class="fas fa-chevron-left"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+                    
+                    <li class="page-item active">
+                        <span class="page-link">Page {{ staff_list.number }} of {{ staff_list.paginator.num_pages }}</span>
+                    </li>
+                    
+                    {% if staff_list.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ staff_list.next_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                            <i class="fas fa-chevron-right"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .badge-secondary {
+        background-color: #6c757d;
+        color: white;
+        padding: 5px 10px;
+        border-radius: 20px;
+        font-weight: 500;
+        font-size: 0.85rem;
+    }
+    .btn-group .btn {
+        padding: 0.25rem 0.5rem;
+    }
+    .btn-group .btn i {
+        font-size: 1rem;
+    }
+</style>
+{% endblock %}

@@ -1,0 +1,308 @@
+{% extends 'sales/staff_base.html' %}
+{% load static %}
+
+{% block title %}Search Orders - Fieldmax{% endblock %}
+
+{% block page_title %}Search Orders{% endblock %}
+{% block page_icon %}fas fa-search{% endblock %}
+
+{% block page_actions %}
+<div class="btn-group">
+    <a href="{% url 'website:pending-orders-list' %}" class="btn btn-outline-primary">
+        <i class="fas fa-clock me-2"></i>Pending Orders
+    </a>
+    <a href="{% url 'website:completed-orders' %}" class="btn btn-outline-success">
+        <i class="fas fa-check-circle me-2"></i>Completed Orders
+    </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Search Section -->
+    <div class="row justify-content-center mb-4">
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-body p-4">
+                    <h5 class="card-title mb-4">
+                        <i class="fas fa-search text-primary me-2"></i>
+                        Track Your Order
+                    </h5>
+                    
+                    <form method="POST" action="{% url 'website:search_order' %}" id="searchForm">
+                        {% csrf_token %}
+                        <div class="input-group mb-3">
+                            <span class="input-group-text bg-white">
+                                <i class="fas fa-barcode text-primary"></i>
+                            </span>
+                            <input type="text" 
+                                   class="form-control form-control-lg" 
+                                   id="search_term" 
+                                   name="search_term" 
+                                   placeholder="Enter Order ID, Phone Number, or Name..."
+                                   value="{{ request.POST.search_term|default:'' }}"
+                                   required>
+                            <button class="btn btn-primary px-4" type="submit">
+                                <i class="fas fa-search me-2"></i>Search
+                            </button>
+                        </div>
+                        <div class="form-text">
+                            <i class="fas fa-info-circle me-1 text-info"></i>
+                            You can search by: Order ID (e.g., PO-20240301-0001), Phone number, or Customer name
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search Results -->
+    {% if order %}
+    <div class="row justify-content-center">
+        <div class="col-md-10">
+            <div class="card shadow-sm border-success">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-check-circle me-2"></i>
+                        Order Found
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <!-- Order Header -->
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <div>
+                            <h4 class="mb-1">{{ order.order_id }}</h4>
+                            <p class="text-muted mb-0">
+                                <i class="fas fa-calendar me-2"></i>{{ order.created_at|date:"F j, Y H:i" }}
+                            </p>
+                        </div>
+                        <span class="badge bg-{{ order.status_color }} p-3 fs-6">
+                            {{ order.status_display }}
+                        </span>
+                    </div>
+
+                    <!-- Customer Information -->
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <h6 class="fw-bold mb-3">
+                                        <i class="fas fa-user text-primary me-2"></i>Customer Details
+                                    </h6>
+                                    <p class="mb-1"><strong>Name:</strong> {{ order.buyer_name }}</p>
+                                    <p class="mb-1"><strong>Phone:</strong> {{ order.buyer_phone }}</p>
+                                    {% if order.buyer_email %}
+                                    <p class="mb-0"><strong>Email:</strong> {{ order.buyer_email }}</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <h6 class="fw-bold mb-3">
+                                        <i class="fas fa-credit-card text-primary me-2"></i>Payment Details
+                                    </h6>
+                                    <p class="mb-1"><strong>Method:</strong> {{ order.payment_method|title }}</p>
+                                    <p class="mb-0"><strong>Total:</strong> 
+                                        <span class="text-success fw-bold">KSh {{ order.total_amount|floatformat:2 }}</span>
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Order Items -->
+                    <h6 class="fw-bold mb-3">
+                        <i class="fas fa-box me-2 text-primary"></i>Order Items ({{ order.item_count }})
+                    </h6>
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>#</th>
+                                    <th>Product</th>
+                                    <th>Quantity</th>
+                                    <th>Unit Price</th>
+                                    <th class="text-end">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in order.items %}
+                                <tr>
+                                    <td>{{ forloop.counter }}</td>
+                                    <td>
+                                        <strong>{{ item.name }}</strong>
+                                        {% if item.sku %}
+                                        <br><small class="text-muted">SKU: {{ item.sku }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ item.quantity }}</td>
+                                    <td>KSh {{ item.price|floatformat:2 }}</td>
+                                    <td class="text-end fw-bold">KSh {{ item.total|floatformat:2 }}</td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="5" class="text-center py-4">
+                                        <i class="fas fa-box-open fa-3x text-muted mb-3"></i>
+                                        <p>No items found</p>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot class="table-light">
+                                <tr>
+                                    <th colspan="4" class="text-end">Total:</th>
+                                    <th class="text-end">KSh {{ order.total_amount|floatformat:2 }}</th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+
+                    {% if order.notes %}
+                    <div class="mt-4 p-3 bg-light rounded">
+                        <strong><i class="fas fa-sticky-note me-2 text-primary"></i>Notes:</strong>
+                        <p class="mb-0 mt-2">{{ order.notes }}</p>
+                    </div>
+                    {% endif %}
+
+                    {% if order.sale_id %}
+                    <div class="mt-4 alert alert-info">
+                        <i class="fas fa-receipt me-2"></i>
+                        <strong>Sale ID:</strong> {{ order.sale_id }}
+                        <a href="{% url 'sales:sale_receipt' order.sale_id %}" class="btn btn-sm btn-outline-info ms-3">
+                            <i class="fas fa-print me-1"></i>View Receipt
+                        </a>
+                    </div>
+                    {% endif %}
+
+                    <!-- Action Buttons -->
+                    <div class="d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
+                        <button class="btn btn-outline-secondary" onclick="window.print()">
+                            <i class="fas fa-print me-2"></i>Print
+                        </button>
+                        <a href="{% url 'website:order_receipt' order.order_id %}" class="btn btn-outline-primary">
+                            <i class="fas fa-file-pdf me-2"></i>Download Receipt
+                        </a>
+                        <button class="btn btn-primary" onclick="resetSearch()">
+                            <i class="fas fa-search me-2"></i>New Search
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% elif request.method == 'POST' %}
+    <!-- No Results Found -->
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow-sm border-warning">
+                <div class="card-body text-center py-5">
+                    <i class="fas fa-exclamation-circle fa-4x text-warning mb-4"></i>
+                    <h4 class="mb-3">No Order Found</h4>
+                    <p class="text-muted mb-4">
+                        We couldn't find any order matching "{{ request.POST.search_term }}"
+                    </p>
+                    <p class="small text-muted mb-4">
+                        Please check your Order ID, phone number, or customer name and try again.
+                    </p>
+                    <button class="btn btn-primary" onclick="resetSearch()">
+                        <i class="fas fa-redo me-2"></i>Try Again
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function resetSearch() {
+    document.getElementById('searchForm').reset();
+    // Remove results if any
+    window.location.href = "{% url 'website:order_search_page' %}";
+}
+
+// Auto-submit after typing (optional)
+let searchTimeout;
+document.getElementById('search_term')?.addEventListener('input', function(e) {
+    clearTimeout(searchTimeout);
+    if (this.value.length >= 3) {
+        searchTimeout = setTimeout(() => {
+            document.getElementById('searchForm').submit();
+        }, 1000);
+    }
+});
+
+// Print functionality
+function printOrder() {
+    window.print();
+}
+
+// Handle enter key
+document.getElementById('search_term')?.addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        document.getElementById('searchForm').submit();
+    }
+});
+
+// Auto-focus search input on page load
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('search_term')?.focus();
+});
+</script>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Print styles */
+    @media print {
+        .sidebar, .top-nav, .btn, .page-actions, footer, .no-print {
+            display: none !important;
+        }
+        .main-content {
+            margin-left: 0 !important;
+            padding: 20px !important;
+        }
+        .card {
+            box-shadow: none !important;
+            border: 1px solid #ddd !important;
+        }
+    }
+    
+    /* Search input styling */
+    .input-group-text {
+        border-right: none;
+    }
+    .form-control-lg {
+        border-left: none;
+        padding-left: 0;
+    }
+    .form-control-lg:focus {
+        border-color: #dee2e6;
+        box-shadow: none;
+    }
+    .input-group:focus-within {
+        border-color: #11998e;
+        box-shadow: 0 0 0 4px rgba(17, 153, 142, 0.1);
+        border-radius: 50px;
+    }
+    
+    /* Table styles */
+    .table thead th {
+        border-top: none;
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 0.85rem;
+    }
+    
+    /* Status badges */
+    .badge {
+        padding: 0.5rem 1rem;
+        border-radius: 50px;
+    }
+</style>
+{% endblock %}

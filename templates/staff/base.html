@@ -42,6 +42,7 @@
             margin: 5px 0;
             border-radius: 10px;
             transition: all 0.3s;
+            position: relative;
         }
         
         .sidebar .nav-link:hover {
@@ -59,6 +60,16 @@
         .sidebar .nav-link i {
             margin-right: 10px;
             width: 25px;
+        }
+        
+        .sidebar .badge {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            padding: 4px 8px;
+            font-size: 0.75rem;
+            border-radius: 20px;
         }
         
         .main-content {
@@ -270,7 +281,7 @@
                     </h4>
                     
                     <!-- HOME BUTTON -->
-                    <a href="{% url 'home' %}" class="btn btn-light w-100 mb-3" style="color: #17a2b8; font-weight: 600;">
+                    <a href="{% url 'website:home' %}" class="btn btn-light w-100 mb-3" style="color: #17a2b8; font-weight: 600;">
                         <i class="fas fa-home me-2"></i> HOME PAGE
                     </a>
 
@@ -314,11 +325,26 @@
                         </a>
                         {% endif %}
                         
-                        <!-- Applications - Only for relevant roles -->
+                        <!-- Applications - Only for relevant roles (WITH COUNT BADGE) -->
                         {% if request.user.is_superuser or request.user|has_role:'sales_agent,sales_manager,supervisor,credit_manager' %}
                         <a class="nav-link {% if 'application' in request.path %}active{% endif %}" 
                            href="{% url 'staff:application_list' %}">
                             <i class="fas fa-file-alt"></i> Staff Onboarding
+                            {% if staff_onboarding_pending > 0 %}
+                            <span class="badge bg-warning text-dark">{{ staff_onboarding_pending }}</span>
+                            {% endif %}
+                        </a>
+                        {% endif %}
+
+                        <!-- Identity Verification - Admin only (WITH COUNT BADGE) -->
+                        {% if request.user.is_superuser or request.user.is_staff %}
+                        <a class="nav-link {% if 'admin-verify' in request.path %}active{% endif %}" 
+                           href="{% url 'staff:admin_verify_list' %}">
+                            <i class="fas fa-shield-alt text-warning"></i> 
+                            Identity Verification
+                            {% if staff_verification_pending > 0 %}
+                            <span class="badge bg-danger">{{ staff_verification_pending }}</span>
+                            {% endif %}
                         </a>
                         {% endif %}
 

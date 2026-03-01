@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pending Approval - FieldMax Staff Portal</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            padding: 20px;
+        }
+        .pending-card {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 500px;
+            width: 100%;
+            animation: slideUp 0.5s ease-out;
+        }
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .pending-icon {
+            width: 100px;
+            height: 100px;
+            background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: -50px auto 20px;
+            box-shadow: 0 10px 20px rgba(255,193,7,0.3);
+        }
+        .pending-icon i {
+            font-size: 50px;
+            color: white;
+        }
+        .info-box {
+            background: #f8f9fa;
+            border-left: 4px solid #17a2b8;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .staff-details {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+        .badge-pending {
+            background: #ffc107;
+            color: #000;
+            padding: 5px 15px;
+            border-radius: 50px;
+            font-weight: 600;
+        }
+        .logout-btn {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 50px;
+            font-size: 16px;
+            font-weight: 600;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.3s;
+        }
+        .logout-btn:hover {
+            background: #5a6268;
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(108,117,125,0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="pending-card">
+        <!-- Messages -->
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }} alert-dismissible fade show m-3" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+        
+        <div class="card-body text-center p-4">
+            <!-- Animated Icon -->
+            <div class="pending-icon">
+                <i class="fas fa-clock"></i>
+            </div>
+            
+            <h2 class="mb-3">Verification Pending</h2>
+            
+            <p class="text-muted mb-4">
+                Thank you for submitting your verification documents.
+            </p>
+            
+            <!-- Info Box -->
+            <div class="info-box text-start">
+                <i class="fas fa-info-circle text-info me-2"></i>
+                <strong>Next Steps:</strong>
+                <p class="mb-0 mt-2">
+                    Your documents are under review by our admin team. 
+                    This usually takes 24-48 hours. You will be notified once your identity is verified.
+                </p>
+            </div>
+            
+            <!-- Staff Details -->
+            {% if staff %}
+            <div class="staff-details text-start">
+                <h6 class="mb-3"><i class="fas fa-user me-2"></i>Your Details</h6>
+                <p class="mb-2">
+                    <strong>Name:</strong> {{ staff.user.get_full_name }}
+                </p>
+                <p class="mb-2">
+                    <strong>Staff ID:</strong> {{ staff.staff_id }}
+                </p>
+                <p class="mb-2">
+                    <strong>Email:</strong> {{ staff.user.email }}
+                </p>
+                <p class="mb-0">
+                    <strong>Status:</strong> 
+                    <span class="badge-pending ms-2">
+                        <i class="fas fa-clock me-1"></i>Pending Review
+                    </span>
+                </p>
+            </div>
+            {% endif %}
+            
+            <!-- Custom Message -->
+            {% if message %}
+            <div class="alert alert-success mt-4">
+                <i class="fas fa-check-circle me-2"></i>
+                {{ message }}
+            </div>
+            {% endif %}
+            
+            <!-- Logout Button -->
+            <div class="mt-4">
+                <a href="{% url 'staff:logout' %}" class="logout-btn">
+                    <i class="fas fa-sign-out-alt me-2"></i>Logout
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

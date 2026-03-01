@@ -26,6 +26,13 @@ import queue
 import threading
 import time
 import sys
+from django.contrib.auth.models import User, Group
+from django.contrib.auth.hashers import make_password
+from staff.models import UserProfile
+import random
+import re
+import string
+
 
 
 
@@ -287,7 +294,7 @@ def custom_logout(request):
     """Custom logout view that handles POST requests"""
     logout(request)
     messages.success(request, "You have been successfully logged out.")
-    return redirect('home') 
+    return redirect('website:home') 
 
 
 
@@ -430,6 +437,9 @@ def staff_dashboard(request):
 
 
 
+
+
+
 # ============================================
 # Identity Verification View
 # ============================================
@@ -562,8 +572,8 @@ def verify_identity(request, staff_id):
         staff.verification_attempts += 1
         staff.save()
         
-        # Send admin notification
-        send_verification_admin_notification(staff, request)
+        # Send admin notification (commented out as per your preference)
+        # send_verification_admin_notification(staff, request)
         
         messages.success(
             request, 
@@ -585,6 +595,11 @@ def verify_identity(request, staff_id):
         'attempts_remaining': max(0, 5 - staff.verification_attempts) if staff.verification_attempts else 5,
     }
     return render(request, 'staff/verify_identity.html', context)
+
+
+
+
+
 
 
 # ============================================
@@ -765,6 +780,84 @@ def send_verification_admin_notification(staff, request=None):
         return False
 
 
+
+
+
+
+
+@staff_member_required
+def admin_verify_list(request):
+    """List all staff members pending verification"""
+    staff_list = Staff.objects.filter(
+        verification_submitted_at__isnull=False
+    ).select_related('user').order_by('-verification_submitted_at')
+    
+    # Apply filters
+    status = request.GET.get('status')
+    if status == 'verified':
+        staff_list = staff_list.filter(is_identity_verified=True)
+    elif status == 'pending':
+        staff_list = staff_list.filter(is_identity_verified=False)
+    elif status == 'rejected':
+        staff_list = staff_list.filter(verification_notes__icontains='rejected')
+    
+    # Date filters
+    date_from = request.GET.get('date_from')
+    if date_from:
+        staff_list = staff_list.filter(verification_submitted_at__date__gte=date_from)
+    
+    date_to = request.GET.get('date_to')
+    if date_to:
+        staff_list = staff_list.filter(verification_submitted_at__date__lte=date_to)
+    
+    # Search
+    search = request.GET.get('search')
+    if search:
+        staff_list = staff_list.filter(
+            Q(user__first_name__icontains=search) |
+            Q(user__last_name__icontains=search) |
+            Q(user__email__icontains=search) |
+            Q(staff_id__icontains=search)
+        )
+    
+    # Pagination
+    paginator = Paginator(staff_list, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    # Statistics
+    pending_count = Staff.objects.filter(
+        verification_submitted_at__isnull=False,
+        is_identity_verified=False
+    ).count()
+    
+    today = timezone.now().date()
+    verified_today = Staff.objects.filter(
+        verified_at__date=today,
+        is_identity_verified=True
+    ).count()
+    
+    total_verified = Staff.objects.filter(is_identity_verified=True).count()
+    rejected_count = Staff.objects.filter(verification_notes__icontains='rejected').count()
+    
+    context = {
+        'staff_list': page_obj,
+        'pending_count': pending_count,
+        'verified_today': verified_today,
+        'total_verified': total_verified,
+        'rejected_count': rejected_count,
+    }
+    return render(request, 'staff/admin_verify_list.html', context)
+
+
+
+
+
+
+
+
+
+
 # ============================================
 # Admin verification approval view
 # ============================================
@@ -807,7 +900,16 @@ def admin_verify_staff(request, staff_id):
     context = {
         'staff': staff,
     }
-    return render(request, 'staff/admin_verify.html', context)
+    return render(request, 'staff/admin_verify_staff.html', context)
+
+
+
+
+
+
+
+
+
 
 
 # ============================================
@@ -2631,16 +2733,9 @@ def application_delete(request, pk):
 
 
 
-
 # ====================================
 # APPROVE VIEW
 # ====================================
-from django.contrib.auth.models import User, Group
-from django.contrib.auth.hashers import make_password
-from staff.models import UserProfile  # Add this import
-import random
-import string
-
 
 @login_required
 def application_approve(request, pk):
@@ -2653,22 +2748,39 @@ def application_approve(request, pk):
             group_id = request.POST.get('group')
             notes = request.POST.get('review_notes', '')
             
-            # Use email as username
-            username = application.email
+            # ============================================
+            # USE PHONE NUMBER AS USERNAME
+            # ============================================
+            username = application.phone
+            
+            # Remove any non-digit characters from phone (keep only numbers)
+            import re
+            username = re.sub(r'\D', '', username)
+            
+            # Ensure username is not empty
+            if not username:
+                # Fallback to email if phone is empty
+                username = application.email.split('@')[0]
             
             # Check if username exists, if so add suffix
             base_username = username
             counter = 1
             while User.objects.filter(username=username).exists():
-                if '@' in base_username:
-                    local_part, domain = base_username.split('@')
-                    username = f"{local_part}{counter}@{domain}"
-                else:
-                    username = f"{base_username}{counter}"
+                username = f"{base_username}{counter}"
                 counter += 1
             
-            # Default password
-            password = "Fsl@12345"
+            # ============================================
+            # USE ID NUMBER AS PASSWORD
+            # ============================================
+            password = application.id_number
+            
+            # Remove any spaces from password
+            password = password.strip() if password else "Fsl@12345"
+            
+            # Ensure password meets minimum requirements (at least 8 chars)
+            if len(password) < 8:
+                # Pad with zeros or add default if too short
+                password = password.zfill(8)  # Pads with zeros to make 8 chars
             
             # Create user account
             user = User.objects.create_user(
@@ -2724,20 +2836,11 @@ def application_approve(request, pk):
             application.created_user = user
             application.save()
             
-            # Send email to applicant
-#            send_login_credentials(application, user, password)
+            # Send email to applicant (commented out as per your request)
+            # send_login_credentials(application, user, password)
             
-
-
-
-
-
-
-
-
-
             # ============================================
-            # SEND ADMIN NOTIFICATION
+            # SEND ADMIN NOTIFICATION (commented out)
             # ============================================
             """
             try:
@@ -2755,20 +2858,13 @@ def application_approve(request, pk):
                 logger.error(f"Failed to send admin notification: {str(e)}")
                 # Don't fail the approval if notification fails
             """
-
-
-
-
-
-
-
-
+            
             messages.success(
                 request, 
                 f'✅ Application for {application.full_name()} has been approved.<br>'
                 f'👤 User account created with group: <strong>{group.name if group_id else "No group"}</strong><br>'
-                f'📧 Username: <strong>{username}</strong><br>'
-                f'🔑 Password: <strong>{password}</strong><br>'
+                f'📧 Username: <strong>{username}</strong> (Phone number)<br>'
+                f'🔑 Password: <strong>{password}</strong> (ID number)<br>'
                 f'⚠️ <span class="text-warning">User will be required to change password on first login.</span>'
             )
             return redirect('staff:application_detail', pk=application.pk)

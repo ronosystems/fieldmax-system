@@ -1,0 +1,298 @@
+{% extends 'staff/base.html' %}
+{% load static %}
+
+{% block title %}Verify Staff: {{ staff.user.get_full_name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="mb-1">
+                <i class="fas fa-shield-alt text-primary me-2"></i>
+                Verify Identity: {{ staff.user.get_full_name }}
+            </h2>
+            <p class="text-muted mb-0">Review documents and verify staff identity</p>
+        </div>
+        <div>
+            <a href="{% url 'staff:admin_verify_list' %}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-2"></i>Back to List
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Staff Information -->
+        <div class="col-md-4 mb-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-user me-2 text-primary"></i>
+                        Staff Information
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-borderless">
+                        <tr>
+                            <th width="40%">Name:</th>
+                            <td><strong>{{ staff.user.get_full_name }}</strong></td>
+                        </tr>
+                        <tr>
+                            <th>Staff ID:</th>
+                            <td><span class="badge bg-dark">{{ staff.staff_id }}</span></td>
+                        </tr>
+                        <tr>
+                            <th>Email:</th>
+                            <td>{{ staff.user.email }}</td>
+                        </tr>
+                        <tr>
+                            <th>Position:</th>
+                            <td>
+                                <span class="role-badge role-{{ staff.position|lower|cut:' ' }}">
+                                    {{ staff.position|title }}
+                                </span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Submitted:</th>
+                            <td>{{ staff.verification_submitted_at|date:"Y-m-d H:i" }}</td>
+                        </tr>
+                        <tr>
+                            <th>Attempts:</th>
+                            <td>{{ staff.verification_attempts }} of 5</td>
+                        </tr>
+                        <tr>
+                            <th>Current Status:</th>
+                            <td>
+                                {% if staff.is_identity_verified %}
+                                    <span class="badge-approved">
+                                        <i class="fas fa-check-circle me-1"></i>Verified
+                                    </span>
+                                {% else %}
+                                    <span class="badge-pending">
+                                        <i class="fas fa-clock me-1"></i>Pending Review
+                                    </span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Documents Section -->
+        <div class="col-md-8 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-file-image me-2 text-primary"></i>
+                        Submitted Documents
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <!-- ID Front -->
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-bold">ID Front</label>
+                            {% if staff.id_front %}
+                            <div class="document-viewer">
+                                <a href="{{ staff.id_front.url }}" target="_blank">
+                                    <img src="{{ staff.id_front.url }}" class="img-fluid rounded border" alt="ID Front">
+                                </a>
+                                <small class="text-muted d-block mt-1">
+                                    <i class="fas fa-external-link-alt me-1"></i>
+                                    Click to view full size
+                                </small>
+                            </div>
+                            {% else %}
+                            <div class="alert alert-warning mb-0">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                No document uploaded
+                            </div>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- ID Back -->
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-bold">ID Back</label>
+                            {% if staff.id_back %}
+                            <div class="document-viewer">
+                                <a href="{{ staff.id_back.url }}" target="_blank">
+                                    <img src="{{ staff.id_back.url }}" class="img-fluid rounded border" alt="ID Back">
+                                </a>
+                                <small class="text-muted d-block mt-1">
+                                    <i class="fas fa-external-link-alt me-1"></i>
+                                    Click to view full size
+                                </small>
+                            </div>
+                            {% else %}
+                            <div class="alert alert-warning mb-0">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                No document uploaded
+                            </div>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Live Photo -->
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label fw-bold">Live Photo</label>
+                            {% if staff.live_photo %}
+                            <div class="document-viewer">
+                                <a href="{{ staff.live_photo.url }}" target="_blank">
+                                    <img src="{{ staff.live_photo.url }}" class="img-fluid rounded border" alt="Live Photo">
+                                </a>
+                                <small class="text-muted d-block mt-1">
+                                    <i class="fas fa-external-link-alt me-1"></i>
+                                    Click to view full size
+                                </small>
+                            </div>
+                            {% else %}
+                            <div class="alert alert-warning mb-0">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                No photo uploaded
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Verification Form -->
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-check-circle me-2 text-primary"></i>
+                        Verification Decision
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" id="verifyForm">
+                        {% csrf_token %}
+                        
+                        <div class="row">
+                            <div class="col-md-8">
+                                <div class="mb-3">
+                                    <label for="notes" class="form-label fw-bold">Verification Notes</label>
+                                    <textarea class="form-control" id="notes" name="notes" rows="3" 
+                                              placeholder="Add any notes or comments about this verification...">{{ staff.verification_notes }}</textarea>
+                                    <div class="form-text">
+                                        <i class="fas fa-info-circle me-1"></i>
+                                        These notes will be visible to the staff member if provided
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold d-block">Decision</label>
+                                    <div class="d-grid gap-2">
+                                        <button type="submit" name="action" value="approve" class="btn btn-success btn-lg">
+                                            <i class="fas fa-check-circle me-2"></i>
+                                            Approve Verification
+                                        </button>
+                                        
+                                        <button type="submit" name="action" value="reject" class="btn btn-danger btn-lg">
+                                            <i class="fas fa-times-circle me-2"></i>
+                                            Reject Verification
+                                        </button>
+                                        
+                                        <button type="button" class="btn btn-outline-secondary" onclick="history.back()">
+                                            <i class="fas fa-arrow-left me-2"></i>
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                {% if staff.verification_notes %}
+                <div class="card-footer bg-light">
+                    <strong>Previous Notes:</strong> {{ staff.verification_notes }}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Confirmation Modal -->
+<div class="modal fade" id="confirmModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalTitle">Confirm Decision</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="modalBody">
+                Are you sure you want to proceed with this decision?
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="confirmBtn">Confirm</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    let action = '';
+    
+    // Handle approve/reject buttons
+    $('#verifyForm button[type="submit"]').click(function(e) {
+        e.preventDefault();
+        action = $(this).val();
+        let decision = action === 'approve' ? 'approve' : 'reject';
+        
+        $('#modalTitle').text(decision === 'approve' ? 'Approve Verification' : 'Reject Verification');
+        $('#modalBody').html(`
+            Are you sure you want to <strong>${decision}</strong> the verification for 
+            <strong>{{ staff.user.get_full_name }}</strong>?
+            ${decision === 'reject' ? '<br><br><span class="text-danger">This will require the staff member to resubmit their documents.</span>' : ''}
+        `);
+        
+        $('#confirmModal').modal('show');
+    });
+    
+    // Handle confirmation
+    $('#confirmBtn').click(function() {
+        $('<input>').attr({
+            type: 'hidden',
+            name: 'action',
+            value: action
+        }).appendTo('#verifyForm');
+        $('#verifyForm').off('submit').submit();
+    });
+});
+</script>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .document-viewer {
+        text-align: center;
+    }
+    .document-viewer img {
+        max-height: 200px;
+        width: auto;
+        cursor: pointer;
+        transition: transform 0.3s;
+    }
+    .document-viewer img:hover {
+        transform: scale(1.05);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+    .btn-success, .btn-danger {
+        transition: all 0.3s;
+    }
+    .btn-success:hover, .btn-danger:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+</style>
+{% endblock %}

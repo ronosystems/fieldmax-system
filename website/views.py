@@ -21,28 +21,16 @@ import json
 from django.db import transaction
 from .models import PendingOrder, PendingOrderItem, Order, Customer
 from django.conf import settings
-
 from datetime import timedelta 
 from django.http import JsonResponse, HttpResponse
 from django.contrib import messages
-from django.utils import timezone
-
-from django.db.models import Q
 from difflib import SequenceMatcher
-
-
-
-
-
+from django.http import Http404
 
 logger = logging.getLogger(__name__)
 
-
-
-
-
 # ============================================
-#  CATEGORIES LIST PUBLIC
+# CATEGORIES LIST PUBLIC
 # ============================================
 @require_GET
 def categories_list_public(request):
@@ -90,12 +78,6 @@ def categories_list_public(request):
             'message': str(e),
             'categories': []
         }, status=500)
-
-
-
-
-
-
 
 # ============================================
 # API GET CATEGORIES
@@ -176,11 +158,6 @@ def api_get_categories(request):
             'categories': []
         }, status=500)
 
-
-
-
-
-
 # ============================================
 # API CATEGORY DETAILS
 # ============================================
@@ -242,11 +219,6 @@ def api_category_details(request, category_id):
             'success': False,
             'message': str(e)
         }, status=500)
-    
-
-
-
-
 
 @require_http_methods(["GET"])
 def search_products(request):
@@ -343,14 +315,9 @@ def search_products(request):
     
     return render(request, 'website/search_results.html', context)
 
-
-
-
-
 # ============================================
 # BEST PRICE HELPER FUNCTIONS
 # ============================================
-
 def calculate_best_price(product):
     """
     Helper function to calculate best price for a product
@@ -375,17 +342,9 @@ def calculate_best_price(product):
         print(f"Error calculating best price: {e}")
         return Decimal('0.00')
 
-
-
-
-
-
-
-
 # ============================================
 # HOME VIEW
 # ============================================
-
 def home(request):
     """
     Home page with top 12 most frequently sold products
@@ -466,15 +425,6 @@ def home(request):
     
     return render(request, 'website/home.html', context)
 
-
-
-
-
-
-
-
-
-
 # ============================================
 # HOME STATS
 # ============================================
@@ -523,15 +473,9 @@ def home_stats(request):
             }
         }, status=500)
 
-
-
-
-
-
 # ============================================
 # FEATURED PRODUCTS
 # ============================================
-
 @require_http_methods(["GET"])
 def featured_products(request):
     """
@@ -582,11 +526,6 @@ def featured_products(request):
             'products': []
         }, status=500)
 
-
-
-
-
-
 # ============================================
 # PRODUCT EMOJI HELPER
 # ============================================
@@ -633,9 +572,6 @@ def get_product_emoji(product):
     
     return '📦'
 
-
-
-
 def product_detail(request, pk):
     """Product detail page"""
     product = get_object_or_404(Product, pk=pk, is_active=True)
@@ -656,11 +592,6 @@ def product_detail(request, pk):
     }
     
     return render(request, 'website/product_detail.html', context)
-
-
-
-
-
 
 # ============================================
 # TRENDING STATS
@@ -707,14 +638,6 @@ def trending_stats(request):
             'error': str(e)
         }, status=500)
 
-
-
-
-
-
-
-
-
 # ============================================
 # PRODUCT VIEW INCREMENT
 # ============================================
@@ -747,17 +670,9 @@ def increment_product_view(request, product_id):
             'error': str(e)
         }, status=500)
 
-
-
-
-
-
-
-
 # ============================================
 # DASHBOARD URL CONTEXT PROCESSOR
 # ============================================
-
 def dashboard_url(request):
     """Make dashboard URL available globally in all templates"""
     url = '#'  # Default fallback
@@ -796,14 +711,6 @@ def dashboard_url(request):
     print(f"[DEBUG] Final dashboard_url: {url}")
     return {'dashboard_url': url}
 
-
-
-
-
-
-
-
-
 # ============================================
 # PRODUCTS PAGE
 # ============================================
@@ -824,13 +731,6 @@ def products_page(request):
     }
     
     return render(request, 'website/products.html', context)
-
-
-
-
-
-
-
 
 # ============================================
 # API FEATURED PRODUCTS
@@ -904,13 +804,6 @@ def api_featured_products(request):
             'products': []
         }, status=500)
 
-
-
-
-
-
-
-
 # ============================================
 # API HOME STATS
 # ============================================
@@ -967,16 +860,9 @@ def api_home_stats(request):
             }
         })
 
-
-
-
-
-
-
 # ============================================
 # API PRODUCTS BY CATEGORY
 # ============================================
-
 @require_http_methods(["GET"])
 def api_product_categories(request):
     """
@@ -1012,11 +898,6 @@ def api_product_categories(request):
             'message': str(e),
             'categories': []
         }, status=500)
-
-
-
-
-
 
 # ============================================
 # API QUICK SEARCH
@@ -1078,13 +959,9 @@ def api_quick_search(request):
             'products': []
         }, status=500)
 
-
-
 # ============================================
 # ORDER SEARCH - PUBLIC
 # ============================================
-from django.views.decorators.csrf import csrf_exempt
-
 @csrf_exempt
 @require_http_methods(["POST", "GET"])
 def search_order(request):
@@ -1210,7 +1087,6 @@ def search_order(request):
             'message': f'Search failed: {str(e)}'
         }, status=500)
 
-
 # ============================================
 # ORDER SEARCH PAGE - PUBLIC
 # ============================================
@@ -1223,8 +1099,6 @@ def order_search_page(request):
         'page_title': 'Track Your Order - Fieldmax'
     })
 
-
-
 # ============================================
 # SHOPPING CART
 # ============================================
@@ -1233,13 +1107,6 @@ def shopping_cart(request):
     return render(request, 'website/cart.html', {
         'page_title': 'Shopping Cart - Fieldmax'
     })
-
-
-
-
-
-
-
 
 # ============================================
 # VALIDATE CART
@@ -1328,11 +1195,6 @@ def validate_cart(request):
             'message': str(e)
         }, status=500)
 
-
-
-
-
-
 # ============================================
 # CHECKOUT
 # ============================================
@@ -1386,21 +1248,15 @@ def checkout(request):
             'message': f'Checkout failed: {str(e)}'
         }, status=500)
 
-
-
-
-
-
-
-
 # ============================================
-# CREATE PENDING ORDER
+# CREATE PENDING ORDER - PUBLIC
 # ============================================
 @csrf_exempt
 @require_http_methods(["POST"])
 def public_create_order(request):
     """
     DEFINITELY public endpoint for customer orders
+    Creates a pending order without any authentication
     """
     try:
         data = json.loads(request.body)
@@ -1477,12 +1333,6 @@ def public_create_order(request):
             'message': f'Failed to create order: {str(e)}'
         }, status=500)
 
-
-
-
-
-
-
 # ============================================
 # CHECKOUT PAGE
 # ============================================
@@ -1496,14 +1346,11 @@ def checkout_page(request):
         'page_title': 'Checkout - Fieldmax'
     })
 
-
-
-
-
-
 # ============================================
 # API: GET PENDING ORDERS WITH APPROVER INFO
 # ============================================
+@login_required
+@require_http_methods(["GET"])
 def api_pending_orders(request):
     """
     API endpoint to get all pending orders with approver info
@@ -1512,30 +1359,29 @@ def api_pending_orders(request):
     try:
         orders = PendingOrder.objects.all().order_by('-created_at')
         
-        # Use the serializer if available, otherwise build manually
-        try:
-            from .serializers import PendingOrderSerializer
-            serializer = PendingOrderSerializer(orders, many=True)
-            orders_data = serializer.data
-        except ImportError:
-            # Fallback to manual serialization
-            orders_data = []
-            for order in orders:
-                orders_data.append({
-                    'order_id': order.order_id,
-                    'buyer_name': order.buyer_name,
-                    'buyer_phone': order.buyer_phone,
-                    'buyer_id_number': order.buyer_id_number or '',
-                    'buyer_email': order.buyer_email or '',
-                    'total_amount': float(order.total_amount),
-                    'status': order.status,
-                    'created_at': order.created_at.isoformat(),
-                    'approved_by': order.approved_by.get_full_name() if order.approved_by else None,
-                    'rejected_by': order.rejected_by.get_full_name() if order.rejected_by else None,
-                    'approved_at': order.approved_at.isoformat() if order.approved_at else None,
-                    'rejected_at': order.rejected_at.isoformat() if order.rejected_at else None,
-                    'rejection_reason': order.rejection_reason
-                })
+        orders_data = []
+        for order in orders:
+            try:
+                cart_items = json.loads(order.cart_data) if order.cart_data else []
+            except:
+                cart_items = []
+            
+            orders_data.append({
+                'order_id': order.order_id,
+                'buyer_name': order.buyer_name,
+                'buyer_phone': order.buyer_phone,
+                'buyer_id_number': order.buyer_id_number or '',
+                'buyer_email': order.buyer_email or '',
+                'total_amount': float(order.total_amount),
+                'status': order.status,
+                'created_at': order.created_at.isoformat(),
+                'approved_by': order.approved_by.get_full_name() if order.approved_by else None,
+                'rejected_by': order.rejected_by.get_full_name() if order.rejected_by else None,
+                'approved_at': order.approved_at.isoformat() if order.approved_at else None,
+                'rejected_at': order.rejected_at.isoformat() if order.rejected_at else None,
+                'rejection_reason': order.rejection_reason,
+                'item_count': len(cart_items)
+            })
         
         return JsonResponse({
             'success': True,
@@ -1549,12 +1395,6 @@ def api_pending_orders(request):
             'error': str(e),
             'orders': []
         }, status=500)
-
-
-
-
-
-
 
 # ============================================
 # STAFF VIEW: LIST PENDING ORDERS
@@ -1577,12 +1417,6 @@ def pending_orders_list(request):
     }
 
     return render(request, 'website/pending_orders.html', context)
-
-
-
-
-
-
 
 # ============================================
 # API: GET PENDING ORDERS COUNT
@@ -1607,11 +1441,6 @@ def pending_orders_count(request):
             'count': 0,
             'error': str(e)
         })
-    
-
-
-
-
 
 @login_required
 @require_http_methods(["GET"])
@@ -1643,10 +1472,6 @@ def api_get_all_orders(request):
             'error': str(e)
         }, status=500)
 
-
-
-
-
 # ============================================
 # APPROVE ORDER WITH ETR GENERATION
 # ============================================
@@ -1671,7 +1496,10 @@ def approve_order(request, order_id):
             )
             
             # Parse cart items
-            cart_items = pending_order.cart_items
+            try:
+                cart_items = json.loads(pending_order.cart_data) if pending_order.cart_data else []
+            except:
+                cart_items = []
             
             # STEP 1: CREATE THE SALE
             sale = Sale.objects.create(
@@ -1693,7 +1521,7 @@ def approve_order(request, order_id):
                 try:
                     # Get product from database with lock
                     product = Product.objects.select_for_update().get(
-                        id=item['id'],
+                        id=item.get('id'),
                         is_active=True
                     )
                     
@@ -1702,7 +1530,7 @@ def approve_order(request, order_id):
                         errors.append(f"{product.name} has no category assigned and cannot be sold")
                         continue
                     
-                    quantity = item['quantity']
+                    quantity = item.get('quantity', 1)
                     
                     # Validate availability
                     if product.status == 'sold' and product.category.is_single_item:
@@ -1729,7 +1557,7 @@ def approve_order(request, order_id):
                     created_items.append(sale_item)
                     
                 except Product.DoesNotExist:
-                    errors.append(f"Product ID {item['id']} not found")
+                    errors.append(f"Product ID {item.get('id')} not found")
                     continue
                 except Exception as e:
                     logger.error(f"[APPROVAL ITEM ERROR] {str(e)}", exc_info=True)
@@ -1768,8 +1596,8 @@ def approve_order(request, order_id):
             # STEP 4: UPDATE PENDING ORDER WITH APPROVER INFO
             pending_order.status = 'completed'
             pending_order.sale_id = sale.sale_id
-            pending_order.approved_by = request.user  # NEW: Track who approved
-            pending_order.approved_at = timezone.now()  # NEW: Track when
+            pending_order.approved_by = request.user  # Track who approved
+            pending_order.approved_at = timezone.now()  # Track when
             pending_order.reviewed_by = request.user
             pending_order.reviewed_at = timezone.now()
             pending_order.save()
@@ -1806,11 +1634,6 @@ def approve_order(request, order_id):
             'message': f'Failed to approve order: {str(e)}'
         }, status=500)
 
-
-
-
-
-
 # ============================================
 # ETR GENERATION HELPER
 # ============================================
@@ -1839,11 +1662,6 @@ def generate_etr_from_sale_id(sale_id):
         logger.error(f"[ETR ERROR] Failed to extract from {sale_id}: {e}")
         return "0000"
 
-
-
-
-
-
 # ============================================
 # STAFF ACTION: REJECT ORDER
 # ============================================
@@ -1866,8 +1684,8 @@ def reject_order(request, order_id):
         # Update with rejection info
         pending_order.status = 'rejected'
         pending_order.rejection_reason = reason
-        pending_order.rejected_by = request.user  # NEW: Track who rejected
-        pending_order.rejected_at = timezone.now()  # NEW: Track when
+        pending_order.rejected_by = request.user  # Track who rejected
+        pending_order.rejected_at = timezone.now()  # Track when
         pending_order.reviewed_by = request.user
         pending_order.reviewed_at = timezone.now()
         pending_order.save()
@@ -1899,10 +1717,6 @@ def reject_order(request, order_id):
             'success': False,
             'message': f'Failed to reject order: {str(e)}'
         }, status=500)
-
-
-
-
 
 # ============================================
 # PROCESS ORDER
@@ -2074,9 +1888,6 @@ def process_order(request):
             'message': f'Failed to process order: {str(e)}'
         }, status=500)
 
-
-
-
 # ============================================
 # API: GET SINGLE ORDER DETAILS
 # ============================================
@@ -2121,8 +1932,8 @@ def api_single_order_details(request, order_id):
             'cart_items': cart_items,
             'created_at': order.created_at.isoformat() if order.created_at else None,
             'updated_at': order.updated_at.isoformat() if order.updated_at else None,
-            'approved_date': order.approved_date.isoformat() if order.approved_date else None,
-            'rejected_date': order.rejected_date.isoformat() if order.rejected_date else None,
+            'approved_date': order.approved_at.isoformat() if order.approved_at else None,
+            'rejected_date': order.rejected_at.isoformat() if order.rejected_at else None,
             'reviewed_at': order.reviewed_at.isoformat() if order.reviewed_at else None,
             'approved_by': approved_by_name,
             'rejected_by': rejected_by_name,
@@ -2149,14 +1960,9 @@ def api_single_order_details(request, order_id):
             'error': str(e)
         }, status=500)
 
-
-
-
-
 # ============================================
 # API: GET SINGLE ORDER DETAILS FOR NOTIFICATIONS
 # ============================================
-# Add this NEW function to views.py (replace the old one)
 @login_required
 @require_http_methods(["GET"])
 def get_order_details_notification(request, order_id):
@@ -2198,8 +2004,8 @@ def get_order_details_notification(request, order_id):
             'cart_items': cart_items,
             'created_at': order.created_at.isoformat() if order.created_at else None,
             'updated_at': order.updated_at.isoformat() if order.updated_at else None,
-            'approved_date': order.approved_date.isoformat() if order.approved_date else None,  # CORRECT FIELD NAME
-            'rejected_date': order.rejected_date.isoformat() if order.rejected_date else None,  # CORRECT FIELD NAME
+            'approved_date': order.approved_at.isoformat() if order.approved_at else None,
+            'rejected_date': order.rejected_at.isoformat() if order.rejected_at else None,
             'reviewed_at': order.reviewed_at.isoformat() if order.reviewed_at else None,
             'approved_by': approved_by_name,
             'rejected_by': rejected_by_name,
@@ -2227,15 +2033,9 @@ def get_order_details_notification(request, order_id):
             'error': str(e)
         }, status=500)
 
-
-
-
-
-
 # ============================================
-# NOTIFICATION SYSTEM - ADD THESE FUNCTIONS
+# NOTIFICATION SYSTEM
 # ============================================
-
 @login_required
 @require_http_methods(["GET"])
 def get_notifications(request):
@@ -2250,7 +2050,7 @@ def get_notifications(request):
         ).order_by('-created_at')[:20]
         
         # Get completed/rejected orders from last 24 hours
-        yesterday = timezone.now() - timezone.timedelta(days=1)
+        yesterday = timezone.now() - timedelta(days=1)
         recent_orders = PendingOrder.objects.filter(
             status__in=['completed', 'rejected'],
             updated_at__gte=yesterday
@@ -2321,12 +2121,6 @@ def get_notifications(request):
             'notifications': []
         }, status=500)
 
-
-
-
-
-
-
 # ============================================
 # MARK NOTIFICATION AS READ
 # ============================================
@@ -2343,10 +2137,6 @@ def mark_notification_read(request, notification_id):
         'success': True,
         'message': 'Notification marked as read'
     })
-
-
-
-
 
 # ============================================
 # APPROVE PENDING ORDER FROM NOTIFICATION
@@ -2370,10 +2160,6 @@ def approve_pending_order_notification(request, order_id):
             'success': False,
             'error': str(e)
         }, status=500)
-
-
-
-
 
 # ============================================
 # REJECT PENDING ORDER FROM NOTIFICATION
@@ -2404,10 +2190,123 @@ def reject_pending_order_notification(request, order_id):
 
 
 
+
+# ============================================
+# COMPLETED ORDERS - STAFF VIEW
+# ============================================
+@login_required
+@require_http_methods(["GET"])
+def completed_orders(request):
+    """
+    Staff view to see all completed orders
+    URL: /staff/orders/completed/
+    """
+    try:
+        # Get all completed orders (both from PendingOrder and Order models)
+        completed_pending_orders = PendingOrder.objects.filter(
+            status='completed'
+        ).select_related(
+            'approved_by', 'rejected_by', 'reviewed_by'
+        ).order_by('-updated_at')[:50]
+        
+        # Get completed orders from Order model if it exists
+        completed_orders_list = []
+        try:
+            from .models import Order
+            completed_orders_list = Order.objects.filter(
+                status='completed'
+            ).select_related('customer').order_by('-completed_at')[:50]
+        except (ImportError, AttributeError):
+            # Order model might not exist or have different fields
+            pass
+        
+        # Prepare data for template
+        orders_data = []
+        
+        # Add PendingOrder completed orders
+        for order in completed_pending_orders:
+            # Parse cart items for count
+            try:
+                cart_items = json.loads(order.cart_data) if order.cart_data else []
+                item_count = len(cart_items)
+            except:
+                item_count = order.items.count() if hasattr(order, 'items') else 0
+            
+            orders_data.append({
+                'id': order.order_id,
+                'order_id': order.order_id,
+                'type': 'pending_order',
+                'customer_name': order.buyer_name,
+                'customer_phone': order.buyer_phone,
+                'total_amount': float(order.total_amount),
+                'status': 'completed',
+                'created_at': order.created_at,
+                'completed_at': order.updated_at,
+                'processed_by': order.approved_by.get_full_name() if order.approved_by else 'System',
+                'item_count': item_count,
+                'sale_id': order.sale_id,
+                'details_url': reverse('website:pending-order-detail', args=[order.order_id])
+            })
+        
+        # Add Order model completed orders
+        for order in completed_orders_list:
+            orders_data.append({
+                'id': order.order_number,
+                'order_id': order.order_number,
+                'type': 'order',
+                'customer_name': order.customer_name,
+                'customer_phone': order.customer_phone,
+                'total_amount': float(order.total_amount),
+                'status': order.status,
+                'created_at': order.created_at,
+                'completed_at': order.completed_at,
+                'processed_by': 'System',
+                'item_count': order.items.count() if hasattr(order, 'items') else 0,
+                'details_url': f'/staff/orders/{order.order_number}/'  # You may need to create this URL
+            })
+        
+        # Sort by completed_at (most recent first)
+        orders_data.sort(key=lambda x: x['completed_at'] or x['created_at'], reverse=True)
+        
+        # Pagination
+        from django.core.paginator import Paginator
+        paginator = Paginator(orders_data, 20)
+        page_number = request.GET.get('page')
+        page_obj = paginator.get_page(page_number)
+        
+        # Statistics
+        total_completed = len(orders_data)
+        total_revenue = sum(order['total_amount'] for order in orders_data)
+        
+        context = {
+            'orders': page_obj,
+            'total_completed': total_completed,
+            'total_revenue': total_revenue,
+            'page_title': 'Completed Orders',
+        }
+        
+        return render(request, 'website/completed_orders.html', context)
+        
+    except Exception as e:
+        logger.error(f"[COMPLETED ORDERS ERROR] {str(e)}", exc_info=True)
+        messages.error(request, f'Error loading completed orders: {str(e)}')
+        return render(request, 'website/completed_orders.html', {
+            'orders': [],
+            'total_completed': 0,
+            'total_revenue': 0,
+            'error': str(e)
+        })
+
+
+
+
+
+
+
+
 # ============================================
 # ORDER SUCCESS
 # ============================================
-
 @require_http_methods(["GET"])
 def order_success(request):
     """
@@ -2416,11 +2315,6 @@ def order_success(request):
     return render(request, 'website/order_success.html', {
         'page_title': 'Order Successful - Fieldmax',
     })
-
-
-
-
-
 
 # ============================================
 # API ADD TO CART
@@ -2471,12 +2365,6 @@ def api_add_to_cart(request):
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
-
-
-
-
-
-
 # ============================================
 # SHOP VIEW
 # ============================================
@@ -2484,6 +2372,8 @@ def shop_view(request):
     """
     Display all products organized by category
     """
+    from django.conf import settings  # Ensure this import is at the top of file
+    
     category_id = request.GET.get('category')
     selected_category = None
     
@@ -2510,14 +2400,10 @@ def shop_view(request):
         'categories': categories_with_products,
         'all_categories': all_categories,
         'selected_category': selected_category,
-        'debug': settings.DEBUG,
+        'debug': settings.DEBUG,  # Now works correctly
     }
     
     return render(request, 'website/shop.html', context)
-
-
-
-
 
 # ============================================
 # SHOP LIST VIEW (CLASS-BASED)
@@ -2568,12 +2454,6 @@ class ShopListView(ListView):
         context['debug'] = settings.DEBUG
         
         return context
-
-
-
-
-
-
 
 # ============================================
 # SALES CHART DATA - FIXED VERSION
@@ -2673,18 +2553,10 @@ def get_sales_chart_data(request):
         }
     }
 
-
-
-
-
-
 def is_staff_subdomain(request):
     """Check if request is coming from staff subdomain"""
     host = request.get_host()
     return 'staff.fieldmaxstore' in host
-
-
-
 
 def get_client_ip(request):
     """Get client IP address"""
@@ -2694,12 +2566,6 @@ def get_client_ip(request):
     else:
         ip = request.META.get('REMOTE_ADDR')
     return ip
-
-
-
-
-
-
 
 # ============================================
 # FIX PRODUCT STATUSES
@@ -2834,21 +2700,9 @@ def debug_product_status(request, product_code):
     
     return render(request, "debug_product.html", debug_info)
 
-
-
-
-
-
-
-
 # ============================================
 # SESSION CHECK API
 # ============================================
-from django.http import JsonResponse
-from django.contrib.auth.decorators import login_required
-from django.views.decorators.http import require_http_methods
-from django.utils import timezone
-
 @login_required
 @require_http_methods(["GET"])
 def check_session_status(request):
@@ -2902,12 +2756,83 @@ def check_session_status(request):
             'session_expires_soon': False,
             'error': str(e)
         })
-    
 
 
 
 
-    # ============================================
+
+
+
+# ============================================
+# PENDING ORDER DETAIL - STAFF VIEW
+# ============================================
+@login_required
+@require_http_methods(["GET"])
+def pending_order_detail(request, order_id):
+    """
+    Staff view to see details of a specific pending order
+    URL: /staff/pending-orders/<order_id>/
+    """
+    try:
+        # Get the order with all related data
+        order = PendingOrder.objects.select_related(
+            'approved_by', 'rejected_by', 'reviewed_by'
+        ).prefetch_related('items').get(order_id=order_id)
+        
+        # Parse cart data if available
+        cart_items = []
+        if order.cart_data:
+            try:
+                cart_items = json.loads(order.cart_data)
+            except:
+                # If cart_data is invalid JSON, try to get from items
+                cart_items = [
+                    {
+                        'name': item.product_name,
+                        'quantity': item.quantity,
+                        'price': float(item.unit_price),
+                        'total': float(item.unit_price) * item.quantity
+                    }
+                    for item in order.items.all()
+                ]
+        
+        # Get items from the PendingOrderItem model if available
+        items_from_model = []
+        for item in order.items.all():
+            items_from_model.append({
+                'id': item.id,
+                'product_name': item.product_name,
+                'quantity': item.quantity,
+                'unit_price': float(item.unit_price),
+                'total_price': float(item.unit_price) * item.quantity
+            })
+        
+        # Use cart_items if we have them, otherwise use items_from_model
+        display_items = cart_items if cart_items else items_from_model
+        
+        context = {
+            'order': order,
+            'items': display_items,
+            'items_count': len(display_items),
+            'page_title': f'Order #{order.order_id}',
+        }
+        
+        return render(request, 'website/pending_order_detail.html', context)
+        
+    except PendingOrder.DoesNotExist:
+        raise Http404(f"Order with ID {order_id} does not exist")
+    except Exception as e:
+        logger.error(f"[PENDING ORDER DETAIL ERROR] {str(e)}", exc_info=True)
+        messages.error(request, f'Error loading order: {str(e)}')
+        return redirect('website:pending-orders-list')
+
+
+
+
+
+
+
+# ============================================
 # PENDING ORDER RECEIPT
 # ============================================
 @require_http_methods(["GET"])
@@ -2955,7 +2880,6 @@ def pending_order_receipt(request, order_id):
         return render(request, '500.html', {
             'message': f'Error generating receipt: {str(e)}'
         }, status=500)
-
 
 # ============================================
 # API: GET ORDER RECEIPT DATA
@@ -3016,3 +2940,254 @@ def api_order_receipt(request, order_id):
             'success': False,
             'message': str(e)
         }, status=500)
+
+
+
+
+
+        # ============================================
+# CUSTOMER MANAGEMENT VIEWS
+# ============================================
+@login_required
+@require_http_methods(["GET"])
+def customer_list(request):
+    """
+    List all customers from the system
+    URL: /customers/
+    """
+    try:
+        # Get customers from different sources
+        customers = []
+        
+        # 1. Get customers from PendingOrder (unique by phone)
+        order_customers = PendingOrder.objects.values(
+            'buyer_name', 'buyer_phone', 'buyer_email'
+        ).distinct().order_by('buyer_name')
+        
+        for cust in order_customers:
+            if cust['buyer_name'] and cust['buyer_phone']:
+                customers.append({
+                    'name': cust['buyer_name'],
+                    'phone': cust['buyer_phone'],
+                    'email': cust.get('buyer_email', ''),
+                    'total_orders': PendingOrder.objects.filter(buyer_phone=cust['buyer_phone']).count(),
+                    'last_order': PendingOrder.objects.filter(buyer_phone=cust['buyer_phone']).order_by('-created_at').first(),
+                })
+        
+        # 2. Get customers from Customer model if it exists
+        try:
+            from .models import Customer
+            db_customers = Customer.objects.filter(is_active=True).order_by('full_name')
+            for cust in db_customers:
+                # Check if already added
+                if not any(c['phone'] == cust.phone for c in customers if c.get('phone')):
+                    customers.append({
+                        'name': cust.full_name,
+                        'phone': cust.phone,
+                        'email': cust.email,
+                        'total_orders': cust.orders.count() if hasattr(cust, 'orders') else 0,
+                        'last_order': cust.orders.order_by('-created_at').first() if hasattr(cust, 'orders') else None,
+                        'address': cust.address,
+                        'city': cust.city,
+                    })
+        except (ImportError, AttributeError):
+            pass
+        
+        # 3. Get customers from Sales
+        try:
+            from sales.models import Sale
+            sale_customers = Sale.objects.filter(
+                buyer_name__isnull=False,
+                buyer_phone__isnull=False
+            ).values('buyer_name', 'buyer_phone', 'buyer_email').distinct().order_by('buyer_name')
+            
+            for cust in sale_customers:
+                if not any(c['phone'] == cust['buyer_phone'] for c in customers if c.get('phone')):
+                    customers.append({
+                        'name': cust['buyer_name'],
+                        'phone': cust['buyer_phone'],
+                        'email': cust.get('buyer_email', ''),
+                        'total_orders': Sale.objects.filter(buyer_phone=cust['buyer_phone']).count(),
+                        'last_order': Sale.objects.filter(buyer_phone=cust['buyer_phone']).order_by('-sale_date').first(),
+                    })
+        except ImportError:
+            pass
+        
+        # Sort customers by name
+        customers.sort(key=lambda x: x['name'].lower() if x['name'] else '')
+        
+        # Pagination
+        from django.core.paginator import Paginator
+        paginator = Paginator(customers, 20)
+        page_number = request.GET.get('page')
+        page_obj = paginator.get_page(page_number)
+        
+        context = {
+            'customers': page_obj,
+            'total_customers': len(customers),
+            'page_title': 'Customer List',
+        }
+        
+        return render(request, 'website/customer_list.html', context)
+        
+    except Exception as e:
+        logger.error(f"[CUSTOMER LIST ERROR] {str(e)}", exc_info=True)
+        messages.error(request, f'Error loading customers: {str(e)}')
+        return render(request, 'website/customer_list.html', {'customers': [], 'total_customers': 0})
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def customer_create(request):
+    """
+    Create a new customer
+    URL: /customers/create/
+    """
+    if request.method == 'POST':
+        try:
+            data = request.POST
+            
+            # Try to use Customer model if it exists
+            try:
+                from .models import Customer
+                
+                # Check if customer already exists
+                if Customer.objects.filter(phone=data.get('phone')).exists():
+                    messages.error(request, 'Customer with this phone number already exists.')
+                    return redirect('website:customer-create')
+                
+                customer = Customer.objects.create(
+                    full_name=data.get('full_name'),
+                    email=data.get('email', ''),
+                    phone=data.get('phone'),
+                    address=data.get('address', ''),
+                    city=data.get('city', ''),
+                    postal_code=data.get('postal_code', ''),
+                )
+                
+                messages.success(request, f'Customer {customer.full_name} created successfully!')
+                return redirect('website:customer-list')
+                
+            except (ImportError, AttributeError):
+                # If Customer model doesn't exist, just show success message
+                messages.success(request, f'Customer {data.get("full_name")} would be created (model not available).')
+                return redirect('website:customer-list')
+                
+        except Exception as e:
+            logger.error(f"[CUSTOMER CREATE ERROR] {str(e)}", exc_info=True)
+            messages.error(request, f'Error creating customer: {str(e)}')
+    
+    # GET request - show form
+    return render(request, 'website/customer_form.html', {
+        'page_title': 'Create Customer',
+        'form_action': 'create',
+    })
+
+
+
+
+# ============================================
+# REPORT VIEWS (Placeholder)
+# ============================================
+@login_required
+@require_http_methods(["GET"])
+def order_report(request):
+    """
+    Placeholder for order reports
+    """
+    context = {
+        'page_title': 'Order Reports - Coming Soon',
+        'report_type': 'Orders',
+        'message': 'Order reports are under development. Check back soon!'
+    }
+    return render(request, 'website/report_placeholder.html', context)
+
+
+@login_required
+@require_http_methods(["GET"])
+def sales_report(request):
+    """
+    Placeholder for sales reports
+    """
+    context = {
+        'page_title': 'Sales Analysis - Coming Soon',
+        'report_type': 'Sales Analysis',
+        'message': 'Sales analysis reports are under development. Check back soon!'
+    }
+    return render(request, 'website/report_placeholder.html', context)
+
+
+@login_required
+@require_http_methods(["GET"])
+def performance_report(request):
+    """
+    Placeholder for performance reports
+    """
+    context = {
+        'page_title': 'Performance Reports - Coming Soon',
+        'report_type': 'Performance',
+        'message': 'Performance reports are under development. Check back soon!'
+    }
+    return render(request, 'website/report_placeholder.html', context)
+
+
+
+
+
+
+
+# ============================================
+# PROFILE VIEW
+# ============================================
+@login_required
+def profile(request):
+    """Simple profile view"""
+    context = {
+        'user': request.user,
+        'page_title': 'My Profile'
+    }
+    return render(request, 'staff/profile.html', context)
+
+
+# ============================================
+# SETTINGS VIEW
+# ============================================
+@login_required
+def settings(request):
+    """Simple settings view"""
+    context = {
+        'user': request.user,
+        'page_title': 'Settings'
+    }
+    return render(request, 'staff/settings.html', context)
+
+
+# ============================================
+# API: GET CART COUNT
+# ============================================
+@login_required
+@require_http_methods(["GET"])
+def api_cart_count(request):
+    """
+    API endpoint to get cart count from session
+    URL: /api/cart/count/
+    """
+    try:
+        # Get cart from session
+        cart = request.session.get('cart', {})
+        sales_cart = request.session.get('sales_cart', [])
+        
+        # Calculate total count
+        cart_count = len(cart) + len(sales_cart)
+        
+        return JsonResponse({
+            'success': True,
+            'count': cart_count
+        })
+    except Exception as e:
+        logger.error(f"[CART COUNT ERROR] {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'count': 0,
+            'error': str(e)
+        })

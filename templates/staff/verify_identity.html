@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify Identity - FieldMax Staff Portal</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .verification-card {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            margin-top: 30px;
+        }
+        .upload-area {
+            border: 2px dashed #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            background: #f8f9fa;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .upload-area:hover {
+            border-color: #0d6efd;
+            background: #e7f1ff;
+        }
+        .upload-area input[type="file"] {
+            display: none;
+        }
+        .upload-label {
+            cursor: pointer;
+            display: block;
+        }
+        .preview-image {
+            max-width: 100%;
+            max-height: 100px;
+            margin-top: 10px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <div class="verification-card p-4">
+                    <!-- Header -->
+                    <div class="text-center mb-4">
+                        <i class="fas fa-shield-alt fa-3x text-primary mb-3"></i>
+                        <h2>Identity Verification Required</h2>
+                        <p class="text-muted">Please verify your identity to access the staff portal</p>
+                    </div>
+                    
+                    <!-- Messages -->
+                    {% if messages %}
+                        {% for message in messages %}
+                            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                    
+                    <!-- Staff Info Card -->
+                    <div class="card bg-light mb-4">
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-sm-6">
+                                    <p><strong><i class="fas fa-user me-2"></i>Name:</strong> {{ staff.user.get_full_name }}</p>
+                                    <p><strong><i class="fas fa-id-card me-2"></i>Staff ID:</strong> {{ staff.staff_id }}</p>
+                                </div>
+                                <div class="col-sm-6">
+                                    <p><strong><i class="fas fa-envelope me-2"></i>Email:</strong> {{ staff.user.email }}</p>
+                                    <p><strong><i class="fas fa-briefcase me-2"></i>Position:</strong> {{ staff.position|title }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- DEV MODE: Show verification code -->
+                    <div class="alert alert-warning text-center">
+                        <i class="fas fa-flask me-2"></i>
+                        <strong>DEVELOPMENT MODE</strong>
+                        <div class="mt-2">
+                            <span class="badge bg-dark fs-3 p-3">{{ verification_code }}</span>
+                        </div>
+                        <small class="d-block mt-2">Copy this code to verify</small>
+                    </div>
+                    
+                    <!-- Verification Form -->
+                    <form method="post" enctype="multipart/form-data" id="verificationForm">
+                        {% csrf_token %}
+                        
+                        <!-- Code Expiration Warning -->
+                        {% if is_expired %}
+                            <div class="alert alert-danger">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                Your verification code has expired. 
+                                <button type="submit" name="action" value="resend" class="btn btn-sm btn-warning ms-3">
+                                    <i class="fas fa-redo-alt me-1"></i>Resend Code
+                                </button>
+                            </div>
+                        {% else %}
+                            {% if time_remaining %}
+                                <div class="alert alert-warning">
+                                    <i class="fas fa-clock me-2"></i>
+                                    Code expires in: <strong>{{ time_remaining }}</strong>
+                                </div>
+                            {% endif %}
+                        {% endif %}
+                        
+                        <!-- Verification Code Input -->
+                        <div class="mb-4">
+                            <label for="verification_code" class="form-label fw-bold">
+                                <i class="fas fa-key me-2"></i>Verification Code
+                            </label>
+                            <input type="text" 
+                                   class="form-control form-control-lg text-center" 
+                                   id="verification_code" 
+                                   name="verification_code" 
+                                   placeholder="Enter 6-digit code"
+                                   maxlength="6"
+                                   pattern="\d{6}"
+                                   required>
+                            <div class="form-text text-center">Enter the 6-digit code shown above</div>
+                        </div>
+                        
+                        <!-- Document Upload Section -->
+                        <h5 class="mt-4 mb-3">
+                            <i class="fas fa-upload me-2"></i>
+                            Upload Required Documents
+                        </h5>
+                        
+                        <div class="row g-3">
+                            <!-- ID Front -->
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">ID Front</label>
+                                <div class="upload-area" onclick="document.getElementById('id_front').click()">
+                                    <input type="file" 
+                                           id="id_front" 
+                                           name="id_front" 
+                                           accept="image/*"
+                                           required
+                                           onchange="previewFile(this, 'idFrontPreview')">
+                                    <div class="upload-label">
+                                        <i class="fas fa-cloud-upload-alt fa-2x mb-2"></i>
+                                        <p class="mb-0">Click to upload</p>
+                                    </div>
+                                    <div id="idFrontPreview" class="preview-container"></div>
+                                </div>
+                                <small class="text-muted d-block mt-1">Upload ID front side</small>
+                            </div>
+                            
+                            <!-- ID Back -->
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">ID Back</label>
+                                <div class="upload-area" onclick="document.getElementById('id_back').click()">
+                                    <input type="file" 
+                                           id="id_back" 
+                                           name="id_back" 
+                                           accept="image/*"
+                                           required
+                                           onchange="previewFile(this, 'idBackPreview')">
+                                    <div class="upload-label">
+                                        <i class="fas fa-cloud-upload-alt fa-2x mb-2"></i>
+                                        <p class="mb-0">Click to upload</p>
+                                    </div>
+                                    <div id="idBackPreview" class="preview-container"></div>
+                                </div>
+                                <small class="text-muted d-block mt-1">Upload ID back side</small>
+                            </div>
+                            
+                            <!-- Live Photo -->
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">Live Photo</label>
+                                <div class="upload-area" onclick="document.getElementById('live_photo').click()">
+                                    <input type="file" 
+                                           id="live_photo" 
+                                           name="live_photo" 
+                                           accept="image/*"
+                                           capture="user"
+                                           required
+                                           onchange="previewFile(this, 'livePhotoPreview')">
+                                    <div class="upload-label">
+                                        <i class="fas fa-camera fa-2x mb-2"></i>
+                                        <p class="mb-0">Take a selfie</p>
+                                    </div>
+                                    <div id="livePhotoPreview" class="preview-container"></div>
+                                </div>
+                                <small class="text-muted d-block mt-1">Take a current photo</small>
+                            </div>
+                        </div>
+                        
+                        <!-- Attempts Remaining -->
+                        {% if attempts_remaining %}
+                            <div class="alert alert-warning mt-3">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                Attempts remaining: <strong>{{ attempts_remaining }}</strong>
+                            </div>
+                        {% endif %}
+                        
+                        <!-- Buttons -->
+                        <div class="d-flex justify-content-between mt-4 pt-3 border-top">
+                            <button type="submit" name="action" value="resend" class="btn btn-outline-secondary btn-lg">
+                                <i class="fas fa-redo-alt me-2"></i>Resend Code
+                            </button>
+                            
+                            <button type="submit" class="btn btn-primary btn-lg" {% if is_expired %}disabled{% endif %}>
+                                <i class="fas fa-check-circle me-2"></i>Verify Identity
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // File preview function
+        function previewFile(input, previewId) {
+            const preview = document.getElementById(previewId);
+            preview.innerHTML = '';
+            
+            if (input.files && input.files[0]) {
+                const file = input.files[0];
+                const reader = new FileReader();
+                
+                reader.onload = function(e) {
+                    const img = document.createElement('img');
+                    img.src = e.target.result;
+                    img.className = 'preview-image';
+                    preview.appendChild(img);
+                    
+                    // Add file name
+                    const fileName = document.createElement('small');
+                    fileName.className = 'text-muted d-block mt-1';
+                    fileName.textContent = file.name;
+                    preview.appendChild(fileName);
+                }
+                
+                reader.readAsDataURL(file);
+                
+                // Style the upload area
+                const uploadArea = input.closest('.upload-area');
+                uploadArea.style.borderColor = '#28a745';
+                uploadArea.style.background = '#f0fff4';
+            }
+        }
+        
+        // Auto-submit when code is entered (optional)
+        document.getElementById('verification_code').addEventListener('input', function(e) {
+            if (this.value.length === 6) {
+                // Could auto-submit if desired
+            }
+        });
+    </script>
+    
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
