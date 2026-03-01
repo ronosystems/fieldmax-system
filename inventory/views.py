@@ -466,7 +466,20 @@ def product_add(request):
                 product.supplier = supplier
                 product.save()
             
-            # Send admin notification
+
+
+
+
+
+
+
+
+
+
+            # ============================================
+            # ADD ADMIN NOTIFICATION HERE
+            # ============================================
+            """
             try:
                 from utils.notifications import AdminNotifier
                 AdminNotifier.notify_product_added(product, request.user)
@@ -478,7 +491,18 @@ def product_add(request):
             
             messages.success(request, f'Product "{name}" created successfully with reorder level {reorder_level}.')
             return redirect('inventory:product_detail', pk=product.id)
+            """
             
+
+
+
+
+
+
+
+
+
+
         except Category.DoesNotExist:
             messages.error(request, 'Selected category does not exist.')
             return redirect('inventory:product_add')
@@ -596,9 +620,20 @@ def product_bulk_add(request):
                 created_count += 1
                 created_products.append(product)  # ✅ FIX: Add product to the list
             
+
+
+
+
+
+
+
+
+
+
             # ============================================
             # ADD ADMIN NOTIFICATION HERE
             # ============================================
+            """
             if created_count > 0:
                 try:
                     from utils.notifications import AdminNotifier
@@ -612,7 +647,19 @@ def product_bulk_add(request):
                     logger.warning("AdminNotifier not available - skipping notification")
                 except Exception as e:
                     logger.error(f"Failed to send bulk add notification: {str(e)}")
+            """
             
+
+
+
+
+
+
+
+
+
+
+
             # Show success message
             if created_count > 0:
                 messages.success(
@@ -951,9 +998,21 @@ def process_restock(request):
             
             logger.info(f"Restocked: {product.product_code} - Qty: {quantity}")
             
+
+
+
+
+
+
+
+
+
+
+
             # ============================================
             # SEND ADMIN NOTIFICATION
             # ============================================
+            """
             try:
                 from utils.notifications import AdminNotifier
                 
@@ -976,7 +1035,19 @@ def process_restock(request):
             except Exception as e:
                 logger.error(f"Failed to send restock notification: {str(e)}")
                 # Don't fail the restock if notification fails
-        
+            """
+
+
+
+
+
+
+
+
+
+
+
+
         return JsonResponse({
             'success': True,
             'message': f'Successfully added {quantity} units to {product.name}',
@@ -1274,9 +1345,21 @@ def stock_entry_add(request, product_id):
                 created_by=request.user
             )
             
+
+
+
+
+
+
+
+
+
+
+
             # ============================================
             # ADD ADMIN NOTIFICATIONS HERE
             # ============================================
+            """
             try:
                 from utils.notifications import AdminNotifier
                 
@@ -1313,7 +1396,16 @@ def stock_entry_add(request, product_id):
                 logger.warning("AdminNotifier not available - skipping notifications")
             except Exception as e:
                 logger.error(f"Failed to send stock notifications: {str(e)}")
+            """
             
+
+
+
+
+
+
+
+
             messages.success(request, f'Stock entry added successfully for {product.display_name}.')
             return redirect('inventory:product_detail', pk=product.id)
             
@@ -1791,9 +1883,19 @@ def product_transfer(request):
                     transferred_products.append(product)
                     transferred_skus.append(product.sku_value)
                 
+
+
+
+
+
+
+
+
+
                 # ============================================
                 # ADD ADMIN NOTIFICATION HERE
                 # ============================================
+                """
                 try:
                     from utils.notifications import AdminNotifier
                     AdminNotifier.notify_products_transferred(
@@ -1807,7 +1909,14 @@ def product_transfer(request):
                     logger.warning("AdminNotifier not available - skipping notification")
                 except Exception as e:
                     logger.error(f"Failed to send transfer notification: {str(e)}")
+                """
                 
+
+
+
+
+
+
                 messages.success(
                     request,
                     f'✅ Successfully transferred {transferred_count} products to {receiver.get_full_name() or receiver.username}.'
