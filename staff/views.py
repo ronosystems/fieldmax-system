@@ -2416,9 +2416,18 @@ def application_form(request):
             
             logger.info(f"New staff application created: {application.full_name()} (ID: {application.id})")
             
+
+
+
+
+
+
+
+
             # ============================================
             # SEND ADMIN NOTIFICATION
             # ============================================
+            """
             try:
                 from utils.notifications import AdminNotifier
                 AdminNotifier.notify_new_application(application)
@@ -2428,7 +2437,18 @@ def application_form(request):
             except Exception as e:
                 logger.error(f"Failed to send admin notification: {str(e)}")
                 # Don't fail the application if notification fails
-            
+            """
+
+
+
+
+
+
+
+
+
+
+
             # Return response based on request type
             if is_ajax:
                 return JsonResponse({
@@ -2462,6 +2482,13 @@ def application_form(request):
         'positions': StaffApplication.POSITION_CHOICES,
     }
     return render(request, 'staff/apply.html', context)
+
+
+
+
+
+
+
 
 
 
@@ -2698,11 +2725,21 @@ def application_approve(request, pk):
             application.save()
             
             # Send email to applicant
-            send_login_credentials(application, user, password)
+#            send_login_credentials(application, user, password)
             
+
+
+
+
+
+
+
+
+
             # ============================================
             # SEND ADMIN NOTIFICATION
             # ============================================
+            """
             try:
                 from utils.notifications import AdminNotifier
                 # Notify admin about approval
@@ -2717,7 +2754,15 @@ def application_approve(request, pk):
             except Exception as e:
                 logger.error(f"Failed to send admin notification: {str(e)}")
                 # Don't fail the approval if notification fails
-            
+            """
+
+
+
+
+
+
+
+
             messages.success(
                 request, 
                 f'✅ Application for {application.full_name()} has been approved.<br>'
@@ -2749,7 +2794,7 @@ def application_approve(request, pk):
 
 
 
-def send_login_credentials(application, user, password):
+#def send_login_credentials(application, user, password):
     """Send login credentials to approved staff"""
     try:
         subject = f'🎉 Welcome to FieldMax - Your Staff Account has been Created'
@@ -2887,10 +2932,10 @@ def application_revert_to_pending(request, pk):
         )
         
         # Send email notification to applicant (optional)
-        try:
-            send_revert_notification(application, user_deleted, username)
-        except Exception as e:
-            logger.error(f"Failed to send revert notification email: {str(e)}")
+#        try:
+#            send_revert_notification(application, user_deleted, username)
+#        except Exception as e:
+#            logger.error(f"Failed to send revert notification email: {str(e)}")
         
         # Success message
         if user_deleted:
@@ -2914,50 +2959,50 @@ def application_revert_to_pending(request, pk):
     return redirect('staff:application_list')
 
 
-def send_revert_notification(application, user_deleted, username):
-    """Send notification email when application is reverted"""
-    try:
-        subject = f'FieldMax - Your Staff Application Status Update'
+#def send_revert_notification(application, user_deleted, username):
+#    """Send notification email when application is reverted"""
+#    try:
+#        subject = f'FieldMax - Your Staff Application Status Update'
         
-        context = {
-            'name': application.full_name(),
-            'application_id': application.id,
-            'position': application.get_position_display(),
-            'user_deleted': user_deleted,
-            'username': username,
-            'reverted_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
-            'support_email': settings.DEFAULT_FROM_EMAIL,
-        }
+#        context = {
+#            'name': application.full_name(),
+#            'application_id': application.id,
+#            'position': application.get_position_display(),
+#            'user_deleted': user_deleted,
+#            'username': username,
+#            'reverted_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
+#            'support_email': settings.DEFAULT_FROM_EMAIL,
+#        }
+#        
+#        html_message = render_to_string('staff/email/revert_notification.html', context)
+#        plain_message = f"""
+#        Dear {application.full_name()},
+#        
+#        Your staff application (#{application.id}) status has been updated.
+#        
+#        Status: PENDING (Reverted from Approved)
+#        Position: {application.get_position_display()}
+#        Date: {timezone.now().strftime('%Y-%m-%d %H:%M')}
+#        
+#        {'Your user account access has been removed.' if user_deleted else ''}
+#        
+#        If you have any questions, please contact the HR department.
+#        
+#        Regards,
+#        FieldMax HR Team
+#        """
+#        
+#        send_mail(
+#            subject,
+#            plain_message,
+#            settings.DEFAULT_FROM_EMAIL,
+#            [application.email],
+#            html_message=html_message,
+#            fail_silently=True,
+#        )
         
-        html_message = render_to_string('staff/email/revert_notification.html', context)
-        plain_message = f"""
-        Dear {application.full_name()},
-        
-        Your staff application (#{application.id}) status has been updated.
-        
-        Status: PENDING (Reverted from Approved)
-        Position: {application.get_position_display()}
-        Date: {timezone.now().strftime('%Y-%m-%d %H:%M')}
-        
-        {'Your user account access has been removed.' if user_deleted else ''}
-        
-        If you have any questions, please contact the HR department.
-        
-        Regards,
-        FieldMax HR Team
-        """
-        
-        send_mail(
-            subject,
-            plain_message,
-            settings.DEFAULT_FROM_EMAIL,
-            [application.email],
-            html_message=html_message,
-            fail_silently=True,
-        )
-        
-    except Exception as e:
-        logger.error(f"Failed to send revert notification email to {application.email}: {str(e)}")
+#    except Exception as e:
+#        logger.error(f"Failed to send revert notification email to {application.email}: {str(e)}")
 
 
 
@@ -2984,9 +3029,17 @@ def application_reject(request, pk):
             application.review_notes = reason
             application.save()
             
+
+
+
+
+
+
+
             # ============================================
             # SEND ADMIN NOTIFICATION
             # ============================================
+            """
             try:
                 from utils.notifications import AdminNotifier
                 # Notify admin about rejection
@@ -3000,6 +3053,11 @@ def application_reject(request, pk):
                 logger.warning("AdminNotifier not available - skipping notification")
             except Exception as e:
                 logger.error(f"Failed to send admin notification: {str(e)}")
+            """
+
+
+
+
             
             messages.success(
                 request, 

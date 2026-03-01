@@ -628,10 +628,16 @@ def sale_create(request):
                     except Exception as e:
                         logger.error(f"Credit record creation failed: {str(e)}")
                 
+
+
+
+
+
+
                 # ============================================
                 # ADD NOTIFICATION HERE - AFTER SUCCESSFUL SALE
                 # ============================================
-                # Import the notifier
+                """
                 from utils.notifications import AdminNotifier
                 
                 # Send notification to admin
@@ -641,7 +647,12 @@ def sale_create(request):
                 except Exception as e:
                     logger.error(f"Failed to send admin notification: {str(e)}")
                     # Don't fail the sale if notification fails
-                
+                """
+
+
+
+
+
                 # Return appropriate response
                 if is_ajax:
                     return JsonResponse({
@@ -739,9 +750,18 @@ def sale_reverse(request, sale_id):
                 # Reverse the sale
                 result = sale.reverse_sale(reversed_by=request.user)
                 
+
+
+
+
+
+
+
+
                 # ============================================
-                # ADD NOTIFICATION FOR SALE REVERSAL (with error handling)
+                # ADD NOTIFICATION FOR SALE REVERSAL 
                 # ============================================
+                """
                 try:
                     from utils.notifications import AdminNotifier
                     AdminNotifier.notify_sale_reversed(sale, request.user, reason)
@@ -750,7 +770,16 @@ def sale_reverse(request, sale_id):
                     logger.warning("AdminNotifier not available - skipping notification")
                 except Exception as e:
                     logger.error(f"Failed to send reversal notification: {str(e)}")
-                
+                """
+
+
+
+
+
+
+
+
+
                 messages.success(request, result)
                 return redirect('sales:sale_detail', sale_id=sale_id)
                 
