@@ -13,23 +13,21 @@ def send_email_via_api(to_email, subject, html_content, plain_text=None):
         logger.error("❌ SENDGRID_API_KEY not set in environment")
         return False
     
-    # Check sendgrid version
+    # Get sendgrid version
     sendgrid_version = sendgrid.__version__
     logger.info(f"📧 Using SendGrid version: {sendgrid_version}")
     
     try:
         if sendgrid_version.startswith('3.'):
             # Version 3.x syntax
-            import sendgrid
             from sendgrid.helpers.mail import Email, Content, Mail
             
-            sg = sendgrid.SendGridAPIClient(api_key=settings.SENDGRID_API_KEY)
+            sg = SendGridAPIClient(settings.SENDGRID_API_KEY)
             from_email = Email(settings.DEFAULT_FROM_EMAIL)
             to_email_obj = Email(to_email)
-            subject_line = subject
             content = Content("text/plain", plain_text or "")
             
-            mail = Mail(from_email, subject_line, to_email_obj, content)
+            mail = Mail(from_email, subject, to_email_obj, content)
             
             # Add HTML content if provided
             if html_content:
