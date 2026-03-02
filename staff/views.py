@@ -447,8 +447,8 @@ def staff_dashboard(request):
 
 
         # ✅ TEMPORARY: Auto-verify OTP
-        request.session['otp_verified'] = True
-        messages.info(request, '🔧 DEV MODE - OTP verification auto-approved')
+#        request.session['otp_verified'] = True
+#        messages.info(request, '🔧 DEV MODE - OTP verification auto-approved')
     
     # ============================================
     # STEP 6: If all checks passed, redirect directly
