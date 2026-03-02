@@ -95,6 +95,9 @@ logger.info(f"✅ Worker thread started. Alive: {worker_thread.is_alive()}")
 
 
 
+
+
+
 @login_required
 def otp_verify(request):
     """OTP verification page"""
@@ -125,13 +128,15 @@ def otp_verify(request):
         else:
             messages.error(request, message)
     
-    # Generate new OTP if needed - WITH QUEUE-BASED EMAIL (PAUSED)
+    # Generate new OTP if needed
     if request.method == 'GET' or 'resend' in request.GET:
         otp = OTPVerification.generate_otp(request.user, purpose='dashboard_access')
         
         # Prepare email content
         user_name = request.user.get_full_name() or request.user.username
-        subject = 'FieldMax - Your Dashboard Access Code'
+        subject = '🔐 FieldMax - Your Dashboard Access Code'
+        
+        # Plain text message
         plain_message = f"""
         Dear {user_name},
         
@@ -179,19 +184,19 @@ def otp_verify(request):
         </html>
         """
         
-        # 🚫 EMAIL PAUSED - Commented out for now
-        # Send email via queue (non-blocking)
-        # queue_email(subject, plain_message, [request.user.email], html_message)
-        # messages.info(request, f'A 6-digit OTP has been sent to your email: {request.user.email}')
+        # ✅ IMPORTANT: THIS SENDS THE EMAIL (UNCOMMENTED)
+        queue_email(subject, plain_message, [request.user.email], html_message)
+        messages.success(request, f'✅ A 6-digit OTP has been sent to {request.user.email}')
         
-        # ✅ TEMPORARY: Show OTP in message instead
-        messages.info(request, f'🔧 DEV MODE - Your OTP is: {otp.otp_code}')
+        # Log for debugging
+        logger.info(f"📧 OTP {otp.otp_code} sent to {request.user.email}")
     
     context = {
         'user_role': get_user_role(request.user),
         'user_email': request.user.email,
     }
     return render(request, 'staff/otp_verify.html', context)
+
 
 
 
@@ -204,11 +209,11 @@ def otp_resend(request):
         
         # Prepare email content
         user_name = request.user.get_full_name() or request.user.username
-        subject = 'FieldMax - Your Dashboard Access Code'
+        subject = 'FieldMax - New OTP Code'
         plain_message = f"""
         Dear {user_name},
         
-        Your One-Time Password (OTP) for dashboard access is: {otp.otp_code}
+        Your new One-Time Password (OTP) for dashboard access is: {otp.otp_code}
         
         This code will expire in 5 minutes.
         
@@ -237,7 +242,7 @@ def otp_resend(request):
                 </div>
                 <div class="content">
                     <p>Dear <strong>{user_name}</strong>,</p>
-                    <p>Your One-Time Password (OTP) for dashboard access is:</p>
+                    <p>Your new One-Time Password (OTP) is:</p>
                     <div class="otp-code">{otp.otp_code}</div>
                     <p>This code will expire in <strong>5 minutes</strong>.</p>
                 </div>
@@ -250,24 +255,22 @@ def otp_resend(request):
         """
         
         logger.info(f"📧 Adding OTP email to queue for: {request.user.email}")
-        logger.info(f"📧 OTP Code: {otp.otp_code}")
-        logger.info(f"📧 Queue size before add: {email_queue.qsize()}")
-
-        # 🚫 EMAIL PAUSED - Commented out for now
-        # SINGLE CALL to queue_email
-        # queue_email(subject, plain_message, [request.user.email], html_message)
         
-        logger.info(f"📧 Email sending paused. New queue size: {email_queue.qsize()}")
+        # ✅ IMPORTANT: THIS SENDS THE EMAIL (UNCOMMENTED)
+        queue_email(subject, plain_message, [request.user.email], html_message)
         
-        # ✅ TEMPORARY: Return OTP in JSON response
+        logger.info(f"📧 Email queued. Queue size: {email_queue.qsize()}")
+        
         return JsonResponse({
             'success': True, 
-            'message': 'OTP generated (email disabled)', 
-            'otp_code': otp.otp_code,
-            'dev_mode': True
+            'message': 'A new OTP has been sent to your email',
         })
     
     return JsonResponse({'success': False, 'message': 'Invalid request'})
+
+
+
+
 
 
 
@@ -423,7 +426,7 @@ def staff_dashboard(request):
         if not request.session.get('otp_verified'):
             # Store intended URL and redirect to OTP page
             request.session['intended_dashboard_url'] = intended_url
-#            return redirect('staff:otp_verify')
+            return redirect('staff:otp_verify')
 
 
         # ✅ TEMPORARY: Auto-verify OTP
