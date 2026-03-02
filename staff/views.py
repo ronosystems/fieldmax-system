@@ -33,70 +33,80 @@ import random
 import re
 import string
 
-
-
-
 logger = logging.getLogger(__name__)
 User = get_user_model()
 
 # Create a global queue and worker thread
 email_queue = queue.Queue()
 worker_running = True
-
-
-
-
+worker_thread = None
 
 def email_worker():
-    """Single worker thread that processes emails from queue"""
+    """Worker that handles both SMTP (local) and API (Render) emails"""
     global worker_running
     logger.info("🚀 Email worker thread STARTED")
     
     while worker_running:
         try:
-            # Get email task from queue (timeout after 1 second)
             task = email_queue.get(timeout=1)
             if task:
-                subject, message, recipient_list, html_message = task
-                logger.info(f"📤 PROCESSING email for: {recipient_list}")
+                method, subject, message, recipient_list, html_message, retry_count = task
+                logger.info(f"📤 PROCESSING email for: {recipient_list} via {method}")
                 
                 try:
-                    send_mail(
-                        subject=subject,
-                        message=message,
-                        from_email=settings.DEFAULT_FROM_EMAIL,
-                        recipient_list=recipient_list,
-                        html_message=html_message,
-                        fail_silently=False,
-                    )
-                    logger.info(f"✅ EMAIL SENT SUCCESSFULLY to {recipient_list}")
+                    if method == 'api' and os.environ.get('RENDER'):
+                        # Use SendGrid API on Render
+                        from utils.sendgrid_api import send_email_via_api
+                        success = send_email_via_api(
+                            recipient_list[0] if recipient_list else None,
+                            subject, 
+                            html_message or message,
+                            message
+                        )
+                        if success:
+                            logger.info(f"✅ API email sent to {recipient_list}")
+                        else:
+                            raise Exception("API send failed")
+                    else:
+                        # Use SMTP locally
+                        send_mail(
+                            subject=subject,
+                            message=message,
+                            from_email=settings.DEFAULT_FROM_EMAIL,
+                            recipient_list=recipient_list,
+                            html_message=html_message,
+                            fail_silently=False,
+                        )
+                        logger.info(f"✅ SMTP email sent to {recipient_list}")
+                    
+                    email_queue.task_done()
+                    
                 except Exception as e:
-                    logger.error(f"❌ EMAIL SENDING FAILED: {str(e)}")
-                email_queue.task_done()
+                    logger.error(f"❌ Email failed: {str(e)}")
+                    # Retry logic for network errors
+                    if retry_count < 3:
+                        logger.info(f"🔄 Retry {retry_count+1}/3 for {recipient_list}")
+                        email_queue.put((method, subject, message, recipient_list, html_message, retry_count + 1))
+                        time.sleep(2 ** retry_count)
+                    else:
+                        email_queue.task_done()
+                        
         except queue.Empty:
             continue
         except Exception as e:
             logger.error(f"❌ WORKER ERROR: {e}")
             time.sleep(1)
-    
-    logger.warning("⚠️ Email worker thread STOPPED")
 
-# ✅ DEFINE queue_email FUNCTION
 def queue_email(subject, message, recipient_list, html_message=None):
-    """Add email to queue instead of creating new thread"""
-    email_queue.put((subject, message, recipient_list, html_message))
+    """Add email to queue - will use API on Render, SMTP locally"""
+    if os.environ.get('RENDER'):  # Detect if running on Render
+        # On Render: use API (port 443)
+        email_queue.put(('api', subject, message, recipient_list, html_message, 0))
+    else:
+        # Locally: use SMTP (works fine)
+        email_queue.put(('smtp', subject, message, recipient_list, html_message, 0))
+    
     logger.info(f"📦 Email queued for {recipient_list} - Queue size: {email_queue.qsize()}")
-
-# Start the worker thread once when module loads
-worker_thread = threading.Thread(target=email_worker, daemon=True)
-worker_thread.start()
-logger.info(f"✅ Worker thread started. Alive: {worker_thread.is_alive()}")
-
-
-
-
-
-
 
 @login_required
 def otp_verify(request):
@@ -184,7 +194,7 @@ def otp_verify(request):
         </html>
         """
         
-        # ✅ IMPORTANT: THIS SENDS THE EMAIL (UNCOMMENTED)
+        # Send email via queue
         queue_email(subject, plain_message, [request.user.email], html_message)
         messages.success(request, f'✅ A 6-digit OTP has been sent to {request.user.email}')
         
@@ -196,10 +206,6 @@ def otp_verify(request):
         'user_email': request.user.email,
     }
     return render(request, 'staff/otp_verify.html', context)
-
-
-
-
 
 @login_required
 def otp_resend(request):
@@ -256,7 +262,7 @@ def otp_resend(request):
         
         logger.info(f"📧 Adding OTP email to queue for: {request.user.email}")
         
-        # ✅ IMPORTANT: THIS SENDS THE EMAIL (UNCOMMENTED)
+        # Send email via queue
         queue_email(subject, plain_message, [request.user.email], html_message)
         
         logger.info(f"📧 Email queued. Queue size: {email_queue.qsize()}")
@@ -268,13 +274,6 @@ def otp_resend(request):
     
     return JsonResponse({'success': False, 'message': 'Invalid request'})
 
-
-
-
-
-
-
-
 @login_required
 def email_queue_status(request):
     """Check email queue status (admin only)"""
@@ -284,9 +283,15 @@ def email_queue_status(request):
     return JsonResponse({
         'queue_size': email_queue.qsize(),
         'worker_running': worker_running,
-        'worker_alive': worker_thread.is_alive(),
+        'worker_alive': worker_thread.is_alive() if worker_thread else False,
     })
 
+# ============================================
+# Start the worker thread
+# ============================================
+worker_thread = threading.Thread(target=email_worker, daemon=True)
+worker_thread.start()
+logger.info(f"✅ Worker thread started. Alive: {worker_thread.is_alive()}")
 
 
 
