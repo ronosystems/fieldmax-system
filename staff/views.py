@@ -445,7 +445,7 @@ def staff_dashboard(request):
     if requires_otp(request.user):
         logger.info(f"🔴 DASHBOARD - User requires OTP, checking session")
     
-       # Check if already verified in this session
+        # Check if already verified in this session
         if not request.session.get('otp_verified'):
             logger.info(f"🔴 DASHBOARD - No OTP in session, redirecting to OTP page")
             # Store intended URL and redirect to OTP page
