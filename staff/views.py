@@ -108,9 +108,18 @@ def queue_email(subject, message, recipient_list, html_message=None):
     
     logger.info(f"📦 Email queued for {recipient_list} - Queue size: {email_queue.qsize()}")
 
+
+
+
+
+import sys
+
 @login_required
 def otp_verify(request):
-    """OTP verification page"""
+    # Write to stderr immediately (bypasses Django logging)
+    sys.stderr.write(f"\n🔴🔴🔴 OTP VIEW STARTED for {request.user.username}\n")
+    sys.stderr.flush()
+    
     logger.info(f"🔴 OTP VIEW ACCESSED by {request.user.username}")
     
     # If user doesn't require OTP, redirect to dashboard
