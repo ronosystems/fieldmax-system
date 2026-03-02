@@ -111,15 +111,20 @@ def queue_email(subject, message, recipient_list, html_message=None):
 @login_required
 def otp_verify(request):
     """OTP verification page"""
+    logger.info(f"🔴 OTP VIEW ACCESSED by {request.user.username}")
+    
     # If user doesn't require OTP, redirect to dashboard
     if not requires_otp(request.user):
+        logger.info(f"🔴 User {request.user.username} does not require OTP")
         return redirect('staff:staff_dashboard')
     
     # Get intended dashboard URL from session
     intended_url = request.session.get('intended_dashboard_url', 'staff:staff_dashboard')
     
+    # Handle POST (OTP submission)
     if request.method == 'POST':
         otp_code = request.POST.get('otp_code', '').strip()
+        logger.info(f"🔴 POST request with OTP: {otp_code}")
         
         # Verify OTP
         success, message = OTPVerification.verify_otp(
@@ -129,23 +134,22 @@ def otp_verify(request):
         )
         
         if success:
-            # Clear the OTP requirement from session
             request.session['otp_verified'] = True
             request.session['otp_verified_at'] = timezone.now().isoformat()
-            
             messages.success(request, message)
+            logger.info(f"🔴 OTP verified successfully for {request.user.username}")
             return redirect(intended_url)
         else:
             messages.error(request, message)
+            logger.info(f"🔴 OTP verification failed for {request.user.username}")
     
-    # Generate new OTP if needed
-    if request.method == 'GET' or 'resend' in request.GET:
-        otp = OTPVerification.generate_otp(request.user, purpose='dashboard_access')
+    # Handle GET (first time loading the page) or resend
+    if request.method == 'GET':
+        logger.info(f"🔴 GET request - generating new OTP for {request.user.username}")
         
-        # 🔍 ADD DEBUG LOGGING HERE
-        logger.info(f"🔍 OTP GENERATED for {request.user.email}: {otp.otp_code}")
-        logger.info(f"🔍 RENDER env: {os.environ.get('RENDER')}")
-        logger.info(f"🔍 Queue size before: {email_queue.qsize()}")
+        # Generate OTP
+        otp = OTPVerification.generate_otp(request.user, purpose='dashboard_access')
+        logger.info(f"🔴 OTP GENERATED: {otp.otp_code} for {request.user.email}")
         
         # Prepare email content
         user_name = request.user.get_full_name() or request.user.username
@@ -199,25 +203,22 @@ def otp_verify(request):
         </html>
         """
         
-        # 🔍 LOG BEFORE QUEUE
-        logger.info(f"🔍 About to queue email for {request.user.email}")
-        
-        # Send email via queue
+        # Queue the email
+        logger.info(f"🔴 Queuing email for {request.user.email}")
         queue_email(subject, plain_message, [request.user.email], html_message)
-        
-        # 🔍 LOG AFTER QUEUE
-        logger.info(f"🔍 Queue size after: {email_queue.qsize()}")
+        logger.info(f"🔴 Email queued. Queue size: {email_queue.qsize()}")
         
         messages.success(request, f'✅ A 6-digit OTP has been sent to {request.user.email}')
-        
-        # Log for debugging
-        logger.info(f"📧 OTP {otp.otp_code} queued for {request.user.email}")
     
     context = {
         'user_role': get_user_role(request.user),
         'user_email': request.user.email,
     }
     return render(request, 'staff/otp_verify.html', context)
+
+
+
+
 
 @login_required
 def otp_resend(request):
@@ -438,18 +439,22 @@ def staff_dashboard(request):
     # ============================================
     # STEP 5: Check if user requires OTP
     # ============================================
+    logger.info(f"🔴 DASHBOARD - User {request.user.username} requires_otp: {requires_otp(request.user)}")
+    logger.info(f"🔴 DASHBOARD - Session otp_verified: {request.session.get('otp_verified')}")
+
     if requires_otp(request.user):
-        # Check if already verified in this session
+        logger.info(f"🔴 DASHBOARD - User requires OTP, checking session")
+    
+       # Check if already verified in this session
         if not request.session.get('otp_verified'):
+            logger.info(f"🔴 DASHBOARD - No OTP in session, redirecting to OTP page")
             # Store intended URL and redirect to OTP page
             request.session['intended_dashboard_url'] = intended_url
             return redirect('staff:otp_verify')
+        else:
+            logger.info(f"🔴 DASHBOARD - OTP already verified in session")
 
-
-        # ✅ TEMPORARY: Auto-verify OTP
-#        request.session['otp_verified'] = True
-#        messages.info(request, '🔧 DEV MODE - OTP verification auto-approved')
-    
+            
     # ============================================
     # STEP 6: If all checks passed, redirect directly
     # ============================================
