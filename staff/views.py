@@ -3251,3 +3251,59 @@ def password_change(request):
         'first_login': True,
     }
     return render(request, 'staff/password_change.html', context)
+
+
+
+    # ============================================
+# ENSURE WORKER THREAD STARTS ON RENDER
+# ============================================
+# This must be at the very bottom of the file
+
+import time
+
+def ensure_worker_running():
+    """Ensure email worker thread is running"""
+    global worker_thread, worker_running, email_queue
+    
+    # Give Django a moment to fully initialize
+    time.sleep(2)
+    
+    if worker_thread is None or not worker_thread.is_alive():
+        worker_running = True
+        worker_thread = threading.Thread(target=email_worker, daemon=True)
+        worker_thread.start()
+        logger.info("🚀 Email worker thread started (from ensure_worker_running)")
+        print("🚀 Email worker thread started on Render")
+    else:
+        logger.info(f"✅ Email worker already running. Alive: {worker_thread.is_alive()}")
+        print(f"✅ Email worker already running. Alive: {worker_thread.is_alive()}")
+
+# Run the check in a separate thread to not block startup
+threading.Thread(target=ensure_worker_running, daemon=True).start()
+
+
+
+@login_required
+def diagnostic_email(request):
+    """Diagnostic endpoint to check email system"""
+    if not request.user.is_superuser:
+        return JsonResponse({'error': 'Unauthorized'}, status=403)
+    
+    # Test queue an email
+    test_id = f"test-{random.randint(1000, 9999)}"
+    queue_email(
+        subject=f"Diagnostic Test {test_id}",
+        message="This is a diagnostic test email",
+        recipient_list=[request.user.email],
+        html_message="<h1>Diagnostic Test</h1><p>If you see this, email is working!</p>"
+    )
+    
+    return JsonResponse({
+        'worker_alive': worker_thread.is_alive() if worker_thread else False,
+        'worker_running': worker_running,
+        'queue_size': email_queue.qsize(),
+        'on_render': os.environ.get('RENDER', False),
+        'test_id': test_id,
+        'sendgrid_key_exists': bool(settings.SENDGRID_API_KEY),
+    })
+
