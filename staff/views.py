@@ -142,6 +142,11 @@ def otp_verify(request):
     if request.method == 'GET' or 'resend' in request.GET:
         otp = OTPVerification.generate_otp(request.user, purpose='dashboard_access')
         
+        # 🔍 ADD DEBUG LOGGING HERE
+        logger.info(f"🔍 OTP GENERATED for {request.user.email}: {otp.otp_code}")
+        logger.info(f"🔍 RENDER env: {os.environ.get('RENDER')}")
+        logger.info(f"🔍 Queue size before: {email_queue.qsize()}")
+        
         # Prepare email content
         user_name = request.user.get_full_name() or request.user.username
         subject = '🔐 FieldMax - Your Dashboard Access Code'
@@ -194,12 +199,19 @@ def otp_verify(request):
         </html>
         """
         
+        # 🔍 LOG BEFORE QUEUE
+        logger.info(f"🔍 About to queue email for {request.user.email}")
+        
         # Send email via queue
         queue_email(subject, plain_message, [request.user.email], html_message)
+        
+        # 🔍 LOG AFTER QUEUE
+        logger.info(f"🔍 Queue size after: {email_queue.qsize()}")
+        
         messages.success(request, f'✅ A 6-digit OTP has been sent to {request.user.email}')
         
         # Log for debugging
-        logger.info(f"📧 OTP {otp.otp_code} sent to {request.user.email}")
+        logger.info(f"📧 OTP {otp.otp_code} queued for {request.user.email}")
     
     context = {
         'user_role': get_user_role(request.user),
