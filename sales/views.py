@@ -1,31 +1,43 @@
-
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db import transaction
-from django.db.models import Q, Sum
+from django.db.models import Q, Sum, Count, Avg, F
 from django.http import JsonResponse
 from django.utils import timezone
 from decimal import Decimal
 import json
 import logging
+import calendar
+from datetime import timedelta, datetime, date
+
 from inventory.models import Product, StockEntry
 from .models import Sale, SaleItem, generate_custom_sale_id
-from django.db.models import Sum, Count, Avg, Q, F
-from django.utils import timezone
-from django.contrib.auth.decorators import login_required
-from django.shortcuts import render
-from .models import Sale, SaleItem
-from decimal import Decimal
-from datetime import timedelta
 from django.contrib.auth.models import User
-
-
-
-
-
+from django.db.models.functions import Coalesce
 
 logger = logging.getLogger(__name__)
+
+def calculate_profit(sale):
+    """Calculate profit for a single sale"""
+    total_profit = Decimal('0.00')
+    for item in sale.items.all():
+        if item.product and item.product.buying_price:
+            item_profit = (item.unit_price - item.product.buying_price) * item.quantity
+            total_profit += item_profit
+    return total_profit
+
+def get_payment_method_color(method):
+    """Get color for payment method"""
+    colors = {
+        'Cash': 'success',
+        'M-Pesa': 'info',
+        'Card': 'primary',
+        'Points': 'warning',
+        'Credit': 'danger',
+    }
+    return colors.get(method, 'secondary')
+
 
 
 
@@ -48,7 +60,7 @@ def sales_statistics(request):
     sales_qs = Sale.objects.filter(is_reversed=False)
     
     # ============================================
-    # OVERVIEW STATISTICS
+    # OVERVIEW STATISTICS WITH PROFITS
     # ============================================
     
     # All time totals
@@ -58,29 +70,226 @@ def sales_statistics(request):
         total=Sum('quantity')
     )['total'] or 0
     
-    # Today's sales
+    # Calculate total profit across all sales
+    total_profit = Decimal('0.00')
+    for sale in sales_qs.select_related().iterator(chunk_size=100):
+        total_profit += calculate_profit(sale)
+    
+    # Profit margin
+    profit_margin = (total_profit / total_revenue * 100) if total_revenue > 0 else 0
+    
+    # Today's sales with profit
     today_sales = sales_qs.filter(sale_date__range=[start_of_day, end_of_day])
     today_count = today_sales.count()
     today_revenue = today_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+    today_profit = Decimal('0.00')
+    for sale in today_sales.select_related().iterator(chunk_size=100):
+        today_profit += calculate_profit(sale)
     
-    # This week's sales
+    # This week's sales with profit
     week_sales = sales_qs.filter(sale_date__gte=start_of_week)
     week_count = week_sales.count()
     week_revenue = week_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+    week_profit = Decimal('0.00')
+    for sale in week_sales.select_related().iterator(chunk_size=100):
+        week_profit += calculate_profit(sale)
     
-    # This month's sales
+    # This month's sales with profit
     month_sales = sales_qs.filter(sale_date__gte=start_of_month)
     month_count = month_sales.count()
     month_revenue = month_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+    month_profit = Decimal('0.00')
+    for sale in month_sales.select_related().iterator(chunk_size=100):
+        month_profit += calculate_profit(sale)
     
-    # This year's sales
+    # This year's sales with profit
     year_sales = sales_qs.filter(sale_date__gte=start_of_year)
     year_count = year_sales.count()
     year_revenue = year_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+    year_profit = Decimal('0.00')
+    for sale in year_sales.select_related().iterator(chunk_size=100):
+        year_profit += calculate_profit(sale)
     
     # Average values
     avg_transaction_value = total_revenue / total_sales if total_sales > 0 else 0
     avg_items_per_sale = total_items_sold / total_sales if total_sales > 0 else 0
+    avg_profit_per_sale = total_profit / total_sales if total_sales > 0 else 0
+    
+    # ============================================
+    # DAILY BREAKDOWN - Monday to Sunday WITH PROFIT
+    # ============================================
+    daily_sales_breakdown = []
+    for i in range(7):
+        day = start_of_week.date() + timedelta(days=i)
+        day_start = timezone.make_aware(timezone.datetime.combine(day, timezone.datetime.min.time()))
+        day_end = timezone.make_aware(timezone.datetime.combine(day, timezone.datetime.max.time()))
+        
+        day_sales = sales_qs.filter(sale_date__range=[day_start, day_end])
+        day_revenue = day_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+        day_count = day_sales.count()
+        
+        # Calculate profit for the day
+        day_profit = Decimal('0.00')
+        for sale in day_sales.select_related().iterator(chunk_size=100):
+            day_profit += calculate_profit(sale)
+        
+        daily_sales_breakdown.append({
+            'day': day.strftime('%A'),
+            'date': day.strftime('%Y-%m-%d'),
+            'revenue': day_revenue,
+            'profit': day_profit,
+            'margin': (day_profit / day_revenue * 100) if day_revenue > 0 else 0,
+            'count': day_count
+        })
+    
+    # ============================================
+    # FIXED: WEEKLY BREAKDOWN - By Date Ranges of Current Month
+    # ============================================
+    current_year = today.year
+    current_month = today.month
+    
+    # Get last day of month
+    last_day = calendar.monthrange(current_year, current_month)[1]
+    
+    # Define weekly date ranges
+    weekly_ranges = [
+        (1, 7),      # Week 1: 1st - 7th
+        (8, 14),     # Week 2: 8th - 14th
+        (15, 21),    # Week 3: 15th - 21st
+        (22, 28),    # Week 4: 22nd - 28th
+        (29, last_day) # Week 5: 29th - last day (if exists)
+    ]
+    
+    weekly_sales_breakdown = []
+    
+    for week_num, (start_day, end_day) in enumerate(weekly_ranges, 1):
+        # Skip if start day is beyond month
+        if start_day > last_day:
+            continue
+            
+        # Adjust end day if beyond month
+        end_day = min(end_day, last_day)
+        
+        week_start = date(current_year, current_month, start_day)
+        week_end = date(current_year, current_month, end_day)
+        
+        week_start_aware = timezone.make_aware(timezone.datetime.combine(week_start, timezone.datetime.min.time()))
+        week_end_aware = timezone.make_aware(timezone.datetime.combine(week_end, timezone.datetime.max.time()))
+        
+        week_sales = sales_qs.filter(sale_date__range=[week_start_aware, week_end_aware])
+        week_revenue = week_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+        week_count = week_sales.count()
+        
+        # Calculate profit for the week
+        week_profit = Decimal('0.00')
+        for sale in week_sales.select_related().iterator(chunk_size=100):
+            week_profit += calculate_profit(sale)
+        
+        # Format date range
+        month_name = week_start.strftime('%b')
+        date_range = f"{month_name} {start_day}{get_day_suffix(start_day)} - {month_name} {end_day}{get_day_suffix(end_day)}"
+        if start_day == end_day:
+            date_range = f"{month_name} {start_day}{get_day_suffix(start_day)}"
+        
+        weekly_sales_breakdown.append({
+            'week_number': week_num,
+            'week_range': date_range,
+            'revenue': week_revenue,
+            'profit': week_profit,
+            'margin': (week_profit / week_revenue * 100) if week_revenue > 0 else 0,
+            'count': week_count
+        })
+    
+    # ============================================
+    # MONTHLY BREAKDOWN - Last 12 months WITH PROFIT
+    # ============================================
+    monthly_sales_breakdown = []
+    for i in range(11, -1, -1):
+        month_date = today - timedelta(days=30*i)
+        month_start = date(month_date.year, month_date.month, 1)
+        month_end = date(month_date.year, month_date.month, 
+                        calendar.monthrange(month_date.year, month_date.month)[1])
+        
+        month_start_aware = timezone.make_aware(timezone.datetime.combine(month_start, timezone.datetime.min.time()))
+        month_end_aware = timezone.make_aware(timezone.datetime.combine(month_end, timezone.datetime.max.time()))
+        
+        month_sales = sales_qs.filter(sale_date__range=[month_start_aware, month_end_aware])
+        month_revenue = month_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+        month_count = month_sales.count()
+        
+        # Calculate profit for the month
+        month_profit = Decimal('0.00')
+        for sale in month_sales.select_related().iterator(chunk_size=100):
+            month_profit += calculate_profit(sale)
+        
+        monthly_sales_breakdown.append({
+            'month': month_start.strftime('%B %Y'),
+            'month_short': month_start.strftime('%b %Y'),
+            'revenue': month_revenue,
+            'profit': month_profit,
+            'margin': (month_profit / month_revenue * 100) if month_revenue > 0 else 0,
+            'count': month_count
+        })
+    
+    # ============================================
+    # TOP PRODUCTS WITH PROFIT
+    # ============================================
+    
+    top_products = []
+    product_data = SaleItem.objects.filter(sale__is_reversed=False).select_related('product').values(
+        'product_code', 'product_name', 'product__buying_price'
+    ).annotate(
+        total_quantity=Sum('quantity'),
+        total_revenue=Sum('total_price'),
+        avg_price=Avg('unit_price')
+    ).order_by('-total_quantity')[:10]
+    
+    for item in product_data:
+        buying_price = item.get('product__buying_price') or 0
+        profit_per_unit = item['avg_price'] - buying_price if buying_price else 0
+        total_profit = profit_per_unit * item['total_quantity']
+        
+        top_products.append({
+            'product_code': item['product_code'],
+            'product_name': item['product_name'],
+            'total_quantity': item['total_quantity'],
+            'total_revenue': item['total_revenue'],
+            'avg_price': item['avg_price'],
+            'buying_price': buying_price,
+            'profit_per_unit': profit_per_unit,
+            'total_profit': total_profit,
+            'margin': (total_profit / item['total_revenue'] * 100) if item['total_revenue'] > 0 else 0
+        })
+    
+    # ============================================
+    # TOP SELLERS WITH PROFIT
+    # ============================================
+    
+    top_sellers = []
+    sellers = User.objects.filter(sales_made__is_reversed=False).annotate(
+        sales_count=Count('sales_made'),
+        total_revenue=Sum('sales_made__total_amount'),
+        avg_sale_value=Avg('sales_made__total_amount')
+    ).order_by('-total_revenue')[:10]
+    
+    for seller in sellers:
+        seller_sales = sales_qs.filter(seller=seller)
+        seller_profit = Decimal('0.00')
+        for sale in seller_sales.select_related().iterator(chunk_size=100):
+            seller_profit += calculate_profit(sale)
+        
+        top_sellers.append({
+            'id': seller.id,
+            'username': seller.username,
+            'first_name': seller.first_name,
+            'last_name': seller.last_name,
+            'get_full_name': seller.get_full_name(),
+            'sales_count': seller.sales_count,
+            'total_revenue': seller.total_revenue,
+            'total_profit': seller_profit,
+            'margin': (seller_profit / seller.total_revenue * 100) if seller.total_revenue > 0 else 0,
+            'avg_sale_value': seller.avg_sale_value
+        })
     
     # ============================================
     # PAYMENT METHOD BREAKDOWN
@@ -100,28 +309,6 @@ def sales_statistics(request):
             'percentage': percentage,
             'color': get_payment_method_color(method)
         })
-    
-    # ============================================
-    # TOP SELLING PRODUCTS
-    # ============================================
-    
-    top_products = SaleItem.objects.filter(sale__is_reversed=False).values(
-        'product_code', 'product_name'
-    ).annotate(
-        total_quantity=Sum('quantity'),
-        total_revenue=Sum('total_price'),
-        avg_price=Avg('unit_price')
-    ).order_by('-total_quantity')[:10]
-    
-    # ============================================
-    # SALES BY SELLER
-    # ============================================
-    
-    top_sellers = User.objects.filter(sales_made__is_reversed=False).annotate(
-        sales_count=Count('sales_made'),
-        total_revenue=Sum('sales_made__total_amount'),
-        avg_sale_value=Avg('sales_made__total_amount')
-    ).order_by('-total_revenue')[:10]
     
     # ============================================
     # DAILY SALES CHART DATA (Last 30 days)
@@ -145,23 +332,6 @@ def sales_statistics(request):
         })
     
     # ============================================
-    # CREDIT SALES STATISTICS
-    # ============================================
-    
-    credit_sales = sales_qs.filter(is_credit=True)
-    credit_count = credit_sales.count()
-    credit_revenue = credit_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-    credit_percentage = (credit_revenue / total_revenue * 100) if total_revenue > 0 else 0
-    
-    # ============================================
-    # ETR RECEIPT STATISTICS
-    # ============================================
-    
-    etr_processed = sales_qs.filter(etr_status='processed').count()
-    etr_pending = sales_qs.filter(etr_status='pending').count()
-    etr_failed = sales_qs.filter(etr_status='failed').count()
-    
-    # ============================================
     # HOURLY SALES DISTRIBUTION
     # ============================================
     
@@ -181,6 +351,23 @@ def sales_statistics(request):
         })
     
     # ============================================
+    # CREDIT SALES STATISTICS
+    # ============================================
+    
+    credit_sales = sales_qs.filter(is_credit=True)
+    credit_count = credit_sales.count()
+    credit_revenue = credit_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+    credit_percentage = (credit_revenue / total_revenue * 100) if total_revenue > 0 else 0
+    
+    # ============================================
+    # ETR RECEIPT STATISTICS
+    # ============================================
+    
+    etr_processed = sales_qs.filter(etr_status='processed').count()
+    etr_pending = sales_qs.filter(etr_status='pending').count()
+    etr_failed = sales_qs.filter(etr_status='failed').count()
+    
+    # ============================================
     # REVERSAL STATISTICS
     # ============================================
     
@@ -189,32 +376,55 @@ def sales_statistics(request):
     reversed_amount = reversed_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
     reversal_percentage = (reversed_count / (total_sales + reversed_count) * 100) if (total_sales + reversed_count) > 0 else 0
     
+    # ============================================
+    # CONTEXT DICTIONARY
+    # ============================================
+    
     context = {
-        # Overview
+        # Overview with profit
         'total_sales': total_sales,
         'total_revenue': total_revenue,
+        'total_profit': total_profit,
+        'profit_margin': profit_margin,
         'total_items_sold': total_items_sold,
         'avg_transaction_value': avg_transaction_value,
+        'avg_profit_per_sale': avg_profit_per_sale,
         'avg_items_per_sale': avg_items_per_sale,
         
-        # Time periods
+        # Time periods with profit
         'today_count': today_count,
         'today_revenue': today_revenue,
+        'today_profit': today_profit,
+        'today_margin': (today_profit / today_revenue * 100) if today_revenue > 0 else 0,
+        
         'week_count': week_count,
         'week_revenue': week_revenue,
+        'week_profit': week_profit,
+        'week_margin': (week_profit / week_revenue * 100) if week_revenue > 0 else 0,
+        
         'month_count': month_count,
         'month_revenue': month_revenue,
+        'month_profit': month_profit,
+        'month_margin': (month_profit / month_revenue * 100) if month_revenue > 0 else 0,
+        
         'year_count': year_count,
         'year_revenue': year_revenue,
+        'year_profit': year_profit,
+        'year_margin': (year_profit / year_revenue * 100) if year_revenue > 0 else 0,
+        
+        # Breakdowns with profit
+        'daily_sales_breakdown': daily_sales_breakdown,
+        'weekly_sales_breakdown': weekly_sales_breakdown,
+        'monthly_sales_breakdown': monthly_sales_breakdown,
+        
+        # Top products with profit
+        'top_products': top_products,
+        
+        # Top sellers with profit
+        'top_sellers': top_sellers,
         
         # Payment methods
         'payment_methods': payment_methods,
-        
-        # Top products
-        'top_products': top_products,
-        
-        # Top sellers
-        'top_sellers': top_sellers,
         
         # Charts
         'daily_sales': daily_sales,
@@ -238,16 +448,18 @@ def sales_statistics(request):
     
     return render(request, 'sales/statistics.html', context)
 
-def get_payment_method_color(method):
-    """Get color for payment method"""
-    colors = {
-        'Cash': 'success',
-        'M-Pesa': 'info',
-        'Card': 'primary',
-        'Points': 'warning',
-        'Credit': 'danger',
-    }
-    return colors.get(method, 'secondary')
+def get_day_suffix(day):
+    """Get day suffix (st, nd, rd, th)"""
+    if 11 <= day <= 13:
+        return 'th'
+    elif day % 10 == 1:
+        return 'st'
+    elif day % 10 == 2:
+        return 'nd'
+    elif day % 10 == 3:
+        return 'rd'
+    else:
+        return 'th'
 
 
 
