@@ -30,29 +30,49 @@ from django.shortcuts import render
 from .models import CreditTransaction, CreditCompany, CreditCustomer, CompanyPayment
 from decimal import Decimal
 from datetime import timedelta, date
-
-from django.db.models import Sum, Count, Avg, Q, F, Value, DecimalField
+from django.shortcuts import render
+from django.contrib.auth.decorators import login_required
+from django.db.models import Sum, Count, Q, DecimalField, Value, ExpressionWrapper, F, FloatField, Case, When
 from django.db.models.functions import Coalesce
 from django.utils import timezone
-from django.contrib.auth.decorators import login_required
-from django.shortcuts import render
-from .models import CreditTransaction, CreditCompany, CreditCustomer, CompanyPayment
+from django.conf import settings
 from decimal import Decimal
-from datetime import timedelta, date
+import logging
+import calendar
+from datetime import timedelta, datetime, date
 
+from .models import CreditTransaction, CreditCustomer, CreditCompany, CompanyPayment
+from django.contrib.auth import get_user_model
 
-
-
+User = get_user_model()
 logger = logging.getLogger(__name__)
 
+def get_payment_method_color(method):
+    """Get color for payment method"""
+    colors = {
+        'mpesa': 'success',
+        'bank': 'primary',
+        'cheque': 'warning',
+        'cash': 'info',
+    }
+    return colors.get(method, 'secondary')
 
-
-
-
+def get_day_suffix(day):
+    """Get day suffix (st, nd, rd, th)"""
+    if 11 <= day <= 13:
+        return 'th'
+    elif day % 10 == 1:
+        return 'st'
+    elif day % 10 == 2:
+        return 'nd'
+    elif day % 10 == 3:
+        return 'rd'
+    else:
+        return 'th'
 
 @login_required
 def credit_statistics(request):
-    """Credit statistics dashboard"""
+    """Credit statistics dashboard with daily, weekly, and monthly breakdowns"""
     
     # Date ranges
     today = timezone.now().date()
@@ -102,6 +122,134 @@ def credit_statistics(request):
     avg_transaction_value = total_value / total_transactions if total_transactions > 0 else 0
     
     # ============================================
+    # DAILY BREAKDOWN - Monday to Sunday
+    # ============================================
+    daily_credit_breakdown = []
+    for i in range(7):
+        day = start_of_week.date() + timedelta(days=i)
+        day_start = timezone.make_aware(timezone.datetime.combine(day, timezone.datetime.min.time()))
+        day_end = timezone.make_aware(timezone.datetime.combine(day, timezone.datetime.max.time()))
+        
+        day_transactions = transactions_qs.filter(transaction_date__range=[day_start, day_end])
+        day_value = day_transactions.aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
+        day_count = day_transactions.count()
+        
+        # Calculate collection rate for the day
+        day_paid = day_transactions.filter(payment_status='paid').aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
+        day_collection_rate = (day_paid / day_value * 100) if day_value > 0 else 0
+        
+        daily_credit_breakdown.append({
+            'day': day.strftime('%A'),
+            'date': day.strftime('%Y-%m-%d'),
+            'value': day_value,
+            'count': day_count,
+            'collection_rate': day_collection_rate
+        })
+    
+    # Week totals for collection rate
+    week_transactions = transactions_qs.filter(transaction_date__gte=start_of_week)
+    week_credit_value = week_transactions.aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
+    week_paid = week_transactions.filter(payment_status='paid').aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
+    week_collection_rate = (week_paid / week_credit_value * 100) if week_credit_value > 0 else 0
+    
+    # ============================================
+    # WEEKLY BREAKDOWN - By Date Ranges of Current Month
+    # ============================================
+    current_year = today.year
+    current_month = today.month
+    
+    # Get last day of month
+    last_day = calendar.monthrange(current_year, current_month)[1]
+    
+    # Define weekly date ranges
+    weekly_ranges = [
+        (1, 7),      # Week 1: 1st - 7th
+        (8, 14),     # Week 2: 8th - 14th
+        (15, 21),    # Week 3: 15th - 21st
+        (22, 28),    # Week 4: 22nd - 28th
+        (29, last_day) # Week 5: 29th - last day (if exists)
+    ]
+    
+    weekly_credit_breakdown = []
+    
+    for week_num, (start_day, end_day) in enumerate(weekly_ranges, 1):
+        # Skip if start day is beyond month
+        if start_day > last_day:
+            continue
+            
+        # Adjust end day if beyond month
+        end_day = min(end_day, last_day)
+        
+        week_start = date(current_year, current_month, start_day)
+        week_end = date(current_year, current_month, end_day)
+        
+        week_start_aware = timezone.make_aware(timezone.datetime.combine(week_start, timezone.datetime.min.time()))
+        week_end_aware = timezone.make_aware(timezone.datetime.combine(week_end, timezone.datetime.max.time()))
+        
+        week_trans = transactions_qs.filter(transaction_date__range=[week_start_aware, week_end_aware])
+        week_value = week_trans.aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
+        week_count = week_trans.count()
+        
+        # Calculate collection rate for the week
+        week_paid = week_trans.filter(payment_status='paid').aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
+        week_collection = (week_paid / week_value * 100) if week_value > 0 else 0
+        
+        # Format date range
+        month_name = week_start.strftime('%b')
+        date_range = f"{month_name} {start_day}{get_day_suffix(start_day)} - {month_name} {end_day}{get_day_suffix(end_day)}"
+        if start_day == end_day:
+            date_range = f"{month_name} {start_day}{get_day_suffix(start_day)}"
+        
+        weekly_credit_breakdown.append({
+            'week_number': week_num,
+            'week_range': date_range,
+            'value': week_value,
+            'count': week_count,
+            'collection_rate': week_collection
+        })
+    
+    # Month totals
+    month_credit_value = month_transactions.aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
+    month_paid = month_transactions.filter(payment_status='paid').aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
+    month_collection_rate = (month_paid / month_credit_value * 100) if month_credit_value > 0 else 0
+    
+    # ============================================
+    # MONTHLY BREAKDOWN - Last 12 months
+    # ============================================
+    monthly_credit_breakdown = []
+    for i in range(11, -1, -1):
+        month_date = today - timedelta(days=30*i)
+        month_start = date(month_date.year, month_date.month, 1)
+        month_end = date(month_date.year, month_date.month, 
+                        calendar.monthrange(month_date.year, month_date.month)[1])
+        
+        month_start_aware = timezone.make_aware(timezone.datetime.combine(month_start, timezone.datetime.min.time()))
+        month_end_aware = timezone.make_aware(timezone.datetime.combine(month_end, timezone.datetime.max.time()))
+        
+        month_trans = transactions_qs.filter(transaction_date__range=[month_start_aware, month_end_aware])
+        month_value = month_trans.aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
+        month_count = month_trans.count()
+        
+        # Calculate paid amount for the month
+        month_paid_amount = month_trans.filter(payment_status='paid').aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
+        month_collection = (month_paid_amount / month_value * 100) if month_value > 0 else 0
+        
+        monthly_credit_breakdown.append({
+            'month': month_start.strftime('%B %Y'),
+            'month_short': month_start.strftime('%b %Y'),
+            'value': month_value,
+            'count': month_count,
+            'paid_value': month_paid_amount,
+            'collection_rate': month_collection
+        })
+    
+    # Year totals
+    year_transactions = transactions_qs.filter(transaction_date__gte=start_of_year)
+    year_credit_value = year_transactions.aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
+    year_paid_value = year_transactions.filter(payment_status='paid').aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
+    year_collection_rate = (year_paid_value / year_credit_value * 100) if year_credit_value > 0 else 0
+    
+    # ============================================
     # COMPANY BREAKDOWN
     # ============================================
     
@@ -132,11 +280,9 @@ def credit_statistics(request):
     company_stats.sort(key=lambda x: x['total_value'], reverse=True)
     
     # ============================================
-    # TOP CUSTOMERS (FIXED with output_field)
+    # TOP CUSTOMERS 
     # ============================================
     
-    # Use different names for annotated fields to avoid conflict with model properties
-    # IMPORTANT: Set output_field=DecimalField() for all Sum aggregations
     top_customers = CreditCustomer.objects.filter(
         transactions__payment_status__in=['pending', 'paid']
     ).annotate(
@@ -160,7 +306,57 @@ def credit_statistics(request):
     ).order_by('-total_credit_value')[:10]
     
     # ============================================
-    # MONTHLY TREND (Last 6 months)
+    # TOP SELLERS (DEALERS) - FIXED
+    # ============================================
+    
+    # First, get the base queryset with annotations for counts and sums
+    top_sellers_base = User.objects.filter(
+        credit_transactions__payment_status__in=['pending', 'paid']
+    ).annotate(
+        sales_count=Count('credit_transactions'),
+        total_credit=Coalesce(
+            Sum('credit_transactions__ceiling_price', output_field=DecimalField()),
+            Value(0, output_field=DecimalField())
+        ),
+        pending_credit=Coalesce(
+            Sum('credit_transactions__ceiling_price', 
+                filter=Q(credit_transactions__payment_status='pending'),
+                output_field=DecimalField()),
+            Value(0, output_field=DecimalField())
+        ),
+        paid_credit=Coalesce(
+            Sum('credit_transactions__ceiling_price', 
+                filter=Q(credit_transactions__payment_status='paid'),
+                output_field=DecimalField()),
+            Value(0, output_field=DecimalField())
+        )
+    ).order_by('-total_credit')[:10]
+    
+    # Format top sellers for template - calculate collection rate in Python
+    top_sellers_list = []
+    for seller in top_sellers_base:
+        # Calculate collection rate safely in Python
+        if seller.total_credit and seller.total_credit > 0:
+            collection_rate = float(seller.paid_credit * 100 / seller.total_credit)
+        else:
+            collection_rate = 0
+        
+        # Build the seller dictionary with all needed fields
+        top_sellers_list.append({
+            'id': seller.id,
+            'username': seller.username,
+            'first_name': seller.first_name,
+            'last_name': seller.last_name,
+            'get_full_name': seller.get_full_name(),
+            'sales_count': seller.sales_count,
+            'total_credit': seller.total_credit,
+            'pending_credit': seller.pending_credit,
+            'paid_credit': seller.paid_credit,
+            'collection_rate': collection_rate,
+        })
+    
+    # ============================================
+    # MONTHLY TREND (Last 6 months) - for chart
     # ============================================
     
     monthly_trend = []
@@ -220,7 +416,7 @@ def credit_statistics(request):
     }
     
     for transaction in pending_transactions:
-        days = transaction.days_since_given
+        days = (today - transaction.transaction_date.date()).days
         if days <= 30:
             aging['0_30'] += 1
         elif days <= 60:
@@ -230,6 +426,10 @@ def credit_statistics(request):
         else:
             aging['90_plus'] += 1
         aging['total'] += 1
+    
+    # ============================================
+    # CONTEXT DICTIONARY
+    # ============================================
     
     context = {
         # Overview
@@ -249,13 +449,32 @@ def credit_statistics(request):
         'month_count': month_count,
         'month_value': month_value,
         
+        # Daily breakdown (Mon-Sun)
+        'daily_credit_breakdown': daily_credit_breakdown,
+        'week_credit_value': week_credit_value,
+        'week_collection_rate': week_collection_rate,
+        
+        # Weekly breakdown (Week 1-4)
+        'weekly_credit_breakdown': weekly_credit_breakdown,
+        'month_credit_value': month_credit_value,
+        'month_collection_rate': month_collection_rate,
+        
+        # Monthly breakdown (Last 12 months)
+        'monthly_credit_breakdown': monthly_credit_breakdown,
+        'year_credit_value': year_credit_value,
+        'year_paid_value': year_paid_value,
+        'year_collection_rate': year_collection_rate,
+        
         # Companies
         'company_stats': company_stats,
         'total_companies': CreditCompany.objects.filter(is_active=True).count(),
         
-        # Customers (using the annotated fields with output_field set)
+        # Customers
         'top_customers': top_customers,
         'total_customers': CreditCustomer.objects.filter(is_active=True).count(),
+        
+        # Top sellers (dealers)
+        'top_sellers': top_sellers_list,
         
         # Trends
         'monthly_trend': monthly_trend,
@@ -270,16 +489,6 @@ def credit_statistics(request):
     }
     
     return render(request, 'credit/statistics.html', context)
-
-def get_payment_method_color(method):
-    """Get color for payment method"""
-    colors = {
-        'mpesa': 'success',
-        'bank': 'primary',
-        'cheque': 'warning',
-        'cash': 'info',
-    }
-    return colors.get(method, 'secondary')
 
 
 
