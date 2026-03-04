@@ -420,6 +420,7 @@ def staff_dashboard(request):
     else:
         # Get user's groups
         user_groups = request.user.groups.values_list('name', flat=True)
+        logger.info(f"🔴 DASHBOARD - User {request.user.username} groups: {list(user_groups)}")
         
         # Define group to dashboard mapping
         dashboard_routes = {
@@ -443,7 +444,22 @@ def staff_dashboard(request):
         for group_name, dashboard_url in dashboard_routes.items():
             if group_name in user_groups:
                 intended_url = dashboard_url
+                logger.info(f"🔴 DASHBOARD - Matched group '{group_name}' to dashboard: {dashboard_url}")
                 break
+        
+        # Special handling for credit users (fallback)
+        if intended_url == 'staff:staff_stats_dashboard':
+            credit_groups = ['Credit Officer', 'Credit Manager']
+            for group in credit_groups:
+                if group in user_groups:
+                    if group == 'Credit Manager':
+                        intended_url = 'staff:credit_manager_dashboard'
+                    else:
+                        intended_url = 'staff:credit_officer_dashboard'
+                    logger.info(f"🔴 DASHBOARD - Credit fallback: {intended_url}")
+                    break
+    
+    logger.info(f"🔴 DASHBOARD - Final intended URL for {request.user.username}: {intended_url}")
     
     # ============================================
     # STEP 5: Check if user requires OTP
@@ -467,6 +483,7 @@ def staff_dashboard(request):
     # ============================================
     # STEP 6: If all checks passed, redirect directly
     # ============================================
+    logger.info(f"🔴 DASHBOARD - Redirecting {request.user.username} to: {intended_url}")
     return redirect(intended_url)
 
 
@@ -3332,4 +3349,3 @@ def diagnostic_email(request):
         'test_id': test_id,
         'sendgrid_key_exists': bool(settings.SENDGRID_API_KEY),
     })
-
