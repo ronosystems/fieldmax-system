@@ -233,7 +233,7 @@
             box-shadow: 0 4px 8px rgba(0,0,0,0.2);
         }
         
-        /* Role badge styles */
+        /* Role badge styles - COMPLETE with all roles */
         .role-badge {
             display: inline-block;
             padding: 3px 8px;
@@ -243,15 +243,79 @@
             margin-left: 8px;
         }
         
-        .role-sales_agent { background: #28a745; color: white; }
-        .role-cashier { background: #17a2b8; color: white; }
-        .role-store_manager { background: #ffc107; color: black; }
-        .role-sales_manager { background: #dc3545; color: white; }
-        .role-credit_manager { background: #fd7e14; color: white; }
-        .role-customer_service { background: #6f42c1; color: white; }
-        .role-supervisor { background: #343a40; color: white; }
-        .role-security { background: #20c997; color: black; }
-        .role-cleaner { background: #6c757d; color: white; }
+        .role-sales_agent, 
+        .role-sales-agent { 
+            background: #28a745; 
+            color: white; 
+        }
+        
+        .role-cashier { 
+            background: #17a2b8; 
+            color: white; 
+        }
+        
+        .role-store_manager,
+        .role-store-manager { 
+            background: #ffc107; 
+            color: black; 
+        }
+        
+        .role-sales_manager,
+        .role-sales-manager { 
+            background: #dc3545; 
+            color: white; 
+        }
+        
+        .role-credit_manager,
+        .role-credit-manager { 
+            background: #fd7e14; 
+            color: white; 
+        }
+        
+        .role-credit_officer,
+        .role-credit-officer { 
+            background: #fd7e14; 
+            color: white; 
+        }
+        
+        .role-customer_service,
+        .role-customer-service { 
+            background: #6f42c1; 
+            color: white; 
+        }
+        
+        .role-supervisor { 
+            background: #343a40; 
+            color: white; 
+        }
+        
+        .role-security_officer,
+        .role-security-officer { 
+            background: #20c997; 
+            color: black; 
+        }
+        
+        .role-cleaner { 
+            background: #6c757d; 
+            color: white; 
+        }
+        
+        .role-inventory_manager,
+        .role-inventory-manager { 
+            background: #ffc107; 
+            color: black; 
+        }
+        
+        .role-assistant_manager,
+        .role-assistant-manager { 
+            background: #343a40; 
+            color: white; 
+        }
+        
+        .role-administrator { 
+            background: #000000; 
+            color: white; 
+        }
         
         @media (max-width: 768px) {
             .sidebar {
@@ -300,19 +364,19 @@
                         </a>
                         
                          <!-- store statistics -->
-                        <a class="nav-link {% if 'application' in request.path %}active{% endif %}" 
+                        <a class="nav-link {% if 'statistics' in request.path and 'store' in request.path %}active{% endif %}" 
                            href="{% url 'inventory:store_statistics' %}">
                             <i class="fas fa-chart-pie"></i> Store Statistics
                         </a>
 
                           <!-- sales statistics -->
-                        <a class="nav-link {% if 'application' in request.path %}active{% endif %}" 
+                        <a class="nav-link {% if 'statistics' in request.path and 'sales' in request.path %}active{% endif %}" 
                            href="{% url 'sales:sales_statistics' %}">
                             <i class="fas fa-chart-pie"></i> Sales Statistics
                         </a>
 
                         <!-- credit statistics -->
-                        <a class="nav-link {% if 'application' in request.path %}active{% endif %}" 
+                        <a class="nav-link {% if 'statistics' in request.path and 'credit' in request.path %}active{% endif %}" 
                            href="{% url 'credit:credit_statistics' %}">
                             <i class="fas fa-chart-bar"></i> Credit Statistics
                         </a>
@@ -336,12 +400,12 @@
                         </a>
                         {% endif %}
 
-                        <!-- Identity Verification - Admin only (WITH COUNT BADGE) -->
+                        <!--Staff Verification - Admin only (WITH COUNT BADGE) -->
                         {% if request.user.is_superuser or request.user.is_staff %}
                         <a class="nav-link {% if 'admin-verify' in request.path %}active{% endif %}" 
                            href="{% url 'staff:admin_verify_list' %}">
                             <i class="fas fa-shield-alt text-warning"></i> 
-                            Identity Verification
+                            Staff Verification
                             {% if staff_verification_pending > 0 %}
                             <span class="badge bg-danger">{{ staff_verification_pending }}</span>
                             {% endif %}
@@ -361,7 +425,7 @@
                         <div class="text-white-100 small fw-bold mb-2">OTHER APPS</div>
                         
                         <!-- Inventory Section - Only for relevant roles -->
-                        {% if request.user.is_superuser or request.user|has_role:'store_manager,supervisor' %}
+                        {% if request.user.is_superuser or request.user|has_role:'store_manager,supervisor,inventory_manager' %}
                         <div class="text-white-50 small fw-bold mb-2">INVENTORY</div>
                         <a class="nav-link" href="{% url 'inventory:dashboard' %}">
                             <i class="fas fa-boxes" style="color: #4361ee;"></i> Inventory Dashboard
@@ -377,7 +441,7 @@
                         {% endif %}
                         
                         <!-- Credit Section - Only for relevant roles -->
-                        {% if request.user.is_superuser or request.user|has_role:'credit_manager,supervisor' %}
+                        {% if request.user.is_superuser or request.user|has_role:'credit_manager,supervisor,credit_officer' %}
                         <div class="text-white-50 small fw-bold mb-2">CREDIT</div>
                         <a class="nav-link" href="{% url 'credit:dashboard' %}">
                             <i class="fas fa-credit-card" style="color: #ff9d00;"></i> Credit Dashboard
@@ -400,7 +464,9 @@
                                     {% else %}
                                         {% get_user_position request.user as position %}
                                         {% if position %}
-                                            {{ position|title|replace:"_, " }}
+                                            <span class="role-badge role-{{ position|lower|cut:' '|cut:'_' }}">
+                                                {{ position|title|replace:"_, " }}
+                                            </span>
                                         {% else %}
                                             Staff Member
                                         {% endif %}
@@ -446,7 +512,7 @@
         </div>
     </div>
     
-    <!-- Hidden div with user role data (no linter errors) -->
+    <!-- Hidden div with user role data -->
     {% if not request.user.is_superuser %}
         {% get_user_position request.user as user_position %}
     {% endif %}
@@ -493,7 +559,7 @@
                 $('.alert').fadeOut('slow');
             }, 5000);
             
-            // Get role data from data attributes (no linter errors)
+            // Get role data from data attributes
             var userRoleData = document.getElementById('user-role-data');
             if (userRoleData) {
                 var isSuperuser = userRoleData.dataset.isSuperuser === 'true';
