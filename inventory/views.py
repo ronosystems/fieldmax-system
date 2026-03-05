@@ -33,6 +33,13 @@ from django.shortcuts import render
 from decimal import Decimal
 import csv
 from django.http import HttpResponse
+from django.shortcuts import render
+from django.db.models import Sum, Count, Q, F
+from django.utils import timezone
+from django.contrib.auth.decorators import login_required
+from datetime import timedelta
+from decimal import Decimal
+from .models import Product, Category, StockEntry, StockAlert, Supplier
 
 
 
@@ -125,113 +132,205 @@ def export_statistics(request):
 def store_statistics(request):
     """Store statistics dashboard"""
     
-    # Total products (unique SKUs)
-    total_products = Product.objects.filter(is_active=True).count()
+    # ============================================
+    # PRODUCT COUNTS AND VALUES
+    # ============================================
+    # Total products (unique product records)
+    total_products = Product.objects.count()
     
     # Total items (sum of quantities)
-    total_items = Product.objects.filter(is_active=True).aggregate(
-        total=Sum('quantity')
-    )['total'] or 0
+    total_items = Product.objects.aggregate(total=Sum('quantity'))['total'] or 0
     
-    # Total categories
-    total_categories = Category.objects.filter(is_active=True).count()
+    # Available items (status='available' and quantity > 0)
+    available_items = Product.objects.filter(
+        status='available', 
+        quantity__gt=0
+    ).aggregate(total=Sum('quantity'))['total'] or 0
     
-    # ===== FIXED: STORE MANAGERS COUNT =====
-    # Count users in Store Manager group (note: singular "Store Manager" not "Store Managers")
-    store_manager_group = Group.objects.filter(name='Store Manager').first()
+    # ============================================
+    # RETURNED ITEMS - FIXED CALCULATION
+    # ============================================
+    from .models import ReturnRequest
+    
+    # Get ALL return requests (not just approved)
+    all_returns = ReturnRequest.objects.all()
+    
+    # Count of returned items (total number of return requests)
+    returned_items = all_returns.count()
+    
+    # Calculate total value of returned items (refund amounts)
+    returned_items_value = all_returns.aggregate(
+        total=Sum('refund_amount')
+    )['total'] or Decimal('0.00')
+    
+    # Calculate total cost of returned items (buying price * quantity)
+    returned_items_cost = Decimal('0.00')
+    for return_req in all_returns.select_related('product'):
+        if return_req.product and return_req.product.buying_price:
+            # Use the product's buying price times quantity
+            returned_items_cost += return_req.product.buying_price * (return_req.quantity or 1)
+        else:
+            # If no product linked, estimate from refund amount (70% of refund as cost)
+            # This is just a fallback
+            returned_items_cost += return_req.refund_amount * Decimal('0.7')
+    
+    # For debugging - print values to console
+    print(f"=== RETURN STATISTICS ===")
+    print(f"Returned Items Count: {returned_items}")
+    print(f"Returned Items Value: {returned_items_value}")
+    print(f"Returned Items Cost: {returned_items_cost}")
+    print(f"=========================")
+    
+    # ============================================
+    # VALUE CALCULATIONS (Selling Price)
+    # ============================================
+    # Total products value (selling price * quantity for all products)
+    total_products_value = Product.objects.aggregate(
+        total=Sum(F('selling_price') * F('quantity'))
+    )['total'] or Decimal('0.00')
+    
+    # Total items value (same as total_products_value)
+    total_items_value = total_products_value
+    
+    # Available items value
+    available_items_value = Product.objects.filter(
+        status='available', 
+        quantity__gt=0
+    ).aggregate(
+        total=Sum(F('selling_price') * F('quantity'))
+    )['total'] or Decimal('0.00')
+    
+    # ============================================
+    # COST CALCULATIONS (Buying Price)
+    # ============================================
+    # Total products cost
+    total_products_cost = Product.objects.aggregate(
+        total=Sum(F('buying_price') * F('quantity'))
+    )['total'] or Decimal('0.00')
+    
+    # Total items cost
+    total_items_cost = total_products_cost
+    
+    # Available items cost
+    available_items_cost = Product.objects.filter(
+        status='available', 
+        quantity__gt=0
+    ).aggregate(
+        total=Sum(F('buying_price') * F('quantity'))
+    )['total'] or Decimal('0.00')
+    
+    # ============================================
+    # STORE MANAGEMENT
+    # ============================================
+    # Store managers
+    from django.contrib.auth.models import Group
+    store_manager_group = Group.objects.filter(name='store_manager').first()
     if store_manager_group:
-        store_managers = store_manager_group.user_set.filter(is_active=True).count()
+        store_managers_count = store_manager_group.user_set.count()
+        active_managers_count = store_manager_group.user_set.filter(is_active=True).count()
     else:
-        store_managers = 0
+        store_managers_count = 0
+        active_managers_count = 0
     
-    # Alternative: Count users with store_manager position in applications
-    # store_managers_from_apps = StaffApplication.objects.filter(
-    #     position='store_manager',
-    #     status='approved',
-    #     created_user__is_active=True
-    # ).count()
-    
-    # Financial calculations
-    products = Product.objects.filter(is_active=True)
-    
-    total_value = sum(p.selling_price * p.quantity for p in products)
-    total_cost = sum(p.buying_price * p.quantity for p in products)
-    
-    # Available items only (status = 'available')
-    available_products = products.filter(status='available')
-    available_items = available_products.aggregate(total=Sum('quantity'))['total'] or 0
-    
-    available_value = sum(p.selling_price * p.quantity for p in available_products)
-    available_cost = sum(p.buying_price * p.quantity for p in available_products)
-    
-    # Percentages
-    available_percentage = (available_value / total_value * 100) if total_value > 0 else 0
-    available_cost_percentage = (available_cost / total_cost * 100) if total_cost > 0 else 0
-    
-    # Stock status counts
-    low_stock_items = products.filter(status='lowstock').count()
-    needs_reorder_items = products.filter(
-        Q(status='lowstock') | 
-        Q(quantity__lte=F('reorder_level'))
-    ).distinct().count()
-    out_of_stock_items = products.filter(status='outofstock').count()
-    damaged_items = products.filter(status='damaged').count()
+    # Suppliers
+    total_suppliers = Supplier.objects.count()
     active_suppliers = Supplier.objects.filter(is_active=True).count()
     
-    # Profit calculations
-    total_potential_profit = total_value - total_cost
-    avg_margin = total_potential_profit / total_products if total_products > 0 else 0
-    avg_margin_percentage = (total_potential_profit / total_cost * 100) if total_cost > 0 else 0
+    # ============================================
+    # RECENT ITEMS
+    # ============================================
+    # Recent 5 products
+    recent_products = Product.objects.select_related('category').order_by('-created_at')[:5]
     
-    # Category breakdown
-    category_stats = []
-    for category in Category.objects.filter(is_active=True):
-        cat_products = products.filter(category=category)
-        cat_total_items = cat_products.aggregate(total=Sum('quantity'))['total'] or 0
-        cat_total_value = sum(p.selling_price * p.quantity for p in cat_products)
-        cat_total_cost = sum(p.buying_price * p.quantity for p in cat_products)
-        
-        category_stats.append({
-            'name': category.name,
-            'code': category.category_code,
-            'product_count': cat_products.count(),
-            'total_items': cat_total_items,
-            'total_value': cat_total_value,
-            'total_cost': cat_total_cost,
-            'profit': cat_total_value - cat_total_cost
+    # Recent 5 stock activities
+    recent_stock_entries = StockEntry.objects.select_related(
+        'product', 'created_by'
+    ).order_by('-created_at')[:5]
+    
+    # Recent 5 returns - FIXED: Get ALL returns ordered by date
+    recent_returns = ReturnRequest.objects.select_related(
+        'requested_by', 'product'
+    ).order_by('-requested_at')[:5]
+    
+    # Recent 5 suppliers with product counts
+    recent_suppliers = Supplier.objects.filter(
+        is_active=True
+    ).order_by('-created_at')[:5]
+    
+    # Add product count to each supplier
+    supplier_list = []
+    for supplier in recent_suppliers:
+        supplier_list.append({
+            'id': supplier.id,
+            'name': supplier.name,
+            'phone': supplier.phone,
+            'contact_person': supplier.contact_person,
+            'created_at': supplier.created_at,
+            'product_count': supplier.products.count(),
+            'is_active': supplier.is_active,
         })
     
-    # Debug print to verify count
-    print(f"Store Manager Group: {store_manager_group}")
-    print(f"Store Managers Count: {store_managers}")
+    # ============================================
+    # STOCK ALERTS
+    # ============================================
+    stock_alerts = StockAlert.objects.filter(
+        is_active=True,
+        is_dismissed=False
+    ).select_related('product').order_by(
+        '-severity', '-last_alerted'
+    )[:6]  # Show top 6 alerts
     
     context = {
+        # Products
         'total_products': total_products,
+        'total_products_value': total_products_value,
+        'total_products_cost': total_products_cost,
+        
+        # Items
         'total_items': total_items,
-        'total_categories': total_categories,
-        'store_managers': store_managers,  # This will now show 1
-        'total_value': total_value,
-        'total_cost': total_cost,
-        'available_value': available_value,
-        'available_cost': available_cost,
-        'available_percentage': available_percentage,
-        'available_cost_percentage': available_cost_percentage,
-        'available_products': available_products.count(),
+        'total_items_value': total_items_value,
+        'total_items_cost': total_items_cost,
+        
+        # Available
         'available_items': available_items,
-        'low_stock_items': low_stock_items,
-        'needs_reorder_items': needs_reorder_items,
-        'out_of_stock_items': out_of_stock_items,
-        'damaged_items': damaged_items,
+        'available_items_value': available_items_value,
+        'available_items_cost': available_items_cost,
+        
+        # Returns - FIXED: Using corrected values
+        'returned_items': returned_items,
+        'returned_items_value': returned_items_value,
+        'returned_items_cost': returned_items_cost,
+        
+        # Staff & Suppliers
+        'store_managers_count': store_managers_count,
+        'active_managers_count': active_managers_count,
+        'total_suppliers': total_suppliers,
         'active_suppliers': active_suppliers,
-        'total_potential_profit': total_potential_profit,
-        'avg_margin': avg_margin,
-        'avg_margin_percentage': avg_margin_percentage,
-        'category_stats': category_stats,
+        
+        # Recent Items
+        'recent_products': recent_products,
+        'recent_stock_entries': recent_stock_entries,
+        'recent_returns': recent_returns,
+        'recent_suppliers': supplier_list,
+        
+        # Stock Alerts
+        'stock_alerts': stock_alerts,
     }
     
     return render(request, 'inventory/statistics.html', context)
 
 
+
+
+
+@login_required
+def export_statistics(request):
+    """Export statistics as CSV/Excel"""
+    # You can implement this function to export data
+    # For now, just redirect back
+    from django.contrib import messages
+    messages.info(request, 'Export feature coming soon!')
+    return redirect('inventory:statistics')
 
 
 

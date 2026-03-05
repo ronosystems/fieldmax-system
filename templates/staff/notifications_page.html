@@ -1,0 +1,935 @@
+{% extends "staff/base.html" %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}Notifications - FieldMax{% endblock %}
+
+{% block extra_css %}
+<style>
+    .notifications-container {
+        padding: 2rem;
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+
+    /* Header */
+    .page-header {
+        background: white;
+        border-radius: 16px;
+        padding: 1.5rem 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.02);
+        border: 1px solid #e9ecef;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+
+    .page-header h1 {
+        font-size: 1.8rem;
+        font-weight: 600;
+        color: #1e293b;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .page-header h1 i {
+        color: #2563eb;
+    }
+
+    .mark-read-btn {
+        background: #f8fafc;
+        color: #475569;
+        border: 1px solid #e2e8f0;
+        padding: 0.6rem 1.2rem;
+        border-radius: 10px;
+        font-weight: 500;
+        font-size: 0.9rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        transition: all 0.2s;
+        cursor: pointer;
+    }
+
+    .mark-read-btn:hover {
+        background: #2563eb;
+        color: white;
+        border-color: #2563eb;
+    }
+
+    /* Summary Cards */
+    .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .summary-card {
+        background: white;
+        border-radius: 16px;
+        padding: 1rem;
+        border: 1px solid #e9ecef;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.02);
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .summary-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.3rem;
+        flex-shrink: 0;
+    }
+
+    .summary-icon.red {
+        background: #fee2e2;
+        color: #dc2626;
+    }
+
+    .summary-icon.orange {
+        background: #fef3c7;
+        color: #d97706;
+    }
+
+    .summary-icon.blue {
+        background: #dbeafe;
+        color: #2563eb;
+    }
+
+    .summary-icon.green {
+        background: #dcfce7;
+        color: #16a34a;
+    }
+
+    .summary-icon.purple {
+        background: #e9d5ff;
+        color: #7e22ce;
+    }
+
+    .summary-icon.indigo {
+        background: #e0e7ff;
+        color: #4f46e5;
+    }
+
+    .summary-info h3 {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #1e293b;
+        margin: 0 0 0.15rem 0;
+        line-height: 1.2;
+    }
+
+    .summary-info p {
+        font-size: 0.75rem;
+        color: #64748b;
+        margin: 0;
+        line-height: 1.2;
+    }
+
+    /* Three Column Layout for Staff Notifications */
+    .three-column {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+
+    /* Two Column Layout */
+    .two-column {
+        display: grid;
+        grid-template-columns: 1.5fr 1fr;
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+
+    /* Notification Cards */
+    .notification-card {
+        background: white;
+        border-radius: 20px;
+        border: 1px solid #e9ecef;
+        overflow: hidden;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.02);
+        margin-bottom: 1.5rem;
+        height: fit-content;
+    }
+
+    .card-header {
+        padding: 1.2rem 1.5rem;
+        background: #f8fafc;
+        border-bottom: 1px solid #e9ecef;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .card-header h2 {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #1e293b;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .card-header h2 i {
+        color: #2563eb;
+    }
+
+    .badge-count {
+        background: white;
+        color: #475569;
+        padding: 0.25rem 0.75rem;
+        border-radius: 50px;
+        font-size: 0.8rem;
+        font-weight: 500;
+        border: 1px solid #e2e8f0;
+    }
+
+    .card-body {
+        padding: 1rem;
+        max-height: 400px;
+        overflow-y: auto;
+    }
+
+    /* Notification Items */
+    .notification-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 1rem;
+        padding: 1rem;
+        border-radius: 12px;
+        transition: background 0.2s;
+        border-bottom: 1px solid #f1f5f9;
+        position: relative;
+    }
+
+    .notification-item:last-child {
+        border-bottom: none;
+    }
+
+    .notification-item:hover {
+        background: #f8fafc;
+    }
+
+    .notification-item.unread {
+        background: #f0f9ff;
+        border-left: 3px solid #2563eb;
+    }
+
+    .notification-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2rem;
+        flex-shrink: 0;
+    }
+
+    .notification-icon.critical {
+        background: #fee2e2;
+        color: #dc2626;
+    }
+
+    .notification-icon.warning {
+        background: #fef3c7;
+        color: #d97706;
+    }
+
+    .notification-icon.success {
+        background: #dcfce7;
+        color: #16a34a;
+    }
+
+    .notification-icon.info {
+        background: #dbeafe;
+        color: #2563eb;
+    }
+
+    .notification-icon.purple {
+        background: #e9d5ff;
+        color: #7e22ce;
+    }
+
+    .notification-content {
+        flex: 1;
+    }
+
+    .notification-title {
+        font-weight: 600;
+        color: #1e293b;
+        margin-bottom: 0.3rem;
+        font-size: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .notification-desc {
+        font-size: 0.85rem;
+        color: #64748b;
+        margin-bottom: 0.3rem;
+    }
+
+    .notification-meta {
+        display: flex;
+        gap: 1rem;
+        font-size: 0.7rem;
+        color: #94a3b8;
+        flex-wrap: wrap;
+    }
+
+    .notification-meta span {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
+    .notification-badge {
+        padding: 0.2rem 0.6rem;
+        border-radius: 50px;
+        font-size: 0.7rem;
+        font-weight: 600;
+        display: inline-block;
+    }
+
+    .badge-critical {
+        background: #fee2e2;
+        color: #dc2626;
+    }
+
+    .badge-warning {
+        background: #fef3c7;
+        color: #d97706;
+    }
+
+    .badge-success {
+        background: #dcfce7;
+        color: #16a34a;
+    }
+
+    .badge-info {
+        background: #dbeafe;
+        color: #2563eb;
+    }
+
+    .notification-action {
+        margin-left: auto;
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .action-btn {
+        padding: 0.3rem 0.8rem;
+        border-radius: 6px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        text-decoration: none;
+        transition: all 0.2s;
+        border: 1px solid #e2e8f0;
+        background: white;
+        color: #475569;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
+    .action-btn:hover {
+        background: #2563eb;
+        color: white;
+        border-color: #2563eb;
+    }
+
+    /* Empty State */
+    .empty-state {
+        text-align: center;
+        padding: 2rem;
+        color: #94a3b8;
+    }
+
+    .empty-state i {
+        font-size: 2.5rem;
+        margin-bottom: 0.75rem;
+        opacity: 0.5;
+    }
+
+    .empty-state p {
+        font-size: 0.9rem;
+        margin: 0;
+    }
+
+    /* Card Footer */
+    .card-footer {
+        padding: 1rem;
+        background: white;
+        border-top: 1px solid #e9ecef;
+    }
+
+    .card-footer a {
+        color: #2563eb;
+        text-decoration: none;
+        font-size: 0.9rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .card-footer a:hover {
+        color: #1d4ed8;
+        text-decoration: underline;
+    }
+
+    /* Responsive */
+    @media (max-width: 1400px) {
+        .summary-grid {
+            grid-template-columns: repeat(3, 1fr);
+        }
+        
+        .three-column {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    @media (max-width: 1200px) {
+        .summary-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        
+        .two-column {
+            grid-template-columns: 1fr;
+        }
+        
+        .three-column {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .notifications-container {
+            padding: 1rem;
+        }
+        
+        .summary-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .page-header {
+            flex-direction: column;
+            text-align: center;
+        }
+        
+        .notification-item {
+            flex-wrap: wrap;
+        }
+        
+        .notification-action {
+            margin-left: 0;
+            width: 100%;
+            justify-content: flex-end;
+        }
+        
+        .notification-title {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.25rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="notifications-container">
+    <!-- Page Header -->
+    <div class="page-header">
+        <h1>
+            <i class="fas fa-bell"></i>
+            Notifications Center
+        </h1>
+        <button class="mark-read-btn" onclick="markAllAsRead()">
+            <i class="fas fa-check-double"></i>
+            Mark All as Read
+        </button>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="summary-grid">
+        <div class="summary-card">
+            <div class="summary-icon red">
+                <i class="fas fa-exclamation-circle"></i>
+            </div>
+            <div class="summary-info">
+                <h3>{{ notification_counts.critical_alerts }}</h3>
+                <p>Critical Alerts</p>
+            </div>
+        </div>
+        
+        <div class="summary-card">
+            <div class="summary-icon orange">
+                <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            <div class="summary-info">
+                <h3>{{ notification_counts.warning_alerts }}</h3>
+                <p>Warnings</p>
+            </div>
+        </div>
+        
+        <div class="summary-card">
+            <div class="summary-icon blue">
+                <i class="fas fa-undo-alt"></i>
+            </div>
+            <div class="summary-info">
+                <h3>{{ notification_counts.pending_returns }}</h3>
+                <p>Pending Returns</p>
+            </div>
+        </div>
+        
+        <div class="summary-card">
+            <div class="summary-icon green">
+                <i class="fas fa-check-circle"></i>
+            </div>
+            <div class="summary-info">
+                <h3>{{ notification_counts.verified_returns }}</h3>
+                <p>Verified Returns</p>
+            </div>
+        </div>
+
+        {% if request.user.is_superuser or request.user.is_staff %}
+        <div class="summary-card">
+            <div class="summary-icon purple">
+                <i class="fas fa-id-card"></i>
+            </div>
+            <div class="summary-info">
+                <h3>{{ notification_counts.pending_verifications }}</h3>
+                <p>Staff Verifications</p>
+            </div>
+        </div>
+        
+        <div class="summary-card">
+            <div class="summary-icon indigo">
+                <i class="fas fa-file-alt"></i>
+            </div>
+            <div class="summary-info">
+                <h3>{{ notification_counts.pending_applications }}</h3>
+                <p>Staff Applications</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Staff Notifications Section (for superusers/staff) -->
+    {% if request.user.is_superuser or request.user.is_staff %}
+    <div class="three-column">
+        <!-- Staff Verifications Section -->
+        <div class="notification-card">
+            <div class="card-header">
+                <h2>
+                    <i class="fas fa-user-check"></i>
+                    Pending Staff Verifications
+                </h2>
+                <span class="badge-count">{{ pending_verifications|length }} pending</span>
+            </div>
+            <div class="card-body">
+                {% for staff in pending_verifications %}
+                <div class="notification-item">
+                    <div class="notification-icon warning">
+                        <i class="fas fa-id-card"></i>
+                    </div>
+                    <div class="notification-content">
+                        <div class="notification-title">
+                            {# Try to get user info - adjust field name based on your model #}
+                            {% if staff.user %}
+                                {{ staff.user.get_full_name|default:staff.user.username }}
+                            {% elif staff.created_user %}
+                                {{ staff.created_user.get_full_name|default:staff.created_user.username }}
+                            {% elif staff.user_id %}
+                                User ID: {{ staff.user_id }}
+                            {% else %}
+                                Staff Member #{{ staff.id }}
+                            {% endif %}
+                        </div>
+                        <div class="notification-desc">
+                            Staff verification pending
+                        </div>
+                        <div class="notification-meta">
+                            <span><i class="far fa-clock"></i> {{ staff.verification_submitted_at|timesince }} ago</span>
+                            <span><i class="fas fa-envelope"></i> 
+                                {% if staff.user %}
+                                    {{ staff.user.email }}
+                                {% elif staff.created_user %}
+                                    {{ staff.created_user.email }}
+                                {% else %}
+                                    No email
+                                {% endif %}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="notification-action">
+                        <a href="{% url 'staff:admin_verify_list' %}" class="action-btn">
+                            <i class="fas fa-eye"></i> Review
+                        </a>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="empty-state">
+                    <i class="fas fa-check-circle" style="color: #16a34a;"></i>
+                    <p>No pending verifications</p>
+                </div>
+                {% endfor %}
+            </div>
+            {% if pending_verifications %}
+            <div class="card-footer">
+                <a href="{% url 'staff:admin_verify_list' %}">
+                    View All Verifications <i class="fas fa-arrow-right ms-2"></i>
+                </a>
+            </div>
+            {% endif %}
+        </div>
+
+<!-- Staff Applications Section -->
+<div class="notification-card">
+    <div class="card-header">
+        <h2>
+            <i class="fas fa-file-alt"></i>
+            Pending Staff Applications
+        </h2>
+        <span class="badge-count">{{ pending_applications|length }} pending</span>
+    </div>
+    <div class="card-body">
+        {% for application in pending_applications %}
+        <div class="notification-item">
+            <div class="notification-icon info">
+                <i class="fas fa-user-plus"></i>
+            </div>
+            <div class="notification-content">
+                <div class="notification-title">
+                    {% if application.created_user %}
+                        {{ application.created_user.get_full_name|default:application.created_user.username }}
+                    {% else %}
+                        Unknown User (Application #{{ application.id }})
+                    {% endif %}
+                </div>
+                <div class="notification-desc">
+                    Applied for {{ application.get_position_display }} position
+                </div>
+                <div class="notification-meta">
+                    <span><i class="far fa-clock"></i> {{ application.created_at|timesince }} ago</span>
+                    {% if application.created_user %}
+                    <span><i class="fas fa-envelope"></i> {{ application.created_user.email }}</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="notification-action">
+                <a href="{% url 'staff:application_list' %}" class="action-btn">
+                    <i class="fas fa-eye"></i> Review
+                </a>
+            </div>
+        </div>
+        {% empty %}
+        <div class="empty-state">
+            <i class="fas fa-check-circle" style="color: #16a34a;"></i>
+            <p>No pending applications</p>
+        </div>
+        {% endfor %}
+    </div>
+    {% if pending_applications %}
+    <div class="card-footer">
+        <a href="{% url 'staff:application_list' %}">
+            View All Applications <i class="fas fa-arrow-right ms-2"></i>
+        </a>
+    </div>
+    {% endif %}
+</div>
+
+        <!-- Low Stock Products -->
+        <div class="notification-card">
+            <div class="card-header">
+                <h2>
+                    <i class="fas fa-exclamation"></i>
+                    Low Stock Products
+                </h2>
+                <span class="badge-count">{{ low_stock_products|length }} items</span>
+            </div>
+            <div class="card-body">
+                {% for product in low_stock_products %}
+                <div class="notification-item">
+                    <div class="notification-icon warning">
+                        <i class="fas fa-box"></i>
+                    </div>
+                    <div class="notification-content">
+                        <div class="notification-title">
+                            {{ product.display_name }}
+                        </div>
+                        <div class="notification-desc">
+                            Current stock: {{ product.quantity }} units
+                            {% if product.reorder_level %} | Reorder at: {{ product.reorder_level }}{% endif %}
+                        </div>
+                        <div class="notification-meta">
+                            <span><i class="fas fa-tag"></i> {{ product.category.name }}</span>
+                            <span><i class="fas fa-dollar-sign"></i> KES {{ product.selling_price|intcomma }}</span>
+                        </div>
+                    </div>
+                    <div class="notification-action">
+                        <a href="{% url 'inventory:product_restock' %}?product={{ product.pk }}" class="action-btn">
+                            <i class="fas fa-plus-circle"></i> Restock
+                        </a>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="empty-state">
+                    <i class="fas fa-check-circle" style="color: #16a34a;"></i>
+                    <p>No low stock products</p>
+                </div>
+                {% endfor %}
+            </div>
+            {% if low_stock_products %}
+            <div class="card-footer">
+                <a href="{% url 'inventory:product_list' %}?status=lowstock">
+                    View All Low Stock <i class="fas fa-arrow-right ms-2"></i>
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Main Content - Stock & Returns -->
+    <div class="two-column">
+        <!-- Left Column - Stock Alerts & Returns -->
+        <div>
+            <!-- Stock Alerts Section -->
+            <div class="notification-card">
+                <div class="card-header">
+                    <h2>
+                        <i class="fas fa-exclamation-triangle"></i>
+                        Stock Alerts
+                    </h2>
+                    <span class="badge-count">{{ stock_alerts|length }} active</span>
+                </div>
+                <div class="card-body">
+                    {% for alert in stock_alerts %}
+                    <div class="notification-item unread">
+                        <div class="notification-icon 
+                            {% if alert.severity == 'critical' or alert.severity == 'danger' %}critical
+                            {% elif alert.severity == 'warning' %}warning
+                            {% else %}info{% endif %}">
+                            <i class="fas fa-{% if alert.severity == 'critical' or alert.severity == 'danger' %}exclamation-circle{% elif alert.severity == 'warning' %}exclamation-triangle{% else %}info-circle{% endif %}"></i>
+                        </div>
+                        <div class="notification-content">
+                            <div class="notification-title">
+                                {{ alert.product.display_name }}
+                                <span class="notification-badge 
+                                    {% if alert.severity == 'critical' or alert.severity == 'danger' %}badge-critical
+                                    {% elif alert.severity == 'warning' %}badge-warning
+                                    {% else %}badge-info{% endif %}">
+                                    {{ alert.get_severity_display }}
+                                </span>
+                            </div>
+                            <div class="notification-desc">
+                                {{ alert.get_alert_type_display }} - Current stock: {{ alert.current_stock }}
+                                {% if alert.threshold %} (Threshold: {{ alert.threshold }}){% endif %}
+                            </div>
+                            <div class="notification-meta">
+                                <span><i class="far fa-clock"></i> {{ alert.last_alerted|timesince|default:'Just now' }} ago</span>
+                                <span><i class="fas fa-box"></i> {{ alert.product.product_code }}</span>
+                            </div>
+                        </div>
+                        <div class="notification-action">
+                            <a href="{% url 'inventory:restock_from_alert' alert.pk %}" class="action-btn">
+                                <i class="fas fa-plus-circle"></i> Restock
+                            </a>
+                            <a href="{% url 'inventory:dismiss_alert' alert.pk %}?next={% url 'staff:notifications_page' %}" class="action-btn">
+                                <i class="fas fa-check"></i> Dismiss
+                            </a>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="empty-state">
+                        <i class="fas fa-check-circle" style="color: #16a34a;"></i>
+                        <p>No active stock alerts</p>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% if stock_alerts %}
+                <div class="card-footer">
+                    <a href="{% url 'inventory:stock_alerts' %}">
+                        View All Alerts <i class="fas fa-arrow-right ms-2"></i>
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Pending Returns Section -->
+            <div class="notification-card">
+                <div class="card-header">
+                    <h2>
+                        <i class="fas fa-clock"></i>
+                        Pending Returns
+                    </h2>
+                    <span class="badge-count">{{ pending_returns|length }} pending</span>
+                </div>
+                <div class="card-body">
+                    {% for return in pending_returns %}
+                    <div class="notification-item">
+                        <div class="notification-icon warning">
+                            <i class="fas fa-hourglass-half"></i>
+                        </div>
+                        <div class="notification-content">
+                            <div class="notification-title">
+                                {{ return.product_name }}
+                                <span class="notification-badge badge-warning">{{ return.get_status_display }}</span>
+                            </div>
+                            <div class="notification-desc">
+                                Return #{{ return.return_id }} - Refund: KES {{ return.refund_amount|intcomma }}
+                            </div>
+                            <div class="notification-meta">
+                                <span><i class="far fa-clock"></i> {{ return.requested_at|timesince }} ago</span>
+                                <span><i class="fas fa-user"></i> {{ return.requested_by.get_full_name|default:return.requested_by.username }}</span>
+                            </div>
+                        </div>
+                        <div class="notification-action">
+                            <a href="{% url 'inventory:return_detail' return.pk %}" class="action-btn">
+                                <i class="fas fa-eye"></i> View
+                            </a>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="empty-state">
+                        <i class="fas fa-check-circle" style="color: #16a34a;"></i>
+                        <p>No pending returns</p>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% if pending_returns %}
+                <div class="card-footer">
+                    <a href="{% url 'inventory:return_list' %}?status=submitted">
+                        View All Pending Returns <i class="fas fa-arrow-right ms-2"></i>
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Right Column - Verified Returns & Recent Activity -->
+        <div>
+            <!-- Verified Returns Section -->
+            <div class="notification-card">
+                <div class="card-header">
+                    <h2>
+                        <i class="fas fa-check-circle"></i>
+                        Verified Returns
+                    </h2>
+                    <span class="badge-count">{{ verified_returns|length }} verified</span>
+                </div>
+                <div class="card-body">
+                    {% for return in verified_returns %}
+                    <div class="notification-item">
+                        <div class="notification-icon success">
+                            <i class="fas fa-check"></i>
+                        </div>
+                        <div class="notification-content">
+                            <div class="notification-title">
+                                {{ return.product_name }}
+                                <span class="notification-badge badge-success">Verified</span>
+                            </div>
+                            <div class="notification-desc">
+                                Return #{{ return.return_id }} - Ready for approval
+                            </div>
+                            <div class="notification-meta">
+                                <span><i class="far fa-clock"></i> {{ return.verified_at|timesince }} ago</span>
+                                <span><i class="fas fa-user"></i> {{ return.verified_by.get_full_name|default:return.verified_by.username }}</span>
+                            </div>
+                        </div>
+                        <div class="notification-action">
+                            <a href="{% url 'inventory:return_detail' return.pk %}" class="action-btn">
+                                <i class="fas fa-eye"></i> View
+                            </a>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="empty-state">
+                        <i class="fas fa-check-circle" style="color: #16a34a;"></i>
+                        <p>No verified returns</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Recent Activity Section -->
+            <div class="notification-card">
+                <div class="card-header">
+                    <h2>
+                        <i class="fas fa-history"></i>
+                        Recent Activity (Last 7 Days)
+                    </h2>
+                    <span class="badge-count">{{ recent_activity|length }} events</span>
+                </div>
+                <div class="card-body">
+                    {% for activity in recent_activity %}
+                    <div class="notification-item">
+                        <div class="notification-icon 
+                            {% if activity.entry_type == 'purchase' %}success
+                            {% elif activity.entry_type == 'sale' %}critical
+                            {% else %}info{% endif %}">
+                            <i class="fas fa-{% if activity.entry_type == 'purchase' %}plus-circle{% elif activity.entry_type == 'sale' %}minus-circle{% else %}undo{% endif %}"></i>
+                        </div>
+                        <div class="notification-content">
+                            <div class="notification-title">
+                                {{ activity.product.display_name }}
+                            </div>
+                            <div class="notification-desc">
+                                {{ activity.get_entry_type_display }}: 
+                                <strong>{% if activity.quantity > 0 %}+{% endif %}{{ activity.quantity }}</strong> units
+                                {% if activity.total_amount %} - KES {{ activity.total_amount|intcomma }}{% endif %}
+                            </div>
+                            <div class="notification-meta">
+                                <span><i class="far fa-clock"></i> {{ activity.created_at|timesince }} ago</span>
+                                <span><i class="fas fa-user"></i> {{ activity.created_by.get_full_name|default:activity.created_by.username }}</span>
+                                {% if activity.reference_id %}
+                                <span><i class="fas fa-hashtag"></i> {{ activity.reference_id }}</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="empty-state">
+                        <i class="fas fa-history"></i>
+                        <p>No recent activity</p>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% if recent_activity %}
+                <div class="card-footer">
+                    <a href="{% url 'inventory:stock_movements' %}">
+                        View All Activity <i class="fas fa-arrow-right ms-2"></i>
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function markAllAsRead() {
+        // This would typically make an AJAX call to mark all notifications as read
+        // For now, just show a message
+        alert('All notifications marked as read (This feature is coming soon!)');
+        
+        // TODO: Implement mark all as read functionality
+    }
+</script>
+{% endblock %}

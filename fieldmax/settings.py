@@ -111,6 +111,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'staff.context_processors.pending_counts', 
+                'staff.context_processors.notification_count',
             ],
         },
     },

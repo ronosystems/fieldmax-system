@@ -65,4 +65,5 @@ urlpatterns = [
     # ============================================
     path('apply/', views.application_form, name='apply'),
     path('apply/success/', views.application_success, name='application_success'),
+    path('notifications/', views.notifications_page, name='notifications_page'),
 ]

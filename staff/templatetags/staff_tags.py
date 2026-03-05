@@ -7,6 +7,9 @@ register = template.Library()
 @register.filter
 def has_role(user, roles):
     """Check if user has any of the specified roles"""
+    if not user or not user.is_authenticated:
+        return False
+        
     if user.is_superuser:
         return True
         
@@ -23,6 +26,9 @@ def has_role(user, roles):
 @register.simple_tag
 def get_dashboard_name(user):
     """Get appropriate dashboard name for user"""
+    if not user or not user.is_authenticated:
+        return "Staff Dashboard"
+        
     if user.is_superuser:
         return "Admin Dashboard"
         
@@ -38,10 +44,13 @@ def get_dashboard_name(user):
             'store_manager': 'Store Manager Dashboard',
             'sales_manager': 'Sales Manager Dashboard',
             'credit_manager': 'Credit Manager Dashboard',
+            'credit_officer': 'Credit Officer Dashboard',
             'customer_service': 'Customer Service Dashboard',
             'supervisor': 'Supervisor Dashboard',
-            'security': 'Security Dashboard',
+            'security_officer': 'Security Dashboard',
             'cleaner': 'Cleaner Dashboard',
+            'inventory_manager': 'Inventory Manager Dashboard',
+            'assistant_manager': 'Assistant Manager Dashboard',
         }
         
         return dashboard_names.get(staff_app.position, 'Staff Dashboard')
@@ -49,9 +58,12 @@ def get_dashboard_name(user):
     except StaffApplication.DoesNotExist:
         return "Staff Dashboard"
 
-@register.simple_tag
+@register.filter
 def get_user_position(user):
-    """Get user's position from StaffApplication"""
+    """Get user's position from StaffApplication - NOW AS A FILTER"""
+    if not user or not user.is_authenticated:
+        return None
+        
     if user.is_superuser:
         return None
         
@@ -77,15 +89,22 @@ def replace(value, arg):
 @register.filter
 def position_display(position_code):
     """Convert position code to display name"""
+    if not position_code:
+        return ''
+        
     position_display = {
         'sales_agent': 'Sales Officer',
-        'cashier': 'Cashier Desk',
+        'cashier': 'Cashier',
         'store_manager': 'Store Manager',
         'sales_manager': 'Sales Manager',
         'credit_manager': 'Credit Manager',
-        'customer_service': 'Customer Care Service',
+        'credit_officer': 'Credit Officer',
+        'customer_service': 'Customer Service',
         'supervisor': 'Supervisor',
-        'security': 'Security Officer',
-        'cleaner': 'Office Cleaner',
+        'security_officer': 'Security Officer',
+        'cleaner': 'Cleaner',
+        'inventory_manager': 'Inventory Manager',
+        'assistant_manager': 'Assistant Manager',
+        'administrator': 'Administrator',
     }
-    return position_display.get(position_code, position_code)
+    return position_display.get(position_code, position_code.replace('_', ' ').title())

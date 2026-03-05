@@ -1,448 +1,979 @@
-{% extends 'staff/base.html' %}
+{% extends "staff/base.html" %}
 {% load static %}
 {% load humanize %}
 
-{% block title %}Store Statistics{% endblock %}
-
-{% block content %}
-<div class="container-fluid py-4">
-    <!-- Header Section -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h2 class="mb-1">
-                <i class="fas fa-store me-2 text-primary"></i>
-                Store Statistics
-            </h2>
-            <p class="text-muted mb-0">Real-time inventory overview and metrics</p>
-        </div>
-        <div class="btn-group">
-            <button class="btn btn-outline-primary" onclick="location.reload()">
-                <i class="fas fa-sync-alt me-2"></i>Refresh
-            </button>
-            <a href="{% url 'inventory:export_statistics' %}" class="btn btn-outline-success">
-                <i class="fas fa-download me-2"></i>Export
-            </a>
-        </div>
-    </div>
-
-    <!-- Summary Cards Row 1 - Inventory Overview -->
-    <div class="row mb-4">
-        <!-- Total Products -->
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-primary shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
-                                <i class="fas fa-box me-1"></i> Total Products
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_products|default:0|intcomma }}</div>
-                            <div class="small text-muted mt-2">
-                                <i class="fas fa-arrow-up me-1 text-success"></i>
-                                Unique product SKUs
-                            </div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-cubes fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Total Items in Inventory -->
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-success shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
-                                <i class="fas fa-layer-group me-1"></i> Total Items
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_items|default:0|intcomma }}</div>
-                            <div class="small text-muted mt-2">
-                                Combined quantity of all products
-                            </div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-cubes fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Total Categories -->
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-info shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
-                                <i class="fas fa-tags me-1"></i> Total Categories
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_categories|default:0|intcomma }}</div>
-                            <div class="small text-muted mt-2">
-                                Active product categories
-                            </div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-tag fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Store Managers -->
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-warning shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
-                                <i class="fas fa-users-cog me-1"></i> Store Managers
-                            </div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ store_managers|default:0|intcomma }}</div>
-                            <div class="small text-muted mt-2">
-                                Active store managers
-                            </div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-user-tie fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Summary Cards Row 2 - Financial Overview -->
-    <div class="row mb-4">
-        <!-- Total Items Value (Selling Price) -->
-        <div class="col-xl-6 col-md-6 mb-4">
-            <div class="card border-left-success shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
-                                <i class="fas fa-dollar-sign me-1"></i> Total Items Value (Retail)
-                            </div>
-                            <div class="h3 mb-0 font-weight-bold text-gray-800">KES {{ total_value|default:0|floatformat:2|intcomma }}</div>
-                            <div class="small text-muted mt-2">
-                                <i class="fas fa-chart-line me-1"></i>
-                                Based on selling price × quantity
-                            </div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-chart-pie fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Total Items Cost (Buying Price) -->
-        <div class="col-xl-6 col-md-6 mb-4">
-            <div class="card border-left-danger shadow h-100 py-2">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
-                                <i class="fas fa-dollar-sign me-1"></i> Total Items Cost
-                            </div>
-                            <div class="h3 mb-0 font-weight-bold text-gray-800">KES {{ total_cost|default:0|floatformat:2|intcomma }}</div>
-                            <div class="small text-muted mt-2">
-                                <i class="fas fa-chart-line me-1"></i>
-                                Based on buying price × quantity
-                            </div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-chart-bar fa-2x text-gray-300"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Summary Cards Row 3 - Available Items Financials -->
-    <div class="row mb-4">
-        <!-- Available Items Value (Selling Price) -->
-        <div class="col-xl-6 col-md-6 mb-4">
-            <div class="card border-left-success shadow h-100 py-2 bg-light-success">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
-                                <i class="fas fa-check-circle me-1"></i> Available Items Value
-                            </div>
-                            <div class="h3 mb-0 font-weight-bold text-success">KES {{ available_value|default:0|floatformat:2|intcomma }}</div>
-                            <div class="small mt-2">
-                                <span class="text-success">
-                                    <i class="fas fa-arrow-up me-1"></i>
-                                    {{ available_percentage|default:0|floatformat:1 }}% of total value
-                                </span>
-                                <span class="text-muted ms-2">(In-stock items only)</span>
-                            </div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-check-circle fa-2x text-success"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Available Items Cost (Buying Price) -->
-        <div class="col-xl-6 col-md-6 mb-4">
-            <div class="card border-left-warning shadow h-100 py-2 bg-light-warning">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
-                                <i class="fas fa-check-circle me-1"></i> Available Items Cost
-                            </div>
-                            <div class="h3 mb-0 font-weight-bold text-warning">KES {{ available_cost|default:0|floatformat:2|intcomma }}</div>
-                            <div class="small mt-2">
-                                <span class="text-warning">
-                                    <i class="fas fa-arrow-up me-1"></i>
-                                    {{ available_cost_percentage|default:0|floatformat:1 }}% of total cost
-                                </span>
-                                <span class="text-muted ms-2">(Cost of in-stock items)</span>
-                            </div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-dollar-sign fa-2x text-warning"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Additional Statistics Row -->
-    <div class="row">
-        <!-- Quick Stats Cards -->
-        <div class="col-lg-6 mb-4">
-            <div class="card shadow mb-4">
-                <div class="card-header py-3 bg-white">
-                    <h6 class="m-0 font-weight-bold text-primary">
-                        <i class="fas fa-chart-simple me-2"></i>Quick Inventory Stats
-                    </h6>
-                </div>
-                <div class="card-body">
-                    <div class="list-group list-group-flush">
-                        <div class="list-group-item d-flex justify-content-between align-items-center px-0">
-                            <div>
-                                <i class="fas fa-check-circle text-success me-2"></i>
-                                Available Products
-                            </div>
-                            <span class="badge bg-success rounded-pill">{{ available_products|default:0|intcomma }}</span>
-                        </div>
-                        <div class="list-group-item d-flex justify-content-between align-items-center px-0">
-                            <div>
-                                <i class="fas fa-exclamation-triangle text-warning me-2"></i>
-                                Low Stock Items
-                            </div>
-                            <span class="badge bg-warning rounded-pill">{{ low_stock_items|default:0|intcomma }}</span>
-                        </div>
-                        <div class="list-group-item d-flex justify-content-between align-items-center px-0">
-                            <div>
-                                <i class="fas fa-exclamation-circle text-danger me-2"></i>
-                                Needs Reorder
-                            </div>
-                            <span class="badge bg-danger rounded-pill">{{ needs_reorder_items|default:0|intcomma }}</span>
-                        </div>
-                        <div class="list-group-item d-flex justify-content-between align-items-center px-0">
-                            <div>
-                                <i class="fas fa-times-circle text-secondary me-2"></i>
-                                Out of Stock
-                            </div>
-                            <span class="badge bg-secondary rounded-pill">{{ out_of_stock_items|default:0|intcomma }}</span>
-                        </div>
-                        <div class="list-group-item d-flex justify-content-between align-items-center px-0">
-                            <div>
-                                <i class="fas fa-tools text-dark me-2"></i>
-                                Damaged Items
-                            </div>
-                            <span class="badge bg-dark rounded-pill">{{ damaged_items|default:0|intcomma }}</span>
-                        </div>
-                        <div class="list-group-item d-flex justify-content-between align-items-center px-0">
-                            <div>
-                                <i class="fas fa-truck text-info me-2"></i>
-                                Active Suppliers
-                            </div>
-                            <span class="badge bg-info rounded-pill">{{ active_suppliers|default:0|intcomma }}</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Profit Margin Overview -->
-        <div class="col-lg-6 mb-4">
-            <div class="card shadow mb-4">
-                <div class="card-header py-3 bg-white">
-                    <h6 class="m-0 font-weight-bold text-primary">
-                        <i class="fas fa-chart-line me-2"></i>Profit Margin Overview
-                    </h6>
-                </div>
-                <div class="card-body">
-                    <div class="mb-4">
-                        <div class="d-flex justify-content-between mb-2">
-                            <span>Average Margin per Product:</span>
-                            <span class="fw-bold text-success">KES {{ avg_margin|default:0|floatformat:2|intcomma }}</span>
-                        </div>
-                        <div class="progress mb-3" style="height: 10px;">
-                            <div class="progress-bar bg-success" role="progressbar" 
-                                 style="width: {{ avg_margin_percentage|default:0 }}%"
-                                 aria-valuenow="{{ avg_margin_percentage|default:0 }}" 
-                                 aria-valuemin="0" 
-                                 aria-valuemax="100">
-                            </div>
-                        </div>
-                        
-                        <div class="d-flex justify-content-between mb-2">
-                            <span>Average Margin %:</span>
-                            <span class="fw-bold text-info">{{ avg_margin_percentage|default:0|floatformat:1 }}%</span>
-                        </div>
-                        
-                        <hr>
-                        
-                        <div class="d-flex justify-content-between mb-2">
-                            <span>Total Potential Profit:</span>
-                            <span class="fw-bold text-success">KES {{ total_potential_profit|default:0|floatformat:2|intcomma }}</span>
-                        </div>
-                        <small class="text-muted">(Total Value - Total Cost)</small>
-                    </div>
-                    
-                    <div class="alert alert-info mb-0">
-                        <i class="fas fa-info-circle me-2"></i>
-                        <strong>Note:</strong> Values based on current stock levels and prices.
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Category Breakdown -->
-    <div class="row">
-        <div class="col-12 mb-4">
-            <div class="card shadow">
-                <div class="card-header py-3 bg-white d-flex justify-content-between align-items-center">
-                    <h6 class="m-0 font-weight-bold text-primary">
-                        <i class="fas fa-chart-pie me-2"></i>Category Breakdown
-                    </h6>
-                    <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse" data-bs-target="#categoryBreakdown">
-                        <i class="fas fa-chevron-down"></i>
-                    </button>
-                </div>
-                <div class="collapse show" id="categoryBreakdown">
-                    <div class="card-body">
-                        <div class="table-responsive">
-                            <table class="table table-hover">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>Category</th>
-                                        <th class="text-end">Products</th>
-                                        <th class="text-end">Total Items</th>
-                                        <th class="text-end">Total Value</th>
-                                        <th class="text-end">Total Cost</th>
-                                        <th class="text-end">Potential Profit</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for category in category_stats %}
-                                    <tr>
-                                        <td>
-                                            <strong>{{ category.name }}</strong>
-                                            <br>
-                                            <small class="text-muted">{{ category.code }}</small>
-                                        </td>
-                                        <td class="text-end">{{ category.product_count|intcomma }}</td>
-                                        <td class="text-end">{{ category.total_items|intcomma }}</td>
-                                        <td class="text-end text-success">KES {{ category.total_value|floatformat:2|intcomma }}</td>
-                                        <td class="text-end text-danger">KES {{ category.total_cost|floatformat:2|intcomma }}</td>
-                                        <td class="text-end text-primary">KES {{ category.profit|floatformat:2|intcomma }}</td>
-                                    </tr>
-                                    {% empty %}
-                                    <tr>
-                                        <td colspan="6" class="text-center py-4">
-                                            <i class="fas fa-folder-open fa-3x text-muted mb-3"></i>
-                                            <p class="text-muted">No categories found</p>
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                                <tfoot class="table-light">
-                                    <tr>
-                                        <th>Total</th>
-                                        <th class="text-end">{{ total_products|default:0|intcomma }}</th>
-                                        <th class="text-end">{{ total_items|default:0|intcomma }}</th>
-                                        <th class="text-end">KES {{ total_value|default:0|floatformat:2|intcomma }}</th>
-                                        <th class="text-end">KES {{ total_cost|default:0|floatformat:2|intcomma }}</th>
-                                        <th class="text-end">KES {{ total_potential_profit|default:0|floatformat:2|intcomma }}</th>
-                                    </tr>
-                                </tfoot>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Last Updated -->
-    <div class="row">
-        <div class="col-12">
-            <p class="text-muted text-end small">
-                <i class="far fa-clock me-1"></i>
-                Last updated: {% now "F j, Y H:i:s" %}
-            </p>
-        </div>
-    </div>
-</div>
-{% endblock %}
+{% block title %}Store Statistics - FieldMax{% endblock %}
 
 {% block extra_css %}
 <style>
-    .border-left-primary {
-        border-left: 4px solid #4e73df !important;
+    /* Professional Store Statistics Styles */
+    .stats-container {
+        padding: 2rem;
+        max-width: 1600px;
+        margin: 0 auto;
     }
-    .border-left-success {
-        border-left: 4px solid #1cc88a !important;
+
+    /* Header */
+    .page-header {
+        background: white;
+        border-radius: 16px;
+        padding: 1.5rem 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.02);
+        border: 1px solid #e9ecef;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
     }
-    .border-left-info {
-        border-left: 4px solid #36b9cc !important;
+
+    .page-header h1 {
+        font-size: 2rem;
+        font-weight: 10000;
+        color: #000000;
+        margin: 0;
     }
-    .border-left-warning {
-        border-left: 4px solid #f6c23e !important;
+
+    .page-header h1 i {
+        color: #2563eb;
+        margin-right: 1rem;
     }
-    .border-left-danger {
-        border-left: 4px solid #e74a3b !important;
+
+    .refresh-btn {
+        background: #f8fafc;
+        color: #006afd;
+        border: 1px solid #e2e8f0;
+        padding: 0.6rem 1.2rem;
+        border-radius: 10px;
+        font-weight: 500;
+        font-size: 0.9rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        transition: all 0.2s;
     }
-    .bg-light-success {
-        background-color: #f0fff4 !important;
+
+    .refresh-btn:hover {
+        background: #2563eb;
+        color: white;
+        border-color: #2563eb;
     }
-    .bg-light-warning {
-        background-color: #fffaf0 !important;
+
+    /* Section Title */
+    .section-title {
+        font-size: 1.2rem;
+        font-weight: 600;
+        color: #ffffff;
+        margin: 2rem 0 1.2rem 0;
+        padding-left: 0.5rem;
+        border-left: 4px solid #2563eb;
     }
-    .card {
-        transition: transform 0.2s;
+
+    .section-title:first-of-type {
+        margin-top: 0;
     }
-    .card:hover {
+
+    /* Stats Grid - 3 columns */
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+
+    /* Stat Card - All White */
+    .stat-card {
+        background: white;
+        border-radius: 20px;
+        padding: 1.5rem;
+        border: 2px solid #000000;
+        transition: all 0.2s;
+        position: relative;
+        overflow: hidden;
+        box-shadow: 0 4px 12px rgb(0, 0, 0);
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .stat-card:hover {
         transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1) !important;
+        box-shadow: 0 12px 24px -8px rgba(0,0,0,0.1);
+        border-color: #2563eb;
     }
-    .text-gray-300 {
-        color: #dddfeb !important;
+
+    .stat-card .stat-header {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
     }
-    .text-gray-800 {
-        color: #5a5c69 !important;
+
+    .stat-card .stat-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        background: #ff00d4;
     }
-    .progress {
-        background-color: #eaecf4;
+
+    .stat-card .stat-icon.blue {
+        background: #dbeafe;
+        color: #2563eb;
+    }
+
+    .stat-card .stat-icon.green {
+        background: #dcfce7;
+        color: #00ff5e;
+    }
+
+    .stat-card .stat-icon.orange {
+        background: #fed7aa;
+        color: #ff4800;
+    }
+
+    .stat-card .stat-icon.purple {
+        background: #e9d5ff;
+        color: #8800ff;
+    }
+
+    .stat-card .stat-title {
+        font-size: 0.9rem;
+        color: #006aff;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    /* Stat Values */
+    .stat-main-value {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #000000;
+        line-height: 1.2;
+        margin-bottom: 1rem;
+    }
+
+    .stat-details {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        padding-top: 1rem;
+        border-top: 1px dashed #e2e8f0;
+        margin-top: auto;
+    }
+
+    .stat-detail-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 0.95rem;
+    }
+
+    .stat-detail-label {
+        color: #000000;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .stat-detail-label i {
+        width: 16px;
+        color: #000000;
+    }
+
+    .stat-detail-value {
+        font-weight: 800;
+        color: #000000;
+    }
+
+    .stat-detail-value.amount {
+        color: #2563eb;
+        font-weight: 700;
+    }
+
+    /* Two Column Layout */
+    .two-column {
+        display: grid;
+        grid-template-columns: 1.5fr 1fr;
+        gap: 1.5rem;
+        margin-top: 2rem;
+    }
+
+    /* Content Cards - Equal Height */
+    .content-card {
+        background: white;
+        border-radius: 20px;
+        border: 1px solid #e9ecef;
+        overflow: hidden;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.02);
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .card-header {
+        padding: 1.2rem 1.5rem;
+        background: #f8fafc;
+        border-bottom: 1px solid #e9ecef;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-shrink: 0;
+    }
+
+    .card-header h3 {
+        font-size: 1rem;
+        font-weight: 600;
+        color: #1e293b;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .card-header h3 i {
+        color: #2563eb;
+    }
+
+    .badge-count {
+        background: white;
+        color: #475569;
+        padding: 0.25rem 0.75rem;
+        border-radius: 50px;
+        font-size: 0.8rem;
+        font-weight: 500;
+        border: 1px solid #e2e8f0;
+    }
+
+    .card-body {
+        padding: 1rem;
+        flex: 1;
+        overflow-y: auto;
+        min-height: 300px;
+        max-height: 350px;
+    }
+
+    /* List Items */
+    .list-item {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 0.75rem;
+        border-radius: 12px;
+        transition: background 0.2s;
+        border-bottom: 1px solid #f1f5f9;
+    }
+
+    .list-item:last-child {
+        border-bottom: none;
+    }
+
+    .list-item:hover {
+        background: #f8fafc;
+    }
+
+    .item-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+        background: #f1f5f9;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #64748b;
+        font-size: 1.1rem;
+        flex-shrink: 0;
+    }
+
+    .item-icon.product {
+        background: #dbeafe;
+        color: #2563eb;
+    }
+
+    .item-icon.activity {
+        background: #dcfce7;
+        color: #16a34a;
+    }
+
+    .item-icon.return {
+        background: #fed7aa;
+        color: #c2410c;
+    }
+
+    .item-icon.supplier {
+        background: #e9d5ff;
+        color: #7e22ce;
+    }
+
+    .item-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .item-title {
+        font-weight: 600;
+        color: #1e293b;
+        margin-bottom: 0.25rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-size: 0.95rem;
+    }
+
+    .item-meta {
+        display: flex;
+        gap: 1rem;
+        font-size: 0.75rem;
+        color: #64748b;
+        flex-wrap: wrap;
+    }
+
+    .item-meta span {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
+    .item-badge {
+        padding: 0.2rem 0.6rem;
+        border-radius: 50px;
+        font-size: 0.7rem;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    .badge-success {
+        background: #dcfce7;
+        color: #16a34a;
+    }
+
+    .badge-warning {
+        background: #fef3c7;
+        color: #d97706;
+    }
+
+    .badge-danger {
+        background: #fee2e2;
+        color: #dc2626;
+    }
+
+    .badge-info {
+        background: #dbeafe;
+        color: #2563eb;
+    }
+
+    .item-amount {
+        font-weight: 700;
+        color: #2563eb;
+        font-size: 0.95rem;
+        white-space: nowrap;
+    }
+
+    /* Stock Alert Cards */
+    .stock-alerts-section {
+        margin-top: 2.5rem;
+    }
+
+    .stock-alerts-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+
+    .alert-card {
+        background: white;
+        border-radius: 16px;
+        border: 1px solid #e9ecef;
+        padding: 1.2rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        transition: all 0.2s;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+    }
+
+    .alert-card:hover {
+        transform: translateX(4px);
+        border-color: #2563eb;
+        box-shadow: 0 8px 16px rgba(0,0,0,0.05);
+    }
+
+    .alert-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.3rem;
+        flex-shrink: 0;
+    }
+
+    .alert-icon.critical {
+        background: #fee2e2;
+        color: #dc2626;
+    }
+
+    .alert-icon.warning {
+        background: #fef3c7;
+        color: #d97706;
+    }
+
+    .alert-icon.info {
+        background: #dbeafe;
+        color: #2563eb;
+    }
+
+    .alert-content {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .alert-title {
+        font-weight: 600;
+        color: #1e293b;
+        margin-bottom: 0.3rem;
+        font-size: 1rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .alert-details {
+        display: flex;
+        gap: 1rem;
+        font-size: 0.8rem;
+        color: #64748b;
+        margin-bottom: 0.3rem;
+        flex-wrap: wrap;
+    }
+
+    .alert-meta {
+        display: flex;
+        gap: 1rem;
+        font-size: 0.7rem;
+        color: #94a3b8;
+    }
+
+    .alert-action {
+        margin-left: auto;
+    }
+
+    .alert-action .btn {
+        padding: 0.4rem 1rem;
+        font-size: 0.8rem;
+        border-radius: 8px;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        color: #475569;
+        text-decoration: none;
+        transition: all 0.2s;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+    }
+
+    .alert-action .btn:hover {
+        background: #2563eb;
+        color: white;
+        border-color: #2563eb;
+    }
+
+    /* Stock Level Indicators */
+    .stock-level {
+        display: inline-block;
+        padding: 0.2rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.7rem;
+        font-weight: 600;
+        background: #f1f5f9;
+    }
+
+    .stock-level.critical {
+        background: #fee2e2;
+        color: #dc2626;
+    }
+
+    .stock-level.warning {
+        background: #fef3c7;
+        color: #d97706;
+    }
+
+    .stock-level.normal {
+        background: #dcfce7;
+        color: #16a34a;
+    }
+
+    /* Empty State */
+    .empty-state {
+        text-align: center;
+        padding: 2rem;
+        color: #94a3b8;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .empty-state i {
+        font-size: 2.5rem;
+        margin-bottom: 0.5rem;
+        opacity: 0.5;
+    }
+
+    .empty-state p {
+        margin: 0;
+        font-size: 0.9rem;
+    }
+
+    /* View All Link */
+    .view-all-link {
+        color: #2563eb;
+        text-decoration: none;
+        font-size: 0.85rem;
+        font-weight: 500;
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        background: white;
+        border: 1px solid #e2e8f0;
+        transition: all 0.2s;
+    }
+
+    .view-all-link:hover {
+        background: #2563eb;
+        color: white;
+        border-color: #2563eb;
+    }
+
+    /* Responsive */
+    @media (max-width: 1200px) {
+        .stats-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        
+        .stock-alerts-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    @media (max-width: 992px) {
+        .two-column {
+            grid-template-columns: 1fr;
+        }
+        
+        .stock-alerts-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .stats-container {
+            padding: 1rem;
+        }
+        
+        .stats-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .page-header {
+            flex-direction: column;
+            gap: 1rem;
+            text-align: center;
+        }
+        
+        .card-body {
+            min-height: 250px;
+        }
     }
 </style>
+{% endblock %}
+
+{% block content %}
+<div class="stats-container">
+    <!-- Header -->
+    <div class="page-header">
+        <h1>
+            <i class="fas fa-store-alt"></i>
+            STORE STATISTICS
+        </h1>
+        <button class="refresh-btn" onclick="location.reload()">
+            <i class="fas fa-sync-alt"></i>
+            Refresh Data
+        </button>
+    </div>
+
+    <!-- Section 1: Products Overview -->
+    <div class="section-title">
+        <i class="fas fa-box me-2"></i>
+        Products Overview
+    </div>
+
+    <div class="stats-grid">
+        <!-- Total Products Card -->
+        <div class="stat-card">
+            <div class="stat-header">
+                <div class="stat-icon blue">
+                    <i class="fas fa-cube"></i>
+                </div>
+                <div class="stat-title">Total Products</div>
+            </div>
+            <div class="stat-main-value">{{ total_products|intcomma }}</div>
+            <div class="stat-details">
+                <div class="stat-detail-item">
+                    <span class="stat-detail-label">
+                        <i class="fas fa-tag"></i> Value
+                    </span>
+                    <span class="stat-detail-value amount">KES {{ total_products_value|intcomma }}</span>
+                </div>
+                <div class="stat-detail-item">
+                    <span class="stat-detail-label">
+                        <i class="fas fa-coins"></i> Cost
+                    </span>
+                    <span class="stat-detail-value">KES {{ total_products_cost|intcomma }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Total Product Items Card -->
+        <div class="stat-card">
+            <div class="stat-header">
+                <div class="stat-icon blue">
+                    <i class="fas fa-cubes"></i>
+                </div>
+                <div class="stat-title">Total Items</div>
+            </div>
+            <div class="stat-main-value">{{ total_items|intcomma }}</div>
+            <div class="stat-details">
+                <div class="stat-detail-item">
+                    <span class="stat-detail-label">
+                        <i class="fas fa-tag"></i> Value
+                    </span>
+                    <span class="stat-detail-value amount">KES {{ total_items_value|intcomma }}</span>
+                </div>
+                <div class="stat-detail-item">
+                    <span class="stat-detail-label">
+                        <i class="fas fa-coins"></i> Cost
+                    </span>
+                    <span class="stat-detail-value">KES {{ total_items_cost|intcomma }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Available Items Card -->
+        <div class="stat-card">
+            <div class="stat-header">
+                <div class="stat-icon green">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <div class="stat-title">Available Items</div>
+            </div>
+            <div class="stat-main-value">{{ available_items|intcomma }}</div>
+            <div class="stat-details">
+                <div class="stat-detail-item">
+                    <span class="stat-detail-label">
+                        <i class="fas fa-tag"></i> Value
+                    </span>
+                    <span class="stat-detail-value amount">KES {{ available_items_value|intcomma }}</span>
+                </div>
+                <div class="stat-detail-item">
+                    <span class="stat-detail-label">
+                        <i class="fas fa-coins"></i> Cost
+                    </span>
+                    <span class="stat-detail-value">KES {{ available_items_cost|intcomma }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section 2: Returns Overview -->
+    <div class="section-title">
+        <i class="fas fa-undo-alt me-2"></i>
+        Returns Overview
+    </div>
+
+    <div class="stats-grid">
+        <!-- Returned Items Card -->
+        <div class="stat-card">
+            <div class="stat-header">
+                <div class="stat-icon orange">
+                    <i class="fas fa-rotate-left"></i>
+                </div>
+                <div class="stat-title">Returned Items</div>
+            </div>
+            <div class="stat-main-value">{{ returned_items|intcomma }}</div>
+            <div class="stat-details">
+                <div class="stat-detail-item">
+                    <span class="stat-detail-label">
+                        <i class="fas fa-tag"></i> Value
+                    </span>
+                    <span class="stat-detail-value amount">KES {{ returned_items_value|intcomma }}</span>
+                </div>
+                <div class="stat-detail-item">
+                    <span class="stat-detail-label">
+                        <i class="fas fa-coins"></i> Cost
+                    </span>
+                    <span class="stat-detail-value">KES {{ returned_items_cost|intcomma }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Store Managers Card -->
+        <div class="stat-card">
+            <div class="stat-header">
+                <div class="stat-icon purple">
+                    <i class="fas fa-user-tie"></i>
+                </div>
+                <div class="stat-title">Store Managers</div>
+            </div>
+            <div class="stat-main-value">{{ store_managers_count|intcomma }}</div>
+            <div class="stat-details">
+                <div class="stat-detail-item">
+                    <span class="stat-detail-label">
+                        <i class="fas fa-check-circle"></i> Active
+                    </span>
+                    <span class="stat-detail-value">{{ active_managers_count|intcomma }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Suppliers Card -->
+        <div class="stat-card">
+            <div class="stat-header">
+                <div class="stat-icon purple">
+                    <i class="fas fa-truck"></i>
+                </div>
+                <div class="stat-title">Suppliers</div>
+            </div>
+            <div class="stat-main-value">{{ total_suppliers|intcomma }}</div>
+            <div class="stat-details">
+                <div class="stat-detail-item">
+                    <span class="stat-detail-label">
+                        <i class="fas fa-check-circle"></i> Active
+                    </span>
+                    <span class="stat-detail-value">{{ active_suppliers|intcomma }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Activity Section with Equal Heights -->
+    <div class="two-column">
+        <!-- Left Column: Recent Products & Stock Activity -->
+        <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+            <!-- Recent Products -->
+            <div class="content-card">
+                <div class="card-header">
+                    <h3>
+                        <i class="fas fa-clock"></i>
+                        Recent Products (Last 5)
+                    </h3>
+                    <span class="badge-count">{{ recent_products|length }} new</span>
+                </div>
+                <div class="card-body">
+                    {% for product in recent_products %}
+                    <div class="list-item">
+                        <div class="item-icon product">
+                            <i class="fas fa-box"></i>
+                        </div>
+                        <div class="item-info">
+                            <div class="item-title">{{ product.display_name }}</div>
+                            <div class="item-meta">
+                                <span><i class="fas fa-hashtag"></i> {{ product.product_code }}</span>
+                                <span><i class="fas fa-tag"></i> {{ product.category.name }}</span>
+                                <span><i class="far fa-clock"></i> {{ product.created_at|timesince }} ago</span>
+                            </div>
+                        </div>
+                        <div class="item-amount">KES {{ product.selling_price|intcomma }}</div>
+                    </div>
+                    {% empty %}
+                    <div class="empty-state">
+                        <i class="fas fa-box-open"></i>
+                        <p>No products added yet</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Recent Stock Activity -->
+            <div class="content-card">
+                <div class="card-header">
+                    <h3>
+                        <i class="fas fa-exchange-alt"></i>
+                        Recent Stock Activity (Last 5)
+                    </h3>
+                    <span class="badge-count">{{ recent_stock_entries|length }} movements</span>
+                </div>
+                <div class="card-body">
+                    {% for entry in recent_stock_entries %}
+                    <div class="list-item">
+                        <div class="item-icon activity">
+                            <i class="fas fa-{% if entry.entry_type == 'purchase' %}plus-circle{% elif entry.entry_type == 'sale' %}minus-circle{% else %}undo{% endif %}"></i>
+                        </div>
+                        <div class="item-info">
+                            <div class="item-title">{{ entry.product.display_name }}</div>
+                            <div class="item-meta">
+                                <span>
+                                    <span class="item-badge {% if entry.quantity > 0 %}badge-success{% else %}badge-danger{% endif %}">
+                                        {% if entry.quantity > 0 %}+{% endif %}{{ entry.quantity }} units
+                                    </span>
+                                </span>
+                                <span><i class="far fa-clock"></i> {{ entry.created_at|timesince }} ago</span>
+                                <span><i class="fas fa-user"></i> {{ entry.created_by.get_full_name|default:entry.created_by.username }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="empty-state">
+                        <i class="fas fa-exchange-alt"></i>
+                        <p>No stock activity yet</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Recent Returns & Suppliers -->
+        <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+            <!-- Recent Returns -->
+            <div class="content-card">
+                <div class="card-header">
+                    <h3>
+                        <i class="fas fa-undo-alt"></i>
+                        Recent Returns (Last 5)
+                    </h3>
+                    <a href="{% url 'inventory:return_list' %}" class="view-all-link">View All</a>
+                </div>
+                <div class="card-body">
+                    {% for return in recent_returns %}
+                    <div class="list-item">
+                        <div class="item-icon return">
+                            <i class="fas fa-rotate-left"></i>
+                        </div>
+                        <div class="item-info">
+                            <div class="item-title">{{ return.product_name }}</div>
+                            <div class="item-meta">
+                                <span>
+                                    <span class="item-badge 
+                                        {% if return.status == 'approved' %}badge-success
+                                        {% elif return.status == 'rejected' %}badge-danger
+                                        {% elif return.status == 'pending' %}badge-warning
+                                        {% elif return.status == 'submitted' %}badge-info
+                                        {% else %}badge-warning{% endif %}">
+                                        {{ return.get_status_display }}
+                                    </span>
+                                </span>
+                                <span><i class="far fa-clock"></i> {{ return.requested_at|timesince }} ago</span>
+                                <span><i class="fas fa-user"></i> {{ return.requested_by.get_full_name|default:return.requested_by.username }}</span>
+                            </div>
+                        </div>
+                        <div class="item-amount">KES {{ return.refund_amount|intcomma }}</div>
+                    </div>
+                    {% empty %}
+                    <div class="empty-state">
+                        <i class="fas fa-undo-alt"></i>
+                        <p>No returns yet</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Recent Suppliers -->
+            <div class="content-card">
+                <div class="card-header">
+                    <h3>
+                        <i class="fas fa-truck"></i>
+                        Recent Suppliers (Last 5)
+                    </h3>
+                    <a href="{% url 'inventory:supplier_list' %}" class="view-all-link">View All</a>
+                </div>
+                <div class="card-body">
+                    {% for supplier in recent_suppliers %}
+                    <div class="list-item">
+                        <div class="item-icon supplier">
+                            <i class="fas fa-building"></i>
+                        </div>
+                        <div class="item-info">
+                            <div class="item-title">{{ supplier.name }}</div>
+                            <div class="item-meta">
+                                <span><i class="fas fa-phone"></i> {{ supplier.phone|default:'No phone' }}</span>
+                                <span><i class="fas fa-box"></i> {{ supplier.product_count }} products</span>
+                                <span><i class="far fa-calendar"></i> {{ supplier.created_at|timesince }} ago</span>
+                            </div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="empty-state">
+                        <i class="fas fa-truck"></i>
+                        <p>No suppliers added yet</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stock Alerts Section -->
+    <div class="stock-alerts-section">
+        <div class="section-title">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            Stock Alerts
+            <span class="badge-count" style="margin-left: 1rem;">{{ stock_alerts|length }} active</span>
+        </div>
+
+        {% if stock_alerts %}
+        <div class="stock-alerts-grid">
+            {% for alert in stock_alerts %}
+            <div class="alert-card">
+                <div class="alert-icon 
+                    {% if alert.severity == 'critical' %}critical
+                    {% elif alert.severity == 'danger' %}critical
+                    {% elif alert.severity == 'warning' %}warning
+                    {% else %}info{% endif %}">
+                    <i class="fas fa-{% if alert.severity == 'critical' or alert.severity == 'danger' %}exclamation-circle{% elif alert.severity == 'warning' %}exclamation-triangle{% else %}info-circle{% endif %}"></i>
+                </div>
+                <div class="alert-content">
+                    <div class="alert-title">{{ alert.product.display_name }}</div>
+                    <div class="alert-details">
+                        <span><i class="fas fa-box"></i> Current: <strong>{{ alert.current_stock }}</strong></span>
+                        {% if alert.threshold %}
+                        <span><i class="fas fa-flag"></i> Threshold: {{ alert.threshold }}</span>
+                        {% endif %}
+                        {% if alert.reorder_level %}
+                        <span><i class="fas fa-shopping-cart"></i> Reorder: {{ alert.reorder_level }}</span>
+                        {% endif %}
+                    </div>
+                    <div class="alert-meta">
+                        <span class="stock-level {% if alert.severity == 'critical' or alert.severity == 'danger' %}critical{% elif alert.severity == 'warning' %}warning{% else %}normal{% endif %}">
+                            {{ alert.get_alert_type_display }}
+                        </span>
+                        <span><i class="far fa-clock"></i> {{ alert.last_alerted|timesince|default:'Just now' }} ago</span>
+                    </div>
+                </div>
+                <div class="alert-action">
+                    <a href="{% url 'inventory:restock_from_alert' alert.pk %}" class="btn">
+                        <i class="fas fa-plus-circle"></i> Restock
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <div style="text-align: right; margin-top: 1rem;">
+            <a href="{% url 'inventory:stock_alerts' %}" class="view-all-link">
+                View All Alerts <i class="fas fa-arrow-right ms-2"></i>
+            </a>
+        </div>
+        {% else %}
+        <div class="empty-state" style="background: white; border-radius: 16px; padding: 3rem; border: 1px solid #e9ecef;">
+            <i class="fas fa-check-circle" style="color: #16a34a; opacity: 1; font-size: 3rem;"></i>
+            <p style="font-size: 1rem; margin-top: 1rem;">No active stock alerts. All inventory levels are healthy!</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
 {% endblock %}

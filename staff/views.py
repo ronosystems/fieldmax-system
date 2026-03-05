@@ -17,6 +17,12 @@ from django.views.decorators.http import require_POST
 from .models import OTPVerification
 from .utils import send_otp_email, requires_otp, get_user_role
 from django.db.models import F
+from django.shortcuts import render
+from django.contrib.auth.decorators import login_required
+from django.db.models import Q, Count
+from inventory.models import StockAlert, ReturnRequest, Product
+from datetime import timedelta
+from django.utils import timezone
 import logging
 import os
 from decimal import Decimal
@@ -3307,7 +3313,138 @@ def password_change(request):
 
 
 
+@login_required
+def notifications_page(request):
+    """Display all notifications for the user"""
+    
+    # Get current time for time calculations
+    now = timezone.now()
+    last_24h = now - timedelta(hours=24)
+    last_week = now - timedelta(days=7)
+    
     # ============================================
+    # STOCK ALERTS
+    # ============================================
+    stock_alerts = StockAlert.objects.filter(
+        is_active=True,
+        is_dismissed=False
+    ).select_related('product').order_by('-severity', '-created_at')
+    
+    # Count alerts by severity
+    critical_alerts = stock_alerts.filter(severity__in=['critical', 'danger']).count()
+    warning_alerts = stock_alerts.filter(severity='warning').count()
+    info_alerts = stock_alerts.filter(severity='info').count()
+    
+    # ============================================
+    # RETURN REQUESTS (for managers/staff)
+    # ============================================
+    if request.user.is_staff or request.user.is_superuser:
+        pending_returns = ReturnRequest.objects.filter(
+            status='submitted'
+        ).select_related('product', 'requested_by').order_by('-requested_at')
+        
+        verified_returns = ReturnRequest.objects.filter(
+            status='verified'
+        ).select_related('product', 'requested_by', 'verified_by').order_by('-verified_at')
+    else:
+        # Regular users see their own returns
+        pending_returns = ReturnRequest.objects.filter(
+            requested_by=request.user,
+            status='submitted'
+        ).order_by('-requested_at')
+        
+        verified_returns = ReturnRequest.objects.filter(
+            requested_by=request.user,
+            status='verified'
+        ).order_by('-requested_at')
+    
+    # ============================================
+    # RECENT ACTIVITY
+    # ============================================
+    from inventory.models import StockEntry
+    
+    recent_activity = StockEntry.objects.select_related(
+        'product', 'created_by'
+    ).filter(
+        created_at__gte=last_week
+    ).order_by('-created_at')[:20]
+    
+    # ============================================
+    # LOW STOCK PRODUCTS
+    # ============================================
+    low_stock_products = Product.objects.filter(
+        Q(category__item_type='bulk', quantity__lte=5, quantity__gt=0) |
+        Q(status='lowstock')
+    ).select_related('category')[:10]
+    
+    # ============================================
+    # STAFF NOTIFICATIONS (for superusers/staff)
+    # ============================================
+    from .models import Staff, StaffApplication
+    
+    pending_verifications = []
+    pending_applications = []
+    
+    if request.user.is_superuser or request.user.is_staff:
+        # Pending staff verifications
+        pending_verifications = Staff.objects.filter(
+            verification_submitted_at__isnull=False,
+            is_identity_verified=False
+        )[:10]
+        
+        # Pending staff applications
+        pending_applications = StaffApplication.objects.filter(
+            status='pending'
+        ).select_related('created_user')[:10]
+    
+    # ============================================
+    # NOTIFICATION COUNTS BY TYPE
+    # ============================================
+    notification_counts = {
+        'total': stock_alerts.count() + pending_returns.count(),
+        'stock_alerts': stock_alerts.count(),
+        'critical_alerts': critical_alerts,
+        'warning_alerts': warning_alerts,
+        'info_alerts': info_alerts,
+        'pending_returns': pending_returns.count(),
+        'verified_returns': verified_returns.count(),
+        'low_stock': low_stock_products.count(),
+        'pending_verifications': pending_verifications.count(),
+        'pending_applications': pending_applications.count(),
+    }
+    
+    # Debug: Print the first staff object to see its attributes
+    if pending_verifications:
+        first_staff = pending_verifications[0]
+        print("=== STAFF MODEL ATTRIBUTES ===")
+        print(f"Staff object: {first_staff}")
+        print(f"Has 'user' attribute: {hasattr(first_staff, 'user')}")
+        print(f"Has 'created_user' attribute: {hasattr(first_staff, 'created_user')}")
+        print(f"Has 'user_id' attribute: {hasattr(first_staff, 'user_id')}")
+        print(f"All attributes: {dir(first_staff)}")
+        print("================================")
+    
+    context = {
+        'stock_alerts': stock_alerts,
+        'pending_returns': pending_returns,
+        'verified_returns': verified_returns,
+        'recent_activity': recent_activity,
+        'low_stock_products': low_stock_products,
+        'pending_verifications': pending_verifications,
+        'pending_applications': pending_applications,
+        'notification_counts': notification_counts,
+        'now': now,
+        'last_24h': last_24h,
+        'last_week': last_week,
+    }
+    
+    return render(request, 'staff/notifications_page.html', context)
+
+
+
+
+
+# ============================================
 # ENSURE WORKER THREAD STARTS ON RENDER
 # ============================================
 # This must be at the very bottom of the file
