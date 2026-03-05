@@ -460,10 +460,19 @@ def staff_dashboard(request):
                     break
     
     logger.info(f"🔴 DASHBOARD - Final intended URL for {request.user.username}: {intended_url}")
-    
+
+    # ============================================
+    # STEP 5: OTP CHECK - HARSHLY BYPASSED!
+    # ============================================
+    logger.info(f"🔴 OTP BYPASS - User {request.user.username} - OTP CHECK SKIPPED COMPLETELY")
+    logger.info(f"🔴 OTP BYPASS - Going directly to dashboard without OTP verification")
+            
+
+ 
     # ============================================
     # STEP 5: Check if user requires OTP
     # ============================================
+    """
     logger.info(f"🔴 DASHBOARD - User {request.user.username} requires_otp: {requires_otp(request.user)}")
     logger.info(f"🔴 DASHBOARD - Session otp_verified: {request.session.get('otp_verified')}")
 
@@ -478,8 +487,9 @@ def staff_dashboard(request):
             return redirect('staff:otp_verify')
         else:
             logger.info(f"🔴 DASHBOARD - OTP already verified in session")
+    """
 
-            
+
     # ============================================
     # STEP 6: If all checks passed, redirect directly
     # ============================================
