@@ -42,7 +42,6 @@ def get_payment_method_color(method):
 
 
 
-
 @login_required
 def sales_statistics(request):
     """Sales statistics dashboard"""
@@ -70,44 +69,44 @@ def sales_statistics(request):
         total=Sum('quantity')
     )['total'] or 0
     
-    # Calculate total profit across all sales
+    # Calculate total profit across all sales - FIXED: removed iterator
     total_profit = Decimal('0.00')
-    for sale in sales_qs.select_related().iterator(chunk_size=100):
+    for sale in sales_qs.select_related().all():  # Changed from iterator
         total_profit += calculate_profit(sale)
     
     # Profit margin
     profit_margin = (total_profit / total_revenue * 100) if total_revenue > 0 else 0
     
-    # Today's sales with profit
+    # Today's sales with profit - FIXED: removed iterator
     today_sales = sales_qs.filter(sale_date__range=[start_of_day, end_of_day])
     today_count = today_sales.count()
     today_revenue = today_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
     today_profit = Decimal('0.00')
-    for sale in today_sales.select_related().iterator(chunk_size=100):
+    for sale in today_sales.select_related().all():  # Changed from iterator
         today_profit += calculate_profit(sale)
     
-    # This week's sales with profit
+    # This week's sales with profit - FIXED: removed iterator
     week_sales = sales_qs.filter(sale_date__gte=start_of_week)
     week_count = week_sales.count()
     week_revenue = week_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
     week_profit = Decimal('0.00')
-    for sale in week_sales.select_related().iterator(chunk_size=100):
+    for sale in week_sales.select_related().all():  # Changed from iterator
         week_profit += calculate_profit(sale)
     
-    # This month's sales with profit
+    # This month's sales with profit - FIXED: removed iterator
     month_sales = sales_qs.filter(sale_date__gte=start_of_month)
     month_count = month_sales.count()
     month_revenue = month_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
     month_profit = Decimal('0.00')
-    for sale in month_sales.select_related().iterator(chunk_size=100):
+    for sale in month_sales.select_related().all():  # Changed from iterator
         month_profit += calculate_profit(sale)
     
-    # This year's sales with profit
+    # This year's sales with profit - FIXED: removed iterator
     year_sales = sales_qs.filter(sale_date__gte=start_of_year)
     year_count = year_sales.count()
     year_revenue = year_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
     year_profit = Decimal('0.00')
-    for sale in year_sales.select_related().iterator(chunk_size=100):
+    for sale in year_sales.select_related().all():  # Changed from iterator
         year_profit += calculate_profit(sale)
     
     # Average values
@@ -128,9 +127,9 @@ def sales_statistics(request):
         day_revenue = day_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
         day_count = day_sales.count()
         
-        # Calculate profit for the day
+        # Calculate profit for the day - FIXED: removed iterator
         day_profit = Decimal('0.00')
-        for sale in day_sales.select_related().iterator(chunk_size=100):
+        for sale in day_sales.select_related().all():  # Changed from iterator
             day_profit += calculate_profit(sale)
         
         daily_sales_breakdown.append({
@@ -180,9 +179,9 @@ def sales_statistics(request):
         week_revenue = week_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
         week_count = week_sales.count()
         
-        # Calculate profit for the week
+        # Calculate profit for the week - FIXED: removed iterator
         week_profit = Decimal('0.00')
-        for sale in week_sales.select_related().iterator(chunk_size=100):
+        for sale in week_sales.select_related().all():  # Changed from iterator
             week_profit += calculate_profit(sale)
         
         # Format date range
@@ -217,9 +216,9 @@ def sales_statistics(request):
         month_revenue = month_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
         month_count = month_sales.count()
         
-        # Calculate profit for the month
+        # Calculate profit for the month - FIXED: removed iterator
         month_profit = Decimal('0.00')
-        for sale in month_sales.select_related().iterator(chunk_size=100):
+        for sale in month_sales.select_related().all():  # Changed from iterator
             month_profit += calculate_profit(sale)
         
         monthly_sales_breakdown.append({
@@ -262,7 +261,7 @@ def sales_statistics(request):
         })
     
     # ============================================
-    # TOP SELLERS WITH PROFIT
+    # TOP SELLERS WITH PROFIT - FIXED: removed iterator
     # ============================================
     
     top_sellers = []
@@ -275,7 +274,7 @@ def sales_statistics(request):
     for seller in sellers:
         seller_sales = sales_qs.filter(seller=seller)
         seller_profit = Decimal('0.00')
-        for sale in seller_sales.select_related().iterator(chunk_size=100):
+        for sale in seller_sales.select_related().all():  # Changed from iterator
             seller_profit += calculate_profit(sale)
         
         top_sellers.append({
@@ -448,6 +447,8 @@ def sales_statistics(request):
     
     return render(request, 'sales/statistics.html', context)
 
+
+# MOVE THIS FUNCTION TO THE TOP OF THE FILE (above sales_statistics)
 def get_day_suffix(day):
     """Get day suffix (st, nd, rd, th)"""
     if 11 <= day <= 13:
@@ -460,7 +461,6 @@ def get_day_suffix(day):
         return 'rd'
     else:
         return 'th'
-
 
 
 
