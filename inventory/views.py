@@ -1018,9 +1018,8 @@ def search_product_for_restock(request):
 
 
 
-
 # ===========================================
-# PROCESS RESTOCK VIEW
+# PROCESS RESTOCK VIEW - FIXED
 #============================================
 
 @login_required
@@ -1072,9 +1071,35 @@ def process_restock(request):
                 'message': 'Buying price cannot be negative'
             }, status=400)
         
-        # Create stock entry and update prices
+        # Create stock entry and update product quantity
         with transaction.atomic():
-            # Create stock entry
+            # Store old quantity for notification
+            old_quantity = product.quantity
+            
+            # ============================================
+            # CRITICAL FIX: ACTUALLY UPDATE THE PRODUCT QUANTITY
+            # ============================================
+            # Add the new quantity to existing stock
+            product.quantity = (product.quantity or 0) + quantity
+            
+            # Update product status based on new quantity
+            if product.quantity > 5:
+                product.status = 'available'
+            elif product.quantity > 0:
+                product.status = 'lowstock'
+            else:
+                product.status = 'outofstock'
+            
+            # Update prices if provided
+            if buying_price:
+                product.buying_price = buying_price
+            if selling_price and selling_price > 0:
+                product.selling_price = selling_price
+            
+            # Save the product with updated quantity
+            product.save(update_fields=['quantity', 'status', 'buying_price', 'selling_price'])
+            
+            # Create stock entry record (for history)
             stock_entry = StockEntry.objects.create(
                 product=product,
                 quantity=quantity,
@@ -1085,29 +1110,8 @@ def process_restock(request):
                 notes=notes or "Restock via search"
             )
             
-            # Store old quantity for notification
-            old_quantity = product.quantity
+            logger.info(f"Restocked: {product.product_code} - Qty: {quantity} (New total: {product.quantity})")
             
-            # Update product prices if provided
-            if buying_price:
-                product.buying_price = buying_price
-            if selling_price and selling_price > 0:
-                product.selling_price = selling_price
-            product.save()
-            
-            logger.info(f"Restocked: {product.product_code} - Qty: {quantity}")
-            
-
-
-
-
-
-
-
-
-
-
-
             # ============================================
             # SEND ADMIN NOTIFICATION
             # ============================================
@@ -1135,18 +1139,7 @@ def process_restock(request):
                 logger.error(f"Failed to send restock notification: {str(e)}")
                 # Don't fail the restock if notification fails
             """
-
-
-
-
-
-
-
-
-
-
-
-
+        
         return JsonResponse({
             'success': True,
             'message': f'Successfully added {quantity} units to {product.name}',
@@ -1154,9 +1147,12 @@ def process_restock(request):
                 'id': product.id,
                 'name': product.name,
                 'product_code': product.product_code,
+                'old_quantity': old_quantity,
                 'new_quantity': product.quantity,
+                'added_quantity': quantity,
                 'buying_price': float(product.buying_price),
-                'selling_price': float(product.selling_price)
+                'selling_price': float(product.selling_price),
+                'status': product.status
             },
             'stock_entry_id': stock_entry.id
         })
@@ -1168,13 +1164,12 @@ def process_restock(request):
         }, status=404)
     
     except Exception as e:
+        import traceback
         logger.error(f"Restock error: {str(e)}\n{traceback.format_exc()}")
         return JsonResponse({
             'success': False,
             'message': f'Error: {str(e)}'
         }, status=500)
-
-
 
 
 

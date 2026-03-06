@@ -550,11 +550,22 @@
                     </div>
                     <div class="notification-content">
                         <div class="notification-title">
-                            {# Try to get user info - adjust field name based on your model #}
                             {% if staff.user %}
-                                {{ staff.user.get_full_name|default:staff.user.username }}
+                                {% if staff.user.get_full_name %}
+                                    {{ staff.user.get_full_name }}
+                                {% elif staff.user.username %}
+                                    {{ staff.user.username }}
+                                {% else %}
+                                    Staff Member #{{ staff.id }}
+                                {% endif %}
                             {% elif staff.created_user %}
-                                {{ staff.created_user.get_full_name|default:staff.created_user.username }}
+                                {% if staff.created_user.get_full_name %}
+                                    {{ staff.created_user.get_full_name }}
+                                {% elif staff.created_user.username %}
+                                    {{ staff.created_user.username }}
+                                {% else %}
+                                    Staff Member #{{ staff.id }}
+                                {% endif %}
                             {% elif staff.user_id %}
                                 User ID: {{ staff.user_id }}
                             {% else %}
@@ -566,15 +577,11 @@
                         </div>
                         <div class="notification-meta">
                             <span><i class="far fa-clock"></i> {{ staff.verification_submitted_at|timesince }} ago</span>
-                            <span><i class="fas fa-envelope"></i> 
-                                {% if staff.user %}
-                                    {{ staff.user.email }}
-                                {% elif staff.created_user %}
-                                    {{ staff.created_user.email }}
-                                {% else %}
-                                    No email
-                                {% endif %}
-                            </span>
+                            {% if staff.user and staff.user.email %}
+                            <span><i class="fas fa-envelope"></i> {{ staff.user.email }}</span>
+                            {% elif staff.created_user and staff.created_user.email %}
+                            <span><i class="fas fa-envelope"></i> {{ staff.created_user.email }}</span>
+                            {% endif %}
                         </div>
                     </div>
                     <div class="notification-action">
@@ -599,60 +606,66 @@
             {% endif %}
         </div>
 
-<!-- Staff Applications Section -->
-<div class="notification-card">
-    <div class="card-header">
-        <h2>
-            <i class="fas fa-file-alt"></i>
-            Pending Staff Applications
-        </h2>
-        <span class="badge-count">{{ pending_applications|length }} pending</span>
-    </div>
-    <div class="card-body">
-        {% for application in pending_applications %}
-        <div class="notification-item">
-            <div class="notification-icon info">
-                <i class="fas fa-user-plus"></i>
+        <!-- Staff Applications Section -->
+        <div class="notification-card">
+            <div class="card-header">
+                <h2>
+                    <i class="fas fa-file-alt"></i>
+                    Pending Staff Applications
+                </h2>
+                <span class="badge-count">{{ pending_applications|length }} pending</span>
             </div>
-            <div class="notification-content">
-                <div class="notification-title">
-                    {% if application.created_user %}
-                        {{ application.created_user.get_full_name|default:application.created_user.username }}
-                    {% else %}
-                        Unknown User (Application #{{ application.id }})
-                    {% endif %}
+            <div class="card-body">
+                {% for application in pending_applications %}
+                <div class="notification-item">
+                    <div class="notification-icon info">
+                        <i class="fas fa-user-plus"></i>
+                    </div>
+                    <div class="notification-content">
+                        <div class="notification-title">
+                            {% if application.created_user %}
+                                {% if application.created_user.get_full_name %}
+                                    {{ application.created_user.get_full_name }}
+                                {% elif application.created_user.username %}
+                                    {{ application.created_user.username }}
+                                {% else %}
+                                    User #{{ application.created_user.id }}
+                                {% endif %}
+                            {% else %}
+                                Unknown User (Application #{{ application.id }})
+                            {% endif %}
+                        </div>
+                        <div class="notification-desc">
+                            Applied for {{ application.get_position_display }} position
+                        </div>
+                        <div class="notification-meta">
+                            <span><i class="far fa-clock"></i> {{ application.created_at|timesince }} ago</span>
+                            {% if application.created_user and application.created_user.email %}
+                            <span><i class="fas fa-envelope"></i> {{ application.created_user.email }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="notification-action">
+                        <a href="{% url 'staff:application_list' %}" class="action-btn">
+                            <i class="fas fa-eye"></i> Review
+                        </a>
+                    </div>
                 </div>
-                <div class="notification-desc">
-                    Applied for {{ application.get_position_display }} position
+                {% empty %}
+                <div class="empty-state">
+                    <i class="fas fa-check-circle" style="color: #16a34a;"></i>
+                    <p>No pending applications</p>
                 </div>
-                <div class="notification-meta">
-                    <span><i class="far fa-clock"></i> {{ application.created_at|timesince }} ago</span>
-                    {% if application.created_user %}
-                    <span><i class="fas fa-envelope"></i> {{ application.created_user.email }}</span>
-                    {% endif %}
-                </div>
+                {% endfor %}
             </div>
-            <div class="notification-action">
-                <a href="{% url 'staff:application_list' %}" class="action-btn">
-                    <i class="fas fa-eye"></i> Review
+            {% if pending_applications %}
+            <div class="card-footer">
+                <a href="{% url 'staff:application_list' %}">
+                    View All Applications <i class="fas fa-arrow-right ms-2"></i>
                 </a>
             </div>
+            {% endif %}
         </div>
-        {% empty %}
-        <div class="empty-state">
-            <i class="fas fa-check-circle" style="color: #16a34a;"></i>
-            <p>No pending applications</p>
-        </div>
-        {% endfor %}
-    </div>
-    {% if pending_applications %}
-    <div class="card-footer">
-        <a href="{% url 'staff:application_list' %}">
-            View All Applications <i class="fas fa-arrow-right ms-2"></i>
-        </a>
-    </div>
-    {% endif %}
-</div>
 
         <!-- Low Stock Products -->
         <div class="notification-card">
@@ -797,7 +810,9 @@
                             </div>
                             <div class="notification-meta">
                                 <span><i class="far fa-clock"></i> {{ return.requested_at|timesince }} ago</span>
+                                {% if return.requested_by %}
                                 <span><i class="fas fa-user"></i> {{ return.requested_by.get_full_name|default:return.requested_by.username }}</span>
+                                {% endif %}
                             </div>
                         </div>
                         <div class="notification-action">
@@ -850,7 +865,9 @@
                             </div>
                             <div class="notification-meta">
                                 <span><i class="far fa-clock"></i> {{ return.verified_at|timesince }} ago</span>
+                                {% if return.verified_by %}
                                 <span><i class="fas fa-user"></i> {{ return.verified_by.get_full_name|default:return.verified_by.username }}</span>
+                                {% endif %}
                             </div>
                         </div>
                         <div class="notification-action">
@@ -897,7 +914,9 @@
                             </div>
                             <div class="notification-meta">
                                 <span><i class="far fa-clock"></i> {{ activity.created_at|timesince }} ago</span>
+                                {% if activity.created_by %}
                                 <span><i class="fas fa-user"></i> {{ activity.created_by.get_full_name|default:activity.created_by.username }}</span>
+                                {% endif %}
                                 {% if activity.reference_id %}
                                 <span><i class="fas fa-hashtag"></i> {{ activity.reference_id }}</span>
                                 {% endif %}
