@@ -2945,8 +2945,8 @@ def api_order_receipt(request, order_id):
 
 
 
-        # ============================================
-# CUSTOMER MANAGEMENT VIEWS
+# ============================================
+# CUSTOMER MANAGEMENT VIEWS - FIXED
 # ============================================
 @login_required
 @require_http_methods(["GET"])
@@ -2960,18 +2960,25 @@ def customer_list(request):
         customers = []
         
         # 1. Get customers from PendingOrder (unique by phone)
+        # PendingOrder model DOES have buyer_email
         order_customers = PendingOrder.objects.values(
             'buyer_name', 'buyer_phone', 'buyer_email'
         ).distinct().order_by('buyer_name')
         
         for cust in order_customers:
             if cust['buyer_name'] and cust['buyer_phone']:
+                # Get last order date
+                last_order = PendingOrder.objects.filter(
+                    buyer_phone=cust['buyer_phone']
+                ).order_by('-created_at').first()
+                
                 customers.append({
                     'name': cust['buyer_name'],
                     'phone': cust['buyer_phone'],
                     'email': cust.get('buyer_email', ''),
                     'total_orders': PendingOrder.objects.filter(buyer_phone=cust['buyer_phone']).count(),
-                    'last_order': PendingOrder.objects.filter(buyer_phone=cust['buyer_phone']).order_by('-created_at').first(),
+                    'last_order_date': last_order.created_at if last_order else None,
+                    'source': 'pending_order'
                 })
         
         # 2. Get customers from Customer model if it exists
@@ -2979,42 +2986,76 @@ def customer_list(request):
             from .models import Customer
             db_customers = Customer.objects.filter(is_active=True).order_by('full_name')
             for cust in db_customers:
-                # Check if already added
+                # Check if already added by phone
                 if not any(c['phone'] == cust.phone for c in customers if c.get('phone')):
+                    # Get last order date
+                    last_order = None
+                    if hasattr(cust, 'orders'):
+                        last_order = cust.orders.order_by('-created_at').first()
+                    
                     customers.append({
                         'name': cust.full_name,
                         'phone': cust.phone,
-                        'email': cust.email,
+                        'email': cust.email or '',
                         'total_orders': cust.orders.count() if hasattr(cust, 'orders') else 0,
-                        'last_order': cust.orders.order_by('-created_at').first() if hasattr(cust, 'orders') else None,
-                        'address': cust.address,
-                        'city': cust.city,
+                        'last_order_date': last_order.created_at if last_order else None,
+                        'address': getattr(cust, 'address', ''),
+                        'city': getattr(cust, 'city', ''),
+                        'source': 'customer_model'
                     })
-        except (ImportError, AttributeError):
+        except (ImportError, AttributeError) as e:
+            logger.warning(f"Customer model not available: {e}")
             pass
         
-        # 3. Get customers from Sales
+        # 3. Get customers from Sales - FIXED: removed buyer_email
         try:
             from sales.models import Sale
+            # Sale model doesn't have buyer_email, so we only get name and phone
             sale_customers = Sale.objects.filter(
                 buyer_name__isnull=False,
                 buyer_phone__isnull=False
-            ).values('buyer_name', 'buyer_phone', 'buyer_email').distinct().order_by('buyer_name')
+            ).values('buyer_name', 'buyer_phone').distinct().order_by('buyer_name')
             
             for cust in sale_customers:
                 if not any(c['phone'] == cust['buyer_phone'] for c in customers if c.get('phone')):
+                    # Get last order date
+                    last_order = Sale.objects.filter(
+                        buyer_phone=cust['buyer_phone']
+                    ).order_by('-sale_date').first()
+                    
                     customers.append({
                         'name': cust['buyer_name'],
                         'phone': cust['buyer_phone'],
-                        'email': cust.get('buyer_email', ''),
+                        'email': '',  # Sale model has no email field
                         'total_orders': Sale.objects.filter(buyer_phone=cust['buyer_phone']).count(),
-                        'last_order': Sale.objects.filter(buyer_phone=cust['buyer_phone']).order_by('-sale_date').first(),
+                        'last_order_date': last_order.sale_date if last_order else None,
+                        'source': 'sale'
                     })
-        except ImportError:
+        except ImportError as e:
+            logger.warning(f"Sales model not available: {e}")
             pass
         
+        # Remove duplicates by phone number (keep first occurrence)
+        unique_customers = {}
+        for customer in customers:
+            phone = customer.get('phone')
+            if phone and phone not in unique_customers:
+                unique_customers[phone] = customer
+        
+        customers = list(unique_customers.values())
+        
         # Sort customers by name
-        customers.sort(key=lambda x: x['name'].lower() if x['name'] else '')
+        customers.sort(key=lambda x: x['name'].lower() if x.get('name') else '')
+        
+        # Handle search if provided
+        search_query = request.GET.get('search', '').strip()
+        if search_query:
+            filtered_customers = []
+            for customer in customers:
+                if (search_query.lower() in customer.get('name', '').lower() or 
+                    search_query in customer.get('phone', '')):
+                    filtered_customers.append(customer)
+            customers = filtered_customers
         
         # Pagination
         from django.core.paginator import Paginator
@@ -3026,6 +3067,7 @@ def customer_list(request):
             'customers': page_obj,
             'total_customers': len(customers),
             'page_title': 'Customer List',
+            'search_query': search_query
         }
         
         return render(request, 'website/customer_list.html', context)
@@ -3033,7 +3075,13 @@ def customer_list(request):
     except Exception as e:
         logger.error(f"[CUSTOMER LIST ERROR] {str(e)}", exc_info=True)
         messages.error(request, f'Error loading customers: {str(e)}')
-        return render(request, 'website/customer_list.html', {'customers': [], 'total_customers': 0})
+        return render(request, 'website/customer_list.html', {
+            'customers': [], 
+            'total_customers': 0,
+            'error': str(e)
+        })
+
+
 
 
 @login_required

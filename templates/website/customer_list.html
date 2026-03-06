@@ -12,6 +12,23 @@
         </a>
     </div>
     
+    <!-- Search form -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <form method="GET" action="{% url 'website:customer-list' %}" class="row g-3">
+                <div class="col-md-10">
+                    <input type="text" name="search" class="form-control" placeholder="Search by name or phone..." value="{{ request.GET.search|default:'' }}">
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-search me-2"></i>Search
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Customers table -->
     <div class="card shadow-sm">
         <div class="card-body">
             <div class="table-responsive">
@@ -23,6 +40,7 @@
                             <th>Email</th>
                             <th>Total Orders</th>
                             <th>Last Order</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -33,25 +51,86 @@
                             <td>{{ customer.email|default:'-' }}</td>
                             <td><span class="badge bg-info">{{ customer.total_orders }}</span></td>
                             <td>
-                                {% if customer.last_order %}
-                                    {{ customer.last_order.created_at|date:"Y-m-d" }}
+                                {% if customer.last_order_date %}
+                                    {{ customer.last_order_date|date:"Y-m-d" }}
                                 {% else %}
                                     -
                                 {% endif %}
                             </td>
+                            <td>
+                                <a href="#" class="btn btn-sm btn-outline-primary">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                            </td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="5" class="text-center py-4">
+                            <td colspan="6" class="text-center py-4">
                                 <i class="fas fa-users fa-3x text-muted mb-3"></i>
                                 <p>No customers found</p>
+                                {% if request.GET.search %}
+                                <p class="text-muted">Try a different search term</p>
+                                {% endif %}
                             </td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
+            
+            <!-- Pagination -->
+            {% if customers.has_other_pages %}
+            <nav aria-label="Page navigation" class="mt-4">
+                <ul class="pagination justify-content-center">
+                    {% if customers.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ customers.previous_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}">
+                            <i class="fas fa-chevron-left"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+                    
+                    {% for num in customers.paginator.page_range %}
+                        {% if customers.number == num %}
+                        <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                        {% elif num > customers.number|add:'-3' and num < customers.number|add:'3' %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ num }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}">{{ num }}</a>
+                        </li>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if customers.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ customers.next_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}">
+                            <i class="fas fa-chevron-right"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+            
+            <div class="text-muted mt-3">
+                Total Customers: <strong>{{ total_customers }}</strong>
+            </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Initialize DataTable if needed
+    if ($('.datatable').length) {
+        $('.datatable').DataTable({
+            "paging": false,
+            "searching": false,
+            "info": false,
+            "order": [[0, 'asc']]
+        });
+    }
+});
+</script>
 {% endblock %}
