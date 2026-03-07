@@ -1424,7 +1424,6 @@ def clear_cart(request):
 
 
 
-
 @login_required
 def sold_items_list(request):
     """List all sold items with details"""
@@ -1457,27 +1456,35 @@ def sold_items_list(request):
             Q(sale__buyer_name__icontains=search)
         )
     
-    # Calculate profit for each item (unit_price - buying_price) * quantity
+    # Create a list of items with profit calculated as a dictionary attribute
+    items_with_profit = []
     for item in sold_items:
-        # FIXED: Use unit_price instead of price
+        # Calculate profit
         if item.product and item.product.buying_price:
-            item.profit = (item.unit_price - item.product.buying_price) * item.quantity
+            profit_value = (item.unit_price - item.product.buying_price) * item.quantity
         else:
-            item.profit = 0
+            profit_value = 0
+        
+        # Add profit as a dictionary key instead of object attribute
+        items_with_profit.append({
+            'item': item,
+            'profit': profit_value
+        })
     
-    # Pagination
+    # Pagination - need to paginate the original queryset, then map to our list
     paginator = Paginator(sold_items, 50)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
     
-    # Calculate totals - FIXED: Use unit_price instead of price
-    total_sold = sum(item.quantity for item in sold_items)
-    total_revenue = sum(item.total_price for item in sold_items)
-    total_profit = sum(
-        (item.unit_price - item.product.buying_price) * item.quantity 
-        for item in sold_items 
-        if item.product and item.product.buying_price
-    )
+    # Calculate totals
+    total_sold = sold_items.aggregate(total=Sum('quantity'))['total'] or 0
+    total_revenue = sold_items.aggregate(total=Sum('total_price'))['total'] or 0
+    
+    # Calculate total profit
+    total_profit = 0
+    for item in sold_items:
+        if item.product and item.product.buying_price:
+            total_profit += (item.unit_price - item.product.buying_price) * item.quantity
     
     context = {
         'page_obj': page_obj,
