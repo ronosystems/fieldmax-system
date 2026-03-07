@@ -1,0 +1,281 @@
+{% extends 'inventory/staff_base.html' %}
+{% load static %}
+
+{% block title %}Category Analysis Report{% endblock %}
+
+{% block page_icon %}fas fa-chart-pie{% endblock %}
+{% block page_title %}Category Analysis Report{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'staff:store_manager_dashboard' %}">Dashboard</a></li>
+<li class="breadcrumb-item"><a href="{% url 'inventory:store_statistics' %}">Reports</a></li>
+<li class="breadcrumb-item active">Category Analysis</li>
+{% endblock %}
+
+{% block page_actions %}
+<div class="btn-group" role="group">
+    <button type="button" class="btn btn-outline-success" onclick="exportToCSV()">
+        <i class="fas fa-file-excel me-2"></i>Export CSV
+    </button>
+    <button type="button" class="btn btn-outline-secondary" onclick="window.print()">
+        <i class="fas fa-print me-2"></i>Print
+    </button>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-white bg-primary">
+                <div class="card-body">
+                    <h6 class="text-white-50">Total Categories</h6>
+                    <h3 class="mb-0">{{ categories|length }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-success">
+                <div class="card-body">
+                    <h6 class="text-white-50">Total Products</h6>
+                    <h3 class="mb-0">{{ total_products }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-info">
+                <div class="card-body">
+                    <h6 class="text-white-50">Total Value</h6>
+                    <h3 class="mb-0">KES {{ total_value|floatformat:0 }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-warning">
+                <div class="card-body">
+                    <h6 class="text-white-50">Total Profit</h6>
+                    <h3 class="mb-0">KES {{ total_profit|floatformat:0 }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Category Analysis Table -->
+    <div class="card shadow-sm">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <i class="fas fa-chart-pie text-primary me-2"></i>
+                Category Breakdown
+            </h5>
+            <div>
+                <span class="badge bg-light text-dark me-2">
+                    <i class="fas fa-box me-1"></i> {{ total_items }} Total Items
+                </span>
+                <span class="badge bg-light text-dark">
+                    <i class="fas fa-percentage me-1"></i> {{ overall_margin|floatformat:1 }}% Overall Margin
+                </span>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Category</th>
+                            <th>Code</th>
+                            <th>Type</th>
+                            <th class="text-center">Products</th>
+                            <th class="text-center">Items</th>
+                            <th class="text-end">Total Value</th>
+                            <th class="text-end">Total Cost</th>
+                            <th class="text-end">Profit</th>
+                            <th class="text-end">Margin</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for category in categories %}
+                        <tr>
+                            <td>
+                                <strong>{{ category.name }}</strong>
+                                {% if category.total_products == 0 %}
+                                <span class="badge bg-warning text-dark ms-2">Empty</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if category.category_code %}
+                                    <code>{{ category.category_code }}</code>
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if category.item_type == 'bulk' %}
+                                <span class="badge bg-info">Bulk</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Single</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <span class="fw-bold">{{ category.total_products }}</span>
+                            </td>
+                            <td class="text-center">{{ category.total_items }}</td>
+                            <td class="text-end">
+                                <span class="fw-bold">KES {{ category.total_value|floatformat:0 }}</span>
+                            </td>
+                            <td class="text-end">KES {{ category.total_cost|floatformat:0 }}</td>
+                            <td class="text-end {% if category.profit > 0 %}text-success{% elif category.profit < 0 %}text-danger{% endif %}">
+                                <span class="fw-bold">
+                                    {% if category.profit > 0 %}+{% endif %}
+                                    KES {{ category.profit|floatformat:0 }}
+                                </span>
+                                {% if category.profit > 0 %}
+                                <i class="fas fa-arrow-up text-success ms-1 small"></i>
+                                {% elif category.profit < 0 %}
+                                <i class="fas fa-arrow-down text-danger ms-1 small"></i>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                <span class="badge {% if category.margin >= 20 %}bg-success{% elif category.margin >= 10 %}bg-info{% elif category.margin > 0 %}bg-warning text-dark{% else %}bg-danger{% endif %} p-2">
+                                    {{ category.margin|floatformat:1 }}%
+                                </span>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="9" class="text-center py-5">
+                                <i class="fas fa-folder-open fa-4x text-muted mb-3"></i>
+                                <h5 class="text-muted">No Categories Found</h5>
+                                <p class="text-muted">There are no categories to analyze</p>
+                                <a href="{% url 'inventory:category_add' %}" class="btn btn-primary mt-3">
+                                    <i class="fas fa-plus me-2"></i>Add Category
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot class="table-light fw-bold">
+                        <tr>
+                            <td colspan="3" class="text-end">TOTALS:</td>
+                            <td class="text-center">{{ total_products }}</td>
+                            <td class="text-center">{{ total_items }}</td>
+                            <td class="text-end">KES {{ total_value|floatformat:0 }}</td>
+                            <td class="text-end">KES {{ total_cost|floatformat:0 }}</td>
+                            <td class="text-end {% if total_profit > 0 %}text-success{% elif total_profit < 0 %}text-danger{% endif %}">
+                                KES {{ total_profit|floatformat:0 }}
+                            </td>
+                            <td class="text-end">{{ overall_margin|floatformat:1 }}%</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function exportToCSV() {
+    let csv = 'Category,Code,Type,Products,Items,Total Value (KES),Total Cost (KES),Profit (KES),Margin (%)\n';
+    
+    {% for category in categories %}
+    csv += '{{ category.name|escapejs }},';
+    csv += '{{ category.category_code|default:"—"|escapejs }},';
+    csv += '{{ category.item_type }},';
+    csv += '{{ category.total_products }},';
+    csv += '{{ category.total_items }},';
+    csv += '{{ category.total_value|floatformat:0 }},';
+    csv += '{{ category.total_cost|floatformat:0 }},';
+    csv += '{{ category.profit|floatformat:0 }},';
+    csv += '"{{ category.margin|floatformat:1 }}%"\n';
+    {% endfor %}
+    
+    // Add totals row
+    csv += 'TOTALS,,,{{ total_products }},{{ total_items }},{{ total_value|floatformat:0 }},{{ total_cost|floatformat:0 }},{{ total_profit|floatformat:0 }},"{{ overall_margin|floatformat:1 }}%"\n';
+    
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'category_analysis_{{ now|date:"Ymd_His" }}.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+$(document).ready(function() {
+    // Initialize DataTable
+    if ($('.datatable').length) {
+        $('.datatable').DataTable({
+            pageLength: 25,
+            order: [[0, 'asc']],
+            language: {
+                search: "Search:",
+                lengthMenu: "Show _MENU_ entries",
+                info: "Showing _START_ to _END_ of _TOTAL_ entries",
+                infoEmpty: "Showing 0 to 0 of 0 entries",
+                infoFiltered: "(filtered from _MAX_ total entries)",
+                paginate: {
+                    first: "First",
+                    last: "Last",
+                    next: "Next",
+                    previous: "Previous"
+                }
+            },
+            columnDefs: [
+                { type: 'num', targets: [3,4,5,6,7,8] }
+            ]
+        });
+    }
+});
+</script>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .text-white-50 {
+        color: rgba(255, 255, 255, 0.8) !important;
+    }
+    .card {
+        border: none;
+        border-radius: 10px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .card-header {
+        background-color: white;
+        border-bottom: 1px solid rgba(0,0,0,0.1);
+        padding: 1rem 1.5rem;
+    }
+    .table td {
+        vertical-align: middle;
+    }
+    .badge {
+        font-size: 0.85rem;
+        font-weight: 500;
+    }
+    tfoot {
+        border-top: 2px solid #dee2e6;
+    }
+    .bg-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    .bg-success {
+        background: linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%);
+        color: #1a1a2e !important;
+    }
+    .bg-info {
+        background: linear-gradient(135deg, #6b8cff 0%, #8b5cf6 100%);
+    }
+    .bg-warning {
+        background: linear-gradient(135deg, #fad0c4 0%, #ffd1ff 100%);
+        color: #1a1a2e !important;
+    }
+    @media print {
+        .btn, .card-header, .dataTables_filter, .dataTables_length, .dataTables_paginate {
+            display: none !important;
+        }
+    }
+</style>
+{% endblock %}

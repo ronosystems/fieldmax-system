@@ -1,0 +1,319 @@
+{% extends 'inventory/staff_base.html' %}
+{% load static %}
+
+{% block title %}Inventory Report{% endblock %}
+
+{% block page_icon %}fas fa-chart-bar{% endblock %}
+{% block page_title %}Inventory Report{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'staff:store_manager_dashboard' %}">Dashboard</a></li>
+<li class="breadcrumb-item"><a href="{% url 'inventory:store_statistics' %}">Reports</a></li>
+<li class="breadcrumb-item active">Inventory Report</li>
+{% endblock %}
+
+{% block page_actions %}
+<div class="btn-group" role="group">
+    <button type="button" class="btn btn-outline-success" onclick="exportToCSV()">
+        <i class="fas fa-file-excel me-2"></i>Export CSV
+    </button>
+    <button type="button" class="btn btn-outline-secondary" onclick="window.print()">
+        <i class="fas fa-print me-2"></i>Print
+    </button>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-white bg-primary">
+                <div class="card-body">
+                    <h6 class="text-white-50">Total Products</h6>
+                    <h3 class="mb-0">{{ total_products }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-success">
+                <div class="card-body">
+                    <h6 class="text-white-50">Total Items</h6>
+                    <h3 class="mb-0">{{ total_items }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-info">
+                <div class="card-body">
+                    <h6 class="text-white-50">Total Value</h6>
+                    <h3 class="mb-0">KES {{ total_value|floatformat:0 }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-warning">
+                <div class="card-body">
+                    <h6 class="text-white-50">Total Cost</h6>
+                    <h3 class="mb-0">KES {{ total_cost|floatformat:0 }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stock Status Cards -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card border-danger">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-danger">Low Stock</h6>
+                            <h3>{{ low_stock }}</h3>
+                        </div>
+                        <i class="fas fa-exclamation-triangle fa-3x text-danger opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-secondary">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-secondary">Out of Stock</h6>
+                            <h3>{{ out_of_stock }}</h3>
+                        </div>
+                        <i class="fas fa-times-circle fa-3x text-secondary opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-success">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-success">Available</h6>
+                            <h3>{{ available }}</h3>
+                        </div>
+                        <i class="fas fa-check-circle fa-3x text-success opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Products Table -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white">
+            <h5 class="mb-0">
+                <i class="fas fa-star text-warning me-2"></i>
+                Top Products by Value
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Product</th>
+                            <th>Code</th>
+                            <th>Category</th>
+                            <th class="text-center">Stock</th>
+                            <th class="text-end">Unit Price</th>
+                            <th class="text-end">Total Value</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for product in top_products %}
+                        <tr>
+                            <td>
+                                <strong>{{ product.display_name }}</strong>
+                                {% if product.brand %}
+                                <br><small class="text-muted">{{ product.brand }}</small>
+                                {% endif %}
+                            </td>
+                            <td><code>{{ product.product_code }}</code></td>
+                            <td>{{ product.category.name|default:"—" }}</td>
+                            <td class="text-center {% if product.quantity <= product.reorder_level %}text-danger fw-bold{% endif %}">
+                                {{ product.quantity }}
+                            </td>
+                            <td class="text-end">KES {{ product.selling_price|floatformat:0 }}</td>
+                            <td class="text-end fw-bold">KES {{ product.total_value|floatformat:0 }}</td>
+                            <td>
+                                {% if product.quantity == 0 %}
+                                <span class="badge bg-secondary">Out of Stock</span>
+                                {% elif product.quantity <= product.reorder_level %}
+                                <span class="badge bg-warning text-dark">Low Stock</span>
+                                {% else %}
+                                <span class="badge bg-success">Available</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center py-4">No products found</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Category Summary -->
+    <div class="card shadow-sm">
+        <div class="card-header bg-white">
+            <h5 class="mb-0">
+                <i class="fas fa-folder text-primary me-2"></i>
+                Category Summary
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Category</th>
+                            <th>Type</th>
+                            <th class="text-center">Products</th>
+                            <th class="text-center">Items</th>
+                            <th class="text-end">Total Value</th>
+                            <th class="text-end">% of Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for category in categories %}
+                        <tr>
+                            <td><strong>{{ category.name }}</strong></td>
+                            <td>
+                                {% if category.item_type == 'bulk' %}
+                                <span class="badge bg-info">Bulk</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Single</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">{{ category.product_count }}</td>
+                            <td class="text-center">{{ category.total_items }}</td>
+                            <td class="text-end">KES {{ category.total_value|floatformat:0 }}</td>
+                            <td class="text-end">
+                                <div class="d-flex align-items-center justify-content-end">
+                                    <span class="me-2">{{ category.percentage|floatformat:1 }}%</span>
+                                    <div class="progress" style="width: 100px; height: 8px;">
+                                        <div class="progress-bar bg-primary" 
+                                             style="width: {{ category.percentage }}%"></div>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center py-4">No categories found</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function exportToCSV() {
+    let csv = 'Inventory Report\n';
+    csv += 'Generated: {{ now|date:"Y-m-d H:i:s" }}\n\n';
+    
+    csv += 'SUMMARY\n';
+    csv += 'Total Products,{{ total_products }}\n';
+    csv += 'Total Items,{{ total_items }}\n';
+    csv += 'Total Value,KES {{ total_value|floatformat:0 }}\n';
+    csv += 'Total Cost,KES {{ total_cost|floatformat:0 }}\n';
+    csv += 'Low Stock,{{ low_stock }}\n';
+    csv += 'Out of Stock,{{ out_of_stock }}\n';
+    csv += 'Available,{{ available }}\n\n';
+    
+    csv += 'TOP PRODUCTS\n';
+    csv += 'Product,Code,Category,Stock,Unit Price (KES),Total Value (KES),Status\n';
+    
+    {% for product in top_products %}
+    csv += '{{ product.display_name|escapejs }},';
+    csv += '{{ product.product_code }},';
+    csv += '{{ product.category.name|default:"—"|escapejs }},';
+    csv += '{{ product.quantity }},';
+    csv += '{{ product.selling_price|floatformat:0 }},';
+    csv += '{{ product.total_value|floatformat:0 }},';
+    csv += '{% if product.quantity == 0 %}Out of Stock{% elif product.quantity <= product.reorder_level %}Low Stock{% else %}Available{% endif %}\n';
+    {% endfor %}
+    
+    csv += '\nCATEGORY SUMMARY\n';
+    csv += 'Category,Type,Products,Items,Total Value (KES),% of Total\n';
+    
+    {% for category in categories %}
+    csv += '{{ category.name|escapejs }},';
+    csv += '{{ category.item_type }},';
+    csv += '{{ category.product_count }},';
+    csv += '{{ category.total_items }},';
+    csv += '{{ category.total_value|floatformat:0 }},';
+    csv += '{{ category.percentage|floatformat:1 }}\n';
+    {% endfor %}
+    
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'inventory_report_{{ now|date:"Ymd_His" }}.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+</script>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .text-white-50 {
+        color: rgba(255, 255, 255, 0.8) !important;
+    }
+    .card {
+        border: none;
+        border-radius: 10px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .card-header {
+        background-color: white;
+        border-bottom: 1px solid rgba(0,0,0,0.1);
+        padding: 1rem 1.5rem;
+    }
+    .table td {
+        vertical-align: middle;
+    }
+    .progress {
+        background-color: #e9ecef;
+        border-radius: 4px;
+    }
+    .bg-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    .bg-success {
+        background: linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%);
+        color: #1a1a2e;
+    }
+    .bg-info {
+        background: linear-gradient(135deg, #6b8cff 0%, #8b5cf6 100%);
+    }
+    .bg-warning {
+        background: linear-gradient(135deg, #fad0c4 0%, #ffd1ff 100%);
+        color: #1a1a2e;
+    }
+    @media print {
+        .btn, .card-header, .no-print {
+            display: none !important;
+        }
+    }
+</style>
+{% endblock %}

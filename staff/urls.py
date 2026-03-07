@@ -24,7 +24,7 @@ urlpatterns = [
     path('resend-verification/', views.resend_verification, name='resend_verification'),
     path('email-status/', views.email_queue_status, name='email_queue_status'),
     path('admin-verify/', views.admin_verify_list, name='admin_verify_list'),
-    path('admin-verify/<int:staff_id>/', views.admin_verify_staff, name='admin_verify_staff'),
+    path('admin-verify/<slug:staff_id>/', views.admin_verify_staff, name='admin_verify_staff'),
     
     # ============================================
     # ROLE-SPECIFIC DASHBOARDS

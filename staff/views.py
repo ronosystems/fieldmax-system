@@ -21,6 +21,8 @@ from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q, Count
 from inventory.models import StockAlert, ReturnRequest, Product
+from django.contrib.auth.decorators import user_passes_test
+from .models import Staff
 from datetime import timedelta
 from django.utils import timezone
 import logging
@@ -922,16 +924,17 @@ def admin_verify_list(request):
 
 
 
-
-
-
-# ============================================
-# Admin verification approval view
-# ============================================
-@staff_member_required
+@login_required
+@user_passes_test(lambda u: u.is_superuser or u.is_staff)
 def admin_verify_staff(request, staff_id):
-    """Admin view to verify staff identity"""
-    staff = get_object_or_404(Staff, id=staff_id)
+    """Admin review page for staff identity verification"""
+    # Try to find by database ID first, then by staff_id field
+    try:
+        # Try as integer (database primary key)
+        staff = get_object_or_404(Staff, id=int(staff_id))
+    except (ValueError, TypeError):
+        # If not integer, try as staff_id string
+        staff = get_object_or_404(Staff, staff_id=staff_id)
     
     if request.method == 'POST':
         action = request.POST.get('action')
@@ -942,37 +945,27 @@ def admin_verify_staff(request, staff_id):
             staff.verified_at = timezone.now()
             staff.verified_by = request.user
             staff.verification_notes = notes
-            staff.save()
             
-            # Send approval email to staff
-            send_verification_result_email(staff, approved=True, notes=notes)
-            
-            messages.success(request, f"✅ {staff.user.get_full_name()} has been verified successfully!")
+            messages.success(request, f'Staff {staff.user.get_full_name()} has been verified successfully.')
             
         elif action == 'reject':
             staff.is_identity_verified = False
-            staff.verified_at = None
+            staff.verified_at = timezone.now()
             staff.verified_by = request.user
             staff.verification_notes = notes
-            staff.verification_submitted_at = None  # Allow resubmission
-            staff.save()
+            staff.verification_attempts = 0
+            staff.verification_code = None
+            staff.verification_sent_at = None
             
-            # Send rejection email to staff
-            send_verification_result_email(staff, approved=False, notes=notes)
-            
-            messages.warning(request, f"⚠️ Verification rejected for {staff.user.get_full_name()}. Notes: {notes}")
+            messages.warning(request, f'Staff {staff.user.get_full_name()} verification rejected.')
         
-        return redirect('admin:staff_staff_changelist')
+        staff.save()
+        return redirect('staff:admin_verify_list')
     
     context = {
         'staff': staff,
     }
     return render(request, 'staff/admin_verify_staff.html', context)
-
-
-
-
-
 
 
 

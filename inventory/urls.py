@@ -58,6 +58,7 @@ urlpatterns = [
     path('alerts/', views.stock_alerts, name='stock_alerts'),
     path('alerts/<int:pk>/restock/', views.restock_product, name='restock_product'),
     path('alerts/<int:pk>/dismiss/', views.dismiss_alert, name='dismiss_alert'),
+    path('stock-alerts/<int:pk>/dismiss-page/', views.dismiss_alert_page, name='dismiss_alert_page'), 
 
     # Stock Alert URLs
     path('stock-alerts/', views.stock_alerts, name='stock_alerts'),
@@ -69,4 +70,6 @@ urlpatterns = [
     
     # Reviews
     path('reviews/', views.product_reviews, name='product_reviews'),
+    path('reports/inventory/', views.inventory_report, name='inventory_report'),
+    path('reports/category-analysis/', views.category_analysis, name='category_analysis'),
 ]

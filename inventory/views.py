@@ -50,7 +50,6 @@ User = get_user_model()
 
 
 
-
 @login_required
 def export_statistics(request):
     """Export store statistics to CSV"""
@@ -320,6 +319,138 @@ def store_statistics(request):
     return render(request, 'inventory/statistics.html', context)
 
 
+
+
+
+@login_required
+def inventory_report(request):
+    """Inventory report page"""
+    from django.db.models import Sum, F, Q
+    
+    products = Product.objects.filter(is_active=True).select_related('category')
+    
+    # Calculate totals
+    total_products = products.count()
+    total_items = products.aggregate(total=Sum('quantity'))['total'] or 0
+    total_value = products.aggregate(
+        total=Sum(F('selling_price') * F('quantity'))
+    )['total'] or 0
+    total_cost = products.aggregate(
+        total=Sum(F('buying_price') * F('quantity'))
+    )['total'] or 0
+    
+    # Stock status counts
+    low_stock = products.filter(
+        Q(category__item_type='bulk') & 
+        Q(quantity__gt=0) & 
+        Q(quantity__lte=F('reorder_level'))
+    ).count()
+    
+    out_of_stock = products.filter(
+        Q(quantity=0) | 
+        Q(category__item_type='single', status='sold')
+    ).count()
+    
+    available = products.filter(
+        Q(quantity__gt=0) & 
+        ~Q(category__item_type='single', status='sold')
+    ).count()
+    
+    # Top products by value
+    top_products = []
+    for product in products.order_by('-quantity')[:10]:
+        product.total_value = product.selling_price * product.quantity
+        top_products.append(product)
+    
+    # Category summary
+    categories = []
+    for category in Category.objects.filter(is_active=True):
+        cat_products = products.filter(category=category)
+        cat_value = cat_products.aggregate(
+            total=Sum(F('selling_price') * F('quantity'))
+        )['total'] or 0
+        
+        categories.append({
+            'id': category.id,
+            'name': category.name,
+            'item_type': category.item_type,
+            'product_count': cat_products.count(),
+            'total_items': cat_products.aggregate(total=Sum('quantity'))['total'] or 0,
+            'total_value': cat_value,
+            'percentage': (cat_value / total_value * 100) if total_value > 0 else 0,
+        })
+    
+    context = {
+        'total_products': total_products,
+        'total_items': total_items,
+        'total_value': total_value,
+        'total_cost': total_cost,
+        'low_stock': low_stock,
+        'out_of_stock': out_of_stock,
+        'available': available,
+        'top_products': top_products,
+        'categories': categories,
+        'now': timezone.now(),
+    }
+    return render(request, 'inventory/reports/inventory_report.html', context)
+
+
+
+@login_required
+def category_analysis(request):
+    """Category analysis report"""
+    from django.db.models import Count, Sum, F, Q
+    
+    # Get categories with annotations
+    categories = Category.objects.filter(is_active=True).annotate(
+        total_products=Count('products', filter=Q(products__is_active=True)),
+        total_items=Sum('products__quantity'),
+        total_value=Sum(F('products__selling_price') * F('products__quantity')),
+        total_cost=Sum(F('products__buying_price') * F('products__quantity'))
+    )
+    
+    # Prepare data for template
+    category_data = []
+    for category in categories:
+        total_value = category.total_value or 0
+        total_cost = category.total_cost or 0
+        profit = total_value - total_cost
+        margin = (profit / total_value * 100) if total_value > 0 else 0
+        
+        category_data.append({
+            'id': category.id,
+            'name': category.name,
+            'category_code': category.category_code,
+            'item_type': category.item_type,
+            'total_products': category.total_products or 0,
+            'total_items': category.total_items or 0,
+            'total_value': total_value,
+            'total_cost': total_cost,
+            'profit': profit,
+            'margin': margin,
+        })
+    
+    # Calculate totals
+    total_products = sum(item['total_products'] for item in category_data)
+    total_items = sum(item['total_items'] for item in category_data)
+    total_value = sum(item['total_value'] for item in category_data)
+    total_cost = sum(item['total_cost'] for item in category_data)
+    total_profit = total_value - total_cost
+    overall_margin = (total_profit / total_value * 100) if total_value > 0 else 0
+    
+    context = {
+        'categories': category_data,
+        'total_products': total_products,
+        'total_items': total_items,
+        'total_value': total_value,
+        'total_cost': total_cost,
+        'total_profit': total_profit,
+        'overall_margin': overall_margin,
+    }
+    return render(request, 'inventory/reports/category_analysis.html', context)
+
+
+    
 
 
 
