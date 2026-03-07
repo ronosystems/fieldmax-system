@@ -1457,20 +1457,24 @@ def sold_items_list(request):
             Q(sale__buyer_name__icontains=search)
         )
     
-    # Calculate profit for each item (selling_price - buying_price) * quantity
+    # Calculate profit for each item (unit_price - buying_price) * quantity
     for item in sold_items:
-        item.profit = (item.price - item.product.buying_price) * item.quantity if item.product and item.product.buying_price else 0
+        # FIXED: Use unit_price instead of price
+        if item.product and item.product.buying_price:
+            item.profit = (item.unit_price - item.product.buying_price) * item.quantity
+        else:
+            item.profit = 0
     
     # Pagination
     paginator = Paginator(sold_items, 50)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
     
-    # Calculate totals
+    # Calculate totals - FIXED: Use unit_price instead of price
     total_sold = sum(item.quantity for item in sold_items)
     total_revenue = sum(item.total_price for item in sold_items)
     total_profit = sum(
-        (item.price - item.product.buying_price) * item.quantity 
+        (item.unit_price - item.product.buying_price) * item.quantity 
         for item in sold_items 
         if item.product and item.product.buying_price
     )
@@ -1486,10 +1490,6 @@ def sold_items_list(request):
     }
     
     return render(request, 'sales/sold_items_list.html', context)
-
-
-
-
 
 
 
@@ -1532,15 +1532,16 @@ def export_sold_items(request):
                     'Quantity', 'Unit Price', 'Total Amount', 'Profit', 'Sold By', 'Date Sold', 'Customer'])
     
     for item in sold_items:
-        profit = (item.price - item.product.buying_price) * item.quantity if item.product and item.product.buying_price else 0
+        # FIXED: Use unit_price instead of price
+        profit = (item.unit_price - item.product.buying_price) * item.quantity if item.product and item.product.buying_price else 0
         writer.writerow([
             item.sale.sale_id,
             item.sale.etr_receipt_number or '',
-            item.product.display_name if item.product else '',
-            item.product.sku_value or item.product.product_code if item.product else '',
+            item.product.display_name if item.product else item.product_name,
+            item.sku_value or (item.product.sku_value if item.product else '') or (item.product.product_code if item.product else ''),
             item.product.category.name if item.product and item.product.category else '',
             item.quantity,
-            item.price,
+            item.unit_price,  # FIXED: Use unit_price
             item.total_price,
             profit,
             item.sale.created_by.get_full_name() or item.sale.created_by.username,
