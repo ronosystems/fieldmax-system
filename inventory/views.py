@@ -1596,6 +1596,29 @@ def stock_alerts(request):
 
 
 
+
+
+@login_required
+def dismiss_alert_page(request, pk):
+    """Page for dismissing an alert"""
+    alert = get_object_or_404(StockAlert, pk=pk)
+    
+    if request.method == 'POST':
+        reason = request.POST.get('reason', '')
+        alert.dismiss(user=request.user, reason=reason)
+        messages.success(request, f'Alert for {alert.product.display_name} dismissed.')
+        
+        next_url = request.GET.get('next', 'inventory:stock_alerts')
+        return redirect(next_url)
+    
+    context = {
+        'alert': alert,
+        'next': request.GET.get('next', 'inventory:stock_alerts'),
+    }
+    return render(request, 'inventory/stock/dismiss_alert.html', context)
+
+
+
 @login_required
 def alert_detail(request, pk):
     """View details of a specific alert"""
@@ -1634,48 +1657,91 @@ def reactivate_alert(request, pk):
 
 
 @login_required
-def restock_from_alert(request, pk):
-    """Quick restock from alert page"""
+def restock_alert_combined(request, pk):
+    """Combined view for restocking from alert"""
     alert = get_object_or_404(StockAlert, pk=pk, is_active=True)
     product = alert.product
     
+    # Get related alerts for this product
+    related_alerts = StockAlert.objects.filter(
+        product=alert.product,
+        is_active=True,
+        is_dismissed=False
+    ).exclude(id=alert.id)[:5]
+    
     if request.method == 'POST':
-        quantity = int(request.POST.get('quantity', 1))
-        notes = request.POST.get('notes', '')
+        print(f"\n{'='*50}")
+        print(f"PROCESSING RESTOOK")
+        print(f"POST data: {dict(request.POST)}")
+        print(f"{'='*50}\n")
         
-        if quantity > 0:
-            from inventory.models import StockEntry
-            from decimal import Decimal
+        try:
+            # Get form data
+            quantity = int(request.POST.get('quantity', 0))
+            buying_price = request.POST.get('buying_price', '').strip()
+            selling_price = request.POST.get('selling_price', '').strip()
+            notes = request.POST.get('notes', '')
+            auto_dismiss = request.POST.get('auto_dismiss') == 'on'
             
-            # Create stock entry
-            stock_entry = StockEntry.objects.create(
-                product=product,
-                quantity=quantity,
-                entry_type='purchase',
-                unit_price=product.buying_price or Decimal('0.00'),
-                total_amount=(product.buying_price or Decimal('0.00')) * quantity,
-                reference_id=f"ALERT-{alert.id}",
-                notes=notes or f"Restocked from alert - {alert.get_alert_type_display()}",
-                created_by=request.user
-            )
+            if quantity <= 0:
+                messages.error(request, 'Quantity must be greater than 0.')
+                return redirect('inventory:restock_alert_combined', pk=alert.id)
             
-            # Update product quantity (signal will handle this)
-            product.quantity += quantity
-            product.save()
-            
-            messages.success(request, f'Successfully added {quantity} units to {product.display_name}')
-            
-            # Check if alert should be auto-dismissed
-            if product.quantity > alert.threshold:
-                alert.dismiss(user=request.user, reason=f"Restocked with {quantity} units. New stock: {product.quantity}")
-                messages.info(request, 'Alert automatically dismissed as stock is now above threshold.')
+            with transaction.atomic():
+                # Update quantity
+                old_quantity = product.quantity
+                product.quantity = (product.quantity or 0) + quantity
+                
+                # Update prices if provided
+                if buying_price:
+                    product.buying_price = Decimal(buying_price)
+                if selling_price:
+                    product.selling_price = Decimal(selling_price)
+                
+                # Update status
+                if product.quantity > product.reorder_level:
+                    product.status = 'available'
+                elif product.quantity > 0:
+                    product.status = 'lowstock'
+                else:
+                    product.status = 'outofstock'
+                
+                product.save()
+                
+                # Create stock entry
+                StockEntry.objects.create(
+                    product=product,
+                    quantity=quantity,
+                    entry_type='purchase',
+                    unit_price=product.buying_price or Decimal('0.00'),
+                    total_amount=(product.buying_price or Decimal('0.00')) * quantity,
+                    reference_id=f"ALERT-{alert.id}",
+                    notes=notes or f"Restocked from alert - {alert.get_alert_type_display()}",
+                    created_by=request.user
+                )
+                
+                # Auto-dismiss if enabled
+                if auto_dismiss and product.quantity > alert.threshold:
+                    alert.dismiss(user=request.user, reason=f"Restocked with {quantity} units")
+                    messages.info(request, 'Alert automatically dismissed.')
+                
+                messages.success(request, f'✅ Added {quantity} units. New stock: {product.quantity}')
             
             return redirect('inventory:stock_alerts')
+            
+        except Exception as e:
+            messages.error(request, f'Error: {str(e)}')
+            return redirect('inventory:restock_alert_combined', pk=alert.id)
     
-    return render(request, 'inventory/stock/restock_from_alert.html', {
+    # GET request - show form
+    context = {
         'alert': alert,
-        'product': product
-    })
+        'related_alerts': related_alerts,
+    }
+    return render(request, 'inventory/stock/restock_alert.html', context)
+
+
+
 
 
 @login_required

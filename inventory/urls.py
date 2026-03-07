@@ -23,6 +23,8 @@ urlpatterns = [
     path('restock/search/', views.search_product_for_restock, name='restock-search'),
     path('restock/process/', views.process_restock, name='restock-process'),
     path('restock/', views.ProductRestockView.as_view(), name='product_restock'),
+    path('stock-alerts/<int:pk>/restock/', views.restock_alert_combined, name='restock_alert_combined'),
+    path('stock-alerts/<int:pk>/dismiss-page/', views.dismiss_alert_page, name='dismiss_alert_page'),
     
     # Categories
     path('categories/<int:pk>/delete/', views.category_delete, name='category_delete'),
@@ -63,7 +65,6 @@ urlpatterns = [
     path('stock-alerts/<int:pk>/', views.alert_detail, name='alert_detail'),
     path('stock-alerts/<int:pk>/dismiss/', views.dismiss_alert, name='dismiss_alert'),
     path('stock-alerts/<int:pk>/reactivate/', views.reactivate_alert, name='reactivate_alert'),
-    path('stock-alerts/<int:pk>/restock/', views.restock_from_alert, name='restock_from_alert'),
     path('stock-alerts/export/', views.export_alerts, name='export_alerts'),
     path('stock-alerts/bulk-dismiss/', views.bulk_dismiss_alerts, name='bulk_dismiss_alerts'),
     
