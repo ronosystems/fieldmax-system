@@ -1,0 +1,296 @@
+{% extends 'sales/staff_base.html' %}
+{% load static %}
+
+{% block title %}Sold Items{% endblock %}
+
+{% block page_icon %}fas fa-tag{% endblock %}
+{% block page_title %}Sold Items{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'inventory:dashboard' %}">Dashboard</a></li>
+<li class="breadcrumb-item active">Sold Items</li>
+{% endblock %}
+
+{% block page_actions %}
+<div class="btn-group" role="group">
+    <button type="button" class="btn btn-outline-primary" onclick="exportToExcel()">
+        <i class="fas fa-file-excel me-2"></i>Export
+    </button>
+    <button type="button" class="btn btn-outline-secondary" onclick="printReport()">
+        <i class="fas fa-print me-2"></i>Print
+    </button>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card bg-gradient-primary text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-white-50 mb-2">Total Items Sold</h6>
+                            <h2 class="mb-0">{{ total_sold }}</h2>
+                        </div>
+                        <div class="icon-shape bg-white bg-opacity-25 rounded-circle p-3">
+                            <i class="fas fa-cubes fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card bg-gradient-success text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-white-50 mb-2">Total Revenue</h6>
+                            <h2 class="mb-0">KES {{ total_revenue|floatformat:2 }}</h2>
+                        </div>
+                        <div class="icon-shape bg-white bg-opacity-25 rounded-circle p-3">
+                            <i class="fas fa-money-bill-wave fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card bg-gradient-warning text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-white-50 mb-2">Total Profit</h6>
+                            <h2 class="mb-0">KES {{ total_profit|floatformat:2 }}</h2>
+                        </div>
+                        <div class="icon-shape bg-white bg-opacity-25 rounded-circle p-3">
+                            <i class="fas fa-chart-line fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Filter Card -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <form method="GET" class="row g-3">
+                <div class="col-md-4">
+                    <label for="search" class="form-label">Search</label>
+                    <input type="text" class="form-control" id="search" name="search" 
+                           placeholder="Sale ID, ETR, Product, Customer..." 
+                           value="{{ search }}">
+                </div>
+                <div class="col-md-3">
+                    <label for="date_from" class="form-label">Date From</label>
+                    <input type="date" class="form-control" id="date_from" name="date_from" 
+                           value="{{ date_from }}">
+                </div>
+                <div class="col-md-3">
+                    <label for="date_to" class="form-label">Date To</label>
+                    <input type="date" class="form-control" id="date_to" name="date_to" 
+                           value="{{ date_to }}">
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-filter me-2"></i>Filter
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Sold Items Table -->
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Sale ID</th>
+                            <th>ETR Number</th>
+                            <th>Product</th>
+                            <th>SKU/Code</th>
+                            <th>Quantity</th>
+                            <th>Unit Price</th>
+                            <th>Total Amount</th>
+                            <th>Profit</th>
+                            <th>Sold By</th>
+                            <th>Date Sold</th>
+                            <th>Customer</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in page_obj %}
+                        <tr>
+                            <td>
+                                <a href="{% url 'sales:sale_detail' item.sale.id %}" class="text-primary">
+                                    {{ item.sale.sale_id }}
+                                </a>
+                            </td>
+                            <td>
+                                {% if item.sale.etr_receipt_number %}
+                                    {{ item.sale.etr_receipt_number }}
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <strong>{{ item.product.display_name|default:item.product.name }}</strong>
+                                <br>
+                                <small class="text-muted">{{ item.product.category.name|default:"—" }}</small>
+                            </td>
+                            <td>
+                                {% if item.product.sku_value %}
+                                    {{ item.product.sku_value }}
+                                {% else %}
+                                    {{ item.product.product_code|default:"—" }}
+                                {% endif %}
+                            </td>
+                            <td class="text-center">{{ item.quantity }}</td>
+                            <td class="text-end">KES {{ item.price|floatformat:2 }}</td>
+                            <td class="text-end fw-bold">KES {{ item.total_price|floatformat:2 }}</td>
+                            <td class="text-end {% if item.profit > 0 %}text-success{% else %}text-danger{% endif %} fw-bold">
+                                KES {{ item.profit|floatformat:2 }}
+                            </td>
+                            <td>{{ item.sale.created_by.get_full_name|default:item.sale.created_by.username }}</td>
+                            <td>{{ item.sale.sale_date|date:"Y-m-d H:i" }}</td>
+                            <td>{{ item.sale.buyer_name|default:"Walk-in Customer" }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="11" class="text-center py-5">
+                                <i class="fas fa-tag fa-4x text-muted mb-3"></i>
+                                <h5 class="text-muted">No sold items found</h5>
+                                <p class="text-muted">Items sold will appear here</p>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Pagination -->
+            {% if page_obj.has_other_pages %}
+            <nav aria-label="Page navigation" class="mt-4">
+                <ul class="pagination justify-content-center">
+                    {% if page_obj.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page=1{% if search %}&search={{ search }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}">
+                            <i class="fas fa-angle-double-left"></i>
+                        </a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search %}&search={{ search }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}">
+                            <i class="fas fa-angle-left"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+                    
+                    {% for num in page_obj.paginator.page_range %}
+                        {% if page_obj.number == num %}
+                        <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ num }}{% if search %}&search={{ search }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}">
+                                {{ num }}
+                            </a>
+                        </li>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if page_obj.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search %}&search={{ search }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}">
+                            <i class="fas fa-angle-right"></i>
+                        </a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if search %}&search={{ search }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}">
+                            <i class="fas fa-angle-double-right"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .bg-gradient-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    .bg-gradient-success {
+        background: linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%);
+    }
+    .bg-gradient-warning {
+        background: linear-gradient(135deg, #fad0c4 0%, #ffd1ff 100%);
+    }
+    .icon-shape {
+        width: 48px;
+        height: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .table td {
+        vertical-align: middle;
+    }
+    .text-white-50 {
+        color: rgba(255, 255, 255, 0.8);
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function exportToExcel() {
+    // Get current filter parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const search = urlParams.get('search') || '';
+    const date_from = urlParams.get('date_from') || '';
+    const date_to = urlParams.get('date_to') || '';
+    
+    // Redirect to export URL with same filters
+    window.location.href = `{% url 'sales:export_sold_items' %}?search=${search}&date_from=${date_from}&date_to=${date_to}`;
+}
+
+function printReport() {
+    window.print();
+}
+
+$(document).ready(function() {
+    // Initialize DataTable with custom options
+    if ($('.datatable').length) {
+        $('.datatable').DataTable({
+            "pageLength": 25,
+            "order": [[9, "desc"]], // Sort by date sold descending
+            "language": {
+                "search": "Search:",
+                "lengthMenu": "Show _MENU_ entries",
+                "info": "Showing _START_ to _END_ of _TOTAL_ entries",
+                "infoEmpty": "Showing 0 to 0 of 0 entries",
+                "infoFiltered": "(filtered from _MAX_ total entries)",
+                "paginate": {
+                    "first": "First",
+                    "last": "Last",
+                    "next": "Next",
+                    "previous": "Previous"
+                }
+            },
+            "columnDefs": [
+                { "orderable": false, "targets": [] } // Disable ordering on specific columns if needed
+            ]
+        });
+    }
+});
+</script>
+{% endblock %}

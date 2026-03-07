@@ -10,9 +10,11 @@ import json
 import logging
 import calendar
 from datetime import timedelta, datetime, date
-
+from django.db.models import F, ExpressionWrapper, DecimalField
+from sales.models import Sale, SaleItem
 from inventory.models import Product, StockEntry
 from .models import Sale, SaleItem, generate_custom_sale_id
+from django.core.paginator import Paginator
 from django.contrib.auth.models import User
 from django.db.models.functions import Coalesce
 
@@ -1416,3 +1418,134 @@ def clear_cart(request):
             'message': 'Cart cleared'
         })
     return JsonResponse({'success': False, 'error': 'Invalid request'})
+
+
+
+
+
+
+
+@login_required
+def sold_items_list(request):
+    """List all sold items with details"""
+    
+    # Get all sold items with related data
+    sold_items = SaleItem.objects.select_related(
+        'sale', 'product'
+    ).filter(
+        sale__is_reversed=False  # Exclude reversed sales
+    ).order_by('-sale__sale_date')
+    
+    # Apply filters if any
+    date_from = request.GET.get('date_from')
+    date_to = request.GET.get('date_to')
+    search = request.GET.get('search', '').strip()
+    
+    if date_from:
+        sold_items = sold_items.filter(sale__sale_date__date__gte=date_from)
+    
+    if date_to:
+        sold_items = sold_items.filter(sale__sale_date__date__lte=date_to)
+    
+    if search:
+        sold_items = sold_items.filter(
+            Q(sale__sale_id__icontains=search) |
+            Q(sale__etr_receipt_number__icontains=search) |
+            Q(product__name__icontains=search) |
+            Q(product__product_code__icontains=search) |
+            Q(product__sku_value__icontains=search) |
+            Q(sale__buyer_name__icontains=search)
+        )
+    
+    # Calculate profit for each item (selling_price - buying_price) * quantity
+    for item in sold_items:
+        item.profit = (item.price - item.product.buying_price) * item.quantity if item.product and item.product.buying_price else 0
+    
+    # Pagination
+    paginator = Paginator(sold_items, 50)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    # Calculate totals
+    total_sold = sum(item.quantity for item in sold_items)
+    total_revenue = sum(item.total_price for item in sold_items)
+    total_profit = sum(
+        (item.price - item.product.buying_price) * item.quantity 
+        for item in sold_items 
+        if item.product and item.product.buying_price
+    )
+    
+    context = {
+        'page_obj': page_obj,
+        'total_sold': total_sold,
+        'total_revenue': total_revenue,
+        'total_profit': total_profit,
+        'search': search,
+        'date_from': date_from,
+        'date_to': date_to,
+    }
+    
+    return render(request, 'sales/sold_items_list.html', context)
+
+
+
+
+
+
+
+
+@login_required
+def export_sold_items(request):
+    """Export sold items to CSV"""
+    import csv
+    from django.http import HttpResponse
+    
+    # Get filtered items (same as in sold_items_list)
+    sold_items = SaleItem.objects.select_related(
+        'sale', 'product'
+    ).filter(
+        sale__is_reversed=False
+    ).order_by('-sale__sale_date')
+    
+    # Apply same filters
+    date_from = request.GET.get('date_from')
+    date_to = request.GET.get('date_to')
+    search = request.GET.get('search', '').strip()
+    
+    if date_from:
+        sold_items = sold_items.filter(sale__sale_date__date__gte=date_from)
+    if date_to:
+        sold_items = sold_items.filter(sale__sale_date__date__lte=date_to)
+    if search:
+        sold_items = sold_items.filter(
+            Q(sale__sale_id__icontains=search) |
+            Q(sale__etr_receipt_number__icontains=search) |
+            Q(product__name__icontains=search) |
+            Q(product__product_code__icontains=search)
+        )
+    
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="sold_items_{timezone.now().strftime("%Y%m%d_%H%M%S")}.csv"'
+    
+    writer = csv.writer(response)
+    writer.writerow(['Sale ID', 'ETR Number', 'Product', 'SKU/Code', 'Category', 
+                    'Quantity', 'Unit Price', 'Total Amount', 'Profit', 'Sold By', 'Date Sold', 'Customer'])
+    
+    for item in sold_items:
+        profit = (item.price - item.product.buying_price) * item.quantity if item.product and item.product.buying_price else 0
+        writer.writerow([
+            item.sale.sale_id,
+            item.sale.etr_receipt_number or '',
+            item.product.display_name if item.product else '',
+            item.product.sku_value or item.product.product_code if item.product else '',
+            item.product.category.name if item.product and item.product.category else '',
+            item.quantity,
+            item.price,
+            item.total_price,
+            profit,
+            item.sale.created_by.get_full_name() or item.sale.created_by.username,
+            item.sale.sale_date.strftime('%Y-%m-%d %H:%M'),
+            item.sale.buyer_name or 'Walk-in Customer'
+        ])
+    
+    return response
