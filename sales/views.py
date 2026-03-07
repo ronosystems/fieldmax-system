@@ -1551,7 +1551,7 @@ def export_sold_items(request):
             item.unit_price,  # FIXED: Use unit_price
             item.total_price,
             profit,
-            item.sale.created_by.get_full_name() or item.sale.created_by.username,
+            item.sale.seller.get_full_name() or item.sale.seller.username,
             item.sale.sale_date.strftime('%Y-%m-%d %H:%M'),
             item.sale.buyer_name or 'Walk-in Customer'
         ])
