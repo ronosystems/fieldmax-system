@@ -24,7 +24,6 @@ urlpatterns = [
     path('restock/process/', views.process_restock, name='restock-process'),
     path('restock/', views.ProductRestockView.as_view(), name='product_restock'),
     path('stock-alerts/<int:pk>/restock/', views.restock_alert_combined, name='restock_alert_combined'),
-    path('stock-alerts/<int:pk>/dismiss-page/', views.dismiss_alert_page, name='dismiss_alert_page'),
     
     # Categories
     path('categories/<int:pk>/delete/', views.category_delete, name='category_delete'),
