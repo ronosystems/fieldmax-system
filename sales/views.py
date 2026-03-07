@@ -142,6 +142,14 @@ def sales_statistics(request):
             'margin': (day_profit / day_revenue * 100) if day_revenue > 0 else 0,
             'count': day_count
         })
+
+
+    daily_totals = {
+       'count': sum(day['count'] for day in daily_sales_breakdown),
+       'revenue': sum(day['revenue'] for day in daily_sales_breakdown),
+       'profit': sum(day['profit'] for day in daily_sales_breakdown),
+       'avg_margin': sum(day['margin'] for day in daily_sales_breakdown) / len(daily_sales_breakdown) if daily_sales_breakdown else 0,
+    }
     
     # ============================================
     # FIXED: WEEKLY BREAKDOWN - By Date Ranges of Current Month
@@ -429,6 +437,7 @@ def sales_statistics(request):
         
         # Charts
         'daily_sales': daily_sales,
+        'daily_totals': daily_totals,
         'hourly_sales': hourly_sales,
         
         # Credit sales

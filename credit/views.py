@@ -145,6 +145,24 @@ def credit_statistics(request):
             'count': day_count,
             'collection_rate': day_collection_rate
         })
+
+    # After the daily_credit_breakdown loop — compute true Mon-Sun totals
+    daily_credit_total_value = sum(d['value'] for d in daily_credit_breakdown)
+    daily_credit_total_count = sum(d['count'] for d in daily_credit_breakdown)
+
+    # Weighted collection rate (paid / total), not an average of rates
+    daily_credit_paid = sum(
+        d['value'] * d['collection_rate'] / 100
+        for d in daily_credit_breakdown
+        if d['value'] > 0
+    )
+    daily_credit_totals = {
+        'count': daily_credit_total_count,
+        'value': daily_credit_total_value,
+        'collection_rate': (daily_credit_paid / daily_credit_total_value * 100)
+                       if daily_credit_total_value > 0 else 0,
+    }
+    
     
     # Week totals for collection rate
     week_transactions = transactions_qs.filter(transaction_date__gte=start_of_week)
@@ -248,6 +266,7 @@ def credit_statistics(request):
     year_credit_value = year_transactions.aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
     year_paid_value = year_transactions.filter(payment_status='paid').aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
     year_collection_rate = (year_paid_value / year_credit_value * 100) if year_credit_value > 0 else 0
+    year_count = year_transactions.count()
     
     # ============================================
     # COMPANY BREAKDOWN
@@ -453,6 +472,7 @@ def credit_statistics(request):
         'daily_credit_breakdown': daily_credit_breakdown,
         'week_credit_value': week_credit_value,
         'week_collection_rate': week_collection_rate,
+        'daily_credit_totals': daily_credit_totals,
         
         # Weekly breakdown (Week 1-4)
         'weekly_credit_breakdown': weekly_credit_breakdown,
@@ -464,6 +484,7 @@ def credit_statistics(request):
         'year_credit_value': year_credit_value,
         'year_paid_value': year_paid_value,
         'year_collection_rate': year_collection_rate,
+        'year_count': year_count,
         
         # Companies
         'company_stats': company_stats,
