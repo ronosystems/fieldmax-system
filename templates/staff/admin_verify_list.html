@@ -5,22 +5,24 @@
 
 {% block content %}
 <div class="container-fluid py-4">
-    <!-- Header Section -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h2 class="mb-1">
-                <i class="fas fa-shield-alt text-primary me-2"></i>
-                Identity Verification Requests
-            </h2>
-            <p class="text-muted mb-0">Review and verify staff identity documents</p>
-        </div>
-        <div>
-            <button class="btn btn-outline-primary me-2" onclick="location.reload()">
-                <i class="fas fa-sync-alt me-2"></i>Refresh
-            </button>
-            <a href="{% url 'admin:index' %}" class="btn btn-primary">
-                <i class="fas fa-cog me-2"></i>Admin Panel
-            </a>
+    <!-- Header Section with White Background -->
+    <div class="page-title-section">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2 class="mb-1">
+                    <i class="fas fa-shield-alt text-primary me-2"></i>
+                    Identity Verification Requests
+                </h2>
+                <p class="text-muted mb-0">Review and verify staff identity documents</p>
+            </div>
+            <div>
+                <button class="btn btn-outline-primary me-2" onclick="location.reload()">
+                    <i class="fas fa-sync-alt me-2"></i>Refresh
+                </button>
+                <a href="{% url 'admin:index' %}" class="btn btn-primary">
+                    <i class="fas fa-cog me-2"></i>Admin Panel
+                </a>
+            </div>
         </div>
     </div>
 
@@ -56,8 +58,12 @@
         </div>
     </div>
 
-    <!-- Filters -->
-    <div class="card shadow-sm mb-4">
+    <!-- Filters Card -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="fas fa-filter me-2"></i>
+            Filter Options
+        </div>
         <div class="card-body">
             <form method="get" class="row g-3">
                 <div class="col-md-3">
@@ -93,13 +99,11 @@
         </div>
     </div>
 
-    <!-- Staff Verification List -->
-    <div class="card shadow-sm">
-        <div class="card-header bg-white">
-            <h5 class="mb-0">
-                <i class="fas fa-list me-2"></i>
-                Staff Requiring Verification
-            </h5>
+    <!-- Staff Verification List Card -->
+    <div class="card">
+        <div class="card-header">
+            <i class="fas fa-list me-2"></i>
+            Staff Requiring Verification
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
@@ -170,10 +174,12 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="8" class="text-center py-4">
-                                <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
-                                <h5>No pending verifications</h5>
-                                <p class="text-muted">All staff members have been verified</p>
+                            <td colspan="8" class="text-center py-5">
+                                <div class="empty-state">
+                                    <i class="fas fa-check-circle fa-4x text-success mb-3"></i>
+                                    <h5 class="mb-2">No pending verifications</h5>
+                                    <p class="text-muted mb-0">All staff members have been verified</p>
+                                </div>
                             </td>
                         </tr>
                         {% endfor %}
@@ -214,19 +220,393 @@
 
 {% block extra_css %}
 <style>
-    .badge-secondary {
-        background-color: #6c757d;
-        color: white;
-        padding: 5px 10px;
-        border-radius: 20px;
+    /* Title Background White */
+    .page-title-section {
+        background: white;
+        padding: 25px 30px;
+        border-radius: 15px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+        margin-bottom: 25px;
+        border: 1px solid #eef2f6;
+    }
+    
+    .page-title-section h2 {
+        color: #2c3e50;
+        font-weight: 600;
+        font-size: 1.8rem;
+    }
+    
+    .page-title-section .text-muted {
+        color: #6c757d !important;
+        font-size: 0.95rem;
+    }
+    
+    /* Consistent Stat Cards */
+    .stat-card {
+        background: white;
+        border-radius: 15px;
+        padding: 25px;
+        position: relative;
+        overflow: hidden;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        border: 1px solid #eef2f6;
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+        border-color: #4e73df20;
+    }
+    
+    .stat-card .stat-value {
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin-bottom: 5px;
+        color: #0080ff;
+        line-height: 1.2;
+    }
+    
+    .stat-card .stat-label {
+        color: #0184f7;
+        font-size: 0.9rem;
         font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .stat-card .stat-icon {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        font-size: 3.5rem;
+        opacity: 5;
+        color: inherit;
+        transition: opacity 0.3s ease;
+    }
+    
+    .stat-card:hover .stat-icon {
+        opacity: 0.15;
+    }
+    
+    /* Card styling */
+    .card {
+        border: none;
+        border-radius: 15px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+        background: white;
+        margin-bottom: 25px;
+        border: 1px solid #eef2f6;
+        overflow: hidden;
+    }
+    
+    .card-header {
+        background: white;
+        border-bottom: 1px solid #eef2f6;
+        padding: 18px 25px;
+        font-weight: 600;
+        color: #2c3e50;
+        font-size: 1.1rem;
+    }
+    
+    .card-header i {
+        color: #4e73df;
+    }
+    
+    .card-body {
+        padding: 25px;
+    }
+    
+    .card-footer {
+        background: white;
+        border-top: 1px solid #eef2f6;
+        padding: 15px 25px;
+    }
+    
+    /* Form controls */
+    .form-control, .form-select {
+        border: 1px solid #eef2f6;
+        border-radius: 10px;
+        padding: 12px 15px;
+        background: white;
+        font-size: 0.95rem;
+        transition: all 0.2s ease;
+    }
+    
+    .form-control:focus, .form-select:focus {
+        border-color: #4e73df;
+        box-shadow: 0 0 0 3px rgba(78,115,223,0.1);
+        outline: none;
+    }
+    
+    .form-label {
+        font-weight: 500;
+        color: #2c3e50;
+        margin-bottom: 8px;
+        font-size: 0.9rem;
+    }
+    
+    /* Button styling */
+    .btn-primary {
+        background: linear-gradient(135deg, #4e73df 0%, #224abe 100%);
+        border: none;
+        border-radius: 10px;
+        padding: 10px 20px;
+        font-weight: 500;
+        font-size: 0.95rem;
+        transition: all 0.2s ease;
+    }
+    
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(78,115,223,0.3);
+    }
+    
+    .btn-outline-primary {
+        border: 1px solid #4e73df;
+        color: #4e73df;
+        border-radius: 10px;
+        padding: 10px 20px;
+        font-weight: 500;
+        transition: all 0.2s ease;
+    }
+    
+    .btn-outline-primary:hover {
+        background: #4e73df;
+        color: white;
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(78,115,223,0.2);
+    }
+    
+    .btn-outline-secondary {
+        border: 1px solid #eef2f6;
+        color: #6c757d;
+        border-radius: 10px;
+        padding: 10px 20px;
+        font-weight: 500;
+        transition: all 0.2s ease;
+    }
+    
+    .btn-outline-secondary:hover {
+        background: #eef2f6;
+        color: #2c3e50;
+        transform: translateY(-2px);
+    }
+    
+    .btn-sm {
+        padding: 8px 15px;
         font-size: 0.85rem;
+        border-radius: 8px;
     }
+    
     .btn-group .btn {
-        padding: 0.25rem 0.5rem;
+        padding: 6px 10px;
+        border-radius: 6px !important;
+        margin: 0 2px;
     }
-    .btn-group .btn i {
-        font-size: 1rem;
+    
+    /* Table styling */
+    .table {
+        margin-bottom: 0;
+    }
+    
+    .table thead th {
+        background: #f8fafd;
+        color: #2c3e50;
+        font-weight: 600;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        border-bottom: 2px solid #eef2f6;
+        padding: 15px 20px;
+        white-space: nowrap;
+    }
+    
+    .table tbody td {
+        padding: 15px 20px;
+        vertical-align: middle;
+        color: #2c3e50;
+        border-bottom: 1px solid #eef2f6;
+        font-size: 0.95rem;
+    }
+    
+    .table tbody tr:last-child td {
+        border-bottom: none;
+    }
+    
+    .table tbody tr:hover {
+        background: #f8fafd;
+    }
+    
+    /* Badge styling */
+    .badge-approved {
+        background: linear-gradient(135deg, #1cc88a 0%, #13855c 100%);
+        color: white;
+        padding: 6px 12px;
+        border-radius: 30px;
+        font-weight: 500;
+        font-size: 0.8rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        white-space: nowrap;
+    }
+    
+    .badge-pending {
+        background: linear-gradient(135deg, #f6c23e 0%, #dda20a 100%);
+        color: white;
+        padding: 6px 12px;
+        border-radius: 30px;
+        font-weight: 500;
+        font-size: 0.8rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        white-space: nowrap;
+    }
+    
+    .badge-secondary {
+        background: linear-gradient(135deg, #858796 0%, #60616f 100%);
+        color: white;
+        padding: 6px 12px;
+        border-radius: 30px;
+        font-weight: 500;
+        font-size: 0.8rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        white-space: nowrap;
+    }
+    
+    /* Role badges */
+    .role-badge {
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 500;
+        background: #f0f2f5;
+        color: #2c3e50;
+        display: inline-block;
+        white-space: nowrap;
+    }
+    
+    .role-manager {
+        background: linear-gradient(135deg, #4e73df 0%, #224abe 100%);
+        color: white;
+    }
+    
+    .role-officer {
+        background: linear-gradient(135deg, #1cc88a 0%, #13855c 100%);
+        color: white;
+    }
+    
+    .role-agent {
+        background: linear-gradient(135deg, #36b9cc 0%, #258391 100%);
+        color: white;
+    }
+    
+    /* Empty state */
+    .empty-state {
+        padding: 40px 20px;
+        text-align: center;
+    }
+    
+    .empty-state i {
+        color: #4e73df;
+        opacity: 0.3;
+        margin-bottom: 15px;
+    }
+    
+    .empty-state h5 {
+        color: #2c3e50;
+        font-weight: 600;
+        margin-bottom: 5px;
+    }
+    
+    .empty-state p {
+        color: #6c757d;
+        font-size: 0.95rem;
+    }
+    
+    /* Pagination */
+    .pagination {
+        gap: 5px;
+    }
+    
+    .page-link {
+        border: 1px solid #eef2f6;
+        border-radius: 8px !important;
+        color: #4e73df;
+        padding: 8px 15px;
+        font-size: 0.9rem;
+        transition: all 0.2s ease;
+    }
+    
+    .page-link:hover {
+        background: #4e73df;
+        color: white;
+        border-color: #4e73df;
+        transform: translateY(-1px);
+    }
+    
+    .page-item.active .page-link {
+        background: #4e73df;
+        border-color: #4e73df;
+        color: white;
+    }
+    
+    .page-item.disabled .page-link {
+        background: #f8fafd;
+        color: #bdc3d0;
+        border-color: #eef2f6;
+    }
+    
+    /* Responsive */
+    @media (max-width: 768px) {
+        .page-title-section {
+            padding: 20px;
+        }
+        
+        .page-title-section h2 {
+            font-size: 1.5rem;
+        }
+        
+        .stat-card .stat-value {
+            font-size: 2rem;
+        }
+        
+        .card-header {
+            padding: 15px 20px;
+        }
+        
+        .card-body {
+            padding: 20px;
+        }
+        
+        .table thead th,
+        .table tbody td {
+            padding: 12px 15px;
+            font-size: 0.9rem;
+        }
+    }
+    
+    @media (max-width: 576px) {
+        .stat-card {
+            padding: 20px;
+        }
+        
+        .stat-card .stat-value {
+            font-size: 1.75rem;
+        }
+        
+        .btn-group {
+            display: flex;
+            gap: 2px;
+        }
+        
+        .btn-group .btn {
+            padding: 4px 8px;
+        }
     }
 </style>
 {% endblock %}

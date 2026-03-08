@@ -1,67 +1,65 @@
 {% extends 'staff/base.html' %}
+{% load static %}
 
 {% block title %}System Users - FieldMax{% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-    <!-- Page Header -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h2><i class="fas fa-users me-2"></i>System Users</h2>
-            <nav aria-label="breadcrumb">
-                <ol class="breadcrumb">
-                    <li class="breadcrumb-item"><a href="{% url 'staff:staff_dashboard' %}">Dashboard</a></li>
-                    <li class="breadcrumb-item active">Users</li>
-                </ol>
-            </nav>
+<div class="container-fluid py-4">
+    <!-- Page Header with White Background -->
+    <div class="page-title-section">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2 class="mb-1">
+                    <i class="fas fa-users text-primary me-2"></i>
+                    System Users
+                </h2>
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb mb-0">
+                        <li class="breadcrumb-item"><a href="{% url 'staff:staff_dashboard' %}">Dashboard</a></li>
+                        <li class="breadcrumb-item active" aria-current="page">Users</li>
+                    </ol>
+                </nav>
+            </div>
+            <a href="{% url 'admin:auth_user_add' %}" class="btn btn-primary" target="_blank">
+                <i class="fas fa-plus me-2"></i>Add New User
+            </a>
         </div>
-        <a href="{% url 'admin:auth_user_add' %}" class="btn btn-primary" target="_blank">
-            <i class="fas fa-plus me-2"></i>Add New User
-        </a>
     </div>
 
     <!-- Stats Cards -->
     <div class="row mb-4">
-        <div class="col-md-4">
-            <div class="card stat-card">
-                <div class="card-body">
-                    <div class="stat-icon">
-                        <i class="fas fa-users"></i>
-                    </div>
-                    <div class="stat-value">{{ total_users }}</div>
-                    <div class="stat-label">Total Users</div>
-                </div>
+        <div class="col-md-4 mb-3">
+            <div class="stat-card">
+                <div class="stat-value">{{ total_users|default:0 }}</div>
+                <div class="stat-label">Total Users</div>
+                <i class="fas fa-users stat-icon text-primary"></i>
             </div>
         </div>
-        <div class="col-md-4">
-            <div class="card stat-card">
-                <div class="card-body">
-                    <div class="stat-icon">
-                        <i class="fas fa-check-circle" style="color: #28a745;"></i>
-                    </div>
-                    <div class="stat-value">{{ active_users }}</div>
-                    <div class="stat-label">Active Users</div>
-                </div>
+        <div class="col-md-4 mb-3">
+            <div class="stat-card">
+                <div class="stat-value">{{ active_users|default:0 }}</div>
+                <div class="stat-label">Active Users</div>
+                <i class="fas fa-check-circle stat-icon text-success"></i>
             </div>
         </div>
-        <div class="col-md-4">
-            <div class="card stat-card">
-                <div class="card-body">
-                    <div class="stat-icon">
-                        <i class="fas fa-user-tie" style="color: #17a2b8;"></i>
-                    </div>
-                    <div class="stat-value">{{ staff_users }}</div>
-                    <div class="stat-label">Staff Members</div>
-                </div>
+        <div class="col-md-4 mb-3">
+            <div class="stat-card">
+                <div class="stat-value">{{ staff_users|default:0 }}</div>
+                <div class="stat-label">Staff Members</div>
+                <i class="fas fa-user-tie stat-icon text-info"></i>
             </div>
         </div>
     </div>
 
-    <!-- Users Table -->
+    <!-- Users Table Card -->
     <div class="card">
         <div class="card-header">
             <div class="d-flex justify-content-between align-items-center">
-                <h5 class="mb-0"><i class="fas fa-list me-2"></i>All Users</h5>
+                <div>
+                    <i class="fas fa-list me-2"></i>
+                    All Users
+                    <span class="badge bg-primary ms-2">{{ total_users|default:0 }} Total</span>
+                </div>
                 <div class="btn-group">
                     <button class="btn btn-sm btn-outline-secondary" onclick="exportTableToCSV('users.csv')">
                         <i class="fas fa-download me-1"></i>Export
@@ -69,9 +67,9 @@
                 </div>
             </div>
         </div>
-        <div class="card-body">
+        <div class="card-body p-0">
             <div class="table-responsive">
-                <table class="table table-hover datatable" id="usersTable">
+                <table class="table table-hover mb-0 datatable" id="usersTable">
                     <thead>
                         <tr>
                             <th>ID</th>
@@ -89,7 +87,7 @@
                     <tbody>
                         {% for user in users %}
                         <tr>
-                            <td>{{ user.id }}</td>
+                            <td><span class="badge bg-secondary-subtle text-dark">#{{ user.id }}</span></td>
                             <td>
                                 <strong>{{ user.username }}</strong>
                                 {% if user == request.user %}
@@ -105,88 +103,107 @@
                             </td>
                             <td>
                                 {% if user.email %}
-                                    <a href="mailto:{{ user.email }}">{{ user.email }}</a>
+                                    <a href="mailto:{{ user.email }}" class="text-decoration-none">{{ user.email }}</a>
                                 {% else %}
                                     <span class="text-muted fst-italic">No email</span>
                                 {% endif %}
                             </td>
                             <td>
                                 {% if user.is_superuser %}
-                                    <span class="badge bg-danger">Super Admin</span>
+                                    <span class="badge-user-type" style="background: linear-gradient(135deg, #dc3545, #b02a37);">
+                                        <i class="fas fa-crown me-1"></i>Super Admin
+                                    </span>
                                 {% elif user.is_staff %}
-                                    <span class="badge bg-primary">Staff</span>
+                                    <span class="badge-user-type" style="background: linear-gradient(135deg, #4e73df, #224abe);">
+                                        <i class="fas fa-user-tie me-1"></i>Staff
+                                    </span>
                                 {% else %}
-                                    <span class="badge bg-secondary">Regular User</span>
+                                    <span class="badge-user-type" style="background: linear-gradient(135deg, #6c757d, #5a6268);">
+                                        <i class="fas fa-user me-1"></i>Regular
+                                    </span>
                                 {% endif %}
                             </td>
                             <td>
-                                {% with groups=user.groups.all %}
-                                    {% if groups %}
-                                        {% for group in groups %}
-                                            {% if group.name == 'Administrator' %}
-                                                <span class="badge" style="background-color: #dc3545; color: white; margin: 2px;">{{ group.name }}</span>
-                                            {% elif group.name == 'Supervisor' %}
-                                                <span class="badge" style="background-color: #fd7e14; color: white; margin: 2px;">{{ group.name }}</span>
-                                            {% elif group.name == 'Sales Manager' %}
-                                                <span class="badge" style="background-color: #28a745; color: white; margin: 2px;">{{ group.name }}</span>
-                                            {% elif group.name == 'Store Manager' %}
-                                                <span class="badge" style="background-color: #17a2b8; color: white; margin: 2px;">{{ group.name }}</span>
-                                            {% elif group.name == 'Credit Officer' %}
-                                                <span class="badge" style="background-color: #6f42c1; color: white; margin: 2px;">{{ group.name }}</span>
-                                            {% elif group.name == 'Inventory Manager' %}
-                                                <span class="badge" style="background-color: #20c997; color: white; margin: 2px;">{{ group.name }}</span>
-                                            {% elif group.name == 'Assistant Manager' %}
-                                                <span class="badge" style="background-color: #ffc107; color: white; margin: 2px;">{{ group.name }}</span>
-                                            {% elif group.name == 'Customer Service' %}
-                                                <span class="badge" style="background-color: #6c757d; color: white; margin: 2px;">{{ group.name }}</span>
-                                            {% elif group.name == 'Security Officer' %}
-                                                <span class="badge" style="background-color: #343a40; color: white; margin: 2px;">{{ group.name }}</span>
-                                            {% elif group.name == 'Sales Agent' %}
-                                                <span class="badge" style="background-color: #007bff; color: white; margin: 2px;">{{ group.name }}</span>
-                                            {% elif group.name == 'Cashier' %}
-                                                <span class="badge" style="background-color: #17a2b8; color: white; margin: 2px;">{{ group.name }}</span>
-                                            {% elif group.name == 'Cleaner' %}
-                                                <span class="badge" style="background-color: #6c757d; color: white; margin: 2px;">{{ group.name }}</span>
-                                            {% else %}
-                                                <span class="badge" style="background-color: #6c757d; color: white; margin: 2px;">{{ group.name }}</span>
-                                            {% endif %}
-                                        {% endfor %}
-                                    {% else %}
-                                        <span class="text-muted fst-italic">No role assigned</span>
-                                    {% endif %}
-                                {% endwith %}
+                                <div class="role-badges-container">
+                                    {% with groups=user.groups.all %}
+                                        {% if groups %}
+                                            {% for group in groups %}
+                                                {% if group.name == 'Administrator' %}
+                                                    <span class="role-badge" style="background: linear-gradient(135deg, #dc3545, #b02a37);">Administrator</span>
+                                                {% elif group.name == 'Supervisor' %}
+                                                    <span class="role-badge" style="background: linear-gradient(135deg, #fd7e14, #dc6b12);">Supervisor</span>
+                                                {% elif group.name == 'Sales Manager' %}
+                                                    <span class="role-badge" style="background: linear-gradient(135deg, #28a745, #1e7e34);">Sales Manager</span>
+                                                {% elif group.name == 'Store Manager' %}
+                                                    <span class="role-badge" style="background: linear-gradient(135deg, #17a2b8, #117a8b);">Store Manager</span>
+                                                {% elif group.name == 'Credit Manager' %}
+                                                    <span class="role-badge" style="background: linear-gradient(135deg, #e74a3b, #be2617);">Credit Manager</span>
+                                                {% elif group.name == 'Credit Officer' %}
+                                                    <span class="role-badge" style="background: linear-gradient(135deg, #6f42c1, #5a32a3);">Credit Officer</span>
+                                                {% elif group.name == 'Inventory Manager' %}
+                                                    <span class="role-badge" style="background: linear-gradient(135deg, #20c997, #1a9e7a);">Inventory Manager</span>
+                                                {% elif group.name == 'Assistant Manager' %}
+                                                    <span class="role-badge" style="background: linear-gradient(135deg, #ffc107, #d39e00);">Assistant Manager</span>
+                                                {% elif group.name == 'Customer Service' %}
+                                                    <span class="role-badge" style="background: linear-gradient(135deg, #6c757d, #5a6268);">Customer Service</span>
+                                                {% elif group.name == 'Security Officer' %}
+                                                    <span class="role-badge" style="background: linear-gradient(135deg, #343a40, #1d2124);">Security Officer</span>
+                                                {% elif group.name == 'Sales Agent' %}
+                                                    <span class="role-badge" style="background: linear-gradient(135deg, #007bff, #0056b3);">Sales Agent</span>
+                                                {% elif group.name == 'Cashier' %}
+                                                    <span class="role-badge" style="background: linear-gradient(135deg, #17a2b8, #117a8b);">Cashier</span>
+                                                {% elif group.name == 'Cleaner' %}
+                                                    <span class="role-badge" style="background: linear-gradient(135deg, #6c757d, #5a6268);">Cleaner</span>
+                                                {% else %}
+                                                    <span class="role-badge" style="background: linear-gradient(135deg, #6c757d, #5a6268);">{{ group.name }}</span>
+                                                {% endif %}
+                                            {% endfor %}
+                                        {% else %}
+                                            <span class="text-muted fst-italic">No role assigned</span>
+                                        {% endif %}
+                                    {% endwith %}
+                                </div>
                             </td>
                             <td>
                                 {% if user.is_active %}
-                                    <span class="badge bg-success">Active</span>
+                                    <span class="badge-status badge-active">
+                                        <i class="fas fa-check-circle me-1"></i>Active
+                                    </span>
                                 {% else %}
-                                    <span class="badge bg-danger">Inactive</span>
+                                    <span class="badge-status badge-inactive">
+                                        <i class="fas fa-times-circle me-1"></i>Inactive
+                                    </span>
                                 {% endif %}
                             </td>
                             <td>
                                 {% if user.last_login %}
-                                    {{ user.last_login|date:"M d, Y H:i" }}
+                                    <span class="text-muted">
+                                        <i class="fas fa-clock me-1"></i>
+                                        {{ user.last_login|date:"M d, Y H:i" }}
+                                    </span>
                                 {% else %}
-                                    <span class="text-muted fst-italic">Never</span>
+                                    <span class="text-muted fst-italic">
+                                        <i class="fas fa-minus-circle me-1"></i>Never
+                                    </span>
                                 {% endif %}
                             </td>
                             <td>{{ user.date_joined|date:"M d, Y" }}</td>
                             <td>
-                                <div class="btn-group" role="group">
+                                <div class="action-buttons">
                                     <a href="{% url 'staff:user_detail' user.id %}" 
-                                       class="btn btn-sm btn-outline-info" 
+                                       class="btn-action btn-view" 
                                        title="View Full Details">
                                         <i class="fas fa-eye"></i>
                                     </a>
                                     <a href="{% url 'admin:auth_user_change' user.id %}" 
-                                       class="btn btn-sm btn-outline-primary" 
+                                       class="btn-action btn-edit" 
                                        target="_blank"
                                        title="Edit in Admin">
                                         <i class="fas fa-edit"></i>
                                     </a>
                                     {% if user != request.user %}
                                     <button type="button" 
-                                            class="btn btn-sm btn-outline-danger"
+                                            class="btn-action btn-delete"
                                             onclick="confirmUserDelete('{{ user.id }}', '{{ user.username }}')"
                                             title="Delete User">
                                         <i class="fas fa-trash"></i>
@@ -198,11 +215,14 @@
                         {% empty %}
                         <tr>
                             <td colspan="10" class="text-center py-5">
-                                <i class="fas fa-users fa-4x text-muted mb-3"></i>
-                                <p class="text-muted mb-3">No users found in the system.</p>
-                                <a href="{% url 'admin:auth_user_add' %}" class="btn btn-primary" target="_blank">
-                                    <i class="fas fa-plus me-2"></i>Add First User
-                                </a>
+                                <div class="empty-state">
+                                    <i class="fas fa-users fa-4x text-muted mb-3"></i>
+                                    <h5 class="mb-2">No users found</h5>
+                                    <p class="text-muted mb-3">Get started by adding your first user</p>
+                                    <a href="{% url 'admin:auth_user_add' %}" class="btn btn-primary" target="_blank">
+                                        <i class="fas fa-plus me-2"></i>Add First User
+                                    </a>
+                                </div>
                             </td>
                         </tr>
                         {% endfor %}
@@ -214,27 +234,462 @@
 </div>
 
 <!-- Delete Confirmation Modal -->
-<div class="modal fade" id="deleteConfirmModal" tabindex="-1">
-    <div class="modal-dialog">
+<div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title text-danger">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">
                     <i class="fas fa-exclamation-triangle me-2"></i>
                     Confirm Delete
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <p>Are you sure you want to delete user <strong id="deleteUserName"></strong>?</p>
-                <p class="text-muted small">This action cannot be undone. The user will be permanently removed from the system.</p>
+                <p>Are you sure you want to delete user <strong id="deleteUserName" class="text-danger"></strong>?</p>
+                
+                <div class="alert alert-warning mt-3">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>Warning:</strong> This action cannot be undone. The user will be permanently removed from the system.
+                </div>
+                
+                <p class="text-muted small mb-0">
+                    <i class="fas fa-info-circle me-1"></i>
+                    All associated data and permissions will also be removed.
+                </p>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <a href="#" id="confirmDeleteBtn" class="btn btn-danger">Delete User</a>
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-1"></i>Cancel
+                </button>
+                <a href="#" id="confirmDeleteBtn" class="btn btn-danger">
+                    <i class="fas fa-trash me-1"></i>Delete User
+                </a>
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Title Background White */
+    .page-title-section {
+        background: white;
+        padding: 25px 30px;
+        border-radius: 15px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+        margin-bottom: 25px;
+        border: 1px solid #eef2f6;
+    }
+    
+    .page-title-section h2 {
+        color: #2c3e50;
+        font-weight: 600;
+        font-size: 1.8rem;
+        margin: 0;
+    }
+    
+    .page-title-section .breadcrumb {
+        margin-top: 5px;
+        background: transparent;
+        padding: 0;
+    }
+    
+    .page-title-section .breadcrumb-item a {
+        color: #4e73df;
+        text-decoration: none;
+    }
+    
+    .page-title-section .breadcrumb-item.active {
+        color: #6c757d;
+    }
+    
+    /* Consistent Stat Cards */
+    .stat-card {
+        background: white;
+        border-radius: 15px;
+        padding: 25px;
+        position: relative;
+        overflow: hidden;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        border: 1px solid #eef2f6;
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+        border-color: #4e73df20;
+    }
+    
+    .stat-card .stat-value {
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin-bottom: 5px;
+        color: #2c3e50;
+        line-height: 1.2;
+    }
+    
+    .stat-card .stat-label {
+        color: #6c757d;
+        font-size: 0.9rem;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .stat-card .stat-icon {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        font-size: 3.5rem;
+        opacity: 5;
+        transition: opacity 0.3s ease;
+    }
+    
+    .stat-card:hover .stat-icon {
+        opacity: 5;
+    }
+    
+    /* Card styling */
+    .card {
+        border: none;
+        border-radius: 15px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+        background: white;
+        margin-bottom: 25px;
+        border: 1px solid #eef2f6;
+        overflow: hidden;
+    }
+    
+    .card-header {
+        background: white;
+        border-bottom: 1px solid #eef2f6;
+        padding: 18px 25px;
+        font-weight: 600;
+        color: #2c3e50;
+        font-size: 1.1rem;
+    }
+    
+    .card-header i {
+        color: #4e73df;
+    }
+    
+    .card-header .badge {
+        font-size: 0.8rem;
+        padding: 5px 10px;
+        border-radius: 20px;
+    }
+    
+    .card-body {
+        padding: 0;
+    }
+    
+    /* Table styling */
+    .table {
+        margin-bottom: 0;
+    }
+    
+    .table thead th {
+        background: #f8fafd;
+        color: #2c3e50;
+        font-weight: 600;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        border-bottom: 2px solid #eef2f6;
+        padding: 15px 20px;
+        white-space: nowrap;
+    }
+    
+    .table tbody td {
+        padding: 15px 20px;
+        vertical-align: middle;
+        color: #2c3e50;
+        border-bottom: 1px solid #eef2f6;
+        font-size: 0.95rem;
+    }
+    
+    .table tbody tr:last-child td {
+        border-bottom: none;
+    }
+    
+    .table tbody tr:hover {
+        background: #f8fafd;
+    }
+    
+    /* Badge styling */
+    .badge-secondary-subtle {
+        background: #eef2f6;
+        color: #2c3e50;
+        padding: 5px 10px;
+        border-radius: 20px;
+        font-weight: 500;
+        font-size: 0.8rem;
+    }
+    
+    .badge-user-type {
+        padding: 6px 12px;
+        border-radius: 30px;
+        font-weight: 500;
+        font-size: 0.8rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        color: white;
+        white-space: nowrap;
+    }
+    
+    .badge-status {
+        padding: 6px 12px;
+        border-radius: 30px;
+        font-weight: 500;
+        font-size: 0.8rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        white-space: nowrap;
+    }
+    
+    .badge-active {
+        background: linear-gradient(135deg, #1cc88a 0%, #13855c 100%);
+        color: white;
+    }
+    
+    .badge-inactive {
+        background: linear-gradient(135deg, #e74a3b 0%, #be2617 100%);
+        color: white;
+    }
+    
+    /* Role badges container */
+    .role-badges-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+    }
+    
+    .role-badge {
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        color: white;
+        display: inline-block;
+        white-space: nowrap;
+    }
+    
+    /* Action buttons */
+    .action-buttons {
+        display: flex;
+        gap: 5px;
+    }
+    
+    .btn-action {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+        border: none;
+        cursor: pointer;
+        text-decoration: none;
+    }
+    
+    .btn-view {
+        background: #e7f0ff;
+        color: #4e73df;
+    }
+    
+    .btn-view:hover {
+        background: #4e73df;
+        color: white;
+        transform: translateY(-2px);
+    }
+    
+    .btn-edit {
+        background: #e3f2fd;
+        color: #0d6efd;
+    }
+    
+    .btn-edit:hover {
+        background: #0d6efd;
+        color: white;
+        transform: translateY(-2px);
+    }
+    
+    .btn-delete {
+        background: #fee7e7;
+        color: #e74a3b;
+    }
+    
+    .btn-delete:hover {
+        background: #e74a3b;
+        color: white;
+        transform: translateY(-2px);
+    }
+    
+    /* Empty state */
+    .empty-state {
+        padding: 50px 20px;
+        text-align: center;
+    }
+    
+    .empty-state i {
+        color: #4e73df;
+        opacity: 0.3;
+        margin-bottom: 15px;
+    }
+    
+    .empty-state h5 {
+        color: #2c3e50;
+        font-weight: 600;
+        margin-bottom: 5px;
+    }
+    
+    .empty-state p {
+        color: #6c757d;
+        font-size: 0.95rem;
+    }
+    
+    /* Modal styling */
+    .modal-content {
+        border: none;
+        border-radius: 15px;
+        overflow: hidden;
+    }
+    
+    .modal-header {
+        padding: 15px 20px;
+        border: none;
+    }
+    
+    .modal-header.bg-danger {
+        background: linear-gradient(135deg, #e74a3b 0%, #be2617 100%) !important;
+    }
+    
+    .modal-body {
+        padding: 25px;
+    }
+    
+    .modal-footer {
+        padding: 15px 25px;
+        border-top: 1px solid #eef2f6;
+    }
+    
+    .alert {
+        border-radius: 10px;
+        border: none;
+        padding: 15px;
+    }
+    
+    .alert-warning {
+        background: #fff3e0;
+        color: #856404;
+    }
+    
+    /* Links */
+    a.text-decoration-none {
+        color: #4e73df;
+        transition: color 0.2s ease;
+    }
+    
+    a.text-decoration-none:hover {
+        color: #224abe;
+        text-decoration: underline !important;
+    }
+    
+    /* DataTable customization */
+    .dataTables_wrapper .dataTables_length,
+    .dataTables_wrapper .dataTables_filter,
+    .dataTables_wrapper .dataTables_info,
+    .dataTables_wrapper .dataTables_paginate {
+        padding: 15px 25px;
+        margin: 0;
+    }
+    
+    .dataTables_wrapper .dataTables_filter input {
+        border: 1px solid #eef2f6;
+        border-radius: 8px;
+        padding: 8px 12px;
+        margin-left: 8px;
+    }
+    
+    .dataTables_wrapper .dataTables_filter input:focus {
+        border-color: #4e73df;
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(78,115,223,0.1);
+    }
+    
+    .dataTables_wrapper .dataTables_paginate .paginate_button {
+        border: 1px solid #eef2f6;
+        border-radius: 8px;
+        padding: 8px 12px;
+        margin: 0 2px;
+        transition: all 0.2s ease;
+    }
+    
+    .dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+        background: #4e73df;
+        color: white !important;
+        border-color: #4e73df;
+    }
+    
+    .dataTables_wrapper .dataTables_paginate .paginate_button.current {
+        background: #4e73df;
+        color: white !important;
+        border-color: #4e73df;
+    }
+    
+    /* Responsive */
+    @media (max-width: 768px) {
+        .page-title-section {
+            padding: 20px;
+        }
+        
+        .page-title-section h2 {
+            font-size: 1.5rem;
+        }
+        
+        .stat-card .stat-value {
+            font-size: 2rem;
+        }
+        
+        .card-header {
+            padding: 15px 20px;
+        }
+        
+        .table thead th,
+        .table tbody td {
+            padding: 12px 15px;
+            font-size: 0.9rem;
+        }
+        
+        .action-buttons {
+            flex-wrap: wrap;
+        }
+        
+        .role-badges-container {
+            max-width: 200px;
+        }
+    }
+    
+    @media (max-width: 576px) {
+        .stat-card {
+            padding: 20px;
+        }
+        
+        .stat-card .stat-value {
+            font-size: 1.75rem;
+        }
+        
+        .btn-action {
+            width: 28px;
+            height: 28px;
+        }
+    }
+</style>
 {% endblock %}
 
 {% block extra_js %}
@@ -262,7 +717,12 @@ $(document).ready(function() {
                 "targets": [9], // Actions column (now index 9)
                 "orderable": false
             }
-        ]
+        ],
+        "initComplete": function() {
+            // Style the DataTable controls
+            $('.dataTables_filter input').addClass('form-control form-control-sm');
+            $('.dataTables_length select').addClass('form-select form-select-sm');
+        }
     });
 });
 
@@ -270,7 +730,10 @@ $(document).ready(function() {
 function confirmUserDelete(userId, username) {
     $('#deleteUserName').text(username);
     $('#confirmDeleteBtn').attr('href', `/admin/auth/user/${userId}/delete/`);
-    $('#deleteConfirmModal').modal('show');
+    
+    // Use Bootstrap 5 modal
+    const deleteModal = new bootstrap.Modal(document.getElementById('deleteConfirmModal'));
+    deleteModal.show();
 }
 
 // Export to CSV function
@@ -298,7 +761,29 @@ function exportTableToCSV(filename) {
     downloadLink.style.display = 'none';
     document.body.appendChild(downloadLink);
     downloadLink.click();
-    document.body.removeChild(downloadLink);
+    
+    // Cleanup
+    setTimeout(function() {
+        document.body.removeChild(downloadLink);
+        window.URL.revokeObjectURL(downloadLink.href);
+    }, 100);
 }
+
+// Clear modal data when hidden
+document.addEventListener('DOMContentLoaded', function() {
+    const deleteModal = document.getElementById('deleteConfirmModal');
+    if (deleteModal) {
+        deleteModal.addEventListener('hidden.bs.modal', function() {
+            $('#deleteUserName').text('');
+            $('#confirmDeleteBtn').attr('href', '#');
+        });
+    }
+    
+    // Initialize tooltips
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[title]'));
+    tooltipTriggerList.map(function(tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+});
 </script>
 {% endblock %}

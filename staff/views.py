@@ -342,6 +342,8 @@ def custom_logout(request):
 @login_required
 def staff_dashboard(request):
     """Main dashboard that redirects to role-specific dashboard"""
+
+    prepare_dashboard_messages(request, 'Staff')
     
     # ============================================
     # STEP 1: Check if user has staff profile
@@ -434,7 +436,7 @@ def staff_dashboard(request):
         dashboard_routes = {
             'Administrator': 'staff:admin_dashboard',
             'Sales Manager': 'staff:sales_manager_dashboard',
-            'Sales Agent': 'staff:sales_officer_dashboard',
+            'Sales Agent': 'staff:sales_agent_dashboard',
             'Cashier': 'staff:cashier_dashboard',
             'Store Manager': 'staff:store_manager_dashboard',
             'Credit Manager': 'staff:credit_manager_dashboard',
@@ -1029,6 +1031,70 @@ def send_verification_result_email(staff, approved=True, notes=''):
 
 
 
+# ============================================
+# HELPER FUNCTION FOR DASHBOARD WELCOME MESSAGES
+# ============================================
+def prepare_dashboard_messages(request, dashboard_name=None):
+    """
+    Clear logout messages and add welcome message for all dashboards
+    """
+    # Clear any existing messages (like the logout message)
+    storage = messages.get_messages(request)
+    storage.used = True  # Mark all messages as read/cleared
+    
+    # Add welcome message for first login of the session
+    if not request.session.get('welcome_shown', False):
+        # Get user's name
+        user_name = request.user.get_full_name() or request.user.username
+        
+        # Get dashboard display name if not provided
+        if not dashboard_name:
+            # Try to determine from user's groups
+            user_groups = request.user.groups.values_list('name', flat=True)
+            if 'Administrator' in user_groups:
+                dashboard_name = 'Admin'
+            elif 'Sales Manager' in user_groups:
+                dashboard_name = 'Sales Manager'
+            elif 'Sales Agent' in user_groups:
+                dashboard_name = 'Sales'
+            elif 'Cashier' in user_groups:
+                dashboard_name = 'Cashier'
+            elif 'Store Manager' in user_groups:
+                dashboard_name = 'Store Manager'
+            elif 'Credit Manager' in user_groups:
+                dashboard_name = 'Credit Manager'
+            elif 'Credit Officer' in user_groups:
+                dashboard_name = 'Credit Officer'
+            elif 'Customer Service' in user_groups:
+                dashboard_name = 'Customer Service'
+            elif 'Supervisor' in user_groups:
+                dashboard_name = 'Supervisor'
+            elif 'Security Officer' in user_groups:
+                dashboard_name = 'Security'
+            elif 'Cleaner' in user_groups:
+                dashboard_name = 'Cleaner'
+            else:
+                dashboard_name = 'Staff'
+        
+        # Add welcome message
+        messages.success(
+            request, 
+            f'👋 Welcome back, {user_name}! Ready to manage your {dashboard_name} Dashboard?'
+        )
+        
+        # Mark welcome as shown for this session
+        request.session['welcome_shown'] = True
+        
+        return True
+    
+    return False
+
+
+
+
+
+
+
 #==========================================
 # ADMIN DASHBOARD
 #==========================================
@@ -1041,6 +1107,8 @@ def admin_dashboard(request):
     from credit.models import CreditTransaction, CreditCustomer, CreditCompany
     
     User = get_user_model()
+
+    prepare_dashboard_messages(request, 'Admin')
     
     # System Overview
     total_users = User.objects.count()
@@ -1141,6 +1209,8 @@ def store_manager_dashboard(request):
     from django.utils import timezone
     from datetime import timedelta
     
+    prepare_dashboard_messages(request, 'Store Manager')
+
     today = timezone.now().date()
     week_ago = today - timedelta(days=7)
     
@@ -1311,12 +1381,24 @@ def store_manager_dashboard(request):
 
 
 # ============================================
-# SALES OFFICER DASHBOARD
+# SALES AGENT DASHBOARD - WITH PRODUCT LOOKUP
 # ============================================
 @login_required
-def sales_officer_dashboard(request):
-    """Dashboard for sales officers"""
+def sales_agent_dashboard(request):
+    """Dashboard for sales agents with product price lookup"""
     from sales.models import Sale, SaleItem
+    from inventory.models import Product, Category
+    from django.db.models import Sum, Count, Q
+    from django.utils import timezone
+    from datetime import timedelta
+    from django.http import JsonResponse
+    import json
+    
+    # Check if this is an AJAX lookup request
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' and request.GET.get('action') == 'lookup':
+        return product_lookup_api(request)
+    
+    prepare_dashboard_messages(request, 'Sales Agent')
     
     today = timezone.now().date()
     week_ago = today - timedelta(days=7)
@@ -1328,7 +1410,7 @@ def sales_officer_dashboard(request):
         sale_date__date=today
     ).aggregate(
         total=Sum('total_amount'),
-        count=Count('id')
+        count=Count('sale_id')
     )
     
     my_sales_week = Sale.objects.filter(
@@ -1336,7 +1418,7 @@ def sales_officer_dashboard(request):
         sale_date__date__gte=week_ago
     ).aggregate(
         total=Sum('total_amount'),
-        count=Count('id')
+        count=Count('sale_id')
     )
     
     my_sales_month = Sale.objects.filter(
@@ -1344,7 +1426,7 @@ def sales_officer_dashboard(request):
         sale_date__date__gte=month_ago
     ).aggregate(
         total=Sum('total_amount'),
-        count=Count('id')
+        count=Count('sale_id')
     )
     
     # Recent Sales
@@ -1360,7 +1442,10 @@ def sales_officer_dashboard(request):
         total_value=Sum('total_price')
     ).order_by('-total_qty')[:5]
     
-    # Daily targets (example)
+    # Get all categories for filter dropdown
+    categories = Category.objects.filter(is_active=True)
+    
+    # Daily targets
     daily_target = 50000  # KSH 50,000
     target_achievement = (my_sales_today['total'] or 0) / daily_target * 100 if daily_target > 0 else 0
     
@@ -1372,8 +1457,228 @@ def sales_officer_dashboard(request):
         'top_products': top_products,
         'daily_target': daily_target,
         'target_achievement': target_achievement,
+        'categories': categories,
     }
-    return render(request, 'staff/dashboards/sales_officer_dashboard.html', context)
+    return render(request, 'staff/dashboards/sales_agent_dashboard.html', context)
+
+
+# ============================================
+# PRODUCT LOOKUP API - FOR SALES AGENT DASHBOARD
+# ============================================
+def product_lookup_api(request):
+    """
+    API endpoint for product lookup dashboard.
+    Searches across all product fields: product_code, sku_value, barcode, name, brand, model
+    """
+    search_term = request.GET.get('q', '').strip()
+    
+    if not search_term or len(search_term) < 2:
+        return JsonResponse({
+            'success': False,
+            'message': 'Please enter at least 2 characters'
+        })
+    
+    try:
+        # Build search query across multiple fields
+        products = Product.objects.filter(
+            Q(product_code__icontains=search_term) |
+            Q(sku_value__icontains=search_term) |
+            Q(barcode__icontains=search_term) |
+            Q(name__icontains=search_term) |
+            Q(brand__icontains=search_term) |
+            Q(model__icontains=search_term) |
+            Q(description__icontains=search_term)
+        ).select_related('category').filter(is_active=True)[:20]  # Limit to 20 results
+        
+        if not products.exists():
+            return JsonResponse({
+                'success': False,
+                'message': 'No products found matching your search'
+            })
+        
+        # If multiple products found, return all for grid display
+        products_list = []
+        for product in products:
+            # Format specifications for display
+            specs = {}
+            if product.specifications and isinstance(product.specifications, dict):
+                specs = {
+                    'ram': product.specifications.get('ram', ''),
+                    'storage': product.specifications.get('storage', ''),
+                    'color': product.specifications.get('color', ''),
+                    'screen_size': product.specifications.get('screen_size', ''),
+                }
+            
+            products_list.append({
+                'id': product.id,
+                'product_code': product.product_code,
+                'name': product.name,
+                'display_name': product.display_name,
+                'selling_price': float(product.selling_price) if product.selling_price else 0,
+                'buying_price': float(product.buying_price) if product.buying_price else 0,
+                'best_price': float(product.best_price) if product.best_price else None,
+                'sku_value': product.sku_value,
+                'barcode': product.barcode,
+                'brand': product.brand,
+                'model': product.model,
+                'quantity': product.quantity,
+                'category': product.category.name if product.category else None,
+                'category_id': product.category.id if product.category else None,
+                'status': product.status,
+                'stock_status': product.stock_status,
+                'stock_status_badge': product.stock_status_badge,
+                'stock_status_icon': product.stock_status_icon,
+                'condition': product.get_condition_display() if product.condition else 'New',
+                'warranty_months': product.warranty_months,
+                'specifications': specs,
+                'is_featured': product.is_featured,
+                'is_single_item': product.category.is_single_item if product.category else False,
+                'created_at': product.created_at.isoformat() if product.created_at else None,
+                'updated_at': product.updated_at.isoformat() if product.updated_at else None,
+            })
+        
+        response_data = {
+            'success': True,
+            'products': products_list,
+            'total_matches': products.count(),
+            'message': f'Found {products.count()} product(s)'
+        }
+        
+        return JsonResponse(response_data)
+        
+    except Exception as e:
+        logger.error(f"Product lookup error: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'message': f'Error searching for products: {str(e)}'
+        }, status=500)
+
+
+# ============================================
+# PRODUCT LOOKUP API - WITH DEBUGGING
+# ============================================
+def product_lookup_api(request):
+    """
+    API endpoint for product lookup dashboard.
+    Searches across all product fields: product_code, sku_value, barcode, name, brand, model
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    search_term = request.GET.get('q', '').strip()
+    
+    # Log the request
+    logger.info(f"🔍 Product lookup request - Search term: '{search_term}'")
+    logger.info(f"🔍 Request headers: {dict(request.headers)}")
+    logger.info(f"🔍 GET params: {dict(request.GET)}")
+    
+    if not search_term or len(search_term) < 2:
+        return JsonResponse({
+            'success': False,
+            'message': 'Please enter at least 2 characters',
+            'debug': {'search_term': search_term}
+        })
+    
+    try:
+        # Build search query across multiple fields
+        products = Product.objects.filter(
+            Q(product_code__icontains=search_term) |
+            Q(sku_value__icontains=search_term) |
+            Q(barcode__icontains=search_term) |
+            Q(name__icontains=search_term) |
+            Q(brand__icontains=search_term) |
+            Q(model__icontains=search_term) |
+            Q(description__icontains=search_term)
+        ).select_related('category').filter(is_active=True)[:20]
+        
+        # Log the query and count
+        logger.info(f"🔍 SQL Query: {products.query}")
+        logger.info(f"🔍 Products found: {products.count()}")
+        
+        # Debug: Check if there are any products at all
+        total_products = Product.objects.count()
+        logger.info(f"🔍 Total products in database: {total_products}")
+        
+        if total_products == 0:
+            return JsonResponse({
+                'success': False,
+                'message': 'No products in database',
+                'debug': {'total_products': 0}
+            })
+        
+        if not products.exists():
+            return JsonResponse({
+                'success': False,
+                'message': 'No products found matching your search',
+                'debug': {
+                    'search_term': search_term,
+                    'total_products': total_products
+                }
+            })
+        
+        # Build products list
+        products_list = []
+        for product in products:
+            # Log each product found
+            logger.info(f"🔍 Found product: {product.product_code} - {product.display_name}")
+            
+            # Format specifications
+            specs = {}
+            if product.specifications and isinstance(product.specifications, dict):
+                specs = {
+                    'ram': product.specifications.get('ram', ''),
+                    'storage': product.specifications.get('storage', ''),
+                    'color': product.specifications.get('color', ''),
+                    'screen_size': product.specifications.get('screen_size', ''),
+                }
+            
+            products_list.append({
+                'id': product.id,
+                'product_code': product.product_code or '',
+                'name': product.name or '',
+                'display_name': product.display_name or '',
+                'selling_price': float(product.selling_price) if product.selling_price else 0,
+                'buying_price': float(product.buying_price) if product.buying_price else 0,
+                'best_price': float(product.best_price) if product.best_price else None,
+                'sku_value': product.sku_value or '',
+                'barcode': product.barcode or '',
+                'brand': product.brand or '',
+                'model': product.model or '',
+                'quantity': product.quantity or 0,
+                'category': product.category.name if product.category else '',
+                'category_id': product.category.id if product.category else None,
+                'status': product.status or '',
+                'stock_status': product.stock_status,
+                'condition': product.get_condition_display() if product.condition else 'New',
+                'warranty_months': product.warranty_months or 12,
+                'specifications': specs,
+                'is_featured': product.is_featured,
+                'is_single_item': product.category.is_single_item if product.category else False,
+            })
+        
+        response_data = {
+            'success': True,
+            'products': products_list,
+            'total_matches': len(products_list),
+            'message': f'Found {len(products_list)} product(s)',
+            'debug': {
+                'search_term': search_term,
+                'total_products': total_products
+            }
+        }
+        
+        # Log the response
+        logger.info(f"🔍 Sending response with {len(products_list)} products")
+        return JsonResponse(response_data)
+        
+    except Exception as e:
+        logger.error(f"🔍 Product lookup error: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'success': False,
+            'message': f'Error searching for products: {str(e)}',
+            'debug': {'error': str(e)}
+        }, status=500)
+
 
 
 
@@ -1394,6 +1699,8 @@ def sales_manager_dashboard(request):
     from datetime import timedelta
     
     User = get_user_model()
+
+    prepare_dashboard_messages(request, 'Sales Manager')
     
     today = timezone.now().date()
     week_ago = today - timedelta(days=7)
@@ -1576,6 +1883,8 @@ def cashier_dashboard(request):
     """Dashboard for cashier desk"""
     from sales.models import Sale
     from django.db.models import F, Count, Sum, Q
+
+    prepare_dashboard_messages(request, 'Cashier')
     
     today = timezone.now().date()
     
@@ -1625,6 +1934,8 @@ def cashier_dashboard(request):
 @login_required
 def credit_manager_dashboard(request):
     """Dashboard for Credit Manager - oversees all credit operations"""
+
+    prepare_dashboard_messages(request, 'Credit Manager')
     
     today = timezone.now().date()
     week_ago = today - timedelta(days=7)
@@ -1923,6 +2234,8 @@ def credit_officer_dashboard(request):
     import json
     from django.core.serializers.json import DjangoJSONEncoder
     import logging
+
+    prepare_dashboard_messages(request, 'Credit Officer')
     
     logger = logging.getLogger(__name__)
     
@@ -2185,6 +2498,8 @@ def customer_service_dashboard(request):
     """Dashboard for customer service"""
     from credit.models import CreditCustomer, CreditTransaction
     from django.db.models import Count, Q
+
+    prepare_dashboard_messages(request, 'Customer Service')
     
     today = timezone.now().date()
     
@@ -2234,6 +2549,8 @@ def supervisor_dashboard(request):
     from inventory.models import Product
     from django.contrib.auth import get_user_model
     from django.db.models import Sum, Count, Q
+
+    prepare_dashboard_messages(request, 'Supervisor')
     
     User = get_user_model()
     today = timezone.now().date()
@@ -2301,6 +2618,8 @@ def security_dashboard(request):
     """Dashboard for security officer"""
     from inventory.models import Product
     from sales.models import Sale
+
+    prepare_dashboard_messages(request, 'Security')
     
     today = timezone.now().date()
     
@@ -2345,6 +2664,8 @@ def security_dashboard(request):
 def cleaner_dashboard(request):
     """Dashboard for office cleaner"""
     # Simple dashboard with cleaning schedule, tasks, etc.
+
+    prepare_dashboard_messages(request, 'Cleaner')
     
     today = timezone.now().date()
     

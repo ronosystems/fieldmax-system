@@ -1,208 +1,229 @@
 {% extends 'staff/base.html' %}
+{% load static %}
 
-{% block title %}Admin Dashboard{% endblock %}
+{% block title %}Admin Dashboard - FieldMax{% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-    <!-- Page Header -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2><i class="fas fa-tachometer-alt me-2"></i><strong>System Overview Dashboard</strong></h2>
-        <div>
-            <span class="badge bg-primary p-2">System Administrator</span>
+<div class="container-fluid py-4">
+    <!-- Page Header with Sky Blue Background -->
+    <div class="page-title-section">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2 class="mb-1 text-white">
+                    <i class="fas fa-tachometer-alt me-2"></i>
+                    <strong>System Overview Dashboard</strong>
+                </h2>
+                <p class="text-white mb-0 opacity-75">Complete system management and monitoring</p>
+            </div>
+            <div>
+                <span class="badge bg-white text-sky p-3">
+                    <i class="fas fa-shield-alt me-2"></i>System Administrator
+                </span>
+            </div>
         </div>
     </div>
 
     <!-- System Overview Cards -->
     <div class="row mb-4">
         <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card stat-card h-100 py-2">
-                <div class="card-body">
-                    <div class="stat-icon">
-                        <i class="fas fa-users"></i>
-                    </div>
-                    <div class="stat-value">{{ total_users|default:0 }}</div>
-                    <div class="stat-label">Total Users</div>
-                    <small class="text-muted">{{ total_staff|default:0 }} Staff Members</small>
-                </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ total_users|default:0 }}</div>
+                <div class="stat-label">Total Users</div>
+                <div class="stat-subtitle">{{ total_staff|default:0 }} Staff Members</div>
+                <i class="fas fa-users stat-icon text-primary"></i>
             </div>
         </div>
         <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card stat-card h-100 py-2">
-                <div class="card-body">
-                    <div class="stat-icon">
-                        <i class="fas fa-boxes"></i>
-                    </div>
-                    <div class="stat-value">{{ total_products|default:0 }}</div>
-                    <div class="stat-label">Total Products</div>
-                    <small class="text-muted">{{ total_categories|default:0 }} Categories</small>
-                </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ total_products|default:0 }}</div>
+                <div class="stat-label">Total Products</div>
+                <div class="stat-subtitle">{{ total_categories|default:0 }} Categories</div>
+                <i class="fas fa-boxes stat-icon text-success"></i>
             </div>
         </div>
         <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card stat-card h-100 py-2">
-                <div class="card-body">
-                    <div class="stat-icon">
-                        <i class="fas fa-shopping-cart"></i>
-                    </div>
-                    <div class="stat-value">KSH {{ total_sales|default:0|floatformat:0 }}</div>
-                    <div class="stat-label">Total Sales</div>
-                    <small class="text-muted">Today: KSH {{ today_sales|default:0|floatformat:0 }}</small>
-                </div>
+            <div class="stat-card">
+                <div class="stat-value">KSH {{ total_sales|default:0|floatformat:0 }}</div>
+                <div class="stat-label">Total Sales</div>
+                <div class="stat-subtitle">Today: KSH {{ today_sales|default:0|floatformat:0 }}</div>
+                <i class="fas fa-shopping-cart stat-icon text-warning"></i>
             </div>
         </div>
         <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card stat-card h-100 py-2">
+            <div class="stat-card">
+                <div class="stat-value">KSH {{ total_credit|default:0|floatformat:0 }}</div>
+                <div class="stat-label">Total Credit</div>
+                <div class="stat-subtitle">{{ pending_credit|default:0 }} Pending</div>
+                <i class="fas fa-credit-card stat-icon text-info"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- Management Actions Row -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-sky text-white">
+                    <i class="fas fa-cog me-2"></i>
+                    Quick Management Actions
+                </div>
                 <div class="card-body">
-                    <div class="stat-icon">
-                        <i class="fas fa-credit-card"></i>
+                    <div class="row g-4">
+                        <!-- Users Management Card -->
+                        <div class="col-xl-3 col-md-6">
+                            <div class="action-card">
+                                <div class="action-icon text-primary">
+                                    <i class="fas fa-users"></i>
+                                </div>
+                                <h5 class="action-title">Users Management</h5>
+                                <p class="action-description">Manage system users, roles, and permissions</p>
+                                <div class="action-buttons">
+                                    <a href="{% url 'staff:user_list' %}" class="btn btn-outline-primary btn-sm w-100 mb-2">
+                                        <i class="fas fa-eye me-2"></i>View Users
+                                    </a>
+                                    <a href="{% url 'admin:auth_user_add' %}" class="btn btn-primary btn-sm w-100" target="_blank">
+                                        <i class="fas fa-plus me-2"></i>Add New User
+                                    </a>
+                                </div>
+                                <div class="action-footer">
+                                    {{ total_users|default:0 }} Total Users | {{ active_users|default:0 }} Active
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Sales Management Card -->
+                        <div class="col-xl-3 col-md-6">
+                            <div class="action-card">
+                                <div class="action-icon text-success">
+                                    <i class="fas fa-shopping-cart"></i>
+                                </div>
+                                <h5 class="action-title">Sales Management</h5>
+                                <p class="action-description">Track sales, receipts, and transaction history</p>
+                                <div class="action-buttons">
+                                    <a href="{% url 'sales:sale_list' %}" class="btn btn-outline-success btn-sm w-100 mb-2">
+                                        <i class="fas fa-list me-2"></i>View Sales
+                                    </a>
+                                    <a href="{% url 'sales:sale_create' %}" class="btn btn-success btn-sm w-100">
+                                        <i class="fas fa-plus me-2"></i>New Sale
+                                    </a>
+                                </div>
+                                <div class="action-footer">
+                                    Today: KSH {{ today_sales|default:0|floatformat:0 }} | {{ today_sales_count|default:0 }} Transactions
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Credit Management Card -->
+                        <div class="col-xl-3 col-md-6">
+                            <div class="action-card">
+                                <div class="action-icon text-warning">
+                                    <i class="fas fa-credit-card"></i>
+                                </div>
+                                <h5 class="action-title">Credit Management</h5>
+                                <p class="action-description">Manage credit transactions and customer accounts</p>
+                                <div class="action-buttons">
+                                    <a href="{% url 'credit:transaction_list' %}" class="btn btn-outline-warning btn-sm w-100 mb-2">
+                                        <i class="fas fa-list me-2"></i>View Credits
+                                    </a>
+                                    <a href="{% url 'credit:transaction_create' %}" class="btn btn-warning btn-sm w-100">
+                                        <i class="fas fa-plus me-2"></i>New Credit
+                                    </a>
+                                </div>
+                                <div class="action-footer">
+                                    {{ pending_credit|default:0 }} Pending | KSH {{ total_credit|default:0|floatformat:0 }}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Inventory Management Card -->
+                        <div class="col-xl-3 col-md-6">
+                            <div class="action-card">
+                                <div class="action-icon text-info">
+                                    <i class="fas fa-boxes"></i>
+                                </div>
+                                <h5 class="action-title">Inventory Management</h5>
+                                <p class="action-description">Manage products, stock, and categories</p>
+                                <div class="action-buttons">
+                                    <a href="{% url 'inventory:product_list' %}" class="btn btn-outline-info btn-sm w-100 mb-2">
+                                        <i class="fas fa-list me-2"></i>View Products
+                                    </a>
+                                    <a href="{% url 'inventory:product_add' %}" class="btn btn-info btn-sm w-100">
+                                        <i class="fas fa-plus me-2"></i>Add Product
+                                    </a>
+                                </div>
+                                <div class="action-footer">
+                                    {{ total_products|default:0 }} Products | {{ total_categories|default:0 }} Categories
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="stat-value">KSH {{ total_credit|default:0|floatformat:0 }}</div>
-                    <div class="stat-label">Total Credit</div>
-                    <small class="text-muted">{{ pending_credit|default:0 }} Pending</small>
                 </div>
             </div>
         </div>
     </div>
 
-<!-- Management Actions Row - Single Container with Action Cards -->
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header bg-primary text-white">
-                <i class="fas fa-cog me-1"></i>
-                Quick Management Actions
+    <!-- Charts Row -->
+    <div class="row mb-4">
+        <div class="col-lg-8 mb-4">
+            <div class="card h-100">
+                <div class="card-header bg-sky text-white">
+                    <i class="fas fa-chart-line me-2"></i>
+                    Sales & Credit Overview (Last 30 Days)
+                </div>
+                <div class="card-body">
+                    <canvas id="overviewChart" height="300"></canvas>
+                </div>
             </div>
-            <div class="card-body">
-                <div class="row g-4">
-                    <!-- Users Management Card -->
-                    <div class="col-xl-3 col-md-6">
-                        <div class="card h-100 border-0 shadow-sm">
-                            <div class="card-body text-center">
-                                <div class="display-4 text-primary mb-3">
-                                    <i class="fas fa-users"></i>
-                                </div>
-                                <h5 class="card-title fw-bold">Users Management</h5>
-                                <p class="card-text text-muted small">Manage system users, roles, and permissions</p>
-                                <div class="d-grid gap-2">
-                                    <a href="{% url 'staff:user_list' %}" class="btn btn-outline-primary">
-                                        <i class="fas fa-eye me-2"></i>View Users
-                                    </a>
-                                    <a href="{% url 'admin:auth_user_add' %}" class="btn btn-primary" target="_blank">
-                                        <i class="fas fa-plus me-2"></i>Add New User
-                                    </a>
-                                </div>
-                            </div>
-                            <div class="card-footer bg-transparent border-0 text-muted small text-center">
-                                {{ total_users|default:0 }} Total Users | {{ active_users|default:0 }} Active
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Sales Management Card -->
-                    <div class="col-xl-3 col-md-6">
-                        <div class="card h-100 border-0 shadow-sm">
-                            <div class="card-body text-center">
-                                <div class="display-4 text-success mb-3">
-                                    <i class="fas fa-shopping-cart"></i>
-                                </div>
-                                <h5 class="card-title fw-bold">Sales Management</h5>
-                                <p class="card-text text-muted small">Track sales, receipts, and transaction history</p>
-                                <div class="d-grid gap-2">
-                                    <a href="{% url 'sales:sale_list' %}" class="btn btn-outline-success">
-                                        <i class="fas fa-list me-2"></i>View Sales
-                                    </a>
-                                    <a href="{% url 'sales:sale_create' %}" class="btn btn-success">
-                                        <i class="fas fa-plus me-2"></i>New Sale
-                                    </a>
-                                </div>
-                            </div>
-                            <div class="card-footer bg-transparent border-0 text-muted small text-center">
-                                Today: KSH {{ today_sales|default:0|floatformat:0 }} | {{ today_sales_count|default:0 }} Transactions
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Credit Management Card -->
-                    <div class="col-xl-3 col-md-6">
-                        <div class="card h-100 border-0 shadow-sm">
-                            <div class="card-body text-center">
-                                <div class="display-4 text-warning mb-3">
-                                    <i class="fas fa-credit-card"></i>
-                                </div>
-                                <h5 class="card-title fw-bold">Credit Management</h5>
-                                <p class="card-text text-muted small">Manage credit transactions and customer accounts</p>
-                                <div class="d-grid gap-2">
-                                    <a href="{% url 'credit:transaction_list' %}" class="btn btn-outline-warning">
-                                        <i class="fas fa-list me-2"></i>View Credits
-                                    </a>
-                                    <a href="{% url 'credit:transaction_create' %}" class="btn btn-warning">
-                                        <i class="fas fa-plus me-2"></i>New Credit
-                                    </a>
-                                </div>
-                            </div>
-                            <div class="card-footer bg-transparent border-0 text-muted small text-center">
-                                {{ pending_credit|default:0 }} Pending | KSH {{ total_credit|default:0|floatformat:0 }}
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Inventory Management Card -->
-                    <div class="col-xl-3 col-md-6">
-                        <div class="card h-100 border-0 shadow-sm">
-                            <div class="card-body text-center">
-                                <div class="display-4 text-info mb-3">
-                                    <i class="fas fa-boxes"></i>
-                                </div>
-                                <h5 class="card-title fw-bold">Inventory Management</h5>
-                                <p class="card-text text-muted small">Manage products, stock, and categories</p>
-                                <div class="d-grid gap-2">
-                                    <a href="{% url 'inventory:product_list' %}" class="btn btn-outline-info">
-                                        <i class="fas fa-list me-2"></i>View Products
-                                    </a>
-                                    <a href="{% url 'inventory:product_add' %}" class="btn btn-info">
-                                        <i class="fas fa-plus me-2"></i>Add Product
-                                    </a>
-                                </div>
-                            </div>
-                            <div class="card-footer bg-transparent border-0 text-muted small text-center">
-                                {{ total_products|default:0 }} Products | {{ total_categories|default:0 }} Categories
-                            </div>
-                        </div>
-                    </div>
+        </div>
+        <div class="col-lg-4 mb-4">
+            <div class="card h-100">
+                <div class="card-header bg-sky text-white">
+                    <i class="fas fa-chart-pie me-2"></i>
+                    Staff Distribution
+                </div>
+                <div class="card-body">
+                    <canvas id="staffChart" height="300"></canvas>
                 </div>
             </div>
         </div>
     </div>
-</div>
 
     <!-- Recent Activities Row -->
     <div class="row">
         <!-- Recent Sales -->
         <div class="col-lg-4 mb-4">
-            <div class="card">
-                <div class="card-header">
-                    <i class="fas fa-shopping-cart me-1"></i>
+            <div class="card h-100">
+                <div class="card-header bg-sky text-white">
+                    <i class="fas fa-shopping-cart me-2"></i>
                     Recent Sales
+                    <span class="badge bg-white text-sky ms-2">{{ recent_sales|length }}</span>
                 </div>
                 <div class="card-body p-0">
                     <div class="list-group list-group-flush" style="max-height: 300px; overflow-y: auto;">
                         {% for sale in recent_sales %}
-                        <div class="list-group-item">
+                        <div class="list-group-item list-group-item-action">
                             <div class="d-flex justify-content-between align-items-center">
                                 <div>
                                     <strong>{{ sale.sale_id }}</strong>
                                     <br>
-                                    <small>{{ sale.buyer_name|default:"Walk-in" }}</small>
+                                    <small class="text-muted">
+                                        <i class="fas fa-user me-1"></i>{{ sale.buyer_name|default:"Walk-in" }}
+                                    </small>
                                 </div>
                                 <div class="text-end">
                                     <span class="fw-bold text-success">KSH {{ sale.total_amount|floatformat:0 }}</span>
                                     <br>
-                                    <small class="text-muted">{{ sale.sale_date|date:"H:i" }}</small>
+                                    <small class="text-muted">
+                                        <i class="fas fa-clock me-1"></i>{{ sale.sale_date|date:"H:i" }}
+                                    </small>
                                 </div>
                             </div>
                         </div>
                         {% empty %}
-                        <div class="list-group-item text-center text-muted">No recent sales</div>
+                        <div class="list-group-item text-center py-4">
+                            <i class="fas fa-shopping-cart fa-3x text-muted mb-3"></i>
+                            <p class="text-muted mb-0">No recent sales</p>
+                        </div>
                         {% endfor %}
                     </div>
                 </div>
@@ -211,32 +232,38 @@
 
         <!-- Recent Credits -->
         <div class="col-lg-4 mb-4">
-            <div class="card">
-                <div class="card-header">
-                    <i class="fas fa-credit-card me-1"></i>
+            <div class="card h-100">
+                <div class="card-header bg-sky text-white">
+                    <i class="fas fa-credit-card me-2"></i>
                     Recent Credit Transactions
+                    <span class="badge bg-white text-sky ms-2">{{ recent_credits|length }}</span>
                 </div>
                 <div class="card-body p-0">
                     <div class="list-group list-group-flush" style="max-height: 300px; overflow-y: auto;">
                         {% for credit in recent_credits %}
-                        <div class="list-group-item">
+                        <div class="list-group-item list-group-item-action">
                             <div class="d-flex justify-content-between align-items-center">
                                 <div>
                                     <strong>{{ credit.transaction_id }}</strong>
                                     <br>
-                                    <small>{{ credit.customer.full_name|truncatechars:20 }}</small>
+                                    <small class="text-muted">
+                                        <i class="fas fa-user me-1"></i>{{ credit.customer.full_name|truncatechars:20 }}
+                                    </small>
                                 </div>
                                 <div class="text-end">
                                     <span class="fw-bold text-warning">KSH {{ credit.ceiling_price|floatformat:0 }}</span>
                                     <br>
-                                    <span class="badge {% if credit.payment_status == 'paid' %}bg-success{% elif credit.payment_status == 'pending' %}bg-danger{% else %}bg-warning{% endif %}">
+                                    <span class="badge {% if credit.payment_status == 'paid' %}badge-success{% elif credit.payment_status == 'pending' %}badge-danger{% else %}badge-warning{% endif %}">
                                         {{ credit.payment_status }}
                                     </span>
                                 </div>
                             </div>
                         </div>
                         {% empty %}
-                        <div class="list-group-item text-center text-muted">No recent credits</div>
+                        <div class="list-group-item text-center py-4">
+                            <i class="fas fa-credit-card fa-3x text-muted mb-3"></i>
+                            <p class="text-muted mb-0">No recent credits</p>
+                        </div>
                         {% endfor %}
                     </div>
                 </div>
@@ -245,26 +272,34 @@
 
         <!-- Recent Users -->
         <div class="col-lg-4 mb-4">
-            <div class="card">
-                <div class="card-header">
-                    <i class="fas fa-users me-1"></i>
+            <div class="card h-100">
+                <div class="card-header bg-sky text-white">
+                    <i class="fas fa-users me-2"></i>
                     New Users
+                    <span class="badge bg-white text-sky ms-2">{{ recent_users|length }}</span>
                 </div>
                 <div class="card-body p-0">
                     <div class="list-group list-group-flush" style="max-height: 300px; overflow-y: auto;">
                         {% for user in recent_users %}
-                        <div class="list-group-item">
+                        <div class="list-group-item list-group-item-action">
                             <div class="d-flex justify-content-between align-items-center">
                                 <div>
                                     <strong>{{ user.username }}</strong>
                                     <br>
-                                    <small>{{ user.email }}</small>
+                                    <small class="text-muted">
+                                        <i class="fas fa-envelope me-1"></i>{{ user.email }}
+                                    </small>
                                 </div>
-                                <small class="text-muted">{{ user.date_joined|date:"d M" }}</small>
+                                <small class="text-muted">
+                                    <i class="fas fa-calendar me-1"></i>{{ user.date_joined|date:"d M" }}
+                                </small>
                             </div>
                         </div>
                         {% empty %}
-                        <div class="list-group-item text-center text-muted">No new users</div>
+                        <div class="list-group-item text-center py-4">
+                            <i class="fas fa-users fa-3x text-muted mb-3"></i>
+                            <p class="text-muted mb-0">No new users</p>
+                        </div>
                         {% endfor %}
                     </div>
                 </div>
@@ -280,29 +315,436 @@
      data-credit-data="{{ credit_data|safe }}"
      data-staff-positions="{{ staff_by_position_json|safe }}"
      style="display: none;"></div>
+{% endblock %}
 
+{% block extra_css %}
 <style>
-/* Fix for canvas autoscrolling */
-canvas {
-    display: block;
-    width: 100% !important;
-    height: 100% !important;
-    max-width: 100%;
-}
+    /* Sky Blue Color Variables */
+    :root {
+        --sky-light: #e1f5fe;
+        --sky: #29b6f6;
+        --sky-dark: #0288d1;
+        --sky-gradient: linear-gradient(135deg, #29b6f6 0%, #0288d1 100%);
+    }
 
-/* Prevent body from auto-scrolling */
-html, body {
-    overflow-x: hidden;
-    overflow-y: auto;
-    height: 100%;
-    margin: 0;
-    padding: 0;
-}
-
-.main-content {
-    overflow-y: auto;
-    height: 100vh;
-}
+    /* Title Background Sky Blue */
+    .page-title-section {
+        background: var(--sky-gradient);
+        padding: 25px 30px;
+        border-radius: 15px;
+        box-shadow: 0 4px 15px rgb(0, 0, 0);
+        margin-bottom: 25px;
+    }
+    
+    .page-title-section h2 {
+        font-weight: 600;
+        font-size: 1.8rem;
+        margin: 0;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .page-title-section .text-white {
+        color: white !important;
+    }
+    
+    .page-title-section .opacity-75 {
+        opacity: 0.9;
+    }
+    
+    .page-title-section .badge {
+        font-size: 0.9rem;
+        padding: 12px 20px !important;
+        border-radius: 10px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    }
+    
+    .text-sky {
+        color: var(--sky-dark) !important;
+    }
+    
+    .bg-sky {
+        background: var(--sky-gradient) !important;
+    }
+    
+    /* Consistent Stat Cards */
+    .stat-card {
+        background: white;
+        border-radius: 15px;
+        padding: 25px;
+        position: relative;
+        overflow: hidden;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        border: 1px solid #eef2f6;
+        height: 100%;
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px rgba(2, 136, 209, 0.1);
+        border-color: var(--sky);
+    }
+    
+    .stat-card .stat-value {
+        font-size: 2.2rem;
+        font-weight: 700;
+        margin-bottom: 5px;
+        color: #2c3e50;
+        line-height: 1.2;
+    }
+    
+    .stat-card .stat-label {
+        color: #6c757d;
+        font-size: 0.9rem;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .stat-card .stat-subtitle {
+        color: #6c757d;
+        font-size: 0.8rem;
+        margin-top: 5px;
+    }
+    
+    .stat-card .stat-icon {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        font-size: 3.5rem;
+        opacity: 5;
+        transition: opacity 0.3s ease;
+    }
+    
+    .stat-card:hover .stat-icon {
+        opacity: 5;
+    }
+    
+    /* Card styling */
+    .card {
+        border: none;
+        border-radius: 15px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+        background: white;
+        margin-bottom: 25px;
+        border: 1px solid #eef2f6;
+        overflow: hidden;
+    }
+    
+    .card-header {
+        border-bottom: 1px solid #eef2f6;
+        padding: 18px 25px;
+        font-weight: 600;
+        font-size: 1.1rem;
+    }
+    
+    .card-header.bg-sky {
+        border-bottom: none;
+    }
+    
+    .card-header.bg-sky i {
+        color: white;
+    }
+    
+    .card-header .badge {
+        font-size: 0.8rem;
+        padding: 5px 10px;
+        border-radius: 20px;
+        background: white !important;
+        color: var(--sky-dark) !important;
+    }
+    
+    .card-body {
+        padding: 25px;
+    }
+    
+    .card-body.p-0 {
+        padding: 0 !important;
+    }
+    
+    /* Action Cards */
+    .action-card {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        text-align: center;
+        border: 1px solid #eef2f6;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .action-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px rgba(2, 136, 209, 0.1);
+        border-color: var(--sky);
+    }
+    
+    .action-icon {
+        font-size: 3rem;
+        margin-bottom: 15px;
+    }
+    
+    .action-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #2c3e50;
+        margin-bottom: 10px;
+    }
+    
+    .action-description {
+        color: #6c757d;
+        font-size: 0.85rem;
+        margin-bottom: 20px;
+        flex-grow: 1;
+    }
+    
+    .action-buttons {
+        margin-bottom: 15px;
+    }
+    
+    .action-footer {
+        font-size: 0.8rem;
+        color: #6c757d;
+        padding-top: 10px;
+        border-top: 1px solid #eef2f6;
+    }
+    
+    /* Button styling */
+    .btn-primary {
+        background: linear-gradient(135deg, #4e73df 0%, #224abe 100%);
+        border: none;
+        border-radius: 8px;
+        padding: 8px 16px;
+        font-weight: 500;
+        font-size: 0.9rem;
+        transition: all 0.2s ease;
+        color: white;
+    }
+    
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(78,115,223,0.3);
+    }
+    
+    .btn-success {
+        background: linear-gradient(135deg, #1cc88a 0%, #13855c 100%);
+        border: none;
+        border-radius: 8px;
+        padding: 8px 16px;
+        font-weight: 500;
+        font-size: 0.9rem;
+        transition: all 0.2s ease;
+        color: white;
+    }
+    
+    .btn-success:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(28,200,138,0.3);
+    }
+    
+    .btn-warning {
+        background: linear-gradient(135deg, #f6c23e 0%, #dda20a 100%);
+        border: none;
+        border-radius: 8px;
+        padding: 8px 16px;
+        font-weight: 500;
+        font-size: 0.9rem;
+        transition: all 0.2s ease;
+        color: white;
+    }
+    
+    .btn-warning:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(246,194,62,0.3);
+    }
+    
+    .btn-info {
+        background: linear-gradient(135deg, #36b9cc 0%, #258391 100%);
+        border: none;
+        border-radius: 8px;
+        padding: 8px 16px;
+        font-weight: 500;
+        font-size: 0.9rem;
+        transition: all 0.2s ease;
+        color: white;
+    }
+    
+    .btn-info:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(54,185,204,0.3);
+    }
+    
+    .btn-outline-primary {
+        border: 1px solid #4e73df;
+        color: #4e73df;
+        border-radius: 8px;
+        padding: 8px 16px;
+        font-weight: 500;
+        font-size: 0.9rem;
+        transition: all 0.2s ease;
+        background: white;
+    }
+    
+    .btn-outline-primary:hover {
+        background: #4e73df;
+        color: white;
+        transform: translateY(-2px);
+    }
+    
+    .btn-outline-success {
+        border: 1px solid #1cc88a;
+        color: #1cc88a;
+        border-radius: 8px;
+        padding: 8px 16px;
+        font-weight: 500;
+        font-size: 0.9rem;
+        transition: all 0.2s ease;
+        background: white;
+    }
+    
+    .btn-outline-success:hover {
+        background: #1cc88a;
+        color: white;
+        transform: translateY(-2px);
+    }
+    
+    .btn-outline-warning {
+        border: 1px solid #f6c23e;
+        color: #f6c23e;
+        border-radius: 8px;
+        padding: 8px 16px;
+        font-weight: 500;
+        font-size: 0.9rem;
+        transition: all 0.2s ease;
+        background: white;
+    }
+    
+    .btn-outline-warning:hover {
+        background: #f6c23e;
+        color: white;
+        transform: translateY(-2px);
+    }
+    
+    .btn-outline-info {
+        border: 1px solid #36b9cc;
+        color: #36b9cc;
+        border-radius: 8px;
+        padding: 8px 16px;
+        font-weight: 500;
+        font-size: 0.9rem;
+        transition: all 0.2s ease;
+        background: white;
+    }
+    
+    .btn-outline-info:hover {
+        background: #36b9cc;
+        color: white;
+        transform: translateY(-2px);
+    }
+    
+    .btn-sm {
+        padding: 6px 12px;
+        font-size: 0.85rem;
+    }
+    
+    /* List group styling */
+    .list-group-item {
+        border-left: none;
+        border-right: none;
+        padding: 12px 20px;
+        transition: background 0.2s ease;
+    }
+    
+    .list-group-item:first-child {
+        border-top: none;
+    }
+    
+    .list-group-item:last-child {
+        border-bottom: none;
+    }
+    
+    .list-group-item:hover {
+        background: #f8fafd;
+    }
+    
+    .list-group-item-action {
+        cursor: pointer;
+    }
+    
+    /* Badge styling */
+    .badge-success {
+        background: linear-gradient(135deg, #1cc88a 0%, #13855c 100%);
+        color: white;
+        padding: 4px 8px;
+        border-radius: 20px;
+        font-size: 0.7rem;
+        font-weight: 500;
+    }
+    
+    .badge-danger {
+        background: linear-gradient(135deg, #e74a3b 0%, #be2617 100%);
+        color: white;
+        padding: 4px 8px;
+        border-radius: 20px;
+        font-size: 0.7rem;
+        font-weight: 500;
+    }
+    
+    .badge-warning {
+        background: linear-gradient(135deg, #f6c23e 0%, #dda20a 100%);
+        color: white;
+        padding: 4px 8px;
+        border-radius: 20px;
+        font-size: 0.7rem;
+        font-weight: 500;
+    }
+    
+    /* Chart styling */
+    canvas {
+        display: block;
+        width: 100% !important;
+        height: 100% !important;
+        max-width: 100%;
+    }
+    
+    /* Responsive */
+    @media (max-width: 768px) {
+        .page-title-section {
+            padding: 20px;
+        }
+        
+        .page-title-section h2 {
+            font-size: 1.5rem;
+        }
+        
+        .stat-card .stat-value {
+            font-size: 1.8rem;
+        }
+        
+        .card-header {
+            padding: 15px 20px;
+        }
+        
+        .card-body {
+            padding: 20px;
+        }
+    }
+    
+    @media (max-width: 576px) {
+        .stat-card {
+            padding: 20px;
+        }
+        
+        .stat-card .stat-value {
+            font-size: 1.5rem;
+        }
+        
+        .action-card {
+            padding: 15px;
+        }
+    }
 </style>
 {% endblock %}
 
@@ -314,139 +756,170 @@ html, body {
     
     // Wait for DOM to be ready
     document.addEventListener('DOMContentLoaded', function() {
-        // Prevent any autoscrolling
-        window.scrollTo(0, 0);
-        
         // Get chart data from hidden div
         var chartDataElement = document.getElementById('chartData');
         
         if (chartDataElement) {
-            // Parse chart data
-            var chartLabels = JSON.parse(chartDataElement.dataset.chartLabels || '[]');
-            var salesData = JSON.parse(chartDataElement.dataset.salesData || '[]');
-            var creditData = JSON.parse(chartDataElement.dataset.creditData || '[]');
-            var staffPositions = JSON.parse(chartDataElement.dataset.staffPositions || '[]');
-            
-            // Overview Chart
-            var overviewChartCanvas = document.getElementById('overviewChart');
-            if (overviewChartCanvas && chartLabels.length > 0) {
-                var ctx = overviewChartCanvas.getContext('2d');
-                var overviewChart = new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: chartLabels,
-                        datasets: [
-                            {
-                                label: 'Sales (KSH)',
-                                data: salesData,
-                                borderColor: '#28a745',
-                                backgroundColor: 'rgba(40, 167, 69, 0.1)',
-                                tension: 0.1,
-                                fill: true,
-                                pointRadius: 3,
-                                pointHoverRadius: 5
-                            },
-                            {
-                                label: 'Credit (KSH)',
-                                data: creditData,
-                                borderColor: '#ffc107',
-                                backgroundColor: 'rgba(255, 193, 7, 0.1)',
-                                tension: 0.1,
-                                fill: true,
-                                pointRadius: 3,
-                                pointHoverRadius: 5
-                            }
-                        ]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: true,
-                        animation: {
-                            duration: 500
+            try {
+                // Parse chart data
+                var chartLabels = JSON.parse(chartDataElement.dataset.chartLabels || '[]');
+                var salesData = JSON.parse(chartDataElement.dataset.salesData || '[]');
+                var creditData = JSON.parse(chartDataElement.dataset.creditData || '[]');
+                var staffPositions = JSON.parse(chartDataElement.dataset.staffPositions || '[]');
+                
+                // Overview Chart
+                var overviewChartCanvas = document.getElementById('overviewChart');
+                if (overviewChartCanvas && chartLabels.length > 0) {
+                    var ctx = overviewChartCanvas.getContext('2d');
+                    new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: chartLabels,
+                            datasets: [
+                                {
+                                    label: 'Sales (KSH)',
+                                    data: salesData,
+                                    borderColor: '#1cc88a',
+                                    backgroundColor: 'rgba(28, 200, 138, 0.1)',
+                                    tension: 0.1,
+                                    fill: true,
+                                    pointRadius: 3,
+                                    pointHoverRadius: 5,
+                                    pointBackgroundColor: '#1cc88a',
+                                    pointBorderColor: 'white',
+                                    pointBorderWidth: 2
+                                },
+                                {
+                                    label: 'Credit (KSH)',
+                                    data: creditData,
+                                    borderColor: '#f6c23e',
+                                    backgroundColor: 'rgba(246, 194, 62, 0.1)',
+                                    tension: 0.1,
+                                    fill: true,
+                                    pointRadius: 3,
+                                    pointHoverRadius: 5,
+                                    pointBackgroundColor: '#f6c23e',
+                                    pointBorderColor: 'white',
+                                    pointBorderWidth: 2
+                                }
+                            ]
                         },
-                        plugins: {
-                            legend: {
-                                position: 'top',
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: true,
+                            animation: {
+                                duration: 500
                             },
-                            tooltip: {
-                                mode: 'index',
-                                intersect: false
-                            }
-                        },
-                        scales: {
-                            y: {
-                                beginAtZero: true,
-                                ticks: {
-                                    callback: function(value) {
-                                        return 'KSH ' + value;
+                            plugins: {
+                                legend: {
+                                    position: 'top',
+                                    labels: {
+                                        usePointStyle: true,
+                                        pointStyle: 'circle'
+                                    }
+                                },
+                                tooltip: {
+                                    mode: 'index',
+                                    intersect: false,
+                                    callbacks: {
+                                        label: function(context) {
+                                            return context.dataset.label + ': KSH ' + context.raw.toLocaleString();
+                                        }
+                                    }
+                                }
+                            },
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    ticks: {
+                                        callback: function(value) {
+                                            return 'KSH ' + value.toLocaleString();
+                                        }
+                                    },
+                                    grid: {
+                                        color: '#eef2f6'
+                                    }
+                                },
+                                x: {
+                                    grid: {
+                                        display: false
                                     }
                                 }
                             }
                         }
+                    });
+                } else {
+                    var overviewContainer = document.getElementById('overviewChart');
+                    if (overviewContainer) {
+                        overviewContainer.parentNode.innerHTML = '<div class="alert alert-info m-3">No chart data available</div>';
                     }
-                });
-            } else {
-                var overviewContainer = document.getElementById('overviewChart');
-                if (overviewContainer) {
-                    overviewContainer.parentNode.innerHTML = '<div class="alert alert-info">No chart data available</div>';
-                }
-            }
-            
-            // Staff Distribution Chart
-            var staffChartCanvas = document.getElementById('staffChart');
-            if (staffChartCanvas && staffPositions.length > 0) {
-                var staffLabels = [];
-                var staffCounts = [];
-                var staffColors = ['#28a745', '#17a2b8', '#ffc107', '#dc3545', '#fd7e14', '#6f42c1', '#20c997', '#343a40'];
-                
-                for (var i = 0; i < staffPositions.length; i++) {
-                    staffLabels.push(staffPositions[i].position);
-                    staffCounts.push(staffPositions[i].count);
                 }
                 
-                var staffCtx = staffChartCanvas.getContext('2d');
-                var staffChart = new Chart(staffCtx, {
-                    type: 'doughnut',
-                    data: {
-                        labels: staffLabels,
-                        datasets: [{
-                            data: staffCounts,
-                            backgroundColor: staffColors.slice(0, staffLabels.length),
-                            borderWidth: 0
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: true,
-                        animation: {
-                            duration: 500
+                // Staff Distribution Chart
+                var staffChartCanvas = document.getElementById('staffChart');
+                if (staffChartCanvas && staffPositions.length > 0) {
+                    var staffLabels = [];
+                    var staffCounts = [];
+                    var staffColors = ['#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74a3b', '#fd7e14', '#6f42c1', '#20c997'];
+                    
+                    for (var i = 0; i < staffPositions.length; i++) {
+                        staffLabels.push(staffPositions[i].position);
+                        staffCounts.push(staffPositions[i].count);
+                    }
+                    
+                    var staffCtx = staffChartCanvas.getContext('2d');
+                    new Chart(staffCtx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: staffLabels,
+                            datasets: [{
+                                data: staffCounts,
+                                backgroundColor: staffColors.slice(0, staffLabels.length),
+                                borderWidth: 0,
+                                hoverOffset: 5
+                            }]
                         },
-                        plugins: {
-                            legend: {
-                                position: 'bottom',
-                            }
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: true,
+                            animation: {
+                                duration: 500
+                            },
+                            plugins: {
+                                legend: {
+                                    position: 'bottom',
+                                    labels: {
+                                        usePointStyle: true,
+                                        pointStyle: 'circle'
+                                    }
+                                },
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            return context.label + ': ' + context.raw + ' staff';
+                                        }
+                                    }
+                                }
+                            },
+                            cutout: '60%'
                         }
+                    });
+                } else {
+                    var staffContainer = document.getElementById('staffChart');
+                    if (staffContainer) {
+                        staffContainer.parentNode.innerHTML = '<div class="alert alert-info m-3">No staff data available</div>';
                     }
-                });
-            } else {
-                var staffContainer = document.getElementById('staffChart');
-                if (staffContainer) {
-                    staffContainer.parentNode.innerHTML = '<div class="alert alert-info">No staff data available</div>';
                 }
+            } catch (e) {
+                console.error('Chart initialization error:', e);
             }
         }
         
-        // Ensure canvas doesn't cause scrolling
-        var canvases = document.querySelectorAll('canvas');
-        for (var i = 0; i < canvases.length; i++) {
-            canvases[i].addEventListener('mouseenter', function() {
-                this.style.pointerEvents = 'none';
-                var self = this;
-                setTimeout(function() {
-                    self.style.pointerEvents = 'auto';
-                }, 100);
-            });
-        }
+        // Initialize tooltips
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[title]'));
+        tooltipTriggerList.map(function(tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
     });
 })();
 </script>

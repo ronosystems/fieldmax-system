@@ -30,7 +30,7 @@ urlpatterns = [
     # ROLE-SPECIFIC DASHBOARDS
     # ============================================
     path('admin-dashboard/', views.admin_dashboard, name='admin_dashboard'),
-    path('sales-officer-dashboard/', views.sales_officer_dashboard, name='sales_officer_dashboard'),
+    path('sales-agent-dashboard/', views.sales_agent_dashboard, name='sales_agent_dashboard'),
     path('sales-manager-dashboard/', views.sales_manager_dashboard, name='sales_manager_dashboard'),
     path('cashier-dashboard/', views.cashier_dashboard, name='cashier_dashboard'),
     path('store-manager-dashboard/', views.store_manager_dashboard, name='store_manager_dashboard'),
@@ -66,4 +66,9 @@ urlpatterns = [
     path('apply/', views.application_form, name='apply'),
     path('apply/success/', views.application_success, name='application_success'),
     path('notifications/', views.notifications_page, name='notifications_page'),
+    
+    # ============================================
+    # PRODUCT LOOKUP 
+    # ============================================    
+    path('api/product-lookup/', views.product_lookup_api, name='product_lookup_api'), 
 ]

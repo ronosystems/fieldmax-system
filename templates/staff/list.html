@@ -4,204 +4,275 @@
 {% block title %}Staff Applications{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2><i class="fas fa-file-alt me-2"></i>Staff Applications</h2>
-    <a href="{% url 'staff:apply' %}" class="btn btn-info" target="_blank">
-        <i class="fas fa-plus me-2"></i>New Application
-    </a>
-</div>
-
-<!-- Filters -->
-<div class="card mb-4">
-    <div class="card-body">
-        <form method="get" class="row g-3">
-            <div class="col-md-3">
-                <label class="form-label">Status</label>
-                <select name="status" class="form-select">
-                    <option value="">All Status</option>
-                    {% for status_code, status_name in status_choices %}
-                    <option value="{{ status_code }}" {% if request.GET.status == status_code %}selected{% endif %}>
-                        {{ status_name }}
-                    </option>
-                    {% endfor %}
-                </select>
+<div class="container-fluid py-4">
+    <!-- Header Section with White Background -->
+    <div class="page-title-section">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2 class="mb-1">
+                    <i class="fas fa-file-alt text-primary me-2"></i>
+                    Staff Applications
+                </h2>
+                <p class="text-muted mb-0">Manage and review staff job applications</p>
             </div>
-            <div class="col-md-3">
-                <label class="form-label">Position</label>
-                <select name="position" class="form-select">
-                    <option value="">All Positions</option>
-                    {% for pos_code, pos_name in position_choices %}
-                    <option value="{{ pos_code }}" {% if request.GET.position == pos_code %}selected{% endif %}>
-                        {{ pos_name }}
-                    </option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-4">
-                <label class="form-label">Search</label>
-                <input type="text" name="search" class="form-control" value="{{ request.GET.search }}" 
-                       placeholder="Name, Email, ID Number...">
-            </div>
-            <div class="col-md-2 d-flex align-items-end">
-                <button type="submit" class="btn btn-info me-2">
-                    <i class="fas fa-filter"></i> Filter
-                </button>
-                <a href="{% url 'staff:application_list' %}" class="btn btn-secondary">
-                    <i class="fas fa-times"></i> Clear
-                </a>
-            </div>
-        </form>
-    </div>
-</div>
-
-<!-- Applications Table -->
-<div class="card">
-    <div class="card-body">
-        <div class="table-responsive">
-            <table class="table table-hover" id="applicationsTable">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Name</th>
-                        <th>Position</th>
-                        <th>Email</th>
-                        <th>Phone</th>
-                        <th>Applied On</th>
-                        <th>Status</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for app in applications %}
-                    <tr>
-                        <td><span class="badge bg-secondary">#{{ app.id }}</span></td>
-                        <td class="fw-bold">{{ app.full_name }}</td>
-                        <td>{{ app.get_position_display }}</td>
-                        <td>{{ app.email }}</td>
-                        <td>{{ app.phone }}</td>
-                        <td>{{ app.application_date|date:"Y-m-d" }}</td>
-                        <td>
-                            {% if app.status == 'pending' %}
-                                <span class="badge bg-warning">Pending</span>
-                            {% elif app.status == 'approved' %}
-                                <span class="badge bg-success">Approved</span>
-                            {% elif app.status == 'rejected' %}
-                                <span class="badge bg-danger">Rejected</span>
-                            {% elif app.status == 'under_review' %}
-                                <span class="badge bg-info">Under Review</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            <div class="btn-group" role="group">
-                                <a href="{% url 'staff:application_detail' app.id %}" class="btn btn-sm btn-info" title="View">
-                                    <i class="fas fa-eye"></i>
-                                </a>
-                                <a href="{% url 'staff:view_documents' app.id %}" class="btn btn-sm btn-secondary" title="Documents">
-                                    <i class="fas fa-file-pdf"></i>
-                                </a>
-                                
-                                <!-- Status-specific action buttons -->
-                                {% if app.status == 'pending' or app.status == 'under_review' %}
-                                    <a href="{% url 'staff:application_approve' app.id %}" class="btn btn-sm btn-success" title="Approve">
-                                        <i class="fas fa-check"></i>
-                                    </a>
-                                    <a href="{% url 'staff:application_reject' app.id %}" class="btn btn-sm btn-danger" title="Reject">
-                                        <i class="fas fa-times"></i>
-                                    </a>
-                                {% elif app.status == 'approved' %}
-                                    <!-- Revert button for approved applications -->
-                                    <button type="button" 
-                                            class="btn btn-sm btn-warning" 
-                                            title="Revert to Pending"
-                                            onclick="showRevertModal('{{ app.id }}', '{{ app.full_name|escapejs }}')">
-                                        <i class="fas fa-undo"></i>
-                                    </button>
-                                {% elif app.status == 'rejected' %}
-                                    <!-- Reopen button for rejected applications -->
-                                    <button type="button" 
-                                            class="btn btn-sm btn-info" 
-                                            title="Reopen Application"
-                                            onclick="showReopenModal('{{ app.id }}', '{{ app.full_name|escapejs }}')">
-                                        <i class="fas fa-redo"></i>
-                                    </button>
-                                {% endif %}
-                            </div>
-                            
-                            <!-- Hidden forms for revert/reopen actions -->
-                            <form id="revert-form-{{ app.id }}" method="post" action="{% url 'staff:application_revert_to_pending' app.id %}" style="display: none;">
-                                {% csrf_token %}
-                            </form>
-                            
-                            <form id="reopen-form-{{ app.id }}" method="post" action="{% url 'staff:application_revert_to_pending' app.id %}" style="display: none;">
-                                {% csrf_token %}
-                            </form>
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="8" class="text-center py-4">
-                            <i class="fas fa-file-alt fa-3x text-muted mb-3"></i>
-                            <p class="text-muted">No applications found</p>
-                            <a href="{% url 'staff:apply' %}" class="btn btn-info btn-sm" target="_blank">
-                                <i class="fas fa-plus"></i> Create your first application
-                            </a>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+            <a href="{% url 'staff:apply' %}" class="btn btn-primary" target="_blank">
+                <i class="fas fa-plus me-2"></i>New Application
+            </a>
         </div>
     </div>
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="stat-card">
+                <div class="stat-value">{{ applications.paginator.count|default:0 }}</div>
+                <div class="stat-label">Total Applications</div>
+                <i class="fas fa-file-alt stat-icon text-primary"></i>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="stat-card">
+                <div class="stat-value">{{ pending_count|default:0 }}</div>
+                <div class="stat-label">Pending Review</div>
+                <i class="fas fa-clock stat-icon text-warning"></i>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="stat-card">
+                <div class="stat-value">{{ approved_count|default:0 }}</div>
+                <div class="stat-label">Approved</div>
+                <i class="fas fa-check-circle stat-icon text-success"></i>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="stat-card">
+                <div class="stat-value">{{ rejected_count|default:0 }}</div>
+                <div class="stat-label">Rejected</div>
+                <i class="fas fa-times-circle stat-icon text-danger"></i>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters Card -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="fas fa-filter me-2"></i>
+            Filter Applications
+        </div>
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Status</label>
+                    <select name="status" class="form-select">
+                        <option value="">All Status</option>
+                        {% for status_code, status_name in status_choices %}
+                        <option value="{{ status_code }}" {% if request.GET.status == status_code %}selected{% endif %}>
+                            {{ status_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Position</label>
+                    <select name="position" class="form-select">
+                        <option value="">All Positions</option>
+                        {% for pos_code, pos_name in position_choices %}
+                        <option value="{{ pos_code }}" {% if request.GET.position == pos_code %}selected{% endif %}>
+                            {{ pos_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Search</label>
+                    <input type="text" name="search" class="form-control" value="{{ request.GET.search }}" 
+                           placeholder="Name, Email, ID Number...">
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary me-2">
+                        <i class="fas fa-filter me-1"></i> Filter
+                    </button>
+                    <a href="{% url 'staff:application_list' %}" class="btn btn-outline-secondary">
+                        <i class="fas fa-times"></i>
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Applications Table Card -->
+    <div class="card">
+        <div class="card-header">
+            <i class="fas fa-list me-2"></i>
+            Applications List
+            <span class="badge bg-primary ms-2">{{ applications.paginator.count|default:0 }} Total</span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0" id="applicationsTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Position</th>
+                            <th>Email</th>
+                            <th>Phone</th>
+                            <th>Applied On</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for app in applications %}
+                        <tr>
+                            <td><span class="badge bg-secondary-subtle text-dark">#{{ app.id }}</span></td>
+                            <td class="fw-bold">{{ app.full_name }}</td>
+                            <td>
+                                <span class="role-badge role-{{ app.position|lower }}">
+                                    {{ app.get_position_display }}
+                                </span>
+                            </td>
+                            <td>{{ app.email }}</td>
+                            <td>{{ app.phone }}</td>
+                            <td>{{ app.application_date|date:"Y-m-d" }}</td>
+                            <td>
+                                {% if app.status == 'pending' %}
+                                    <span class="badge-pending">
+                                        <i class="fas fa-clock me-1"></i>Pending
+                                    </span>
+                                {% elif app.status == 'approved' %}
+                                    <span class="badge-approved">
+                                        <i class="fas fa-check-circle me-1"></i>Approved
+                                    </span>
+                                {% elif app.status == 'rejected' %}
+                                    <span class="badge-rejected">
+                                        <i class="fas fa-times-circle me-1"></i>Rejected
+                                    </span>
+                                {% elif app.status == 'under_review' %}
+                                    <span class="badge-info">
+                                        <i class="fas fa-search me-1"></i>Under Review
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="action-buttons">
+                                    <a href="{% url 'staff:application_detail' app.id %}" class="btn-action btn-view" title="View Details">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    <a href="{% url 'staff:view_documents' app.id %}" class="btn-action btn-docs" title="View Documents">
+                                        <i class="fas fa-file-pdf"></i>
+                                    </a>
+                                    
+                                    <!-- Status-specific action buttons -->
+                                    {% if app.status == 'pending' or app.status == 'under_review' %}
+                                        <a href="{% url 'staff:application_approve' app.id %}" class="btn-action btn-approve" title="Approve">
+                                            <i class="fas fa-check"></i>
+                                        </a>
+                                        <a href="{% url 'staff:application_reject' app.id %}" class="btn-action btn-reject" title="Reject">
+                                            <i class="fas fa-times"></i>
+                                        </a>
+                                    {% elif app.status == 'approved' %}
+                                        <!-- Revert button for approved applications -->
+                                        <button type="button" 
+                                                class="btn-action btn-revert" 
+                                                title="Revert to Pending"
+                                                onclick="showRevertModal('{{ app.id }}', '{{ app.full_name|escapejs }}')">
+                                            <i class="fas fa-undo"></i>
+                                        </button>
+                                    {% elif app.status == 'rejected' %}
+                                        <!-- Reopen button for rejected applications -->
+                                        <button type="button" 
+                                                class="btn-action btn-reopen" 
+                                                title="Reopen Application"
+                                                onclick="showReopenModal('{{ app.id }}', '{{ app.full_name|escapejs }}')">
+                                            <i class="fas fa-redo"></i>
+                                        </button>
+                                    {% endif %}
+                                </div>
+                                
+                                <!-- Hidden forms for revert/reopen actions -->
+                                <form id="revert-form-{{ app.id }}" method="post" action="{% url 'staff:application_revert_to_pending' app.id %}" style="display: none;">
+                                    {% csrf_token %}
+                                </form>
+                                
+                                <form id="reopen-form-{{ app.id }}" method="post" action="{% url 'staff:application_revert_to_pending' app.id %}" style="display: none;">
+                                    {% csrf_token %}
+                                </form>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="8" class="text-center py-5">
+                                <div class="empty-state">
+                                    <i class="fas fa-file-alt fa-4x text-muted mb-3"></i>
+                                    <h5 class="mb-2">No applications found</h5>
+                                    <p class="text-muted mb-3">Get started by creating a new application</p>
+                                    <a href="{% url 'staff:apply' %}" class="btn btn-primary" target="_blank">
+                                        <i class="fas fa-plus me-2"></i>Create First Application
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Pagination -->
+        {% if applications.has_other_pages %}
+        <div class="card-footer bg-white">
+            <nav aria-label="Page navigation">
+                <ul class="pagination justify-content-center mb-0">
+                    {% if applications.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ applications.previous_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                            <i class="fas fa-chevron-left"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+                    
+                    {% for num in applications.paginator.page_range %}
+                        {% if applications.number == num %}
+                        <li class="page-item active">
+                            <span class="page-link">{{ num }}</span>
+                        </li>
+                        {% elif num > applications.number|add:'-3' and num < applications.number|add:'3' %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ num }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                                {{ num }}
+                            </a>
+                        </li>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if applications.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ applications.next_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                            <i class="fas fa-chevron-right"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+    </div>
 </div>
 
-<!-- Pagination -->
-{% if applications.has_other_pages %}
-<nav class="mt-4">
-    <ul class="pagination justify-content-center">
-        {% if applications.has_previous %}
-        <li class="page-item">
-            <a class="page-link" href="?page={{ applications.previous_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
-                Previous
-            </a>
-        </li>
-        {% endif %}
-        
-        {% for num in applications.paginator.page_range %}
-            {% if applications.number == num %}
-            <li class="page-item active"><span class="page-link">{{ num }}</span></li>
-            {% elif num > applications.number|add:'-3' and num < applications.number|add:'3' %}
-            <li class="page-item">
-                <a class="page-link" href="?page={{ num }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
-                    {{ num }}
-                </a>
-            </li>
-            {% endif %}
-        {% endfor %}
-        
-        {% if applications.has_next %}
-        <li class="page-item">
-            <a class="page-link" href="?page={{ applications.next_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
-                Next
-            </a>
-        </li>
-        {% endif %}
-    </ul>
-</nav>
-{% endif %}
-
 <!-- Revert Confirmation Modal -->
-<div class="modal fade" id="revertConfirmModal" tabindex="-1" aria-labelledby="revertConfirmModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
+<div class="modal fade" id="revertConfirmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header bg-warning">
-                <h5 class="modal-title" id="revertConfirmModalLabel">
+                <h5 class="modal-title text-white">
                     <i class="fas fa-undo me-2"></i>
                     Revert Application to Pending
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <p>Are you sure you want to revert <strong id="revertApplicantName"></strong>'s application from <span class="badge bg-success">APPROVED</span> back to <span class="badge bg-warning">PENDING</span>?</p>
+                <p>Are you sure you want to revert <strong id="revertApplicantName"></strong>'s application from <span class="badge-approved">APPROVED</span> back to <span class="badge-pending">PENDING</span>?</p>
                 
                 <div class="alert alert-warning mt-3">
                     <i class="fas fa-exclamation-triangle me-2"></i>
@@ -214,7 +285,7 @@
                 </p>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
                     <i class="fas fa-times me-1"></i>Cancel
                 </button>
                 <button type="button" class="btn btn-warning" id="confirmRevertBtn">
@@ -226,18 +297,18 @@
 </div>
 
 <!-- Reopen Confirmation Modal -->
-<div class="modal fade" id="reopenConfirmModal" tabindex="-1" aria-labelledby="reopenConfirmModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
+<div class="modal fade" id="reopenConfirmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
-            <div class="modal-header bg-info text-white">
-                <h5 class="modal-title" id="reopenConfirmModalLabel">
+            <div class="modal-header bg-info">
+                <h5 class="modal-title text-white">
                     <i class="fas fa-redo me-2"></i>
                     Reopen Rejected Application
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <p>Are you sure you want to reopen <strong id="reopenApplicantName"></strong>'s application from <span class="badge bg-danger">REJECTED</span> to <span class="badge bg-warning">PENDING</span>?</p>
+                <p>Are you sure you want to reopen <strong id="reopenApplicantName"></strong>'s application from <span class="badge-rejected">REJECTED</span> to <span class="badge-pending">PENDING</span>?</p>
                 
                 <div class="alert alert-info mt-3">
                     <i class="fas fa-info-circle me-2"></i>
@@ -250,7 +321,7 @@
                 </p>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
                     <i class="fas fa-times me-1"></i>Cancel
                 </button>
                 <button type="button" class="btn btn-info" id="confirmReopenBtn">
@@ -260,6 +331,542 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Title Background White */
+    .page-title-section {
+        background: white;
+        padding: 25px 30px;
+        border-radius: 15px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+        margin-bottom: 25px;
+        border: 1px solid #eef2f6;
+    }
+    
+    .page-title-section h2 {
+        color: #2c3e50;
+        font-weight: 600;
+        font-size: 1.8rem;
+        margin: 0;
+    }
+    
+    .page-title-section .text-muted {
+        color: #6c757d !important;
+        font-size: 0.95rem;
+    }
+    
+    /* Consistent Stat Cards */
+    .stat-card {
+        background: white;
+        border-radius: 15px;
+        padding: 25px;
+        position: relative;
+        overflow: hidden;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        border: 1px solid #eef2f6;
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+        border-color: #4e73df20;
+    }
+    
+    .stat-card .stat-value {
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin-bottom: 5px;
+        color: #2c3e50;
+        line-height: 1.2;
+    }
+    
+    .stat-card .stat-label {
+        color: #6c757d;
+        font-size: 0.9rem;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .stat-card .stat-icon {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        font-size: 3.5rem;
+        opacity: 5;
+        transition: opacity 0.3s ease;
+    }
+    
+    .stat-card:hover .stat-icon {
+        opacity: 0.15;
+    }
+    
+    /* Card styling */
+    .card {
+        border: none;
+        border-radius: 15px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+        background: white;
+        margin-bottom: 25px;
+        border: 1px solid #eef2f6;
+        overflow: hidden;
+    }
+    
+    .card-header {
+        background: white;
+        border-bottom: 1px solid #eef2f6;
+        padding: 18px 25px;
+        font-weight: 600;
+        color: #2c3e50;
+        font-size: 1.1rem;
+    }
+    
+    .card-header i {
+        color: #4e73df;
+    }
+    
+    .card-header .badge {
+        font-size: 0.8rem;
+        padding: 5px 10px;
+        border-radius: 20px;
+    }
+    
+    .card-body {
+        padding: 25px;
+    }
+    
+    .card-footer {
+        background: white;
+        border-top: 1px solid #eef2f6;
+        padding: 15px 25px;
+    }
+    
+    /* Form controls */
+    .form-control, .form-select {
+        border: 1px solid #eef2f6;
+        border-radius: 10px;
+        padding: 12px 15px;
+        background: white;
+        font-size: 0.95rem;
+        transition: all 0.2s ease;
+    }
+    
+    .form-control:focus, .form-select:focus {
+        border-color: #4e73df;
+        box-shadow: 0 0 0 3px rgba(78,115,223,0.1);
+        outline: none;
+    }
+    
+    .form-label {
+        font-weight: 500;
+        color: #2c3e50;
+        margin-bottom: 8px;
+        font-size: 0.9rem;
+    }
+    
+    /* Button styling */
+    .btn-primary {
+        background: linear-gradient(135deg, #4e73df 0%, #224abe 100%);
+        border: none;
+        border-radius: 10px;
+        padding: 10px 20px;
+        font-weight: 500;
+        font-size: 0.95rem;
+        transition: all 0.2s ease;
+        color: white;
+    }
+    
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(78,115,223,0.3);
+        color: white;
+    }
+    
+    .btn-outline-secondary {
+        border: 1px solid #eef2f6;
+        color: #6c757d;
+        border-radius: 10px;
+        padding: 10px 20px;
+        font-weight: 500;
+        transition: all 0.2s ease;
+        background: white;
+    }
+    
+    .btn-outline-secondary:hover {
+        background: #eef2f6;
+        color: #2c3e50;
+        transform: translateY(-2px);
+    }
+    
+    /* Action buttons */
+    .action-buttons {
+        display: flex;
+        gap: 5px;
+    }
+    
+    .btn-action {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+        border: none;
+        cursor: pointer;
+        text-decoration: none;
+    }
+    
+    .btn-view {
+        background: #e7f0ff;
+        color: #4e73df;
+    }
+    
+    .btn-view:hover {
+        background: #4e73df;
+        color: white;
+        transform: translateY(-2px);
+    }
+    
+    .btn-docs {
+        background: #e3f2fd;
+        color: #0d6efd;
+    }
+    
+    .btn-docs:hover {
+        background: #0d6efd;
+        color: white;
+        transform: translateY(-2px);
+    }
+    
+    .btn-approve {
+        background: #e3f9e9;
+        color: #1cc88a;
+    }
+    
+    .btn-approve:hover {
+        background: #1cc88a;
+        color: white;
+        transform: translateY(-2px);
+    }
+    
+    .btn-reject {
+        background: #fee7e7;
+        color: #e74a3b;
+    }
+    
+    .btn-reject:hover {
+        background: #e74a3b;
+        color: white;
+        transform: translateY(-2px);
+    }
+    
+    .btn-revert {
+        background: #fff3e0;
+        color: #f6c23e;
+    }
+    
+    .btn-revert:hover {
+        background: #f6c23e;
+        color: white;
+        transform: translateY(-2px);
+    }
+    
+    .btn-reopen {
+        background: #e0f2fe;
+        color: #36b9cc;
+    }
+    
+    .btn-reopen:hover {
+        background: #36b9cc;
+        color: white;
+        transform: translateY(-2px);
+    }
+    
+    /* Table styling */
+    .table {
+        margin-bottom: 0;
+    }
+    
+    .table thead th {
+        background: #f8fafd;
+        color: #2c3e50;
+        font-weight: 600;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        border-bottom: 2px solid #eef2f6;
+        padding: 15px 20px;
+        white-space: nowrap;
+    }
+    
+    .table tbody td {
+        padding: 15px 20px;
+        vertical-align: middle;
+        color: #2c3e50;
+        border-bottom: 1px solid #eef2f6;
+        font-size: 0.95rem;
+    }
+    
+    .table tbody tr:last-child td {
+        border-bottom: none;
+    }
+    
+    .table tbody tr:hover {
+        background: #f8fafd;
+    }
+    
+    /* Badge styling */
+    .badge-approved {
+        background: linear-gradient(135deg, #1cc88a 0%, #13855c 100%);
+        color: white;
+        padding: 6px 12px;
+        border-radius: 30px;
+        font-weight: 500;
+        font-size: 0.8rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        white-space: nowrap;
+    }
+    
+    .badge-pending {
+        background: linear-gradient(135deg, #f6c23e 0%, #dda20a 100%);
+        color: white;
+        padding: 6px 12px;
+        border-radius: 30px;
+        font-weight: 500;
+        font-size: 0.8rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        white-space: nowrap;
+    }
+    
+    .badge-rejected {
+        background: linear-gradient(135deg, #e74a3b 0%, #be2617 100%);
+        color: white;
+        padding: 6px 12px;
+        border-radius: 30px;
+        font-weight: 500;
+        font-size: 0.8rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        white-space: nowrap;
+    }
+    
+    .badge-info {
+        background: linear-gradient(135deg, #36b9cc 0%, #258391 100%);
+        color: white;
+        padding: 6px 12px;
+        border-radius: 30px;
+        font-weight: 500;
+        font-size: 0.8rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        white-space: nowrap;
+    }
+    
+    .badge-secondary-subtle {
+        background: #eef2f6;
+        color: #2c3e50;
+        padding: 5px 10px;
+        border-radius: 20px;
+        font-weight: 500;
+        font-size: 0.8rem;
+    }
+    
+    /* Role badges */
+    .role-badge {
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 500;
+        background: #f0f2f5;
+        color: #2c3e50;
+        display: inline-block;
+        white-space: nowrap;
+    }
+    
+    .role-sales_manager {
+        background: linear-gradient(135deg, #4e73df 0%, #224abe 100%);
+        color: white;
+    }
+    
+    .role-sales_agent {
+        background: linear-gradient(135deg, #1cc88a 0%, #13855c 100%);
+        color: white;
+    }
+    
+    .role-cashier {
+        background: linear-gradient(135deg, #36b9cc 0%, #258391 100%);
+        color: white;
+    }
+    
+    .role-store_manager {
+        background: linear-gradient(135deg, #f6c23e 0%, #dda20a 100%);
+        color: white;
+    }
+    
+    .role-credit_manager {
+        background: linear-gradient(135deg, #e74a3b 0%, #be2617 100%);
+        color: white;
+    }
+    
+    .role-credit_officer {
+        background: linear-gradient(135deg, #5a5c69 0%, #3d3e48 100%);
+        color: white;
+    }
+    
+    /* Empty state */
+    .empty-state {
+        padding: 40px 20px;
+        text-align: center;
+    }
+    
+    .empty-state i {
+        color: #4e73df;
+        opacity: 0.3;
+        margin-bottom: 15px;
+    }
+    
+    .empty-state h5 {
+        color: #2c3e50;
+        font-weight: 600;
+        margin-bottom: 5px;
+    }
+    
+    .empty-state p {
+        color: #6c757d;
+        font-size: 0.95rem;
+    }
+    
+    /* Pagination */
+    .pagination {
+        gap: 5px;
+    }
+    
+    .page-link {
+        border: 1px solid #eef2f6;
+        border-radius: 8px !important;
+        color: #4e73df;
+        padding: 8px 15px;
+        font-size: 0.9rem;
+        transition: all 0.2s ease;
+        background: white;
+    }
+    
+    .page-link:hover {
+        background: #4e73df;
+        color: white;
+        border-color: #4e73df;
+        transform: translateY(-1px);
+    }
+    
+    .page-item.active .page-link {
+        background: #4e73df;
+        border-color: #4e73df;
+        color: white;
+    }
+    
+    /* Modal styling */
+    .modal-content {
+        border: none;
+        border-radius: 15px;
+        overflow: hidden;
+    }
+    
+    .modal-header {
+        padding: 15px 20px;
+        border: none;
+    }
+    
+    .modal-header.bg-warning {
+        background: linear-gradient(135deg, #f6c23e 0%, #dda20a 100%) !important;
+    }
+    
+    .modal-header.bg-info {
+        background: linear-gradient(135deg, #36b9cc 0%, #258391 100%) !important;
+    }
+    
+    .modal-body {
+        padding: 25px;
+    }
+    
+    .modal-footer {
+        padding: 15px 25px;
+        border-top: 1px solid #eef2f6;
+    }
+    
+    .alert {
+        border-radius: 10px;
+        border: none;
+        padding: 15px;
+    }
+    
+    .alert-warning {
+        background: #fff3e0;
+        color: #856404;
+    }
+    
+    .alert-info {
+        background: #e3f2fd;
+        color: #0c5460;
+    }
+    
+    /* Responsive */
+    @media (max-width: 768px) {
+        .page-title-section {
+            padding: 20px;
+        }
+        
+        .page-title-section h2 {
+            font-size: 1.5rem;
+        }
+        
+        .stat-card .stat-value {
+            font-size: 2rem;
+        }
+        
+        .card-header {
+            padding: 15px 20px;
+        }
+        
+        .card-body {
+            padding: 20px;
+        }
+        
+        .table thead th,
+        .table tbody td {
+            padding: 12px 15px;
+            font-size: 0.9rem;
+        }
+        
+        .action-buttons {
+            flex-wrap: wrap;
+        }
+    }
+    
+    @media (max-width: 576px) {
+        .stat-card {
+            padding: 20px;
+        }
+        
+        .stat-card .stat-value {
+            font-size: 1.75rem;
+        }
+        
+        .btn-action {
+            width: 28px;
+            height: 28px;
+        }
+    }
+</style>
 {% endblock %}
 
 {% block extra_js %}
