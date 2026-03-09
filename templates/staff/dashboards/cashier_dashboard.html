@@ -1350,7 +1350,7 @@
 
         $('#addProductBtn').click(addToCart);
 
-        // Product Lookup Search - Only shows results when typing
+        // Product Lookup Search - FIXED URL
         $('#productSearchLookup').on('keyup', function() {
             clearTimeout(searchTimer);
             let query = $(this).val().trim();
@@ -1392,12 +1392,12 @@
                 }
                 
                 currentRequest = $.ajax({
-                    url: '{% url "sales:search_products" %}',
+                    url: '{% url "staff:product_lookup_api" %}', // FIXED: Changed to correct URL
                     method: 'GET',
                     data: { q: query },
-                    success: function(products) {
-                        if(products.length > 0) {
-                            displayProducts(products);
+                    success: function(response) {
+                        if(response.success && response.products && response.products.length > 0) {
+                            displayProducts(response.products);
                         } else {
                             $('#productList').html(`
                                 <div class="text-center py-4 text-muted">
@@ -1410,6 +1410,7 @@
                     },
                     error: function(xhr, status, error) {
                         if (status !== 'abort') {
+                            console.error('Search error:', error);
                             $('#productList').html(`
                                 <div class="text-center py-4 text-muted">
                                     <i class="fas fa-exclamation-triangle fa-3x mb-2 text-warning"></i>
@@ -1434,37 +1435,37 @@
                 let stockText = 'In Stock';
                 let isSold = false;
                 
-                if (product.stock <= 0) {
+                if (product.quantity <= 0) {  // FIXED: Changed from stock to quantity
                     stockClass = 'stock-out';
                     stockText = 'Out of Stock';
                     isSold = true;
-                } else if (product.stock <= 5) {
+                } else if (product.quantity <= 5) {
                     stockClass = 'stock-low';
                     stockText = 'Low Stock';
                 }
                 
                 // Check if it's a single item that might be sold
-                if (product.is_single && product.stock === 0) {
+                if (product.is_single_item && product.quantity === 0) {  // FIXED: Changed from is_single to is_single_item
                     stockClass = 'stock-sold';
                     stockText = 'SOLD';
                     isSold = true;
                 }
                 
                 let itemClass = isSold ? 'product-item sold-item' : 'product-item';
-                let onclickAttr = isSold ? '' : `onclick="selectProduct('${product.code}')"`;
+                let onclickAttr = isSold ? '' : `onclick="selectProduct('${product.product_code}')"`;  // FIXED: Changed from code to product_code
                 
                 html += `
                     <div class="${itemClass}" ${onclickAttr}>
                         <div class="product-info">
-                            <h6>${product.name}</h6>
-                            <small>Code: ${product.code}</small>
-                            ${product.sku ? `<div class="sku-info">${product.sku_type}: ${product.sku}</div>` : ''}
+                            <h6>${product.display_name || product.name}</h6>  <!-- FIXED: Added fallback for name -->
+                            <small>Code: ${product.product_code}</small>
+                            ${product.sku_value ? `<div class="sku-info">IMEI: ${product.sku_value}</div>` : ''}  <!-- FIXED: Changed from sku to sku_value -->
                         </div>
                         <div class="product-details">
                             <!-- Selling Price Card - Always Visible -->
                             <div class="price-card selling-price-card">
                                 <div class="price-label">Selling Price</div>
-                                <div class="price-value selling-price">KSH ${product.price.toLocaleString()}</div>
+                                <div class="price-value selling-price">KSH ${product.selling_price ? product.selling_price.toLocaleString() : '0'}</div>  <!-- FIXED: Changed from price to selling_price -->
                             </div>
                             
                             <!-- Best Price Card - Hidden by default, shows on click -->
@@ -1481,7 +1482,7 @@
                                 </div>
                             </div>
                             
-                            <span class="stock-badge ${stockClass}">${stockText}: ${product.stock}</span>
+                            <span class="stock-badge ${stockClass}">${stockText}: ${product.quantity}</span>  <!-- FIXED: Changed from stock to quantity -->
                         </div>
                     </div>
                 `;
