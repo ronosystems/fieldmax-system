@@ -1057,7 +1057,7 @@ class ProductRestockView(LoginRequiredMixin, TemplateView):
 
 
 # ===========================================
-# SEARCH PRODUCT FOR RESTOCK
+# SEARCH PRODUCT FOR RESTOCK - UPDATED WITH BRAND & MODEL
 #============================================
 
 @login_required
@@ -1078,7 +1078,9 @@ def search_product_for_restock(request):
         products = Product.objects.filter(
             Q(name__icontains=search_term) |
             Q(product_code__icontains=search_term) |
-            Q(sku_value__iexact=search_term),
+            Q(sku_value__iexact=search_term) |
+            Q(brand__icontains=search_term) |
+            Q(model__icontains=search_term),
             is_active=True
         ).select_related('category')
         
@@ -1097,12 +1099,16 @@ def search_product_for_restock(request):
             product_list = [{
                 'id': p.id,
                 'name': p.name,
+                'display_name': p.display_name,
+                'brand': p.brand or 'N/A',
+                'model': p.model or 'N/A',
                 'product_code': p.product_code,
                 'sku_value': p.sku_value or 'N/A',
                 'category': p.category.name,
                 'current_quantity': p.quantity,
                 'buying_price': float(p.buying_price) if p.buying_price else 0,
                 'selling_price': float(p.selling_price) if p.selling_price else 0,
+                'reorder_level': p.reorder_level or 5,
                 'is_single_item': p.category.is_single_item
             } for p in products[:10]]  # Limit to 10 results
             
@@ -1130,12 +1136,16 @@ def search_product_for_restock(request):
             'product': {
                 'id': product.id,
                 'name': product.name,
+                'display_name': product.display_name,
+                'brand': product.brand or 'N/A',
+                'model': product.model or 'N/A',
                 'product_code': product.product_code,
                 'sku_value': product.sku_value or 'N/A',
                 'category': product.category.name,
                 'current_quantity': product.quantity,
                 'buying_price': float(product.buying_price) if product.buying_price else 0,
                 'selling_price': float(product.selling_price) if product.selling_price else 0,
+                'reorder_level': product.reorder_level or 5,
                 'is_single_item': product.category.is_single_item
             }
         })
@@ -1150,145 +1160,149 @@ def search_product_for_restock(request):
 
 
 # ===========================================
-# PROCESS RESTOCK VIEW - FIXED
-#============================================
-
+# IMPROVED RESTOCK VIEW - Works with signal
+# ===========================================
 @login_required
 @require_http_methods(["POST"])
 def process_restock(request):
-    """Process the restock operation"""
+    """Process the restock operation - works with signal to prevent double counting"""
     try:
         product_id = request.POST.get('product_id')
-        quantity = request.POST.get('quantity')
-        buying_price = request.POST.get('buying_price')
-        selling_price = request.POST.get('selling_price')
+        quantity = int(request.POST.get('quantity', 0))
+        buying_price = request.POST.get('buying_price', '').strip()
+        selling_price = request.POST.get('selling_price', '').strip()
         notes = request.POST.get('notes', '').strip()
         
+        # Generate a unique request ID for tracking
+        import uuid
+        request_id = str(uuid.uuid4())[:8]
+        
+        logger.info(f"🔴 [{request_id}] RESTOCK STARTED - Product ID: {product_id}, Qty: {quantity}")
+        
         # Validation
-        if not all([product_id, quantity, buying_price]):
-            return JsonResponse({
-                'success': False,
-                'message': 'Product, quantity, and buying price are required'
-            }, status=400)
-        
-        product = get_object_or_404(Product, pk=product_id, is_active=True)
-        
-        # Check if single item
-        if product.category.is_single_item:
-            return JsonResponse({
-                'success': False,
-                'message': 'Cannot restock single items'
-            }, status=400)
-        
-        try:
-            quantity = int(quantity)
-            buying_price = float(buying_price)
-            selling_price = float(selling_price) if selling_price else None
-        except ValueError:
-            return JsonResponse({
-                'success': False,
-                'message': 'Invalid number format'
-            }, status=400)
-        
         if quantity <= 0:
             return JsonResponse({
                 'success': False,
                 'message': 'Quantity must be greater than 0'
             }, status=400)
         
-        if buying_price < 0:
-            return JsonResponse({
-                'success': False,
-                'message': 'Buying price cannot be negative'
-            }, status=400)
-        
-        # Create stock entry and update product quantity
         with transaction.atomic():
-            # Store old quantity for notification
+            # Lock the product row to prevent concurrent updates
+            product = Product.objects.select_for_update().get(pk=product_id, is_active=True)
+            
+            # Check if it's a bulk item
+            if product.category.is_single_item:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Cannot restock single items'
+                }, status=400)
+            
+            # Log before state
+            logger.info(f"🔴 [{request_id}] BEFORE - Product: {product.product_code}")
+            logger.info(f"🔴 [{request_id}] BEFORE - Quantity: {product.quantity}")
+            logger.info(f"🔴 [{request_id}] BEFORE - Stock entries count: {StockEntry.objects.filter(product=product).count()}")
+            
+            # Store old values
             old_quantity = product.quantity
             
             # ============================================
-            # CRITICAL FIX: ACTUALLY UPDATE THE PRODUCT QUANTITY
+            # CRITICAL: Update product quantity FIRST
             # ============================================
-            # Add the new quantity to existing stock
             product.quantity = (product.quantity or 0) + quantity
             
-            # Update product status based on new quantity
-            if product.quantity > 5:
+            # Update prices if provided
+            if buying_price:
+                try:
+                    product.buying_price = Decimal(buying_price)
+                except:
+                    pass
+            
+            if selling_price and selling_price.strip():
+                try:
+                    product.selling_price = Decimal(selling_price)
+                except:
+                    pass
+            
+            # Update status based on new quantity
+            if product.quantity > product.reorder_level:
                 product.status = 'available'
             elif product.quantity > 0:
                 product.status = 'lowstock'
             else:
                 product.status = 'outofstock'
             
-            # Update prices if provided
-            if buying_price:
-                product.buying_price = buying_price
-            if selling_price and selling_price > 0:
-                product.selling_price = selling_price
-            
             # Save the product with updated quantity
-            product.save(update_fields=['quantity', 'status', 'buying_price', 'selling_price'])
+            product.save(update_fields=['quantity', 'status', 'buying_price', 'selling_price', 'updated_at'])
             
+            logger.info(f"🔴 [{request_id}] AFTER MANUAL UPDATE - Quantity: {product.quantity}")
+            
+            # ============================================
             # Create stock entry record (for history)
+            # The signal will run after this creation
+            # ============================================
             stock_entry = StockEntry.objects.create(
                 product=product,
                 quantity=quantity,
                 entry_type='purchase',
-                unit_price=buying_price,
-                total_amount=buying_price * quantity,
+                unit_price=Decimal(buying_price) if buying_price else product.buying_price,
+                total_amount=(Decimal(buying_price) if buying_price else product.buying_price) * quantity,
                 created_by=request.user,
-                notes=notes or "Restock via search"
+                notes=notes or f"Restock by {request.user.username}",
+                reference_id=f"RST-{timezone.now().strftime('%Y%m%d%H%M%S')}-{request_id}"
             )
             
-            logger.info(f"Restocked: {product.product_code} - Qty: {quantity} (New total: {product.quantity})")
+            logger.info(f"🔴 [{request_id}] CREATED STOCK ENTRY #{stock_entry.id}")
             
             # ============================================
-            # SEND ADMIN NOTIFICATION
+            # The signal will now run automatically
+            # It will check if quantities match and fix if needed
             # ============================================
-            """
-            try:
-                from utils.notifications import AdminNotifier
-                
-                # Notify about stock addition
-                AdminNotifier.notify_stock_added(
-                    product=product,
-                    quantity=quantity,
-                    entry_type='purchase',
-                    added_by=request.user
-                )
-                
-                # Check and notify if product was out of stock and now has stock
-                if old_quantity == 0 and product.quantity > 0:
-                    logger.info(f"Product {product.product_code} is back in stock")
-                    
-                logger.info(f"Admin notification sent for restock of {product.product_code}")
-                
-            except ImportError:
-                logger.warning("AdminNotifier not available - skipping notification")
-            except Exception as e:
-                logger.error(f"Failed to send restock notification: {str(e)}")
-                # Don't fail the restock if notification fails
-            """
+        
+        # Final check after signal (small delay to let signal complete)
+        import time
+        time.sleep(0.1)
+        
+        # Get fresh product to verify
+        final_product = Product.objects.get(pk=product_id)
+        
+        logger.info(f"🔴 [{request_id}] FINAL - Product: {final_product.product_code}")
+        logger.info(f"🔴 [{request_id}] FINAL - Quantity: {final_product.quantity}")
+        logger.info(f"🔴 [{request_id}] FINAL - Stock entries: {StockEntry.objects.filter(product=product_id).count()}")
+        
+        # Verify if everything is correct
+        calculated_total = StockEntry.objects.filter(product=product_id).aggregate(
+            total=Sum('quantity')
+        )['total'] or 0
+        
+        if final_product.quantity != calculated_total:
+            logger.warning(f"⚠️ [{request_id}] FINAL MISMATCH: Product={final_product.quantity}, Calculated={calculated_total}")
+        else:
+            logger.info(f"✓ [{request_id}] All quantities match: {final_product.quantity}")
         
         return JsonResponse({
             'success': True,
-            'message': f'Successfully added {quantity} units to {product.name}',
+            'message': f'Successfully added {quantity} units to {final_product.name}',
             'product': {
-                'id': product.id,
-                'name': product.name,
-                'product_code': product.product_code,
+                'id': final_product.id,
+                'name': final_product.name,
+                'display_name': final_product.display_name,
+                'brand': final_product.brand or 'N/A',
+                'model': final_product.model or 'N/A',
+                'product_code': final_product.product_code,
+                'category': final_product.category.name if final_product.category else 'N/A',
                 'old_quantity': old_quantity,
-                'new_quantity': product.quantity,
+                'new_quantity': final_product.quantity,
                 'added_quantity': quantity,
-                'buying_price': float(product.buying_price),
-                'selling_price': float(product.selling_price),
-                'status': product.status
+                'buying_price': float(final_product.buying_price),
+                'selling_price': float(final_product.selling_price),
+                'status': final_product.status,
+                'reorder_level': final_product.reorder_level or 5
             },
             'stock_entry_id': stock_entry.id
         })
     
     except Product.DoesNotExist:
+        logger.error(f"❌ Product not found: {product_id}")
         return JsonResponse({
             'success': False,
             'message': 'Product not found'
@@ -1296,11 +1310,12 @@ def process_restock(request):
     
     except Exception as e:
         import traceback
-        logger.error(f"Restock error: {str(e)}\n{traceback.format_exc()}")
+        logger.error(f"❌ Restock error: {str(e)}\n{traceback.format_exc()}")
         return JsonResponse({
             'success': False,
             'message': f'Error: {str(e)}'
         }, status=500)
+
 
 
 
@@ -1310,6 +1325,12 @@ def category_list(request):
     """List all categories"""
     categories = Category.objects.all()
     return render(request, 'inventory/categories/list.html', {'categories': categories})
+
+
+
+
+
+
 
 @login_required
 def category_add(request):
@@ -2716,3 +2737,50 @@ def return_reject(request, pk):
         'return': return_request,
     }
     return render(request, 'inventory/returns/reject.html', context)
+
+
+
+
+
+
+# ===========================================
+# DIAGNOSTIC VIEW - Check product quantities
+# ===========================================
+@login_required
+@user_passes_test(lambda u: u.is_superuser)
+def check_product_quantity(request, product_id):
+    """Diagnostic view to check product quantity vs stock entries"""
+    product = get_object_or_404(Product, pk=product_id)
+    
+    # Get all stock entries for this product
+    entries = StockEntry.objects.filter(product=product).order_by('-created_at')
+    
+    # Calculate expected quantity
+    calculated_total = entries.aggregate(total=Sum('quantity'))['total'] or 0
+    
+    # Check if they match
+    matches = product.quantity == calculated_total
+    
+    # Prepare entry details
+    entry_details = []
+    for entry in entries:
+        entry_details.append({
+            'id': entry.id,
+            'created_at': entry.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+            'entry_type': entry.entry_type,
+            'quantity': entry.quantity,
+            'reference': entry.reference_id,
+            'created_by': entry.created_by.username if entry.created_by else 'System'
+        })
+    
+    return JsonResponse({
+        'product_id': product.id,
+        'product_code': product.product_code,
+        'product_name': product.display_name,
+        'current_quantity': product.quantity,
+        'calculated_quantity': calculated_total,
+        'matches': matches,
+        'entries_count': entries.count(),
+        'entries': entry_details,
+        'suggestion': 'Quantities match!' if matches else f'Expected {calculated_total} but have {product.quantity}'
+    })

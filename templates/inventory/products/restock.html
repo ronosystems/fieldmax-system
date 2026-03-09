@@ -90,7 +90,14 @@
                     <div class="card bg-light mb-3">
                         <div class="card-body">
                             <div class="d-flex justify-content-between align-items-start">
-                                <h6 class="fw-bold" id="productName"></h6>
+                                <div>
+                                    <h5 class="fw-bold" id="productName"></h5>
+                                    <!-- Brand and Model Display -->
+                                    <div class="mt-2">
+                                        <span class="badge bg-primary" id="productBrand">-</span>
+                                        <span class="badge bg-secondary ms-2" id="productModel">-</span>
+                                    </div>
+                                </div>
                                 <span class="badge bg-success">Bulk Item</span>
                             </div>
                             <hr>
@@ -102,6 +109,14 @@
                                 <tr>
                                     <th>Category:</th>
                                     <td id="productCategory"></td>
+                                </tr>
+                                <tr>
+                                    <th>Brand:</th>
+                                    <td id="brandDetail"></td>
+                                </tr>
+                                <tr>
+                                    <th>Model:</th>
+                                    <td id="modelDetail"></td>
                                 </tr>
                                 <tr>
                                     <th>Current Stock:</th>
@@ -231,6 +246,20 @@
         font-size: 11px;
         margin-left: 8px;
     }
+    .brand-badge {
+        background-color: #17a2b8;
+        color: white;
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+    }
+    .model-badge {
+        background-color: #6c757d;
+        color: white;
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+    }
 </style>
 {% endblock %}
 
@@ -265,6 +294,10 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Display fields
     const productName = document.getElementById('productName');
+    const productBrand = document.getElementById('productBrand');
+    const productModel = document.getElementById('productModel');
+    const brandDetail = document.getElementById('brandDetail');
+    const modelDetail = document.getElementById('modelDetail');
     const productCode = document.getElementById('productCode');
     const productCategory = document.getElementById('productCategory');
     const currentStock = document.getElementById('currentStock');
@@ -359,14 +392,21 @@ document.addEventListener('DOMContentLoaded', function() {
         let html = '';
         products.forEach(p => {
             const stockClass = p.current_quantity <= 5 ? 'bg-warning' : 'bg-info';
+            const brand = p.brand || 'N/A';
+            const model = p.model || 'N/A';
+            
             html += `
                 <button class="list-group-item list-group-item-action search-result-item" 
-                        onclick="selectProductFromList(${p.id}, '${p.name.replace(/'/g, "\\'")}', '${p.product_code}', '${p.category}', ${p.current_quantity}, ${p.buying_price}, ${p.selling_price}, ${p.reorder_level || 5})">
+                        onclick="selectProductFromList(${JSON.stringify(p)})">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <strong>${p.name}</strong>
                             <span class="badge bg-secondary ms-2">${p.product_code}</span>
                             <span class="bulk-badge ms-2">BULK</span>
+                            <div class="mt-2">
+                                <span class="badge bg-info">Brand: ${brand}</span>
+                                <span class="badge bg-secondary ms-2">Model: ${model}</span>
+                            </div>
                         </div>
                         <div>
                             <span class="badge ${stockClass}">Stock: ${p.current_quantity}</span>
@@ -378,17 +418,8 @@ document.addEventListener('DOMContentLoaded', function() {
         productsList.innerHTML = html;
     }
     
-    window.selectProductFromList = function(id, name, code, category, stock, buying, selling, reorder) {
-        selectProduct({
-            id: id,
-            name: name,
-            product_code: code,
-            category: category,
-            current_quantity: stock,
-            buying_price: buying,
-            selling_price: selling,
-            reorder_level: reorder
-        });
+    window.selectProductFromList = function(product) {
+        selectProduct(product);
     };
     
     function selectProduct(product) {
@@ -405,10 +436,20 @@ document.addEventListener('DOMContentLoaded', function() {
         // Set form values
         productId.value = product.id;
         
-        // Update display
+        // Update display with name, brand and model
         productName.textContent = product.name;
         productCode.textContent = product.product_code;
         productCategory.textContent = product.category;
+        
+        // Display brand and model
+        const brand = product.brand || 'N/A';
+        const model = product.model || 'N/A';
+        
+        productBrand.textContent = brand;
+        productModel.textContent = model;
+        brandDetail.textContent = brand;
+        modelDetail.textContent = model;
+        
         currentStock.textContent = product.current_quantity;
         reorderLevel.textContent = product.reorder_level || 5;
         currentBuying.textContent = product.buying_price.toFixed(0);

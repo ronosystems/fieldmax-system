@@ -72,4 +72,5 @@ urlpatterns = [
     path('reviews/', views.product_reviews, name='product_reviews'),
     path('reports/inventory/', views.inventory_report, name='inventory_report'),
     path('reports/category-analysis/', views.category_analysis, name='category_analysis'),
+    path('check-product-quantity/<int:product_id>/', views.check_product_quantity, name='check_product_quantity'),
 ]
