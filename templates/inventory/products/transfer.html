@@ -1,0 +1,323 @@
+{% extends 'inventory/staff_base.html' %}
+{% load static %}
+
+{% block title %}Transfer Products{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-exchange-alt me-2"></i>Transfer Products</h2>
+        <a href="{% url 'inventory:product_list' %}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left me-2"></i>Back to Products
+        </a>
+    </div>
+
+    <div class="row">
+        <!-- Selected Products Column -->
+        <div class="col-md-5">
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-list me-2"></i>Products to Transfer</h5>
+                </div>
+                <div class="card-body">
+                    {% if selected_products %}
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Selected Products ({{ selected_products|length }})</label>
+                            <div class="border rounded p-3" style="max-height: 400px; overflow-y: auto;">
+                                {% for product in selected_products %}
+                                <div class="d-flex justify-content-between align-items-center mb-2 p-2 bg-light rounded">
+                                    <div>
+                                        <strong>{{ product.display_name }}</strong><br>
+                                        <small class="text-muted">SKU: {{ product.sku_value }}</small>
+                                        <br>
+                                        <small class="text-info">
+                                            <i class="fas fa-user me-1"></i>Current Owner: {{ product.owner.username|default:"FIELDMAX" }}
+                                        </small>
+                                    </div>
+                                    <span class="badge {% if product.category.is_single_item %}bg-info{% else %}bg-secondary{% endif %}">
+                                        {% if product.category.is_single_item %}Single{% else %}Bulk{% endif %}
+                                    </span>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% else %}
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            No products selected for transfer. 
+                            <a href="{% url 'inventory:product_list' %}" class="alert-link">Go back and select products</a>.
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Transfer Form Column -->
+        <div class="col-md-7">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="fas fa-exchange-alt me-2"></i>Transfer Details</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" action="{% url 'inventory:product_transfer' %}" id="transferForm">
+                        {% csrf_token %}
+                        
+                        <!-- Hidden SKUs field -->
+                        <input type="hidden" name="skus" id="skusInput" value="{{ skus_string }}">
+
+                        <!-- Sender Info (Read-only) -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">Transferring From (Current Owner)</label>
+                            <div class="bg-light p-3 rounded">
+                                <div class="d-flex align-items-center">
+                                    <div class="user-avatar me-3">
+                                        <i class="fas fa-user-circle fa-2x text-primary"></i>
+                                    </div>
+                                    <div>
+                                        <h6 class="mb-1">{{ request.user.get_full_name|default:request.user.username }}</h6>
+                                        <small class="text-muted">{{ request.user.email }}</small>
+                                        <br>
+                                        <span class="badge bg-info mt-1">Current Owner</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Receiver Search -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold required">Transfer To (New Owner)</label>
+                            <div class="position-relative">
+                                <input type="text" 
+                                       class="form-control form-control-lg" 
+                                       id="userSearch" 
+                                       placeholder="Search by username, name or email..."
+                                       autocomplete="off">
+                                <input type="hidden" name="receiver_id" id="receiverId" required>
+                                
+                                <!-- Suggestions dropdown -->
+                                <div id="userSuggestions" class="list-group mt-1" 
+                                     style="position: absolute; z-index: 1000; width: 100%; max-height: 300px; overflow-y: auto; display: none; box-shadow: 0 5px 15px rgba(0,0,0,0.2);">
+                                </div>
+                            </div>
+                            
+                            <!-- Selected User Display -->
+                            <div id="selectedUserCard" class="mt-3 p-3 bg-success bg-opacity-10 rounded" style="display: none;">
+                                <div class="d-flex align-items-center">
+                                    <div class="me-3">
+                                        <i class="fas fa-check-circle fa-2x text-success"></i>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <h6 class="mb-1" id="selectedUserName"></h6>
+                                        <small class="text-muted" id="selectedUserEmail"></small>
+                                    </div>
+                                    <button type="button" class="btn btn-sm btn-outline-danger" id="clearUserBtn">
+                                        <i class="fas fa-times"></i> Change
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Transfer Summary -->
+                        <div class="card bg-light mb-4">
+                            <div class="card-body">
+                                <h6 class="fw-bold mb-3">Transfer Summary</h6>
+                                <div class="row">
+                                    <div class="col-6">
+                                        <p class="mb-1">Total Products:</p>
+                                        <p class="mb-1">Single Items:</p>
+                                        <p class="mb-1">Bulk Items:</p>
+                                        <p class="mb-1">Current Owner:</p>
+                                        <p class="mb-1">New Owner:</p>
+                                    </div>
+                                    <div class="col-6">
+                                        <p class="mb-1 fw-bold">{{ selected_products|length }}</p>
+                                        <p class="mb-1 fw-bold">{{ single_count }}</p>
+                                        <p class="mb-1 fw-bold">{{ bulk_count }}</p>
+                                        <p class="mb-1 fw-bold">{{ request.user.username }}</p>
+                                        <p class="mb-1 fw-bold" id="summaryReceiver">Not selected</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Warning about re-transfer -->
+                        <div class="alert alert-info mb-4">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Note:</strong> You can transfer these products to any other user. 
+                            The new owner will be able to manage these products in their inventory.
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary btn-lg flex-grow-1" id="submitBtn">
+                                <i class="fas fa-exchange-alt me-2"></i>Confirm Transfer
+                            </button>
+                            <a href="{% url 'inventory:product_list' %}" class="btn btn-secondary btn-lg">
+                                <i class="fas fa-times me-2"></i>Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .required:after {
+        content: " *";
+        color: #dc3545;
+        font-weight: normal;
+    }
+    #userSuggestions .user-suggestion-item {
+        cursor: pointer;
+        padding: 12px 15px;
+        border-bottom: 1px solid #dee2e6;
+        transition: background 0.2s;
+    }
+    #userSuggestions .user-suggestion-item:hover {
+        background: #f8f9fa;
+    }
+    #userSuggestions .user-suggestion-item:last-child {
+        border-bottom: none;
+    }
+    .user-avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // ============================================
+    // USER SEARCH FUNCTIONALITY
+    // ============================================
+    let searchTimer;
+    let currentRequest = null;
+    
+    const userSearch = document.getElementById('userSearch');
+    const userSuggestions = document.getElementById('userSuggestions');
+    const receiverId = document.getElementById('receiverId');
+    const selectedUserCard = document.getElementById('selectedUserCard');
+    const selectedUserName = document.getElementById('selectedUserName');
+    const selectedUserEmail = document.getElementById('selectedUserEmail');
+    const clearUserBtn = document.getElementById('clearUserBtn');
+    const summaryReceiver = document.getElementById('summaryReceiver');
+    const transferForm = document.getElementById('transferForm');
+    const submitBtn = document.getElementById('submitBtn');
+    
+    const searchUsersUrl = '/inventory/api/search-users/';
+    
+    if (userSearch) {
+        userSearch.addEventListener('input', function() {
+            clearTimeout(searchTimer);
+            const query = this.value.trim();
+            
+            if (query.length < 2) {
+                userSuggestions.style.display = 'none';
+                return;
+            }
+            
+            userSuggestions.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div> Searching...</div>';
+            userSuggestions.style.display = 'block';
+            
+            searchTimer = setTimeout(function() {
+                if (currentRequest) {
+                    currentRequest.abort();
+                }
+                
+                currentRequest = $.ajax({
+                    url: searchUsersUrl,
+                    method: 'GET',
+                    data: { q: query },
+                    success: function(users) {
+                        if (users.length > 0) {
+                            let html = '';
+                            users.forEach(function(user) {
+                                const fullName = user.full_name.replace(/'/g, "\\'");
+                                html += `
+                                    <div class="user-suggestion-item" onclick="selectUser(${user.id}, '${fullName}', '${user.email}')">
+                                        <strong>${user.full_name}</strong><br>
+                                        <small class="text-muted">${user.email} (${user.username})</small>
+                                    </div>
+                                `;
+                            });
+                            userSuggestions.innerHTML = html;
+                        } else {
+                            userSuggestions.innerHTML = '<div class="text-center py-3 text-muted">No users found</div>';
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Search error:', error);
+                        userSuggestions.innerHTML = '<div class="text-center py-3 text-danger">Error searching users</div>';
+                    },
+                    complete: function() {
+                        currentRequest = null;
+                    }
+                });
+            }, 300);
+        });
+        
+        // Hide suggestions when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!userSearch.contains(e.target) && !userSuggestions.contains(e.target)) {
+                userSuggestions.style.display = 'none';
+            }
+        });
+    }
+    
+    // Select user function
+    window.selectUser = function(id, name, email) {
+        receiverId.value = id;
+        selectedUserName.textContent = name;
+        selectedUserEmail.textContent = email;
+        selectedUserCard.style.display = 'block';
+        userSearch.value = '';
+        userSearch.disabled = true;
+        userSuggestions.style.display = 'none';
+        summaryReceiver.textContent = name;
+    };
+    
+    // Clear selected user
+    if (clearUserBtn) {
+        clearUserBtn.addEventListener('click', function() {
+            receiverId.value = '';
+            selectedUserCard.style.display = 'none';
+            userSearch.disabled = false;
+            userSearch.focus();
+            summaryReceiver.textContent = 'Not selected';
+        });
+    }
+    
+    // Form validation
+    transferForm.addEventListener('submit', function(e) {
+        if (!receiverId.value) {
+            e.preventDefault();
+            alert('Please select a user to transfer products to.');
+            return;
+        }
+        
+        // Check if trying to transfer to self
+        const currentUser = "{{ request.user.id }}";
+        if (receiverId.value === currentUser) {
+            e.preventDefault();
+            alert('You cannot transfer products to yourself. Please select a different user.');
+            return;
+        }
+        
+        // Disable submit button to prevent double submission
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Transferring...';
+    });
+});
+</script>
+{% endblock %}

@@ -10,17 +10,21 @@
         <a href="{% url 'inventory:product_add' %}" class="btn btn-primary">
             <i class="fas fa-plus me-2"></i>Add New Product
         </a>
+        
         <a href="{% url 'inventory:product_bulk_add' %}" class="btn btn-success">
             <i class="fas fa-copy me-2"></i>Bulk Add Products
-        </a>        
+        </a>
+
         <a href="{% url 'inventory:product_restock' %}" class="btn btn-success">
             <i class="fas fa-copy me-2"></i> Restock Products
         </a>
+
         <a href="{% url 'inventory:return_product' %}" class="btn btn-warning">
             <i class="fas fa-undo-alt me-2"></i>Return Product
         </a>
-        <!-- Transfer Button in Header -->
-        <button type="button" class="btn btn-warning me-2" onclick="showTransferModal()">
+
+        <!-- Transfer Button -->
+        <button type="button" class="btn btn-warning me-2" onclick="goToTransferPage()">
             <i class="fas fa-exchange-alt me-2"></i>Transfer Products
         </button>
     </div>
@@ -108,6 +112,7 @@
                         <th>Barcode</th>
                         <th>Stock</th>
                         <th>Status</th>
+                        <th>Owner</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -119,7 +124,11 @@
                                    data-id="{{ product.id }}"
                                    data-sku="{{ product.sku_value }}"
                                    data-name="{{ product.display_name }}"
-                                   {% if not product.sku_value or product.status != 'available' or product.owner != request.user %}disabled{% endif %}>
+                                   data-owner="{{ product.owner.id }}"
+                                   {% if not product.sku_value or product.status != 'available' %}disabled{% endif %}
+                                   
+                                   {# Disable if not owner AND not authorized #}
+                                   {% if product.owner != request.user and not can_transfer_any %}disabled{% endif %}>
                         </td>
                         <td><span class="badge bg-secondary">{{ product.product_code }}</span></td>
                         <td>
@@ -180,6 +189,16 @@
                                 <span class="badge bg-secondary">{{ product.get_status_display }}</span>
                             {% endif %}
                         </td>
+                        <!-- Owner Column -->
+                        <td>
+                            <span class="badge {% if product.owner == request.user %}bg-success{% else %}bg-info{% endif %}">
+                                {% if product.owner %}
+                                    {{ product.owner.username }}
+                                {% else %}
+                                    FIELDMAX
+                                {% endif %}
+                            </span>
+                        </td>
                         <td>
                             <div class="btn-group" role="group">
                                 <a href="{% url 'inventory:product_detail' product.id %}" class="btn btn-sm btn-info" title="View">
@@ -197,7 +216,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="12" class="text-center py-4">
+                        <td colspan="13" class="text-center py-4">
                             <i class="fas fa-box-open fa-3x text-muted mb-3"></i>
                             <p class="text-muted">No products found</p>
                             <a href="{% url 'inventory:product_add' %}" class="btn btn-primary btn-sm">
@@ -215,9 +234,14 @@
             <div class="d-flex justify-content-between align-items-center p-2 bg-light rounded">
                 <div>
                     <span class="fw-bold" id="selectedCount">0</span> products selected
+                    {% if can_transfer_any %}
+                    <span class="text-info ms-2">(Authorized: can select any product)</span>
+                    {% else %}
+                    <span class="text-muted ms-2">(Only products you own)</span>
+                    {% endif %}
                 </div>
                 <div>
-                    <button type="button" class="btn btn-sm btn-warning" onclick="showTransferModal()">
+                    <button type="button" class="btn btn-sm btn-warning" onclick="goToTransferPage()">
                         <i class="fas fa-exchange-alt me-1"></i>Transfer Selected
                     </button>
                     <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearSelections()">
@@ -264,102 +288,8 @@
 </nav>
 {% endif %}
 
-<!-- Transfer Modal -->
-<div class="modal fade" id="transferModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header bg-primary text-white">
-                <h5 class="modal-title"><i class="fas fa-exchange-alt me-2"></i>Transfer Products</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <form method="post" action="{% url 'inventory:product_transfer' %}" id="transferForm">
-                {% csrf_token %}
-                <div class="modal-body">
-                    <!-- Selected Products Summary -->
-                    <div class="card mb-3">
-                        <div class="card-header bg-info text-white">
-                            <h6 class="mb-0"><i class="fas fa-list me-2"></i>Products to Transfer</h6>
-                        </div>
-                        <div class="card-body">
-                            <div class="mb-3">
-                                <textarea name="skus" id="skuTextarea" class="form-control" rows="4" readonly 
-                                          placeholder="Selected products will appear here..."></textarea>
-                                <small class="text-muted">Total: <span id="transferSkuCount">0</span> items</small>
-                            </div>
-                            
-                            <!-- Selected Products Preview -->
-                            <div id="selectedProductsPreview" class="mt-2 d-flex flex-wrap gap-1"></div>
-                            
-                            <button type="button" class="btn btn-sm btn-outline-danger mt-2" id="clearSelectedBtn">
-                                <i class="fas fa-trash me-1"></i>Clear Selection
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <!-- Receiver User Search -->
-                    <div class="card mb-3">
-                        <div class="card-header bg-light">
-                            <h6 class="mb-0"><i class="fas fa-user me-2"></i>Select Receiver</h6>
-                        </div>
-                        <div class="card-body">
-                            <div class="mb-3 position-relative">
-                                <label class="form-label required">Search User</label>
-                                <input type="text" class="form-control" id="userSearch" 
-                                       placeholder="Type username, name or email..." autocomplete="off">
-                                <input type="hidden" name="receiver_id" id="receiverId" required>
-                                <div id="userSuggestions" class="list-group mt-1" style="max-height: 200px; overflow-y: auto; display: none;"></div>
-                            </div>
-                            
-                            <!-- Selected User Display -->
-                            <div id="selectedUserCard" class="selected-user-card" style="display: none;">
-                                <div class="d-flex align-items-center">
-                                    <div class="user-avatar me-3">
-                                        <i class="fas fa-user-circle fa-2x text-primary"></i>
-                                    </div>
-                                    <div class="flex-grow-1">
-                                        <h6 class="mb-1" id="selectedUserName"></h6>
-                                        <small class="text-muted" id="selectedUserEmail"></small>
-                                    </div>
-                                    <button type="button" class="btn btn-sm btn-outline-danger" id="clearUserBtn">
-                                        <i class="fas fa-times"></i>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Transfer Summary -->
-                    <div class="card">
-                        <div class="card-header bg-success text-white">
-                            <h6 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Transfer Summary</h6>
-                        </div>
-                        <div class="card-body">
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <p><strong>Sender:</strong> {{ request.user.get_full_name|default:request.user.username }}</p>
-                                    <p><strong>Receiver:</strong> <span id="summaryReceiver">Not selected</span></p>
-                                </div>
-                                <div class="col-md-6">
-                                    <p><strong>Items to Transfer:</strong> <span id="summaryTransferCount">0</span></p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                        <i class="fas fa-times me-2"></i>Cancel
-                    </button>
-                    <button type="submit" class="btn btn-primary" id="transferSubmitBtn">
-                        <i class="fas fa-exchange-alt me-2"></i>Transfer Products
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
 <style>
+    /* Your existing styles */
     .required:after {
         content: " *";
         color: #dc3545;
@@ -427,27 +357,6 @@
             transform: scale(1);
         }
     }
-    #userSuggestions {
-        position: absolute;
-        z-index: 1000;
-        background: white;
-        border: 1px solid #dee2e6;
-        border-radius: 8px;
-        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-        width: 100%;
-    }
-    .user-suggestion-item {
-        cursor: pointer;
-        padding: 10px 15px;
-        border-bottom: 1px solid #dee2e6;
-        transition: background 0.2s;
-    }
-    .user-suggestion-item:hover {
-        background: #f8f9fa;
-    }
-    .user-suggestion-item:last-child {
-        border-bottom: none;
-    }
     /* Style for disabled checkboxes */
     .product-checkbox:disabled {
         opacity: 0.3;
@@ -459,6 +368,11 @@
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Get user permission from context
+    const canTransferAny = {{ can_transfer_any|yesno:"true,false" }};
+    
+    console.log('Can Transfer Any:', canTransferAny);
+    
     // ============================================
     // SINGLE PRODUCT SEARCH
     // ============================================
@@ -490,16 +404,37 @@ document.addEventListener('DOMContentLoaded', function() {
     const productCheckboxes = document.querySelectorAll('.product-checkbox');
     const selectedProductsBar = document.getElementById('selectedProductsBar');
     const selectedCount = document.getElementById('selectedCount');
-    const skuTextarea = document.getElementById('skuTextarea');
-    const transferSkuCount = document.getElementById('transferSkuCount');
-    const selectedProductsPreview = document.getElementById('selectedProductsPreview');
     const clearSelectedBtn = document.getElementById('clearSelectedBtn');
     
     let selectedProducts = [];
     
-    // Update selected products display
+    // Load selected products from sessionStorage
+    function loadSelectedProducts() {
+        const saved = sessionStorage.getItem('selectedProducts');
+        if (saved) {
+            try {
+                selectedProducts = JSON.parse(saved);
+                // Verify products still exist and are still selectable
+                selectedProducts = selectedProducts.filter(savedProduct => {
+                    const checkbox = Array.from(productCheckboxes).find(
+                        cb => cb.dataset.id === savedProduct.id && !cb.disabled
+                    );
+                    return checkbox !== undefined;
+                });
+                updateSelectedProducts();
+            } catch (e) {
+                console.error('Error loading saved selections:', e);
+            }
+        }
+    }
+    
+    // Save selected products
+    function saveSelectedProducts() {
+        sessionStorage.setItem('selectedProducts', JSON.stringify(selectedProducts));
+    }
+    
+    // Update display
     function updateSelectedProducts() {
-        // Update checkboxes state
         productCheckboxes.forEach(cb => {
             if (!cb.disabled) {
                 const productId = cb.dataset.id;
@@ -507,29 +442,13 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
         
-        // Update selected count and bar
         const count = selectedProducts.length;
         selectedCount.textContent = count;
         selectedProductsBar.style.display = count > 0 ? 'block' : 'none';
-        
-        // Update SKU textarea
-        const skus = selectedProducts.map(p => p.sku).join('\n');
-        skuTextarea.value = skus;
-        transferSkuCount.textContent = count;
-        
-        // Update preview badges
-        let previewHtml = '';
-        selectedProducts.forEach((product, index) => {
-            const shortSku = product.sku.slice(-6);
-            previewHtml += `<span class="product-badge">${product.name} (...${shortSku}) <span class="remove-product" onclick="removeProduct(${index})"><i class="fas fa-times"></i></span></span>`;
-        });
-        selectedProductsPreview.innerHTML = previewHtml;
-        
-        // Update transfer summary
-        document.getElementById('summaryTransferCount').textContent = count;
+        saveSelectedProducts();
     }
     
-    // Add product to selection
+    // Add product
     function addProduct(product) {
         if (!selectedProducts.some(p => p.id === product.id)) {
             selectedProducts.push(product);
@@ -537,21 +456,25 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // Remove product from selection
+    // Remove product
     window.removeProduct = function(index) {
         selectedProducts.splice(index, 1);
         updateSelectedProducts();
     };
     
-    // Clear all selections
+    // Clear all
     window.clearSelections = function() {
         selectedProducts = [];
         updateSelectedProducts();
+        if (selectAllCheckbox) selectAllCheckbox.checked = false;
+        sessionStorage.removeItem('selectedProducts');
     };
     
-    clearSelectedBtn.addEventListener('click', clearSelections);
+    if (clearSelectedBtn) {
+        clearSelectedBtn.addEventListener('click', clearSelections);
+    }
     
-    // Handle individual checkbox changes
+    // Handle checkbox changes
     productCheckboxes.forEach(checkbox => {
         checkbox.addEventListener('change', function() {
             if (this.disabled) return;
@@ -579,7 +502,7 @@ document.addEventListener('DOMContentLoaded', function() {
         selectAllCheckbox.addEventListener('change', function() {
             if (this.checked) {
                 productCheckboxes.forEach(cb => {
-                    if (!cb.disabled) {
+                    if (!cb.disabled && !cb.checked) {
                         cb.checked = true;
                         const product = {
                             id: cb.dataset.id,
@@ -604,132 +527,20 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // ============================================
-    // TRANSFER MODAL FUNCTIONALITY
+    // GO TO TRANSFER PAGE
     // ============================================
-    let searchTimer;
-    let currentRequest = null;
-    
-    const transferModal = document.getElementById('transferModal');
-    const userSearch = document.getElementById('userSearch');
-    const userSuggestions = document.getElementById('userSuggestions');
-    const receiverId = document.getElementById('receiverId');
-    const selectedUserCard = document.getElementById('selectedUserCard');
-    const selectedUserName = document.getElementById('selectedUserName');
-    const selectedUserEmail = document.getElementById('selectedUserEmail');
-    const clearUserBtn = document.getElementById('clearUserBtn');
-    const summaryReceiver = document.getElementById('summaryReceiver');
-    const transferForm = document.getElementById('transferForm');
-    
-    // Show transfer modal
-    window.showTransferModal = function() {
+    window.goToTransferPage = function() {
         if (selectedProducts.length === 0) {
             alert('Please select at least one product to transfer.');
             return;
         }
-        new bootstrap.Modal(transferModal).show();
+        
+        const skus = selectedProducts.map(p => p.sku).join(',');
+        sessionStorage.removeItem('selectedProducts');
+        window.location.href = `/inventory/transfer/?skus=${encodeURIComponent(skus)}`;
     };
     
-    // Update summary when modal opens
-    transferModal.addEventListener('show.bs.modal', function() {
-        updateSelectedProducts();
-    });
-    
-    // User search functionality
-    if (userSearch) {
-        userSearch.addEventListener('input', function() {
-            clearTimeout(searchTimer);
-            const query = this.value.trim();
-            
-            if (query.length < 2) {
-                userSuggestions.style.display = 'none';
-                return;
-            }
-            
-            userSuggestions.innerHTML = '<div class="text-center py-2"><div class="spinner-border spinner-border-sm text-primary"></div> Searching...</div>';
-            userSuggestions.style.display = 'block';
-            
-            searchTimer = setTimeout(function() {
-                if (currentRequest) {
-                    currentRequest.abort();
-                }
-                
-                currentRequest = $.ajax({
-                    url: '{% url "inventory:search_users" %}',
-                    method: 'GET',
-                    data: { q: query },
-                    success: function(users) {
-                        if (users.length > 0) {
-                            let html = '';
-                            users.forEach(function(user) {
-                                const fullName = user.full_name.replace(/'/g, "\\'");
-                                html += `
-                                    <div class="user-suggestion-item" onclick="selectUser(${user.id}, '${fullName}', '${user.email}')">
-                                        <strong>${user.full_name}</strong><br>
-                                        <small class="text-muted">${user.email} (${user.username})</small>
-                                    </div>
-                                `;
-                            });
-                            userSuggestions.innerHTML = html;
-                        } else {
-                            userSuggestions.innerHTML = '<div class="text-center py-2 text-muted">No users found</div>';
-                        }
-                    },
-                    error: function() {
-                        userSuggestions.innerHTML = '<div class="text-center py-2 text-danger">Error searching users</div>';
-                    },
-                    complete: function() {
-                        currentRequest = null;
-                    }
-                });
-            }, 300);
-        });
-        
-        // Hide suggestions when clicking outside
-        document.addEventListener('click', function(e) {
-            if (!userSearch.contains(e.target) && !userSuggestions.contains(e.target)) {
-                userSuggestions.style.display = 'none';
-            }
-        });
-    }
-    
-    // Select user function
-    window.selectUser = function(id, name, email) {
-        receiverId.value = id;
-        selectedUserName.textContent = name;
-        selectedUserEmail.textContent = email;
-        selectedUserCard.style.display = 'block';
-        userSearch.value = '';
-        userSuggestions.style.display = 'none';
-        summaryReceiver.textContent = name;
-    };
-    
-    // Clear selected user
-    if (clearUserBtn) {
-        clearUserBtn.addEventListener('click', function() {
-            receiverId.value = '';
-            selectedUserCard.style.display = 'none';
-            summaryReceiver.textContent = 'Not selected';
-        });
-    }
-    
-    // Form validation
-    transferForm.addEventListener('submit', function(e) {
-        if (!receiverId.value) {
-            e.preventDefault();
-            alert('Please select a receiver user.');
-            return;
-        }
-        
-        if (selectedProducts.length === 0) {
-            e.preventDefault();
-            alert('No products selected for transfer.');
-            return;
-        }
-        
-        if (!confirm(`Are you sure you want to transfer ${selectedProducts.length} products?`)) {
-            e.preventDefault();
-        }
-    });
+    loadSelectedProducts();
 });
 </script>
 {% endblock %}

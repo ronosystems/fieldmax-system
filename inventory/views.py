@@ -542,8 +542,6 @@ def dashboard(request):
 
 
 
-
-
 @login_required
 def product_list(request):
     """List all products with filtering"""
@@ -580,12 +578,41 @@ def product_list(request):
     
     categories = Category.objects.filter(is_active=True)
     
+    # ============================================
+    # GET USER GROUPS (ROLES)
+    # ============================================
+    user_groups = list(request.user.groups.values_list('name', flat=True))
+    
+    # Define which groups can transfer any products (as a list)
+    authorized_roles = [
+        'administrator',
+        'store_manager', 
+        'inventory_manager',
+        'supervisor',
+        'sales_manager',
+        'admin',
+    ]
+    
+    # Check if user has any authorized group
+    can_transfer_any = request.user.is_superuser or any(
+        group in authorized_roles for group in user_groups
+    )
+    
     context = {
         'products': page_obj,
         'categories': categories,
+        'user_groups': user_groups,
+        'is_superuser': request.user.is_superuser,
+        'can_transfer_any': can_transfer_any,
+        'authorized_roles': authorized_roles,  # Pass the list directly
     }
     
     return render(request, 'inventory/products/list.html', context)
+
+
+
+
+
 
 @login_required
 def product_detail(request, pk):  # Fixed: added 'request' parameter
@@ -2044,6 +2071,59 @@ def search_users(request):
 
 
 
+
+
+
+
+@login_required
+def product_transfer_page(request):
+    """Display transfer page with selected products"""
+    # Get SKUs from query string
+    skus_param = request.GET.get('skus', '')
+    
+    if not skus_param:
+        messages.warning(request, 'No products selected for transfer.')
+        return redirect('inventory:product_list')
+    
+    # Split SKUs (they come as comma-separated)
+    sku_list = [sku.strip() for sku in skus_param.split(',') if sku.strip()]
+    
+    # Get products by SKU
+    products = Product.objects.filter(
+        sku_value__in=sku_list,
+        is_active=True
+    ).select_related('category', 'owner')
+    
+    # Filter products that belong to current user (or admin)
+    is_admin = request.user.is_superuser or request.user.is_staff
+    if is_admin:
+        user_products = list(products)  # Admins can transfer any products
+    else:
+        user_products = [p for p in products if p.owner == request.user]
+    
+    if not user_products:
+        messages.error(request, 'No valid products found to transfer.')
+        return redirect('inventory:product_list')
+    
+    # Count single vs bulk items
+    single_count = sum(1 for p in user_products if p.category.is_single_item)
+    bulk_count = len(user_products) - single_count
+    
+    # Create SKUs string for form
+    skus_string = '\n'.join([p.sku_value for p in user_products])
+    
+    context = {
+        'selected_products': user_products,
+        'single_count': single_count,
+        'bulk_count': bulk_count,
+        'skus_string': skus_string,
+    }
+    
+    return render(request, 'inventory/products/transfer.html', context)
+
+
+
+
 @login_required
 def product_transfer(request):
     """Transfer multiple products from current user to another user"""
@@ -2172,14 +2252,14 @@ def product_transfer(request):
                 
                 # Process transfers
                 transferred_count = 0
-                transferred_products = []  # Store actual product objects for notification
+                transferred_products = []
                 transferred_skus = []
                 
                 for item in products_to_transfer:
                     product = item['product']
                     old_owner = product.owner.username if product.owner else "FIELDMAX"
                     
-                    # Transfer to new owner
+                    # Transfer to new owner (ALLOWS RE-TRANSFER)
                     product.owner = receiver
                     product.save()
                     
@@ -2195,40 +2275,7 @@ def product_transfer(request):
                     transferred_products.append(product)
                     transferred_skus.append(product.sku_value)
                 
-
-
-
-
-
-
-
-
-
-                # ============================================
-                # ADD ADMIN NOTIFICATION HERE
-                # ============================================
-                """
-                try:
-                    from utils.notifications import AdminNotifier
-                    AdminNotifier.notify_products_transferred(
-                        products=transferred_products,
-                        from_user=request.user,
-                        to_user=receiver,
-                        transferred_by=request.user
-                    )
-                    logger.info(f"Admin notification sent for transfer of {transferred_count} products")
-                except ImportError:
-                    logger.warning("AdminNotifier not available - skipping notification")
-                except Exception as e:
-                    logger.error(f"Failed to send transfer notification: {str(e)}")
-                """
-                
-
-
-
-
-
-
+                # Success message
                 messages.success(
                     request,
                     f'✅ Successfully transferred {transferred_count} products to {receiver.get_full_name() or receiver.username}.'
@@ -2251,7 +2298,6 @@ def product_transfer(request):
     
     # GET request - redirect to product list
     return redirect('inventory:product_list')
-
 
 
 

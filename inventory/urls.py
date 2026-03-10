@@ -18,6 +18,7 @@ urlpatterns = [
     path('products/<int:pk>/delete/', views.product_delete, name='product_delete'),
     path('api/search-users/', views.search_users, name='search_users'),
     path('product-transfer/', views.product_transfer, name='product_transfer'),
+    path('transfer/', views.product_transfer_page, name='product_transfer_page'),
 
     # Restocking
     path('restock/search/', views.search_product_for_restock, name='restock-search'),
