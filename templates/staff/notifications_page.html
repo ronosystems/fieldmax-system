@@ -8,8 +8,11 @@
 <style>
     .notifications-container {
         padding: 2rem;
-        max-width: 1400px;
+        max-width: 1600px;
         margin: 0 auto;
+        height: calc(100vh - 100px);
+        display: flex;
+        flex-direction: column;
     }
 
     /* Header */
@@ -79,6 +82,19 @@
         display: flex;
         align-items: center;
         gap: 0.75rem;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .summary-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+        border-color: #2563eb;
+    }
+
+    .summary-card.active {
+        border: 2px solid #2563eb;
+        background: #f0f9ff;
     }
 
     .summary-icon {
@@ -92,35 +108,12 @@
         flex-shrink: 0;
     }
 
-    .summary-icon.red {
-        background: #fee2e2;
-        color: #dc2626;
-    }
-
-    .summary-icon.orange {
-        background: #fef3c7;
-        color: #d97706;
-    }
-
-    .summary-icon.blue {
-        background: #dbeafe;
-        color: #2563eb;
-    }
-
-    .summary-icon.green {
-        background: #dcfce7;
-        color: #16a34a;
-    }
-
-    .summary-icon.purple {
-        background: #e9d5ff;
-        color: #7e22ce;
-    }
-
-    .summary-icon.indigo {
-        background: #e0e7ff;
-        color: #4f46e5;
-    }
+    .summary-icon.red { background: #fee2e2; color: #dc2626; }
+    .summary-icon.orange { background: #fef3c7; color: #d97706; }
+    .summary-icon.blue { background: #dbeafe; color: #2563eb; }
+    .summary-icon.green { background: #dcfce7; color: #16a34a; }
+    .summary-icon.purple { background: #e9d5ff; color: #7e22ce; }
+    .summary-icon.indigo { background: #e0e7ff; color: #4f46e5; }
 
     .summary-info h3 {
         font-size: 1.25rem;
@@ -137,34 +130,28 @@
         line-height: 1.2;
     }
 
-    /* Three Column Layout for Staff Notifications */
-    .three-column {
+    /* Main Two-Column Layout */
+    .notifications-main {
         display: grid;
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: 1fr 1.5fr;
         gap: 1.5rem;
-        margin-bottom: 2rem;
+        flex: 1;
+        min-height: 0;
     }
 
-    /* Two Column Layout */
-    .two-column {
-        display: grid;
-        grid-template-columns: 1.5fr 1fr;
-        gap: 1.5rem;
-        margin-bottom: 2rem;
-    }
-
-    /* Notification Cards */
-    .notification-card {
+    /* Column A - Notification List */
+    .notifications-list {
         background: white;
         border-radius: 20px;
         border: 1px solid #e9ecef;
         overflow: hidden;
         box-shadow: 0 4px 12px rgba(0,0,0,0.02);
-        margin-bottom: 1.5rem;
-        height: fit-content;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
     }
 
-    .card-header {
+    .list-header {
         padding: 1.2rem 1.5rem;
         background: #f8fafc;
         border-bottom: 1px solid #e9ecef;
@@ -173,7 +160,7 @@
         justify-content: space-between;
     }
 
-    .card-header h2 {
+    .list-header h2 {
         font-size: 1.1rem;
         font-weight: 600;
         color: #1e293b;
@@ -183,160 +170,254 @@
         gap: 0.5rem;
     }
 
-    .card-header h2 i {
+    .list-header h2 i {
         color: #2563eb;
     }
 
-    .badge-count {
-        background: white;
-        color: #475569;
-        padding: 0.25rem 0.75rem;
+    .filter-tabs {
+        display: flex;
+        gap: 0.5rem;
+        padding: 1rem 1.5rem;
+        border-bottom: 1px solid #e9ecef;
+    }
+
+    .filter-tab {
+        padding: 0.4rem 1rem;
         border-radius: 50px;
         font-size: 0.8rem;
         font-weight: 500;
-        border: 1px solid #e2e8f0;
+        cursor: pointer;
+        transition: all 0.2s;
+        background: #f1f5f9;
+        color: #475569;
     }
 
-    .card-body {
-        padding: 1rem;
-        max-height: 400px;
+    .filter-tab:hover {
+        background: #e2e8f0;
+    }
+
+    .filter-tab.active {
+        background: #2563eb;
+        color: white;
+    }
+
+    .notifications-scroll {
+        flex: 1;
         overflow-y: auto;
+        padding: 1rem;
     }
 
-    /* Notification Items */
-    .notification-item {
+    /* Notification Items in List */
+    .notification-list-item {
         display: flex;
         align-items: flex-start;
         gap: 1rem;
         padding: 1rem;
         border-radius: 12px;
-        transition: background 0.2s;
-        border-bottom: 1px solid #f1f5f9;
+        margin-bottom: 0.5rem;
+        cursor: pointer;
+        transition: all 0.2s;
+        border: 1px solid transparent;
         position: relative;
     }
 
-    .notification-item:last-child {
-        border-bottom: none;
-    }
-
-    .notification-item:hover {
+    .notification-list-item:hover {
         background: #f8fafc;
+        border-color: #e2e8f0;
+        transform: translateX(2px);
     }
 
-    .notification-item.unread {
+    .notification-list-item.selected {
+        background: #f0f9ff;
+        border: 1px solid #2563eb;
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.1);
+    }
+
+    .notification-list-item.unread {
         background: #f0f9ff;
         border-left: 3px solid #2563eb;
     }
 
-    .notification-icon {
-        width: 44px;
-        height: 44px;
-        border-radius: 12px;
+    .list-item-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 10px;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 1.2rem;
+        font-size: 1rem;
         flex-shrink: 0;
     }
 
-    .notification-icon.critical {
-        background: #fee2e2;
-        color: #dc2626;
-    }
+    .list-item-icon.critical { background: #fee2e2; color: #dc2626; }
+    .list-item-icon.warning { background: #fef3c7; color: #d97706; }
+    .list-item-icon.success { background: #dcfce7; color: #16a34a; }
+    .list-item-icon.info { background: #dbeafe; color: #2563eb; }
+    .list-item-icon.purple { background: #e9d5ff; color: #7e22ce; }
 
-    .notification-icon.warning {
-        background: #fef3c7;
-        color: #d97706;
-    }
-
-    .notification-icon.success {
-        background: #dcfce7;
-        color: #16a34a;
-    }
-
-    .notification-icon.info {
-        background: #dbeafe;
-        color: #2563eb;
-    }
-
-    .notification-icon.purple {
-        background: #e9d5ff;
-        color: #7e22ce;
-    }
-
-    .notification-content {
+    .list-item-content {
         flex: 1;
+        min-width: 0;
     }
 
-    .notification-title {
+    .list-item-title {
         font-weight: 600;
         color: #1e293b;
-        margin-bottom: 0.3rem;
-        font-size: 1rem;
+        margin-bottom: 0.2rem;
+        font-size: 0.95rem;
         display: flex;
         align-items: center;
         gap: 0.5rem;
         flex-wrap: wrap;
     }
 
-    .notification-desc {
-        font-size: 0.85rem;
-        color: #64748b;
-        margin-bottom: 0.3rem;
+    .list-item-badge {
+        padding: 0.15rem 0.5rem;
+        border-radius: 50px;
+        font-size: 0.65rem;
+        font-weight: 600;
+        display: inline-block;
     }
 
-    .notification-meta {
+    .badge-critical { background: #fee2e2; color: #dc2626; }
+    .badge-warning { background: #fef3c7; color: #d97706; }
+    .badge-success { background: #dcfce7; color: #16a34a; }
+    .badge-info { background: #dbeafe; color: #2563eb; }
+
+    .list-item-desc {
+        font-size: 0.8rem;
+        color: #64748b;
+        margin-bottom: 0.2rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .list-item-meta {
         display: flex;
         gap: 1rem;
-        font-size: 0.7rem;
+        font-size: 0.65rem;
         color: #94a3b8;
         flex-wrap: wrap;
     }
 
-    .notification-meta span {
+    .list-item-meta span {
         display: flex;
         align-items: center;
         gap: 0.25rem;
     }
 
-    .notification-badge {
-        padding: 0.2rem 0.6rem;
-        border-radius: 50px;
-        font-size: 0.7rem;
-        font-weight: 600;
-        display: inline-block;
-    }
-
-    .badge-critical {
-        background: #fee2e2;
-        color: #dc2626;
-    }
-
-    .badge-warning {
-        background: #fef3c7;
-        color: #d97706;
-    }
-
-    .badge-success {
-        background: #dcfce7;
-        color: #16a34a;
-    }
-
-    .badge-info {
-        background: #dbeafe;
-        color: #2563eb;
-    }
-
-    .notification-action {
-        margin-left: auto;
+    /* Column B - Notification Detail */
+    .notification-detail {
+        background: white;
+        border-radius: 20px;
+        border: 1px solid #e9ecef;
+        overflow: hidden;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.02);
         display: flex;
+        flex-direction: column;
+        height: 100%;
+    }
+
+    .detail-header {
+        padding: 1.5rem;
+        background: linear-gradient(135deg, #002fff, #2600ff);
+        color: white;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .detail-header h3 {
+        font-size: 1.3rem;
+        font-weight: 600;
+        margin: 0 0 0.5rem 0;
+        display: flex;
+        align-items: center;
         gap: 0.5rem;
     }
 
+    .detail-meta {
+        display: flex;
+        gap: 1.5rem;
+        font-size: 0.85rem;
+        opacity: 0.9;
+        flex-wrap: wrap;
+    }
+
+    .detail-meta span {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .detail-body {
+        flex: 1;
+        padding: 1.5rem;
+        overflow-y: auto;
+    }
+
+    .detail-section {
+        margin-bottom: 1.5rem;
+        padding-bottom: 1.5rem;
+        border-bottom: 1px solid #e9ecef;
+    }
+
+    .detail-section:last-child {
+        border-bottom: none;
+        margin-bottom: 0;
+        padding-bottom: 0;
+    }
+
+    .detail-section h4 {
+        font-size: 1rem;
+        font-weight: 600;
+        color: #1e293b;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .detail-section h4 i {
+        color: #2563eb;
+    }
+
+    .info-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+    }
+
+    .info-item {
+        background: #f8fafc;
+        padding: 0.75rem;
+        border-radius: 10px;
+    }
+
+    .info-label {
+        font-size: 0.7rem;
+        color: #64748b;
+        margin-bottom: 0.25rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .info-value {
+        font-size: 1rem;
+        font-weight: 600;
+        color: #1e293b;
+    }
+
+    .detail-actions {
+        display: flex;
+        gap: 1rem;
+        margin-top: 1.5rem;
+        flex-wrap: wrap;
+    }
+
     .action-btn {
-        padding: 0.3rem 0.8rem;
-        border-radius: 6px;
-        font-size: 0.75rem;
+        padding: 0.6rem 1.2rem;
+        border-radius: 10px;
+        font-size: 0.9rem;
         font-weight: 500;
         text-decoration: none;
         transition: all 0.2s;
@@ -345,52 +426,53 @@
         color: #475569;
         display: inline-flex;
         align-items: center;
-        gap: 0.25rem;
+        gap: 0.5rem;
+        flex: 1;
+        justify-content: center;
+        min-width: 120px;
     }
 
-    .action-btn:hover {
+    .action-btn.primary {
         background: #2563eb;
         color: white;
         border-color: #2563eb;
     }
 
-    /* Empty State */
-    .empty-state {
+    .action-btn.primary:hover {
+        background: #1d4ed8;
+    }
+
+    .action-btn:hover {
+        background: #f8fafc;
+    }
+
+    .empty-detail {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        padding: 3rem;
         text-align: center;
-        padding: 2rem;
         color: #94a3b8;
     }
 
-    .empty-state i {
-        font-size: 2.5rem;
-        margin-bottom: 0.75rem;
+    .empty-detail i {
+        font-size: 4rem;
+        margin-bottom: 1rem;
         opacity: 0.5;
     }
 
-    .empty-state p {
+    .empty-detail h3 {
+        font-size: 1.3rem;
+        color: #1e293b;
+        margin-bottom: 0.5rem;
+    }
+
+    .empty-detail p {
         font-size: 0.9rem;
-        margin: 0;
-    }
-
-    /* Card Footer */
-    .card-footer {
-        padding: 1rem;
-        background: white;
-        border-top: 1px solid #e9ecef;
-    }
-
-    .card-footer a {
-        color: #2563eb;
-        text-decoration: none;
-        font-size: 0.9rem;
-        display: inline-flex;
-        align-items: center;
-        gap: 0.5rem;
-    }
-
-    .card-footer a:hover {
-        color: #1d4ed8;
-        text-decoration: underline;
+        max-width: 300px;
+        margin: 0 auto;
     }
 
     /* Responsive */
@@ -398,23 +480,15 @@
         .summary-grid {
             grid-template-columns: repeat(3, 1fr);
         }
-        
-        .three-column {
-            grid-template-columns: repeat(2, 1fr);
-        }
     }
 
     @media (max-width: 1200px) {
-        .summary-grid {
-            grid-template-columns: repeat(2, 1fr);
-        }
-        
-        .two-column {
+        .notifications-main {
             grid-template-columns: 1fr;
         }
         
-        .three-column {
-            grid-template-columns: 1fr;
+        .notifications-container {
+            height: auto;
         }
     }
 
@@ -427,25 +501,12 @@
             grid-template-columns: 1fr;
         }
         
-        .page-header {
+        .info-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .detail-actions {
             flex-direction: column;
-            text-align: center;
-        }
-        
-        .notification-item {
-            flex-wrap: wrap;
-        }
-        
-        .notification-action {
-            margin-left: 0;
-            width: 100%;
-            justify-content: flex-end;
-        }
-        
-        .notification-title {
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 0.25rem;
         }
     }
 </style>
@@ -465,9 +526,9 @@
         </button>
     </div>
 
-    <!-- Summary Cards -->
+    <!-- Summary Cards (Filter by type) -->
     <div class="summary-grid">
-        <div class="summary-card">
+        <div class="summary-card {% if active_filter == 'critical' %}active{% endif %}" onclick="filterNotifications('critical')">
             <div class="summary-icon red">
                 <i class="fas fa-exclamation-circle"></i>
             </div>
@@ -477,7 +538,7 @@
             </div>
         </div>
         
-        <div class="summary-card">
+        <div class="summary-card {% if active_filter == 'warning' %}active{% endif %}" onclick="filterNotifications('warning')">
             <div class="summary-icon orange">
                 <i class="fas fa-exclamation-triangle"></i>
             </div>
@@ -487,7 +548,7 @@
             </div>
         </div>
         
-        <div class="summary-card">
+        <div class="summary-card {% if active_filter == 'returns' %}active{% endif %}" onclick="filterNotifications('returns')">
             <div class="summary-icon blue">
                 <i class="fas fa-undo-alt"></i>
             </div>
@@ -497,7 +558,7 @@
             </div>
         </div>
         
-        <div class="summary-card">
+        <div class="summary-card {% if active_filter == 'verified' %}active{% endif %}" onclick="filterNotifications('verified')">
             <div class="summary-icon green">
                 <i class="fas fa-check-circle"></i>
             </div>
@@ -508,7 +569,7 @@
         </div>
 
         {% if request.user.is_superuser or request.user.is_staff %}
-        <div class="summary-card">
+        <div class="summary-card {% if active_filter == 'staff' %}active{% endif %}" onclick="filterNotifications('staff')">
             <div class="summary-icon purple">
                 <i class="fas fa-id-card"></i>
             </div>
@@ -518,7 +579,7 @@
             </div>
         </div>
         
-        <div class="summary-card">
+        <div class="summary-card {% if active_filter == 'applications' %}active{% endif %}" onclick="filterNotifications('applications')">
             <div class="summary-icon indigo">
                 <i class="fas fa-file-alt"></i>
             </div>
@@ -530,64 +591,116 @@
         {% endif %}
     </div>
 
-    <!-- Staff Notifications Section (for superusers/staff) -->
-    {% if request.user.is_superuser or request.user.is_staff %}
-    <div class="three-column">
-        <!-- Staff Verifications Section -->
-        <div class="notification-card">
-            <div class="card-header">
+    <!-- Main Two-Column Layout -->
+    <div class="notifications-main">
+        <!-- Column A: Notification List -->
+        <div class="notifications-list">
+            <div class="list-header">
                 <h2>
-                    <i class="fas fa-user-check"></i>
-                    Pending Staff Verifications
+                    <i class="fas fa-list"></i>
+                    Notifications
                 </h2>
-                <span class="badge-count">{{ pending_verifications|length }} pending</span>
+                <span class="badge-count" id="notificationCount">0 items</span>
             </div>
-            <div class="card-body">
+            
+            <div class="filter-tabs">
+                <span class="filter-tab active" onclick="changeFilter('all')">All</span>
+                <span class="filter-tab" onclick="changeFilter('unread')">Unread</span>
+                <span class="filter-tab" onclick="changeFilter('alerts')">Alerts</span>
+                <span class="filter-tab" onclick="changeFilter('returns')">Returns</span>
+                <span class="filter-tab" onclick="changeFilter('staff')">Staff</span>
+            </div>
+
+            <div class="notifications-scroll" id="notificationList">
+                <!-- Stock Alerts -->
+                {% for alert in stock_alerts %}
+                <div class="notification-list-item unread" data-id="alert-{{ alert.id }}" data-type="alert" onclick="showNotificationDetail('alert', {{ alert.id|safe }})">
+                    <div class="list-item-icon {% if alert.severity == 'critical' or alert.severity == 'danger' %}critical{% elif alert.severity == 'warning' %}warning{% else %}info{% endif %}">
+                        <i class="fas fa-{% if alert.severity == 'critical' or alert.severity == 'danger' %}exclamation-circle{% elif alert.severity == 'warning' %}exclamation-triangle{% else %}info-circle{% endif %}"></i>
+                    </div>
+                    <div class="list-item-content">
+                        <div class="list-item-title">
+                            {{ alert.product.display_name }}
+                            <span class="list-item-badge {% if alert.severity == 'critical' or alert.severity == 'danger' %}badge-critical{% elif alert.severity == 'warning' %}badge-warning{% else %}badge-info{% endif %}">
+                                {{ alert.get_severity_display }}
+                            </span>
+                        </div>
+                        <div class="list-item-desc">
+                            {{ alert.get_alert_type_display }} - Stock: {{ alert.current_stock }}
+                        </div>
+                        <div class="list-item-meta">
+                            <span><i class="far fa-clock"></i> {{ alert.last_alerted|timesince|default:'Just now' }} ago</span>
+                            <span><i class="fas fa-box"></i> {{ alert.product.product_code }}</span>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+
+                <!-- Pending Returns -->
+                {% for return in pending_returns %}
+                <div class="notification-list-item" data-id="return-{{ return.id }}" data-type="return" onclick="showNotificationDetail('return', {{ return.id|safe }})">
+                    <div class="list-item-icon warning">
+                        <i class="fas fa-hourglass-half"></i>
+                    </div>
+                    <div class="list-item-content">
+                        <div class="list-item-title">
+                            {{ return.product_name }}
+                            <span class="list-item-badge badge-warning">{{ return.get_status_display }}</span>
+                        </div>
+                        <div class="list-item-desc">
+                            Return #{{ return.return_id }} - Refund: KES {{ return.refund_amount|intcomma }}
+                        </div>
+                        <div class="list-item-meta">
+                            <span><i class="far fa-clock"></i> {{ return.requested_at|timesince }} ago</span>
+                            {% if return.requested_by %}
+                            <span><i class="fas fa-user"></i> {{ return.requested_by.get_full_name|default:return.requested_by.username }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+
+                <!-- Verified Returns -->
+                {% for return in verified_returns %}
+                <div class="notification-list-item" data-id="verified-{{ return.id }}" data-type="verified" onclick="showNotificationDetail('verified', {{ return.id|safe }})">
+                    <div class="list-item-icon success">
+                        <i class="fas fa-check"></i>
+                    </div>
+                    <div class="list-item-content">
+                        <div class="list-item-title">
+                            {{ return.product_name }}
+                            <span class="list-item-badge badge-success">Verified</span>
+                        </div>
+                        <div class="list-item-desc">
+                            Return #{{ return.return_id }} - Ready for approval
+                        </div>
+                        <div class="list-item-meta">
+                            <span><i class="far fa-clock"></i> {{ return.verified_at|timesince }} ago</span>
+                            {% if return.verified_by %}
+                            <span><i class="fas fa-user"></i> {{ return.verified_by.get_full_name|default:return.verified_by.username }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+
+                <!-- Staff Verifications - FIXED -->
                 {% for staff in pending_verifications %}
-                <div class="notification-item">
-                    <div class="notification-icon warning">
+                <div class="notification-list-item" data-id="staff-{{ staff.id }}" data-type="staff" onclick="showNotificationDetail('staff', {{ staff.id|safe }})">
+                    <div class="list-item-icon warning">
                         <i class="fas fa-id-card"></i>
                     </div>
-                    <div class="notification-content">
-                        <div class="notification-title">
-                            {% if staff.user %}
-                                {% if staff.user.get_full_name %}
-                                    {{ staff.user.get_full_name }}
-                                {% elif staff.user.username %}
-                                    {{ staff.user.username }}
-                                {% else %}
-                                    Staff Member #{{ staff.id }}
-                                {% endif %}
-                            {% elif staff.created_user %}
-                                {% if staff.created_user.get_full_name %}
-                                    {{ staff.created_user.get_full_name }}
-                                {% elif staff.created_user.username %}
-                                    {{ staff.created_user.username }}
-                                {% else %}
-                                    Staff Member #{{ staff.id }}
-                                {% endif %}
-                            {% elif staff.user_id %}
-                                User ID: {{ staff.user_id }}
-                            {% else %}
-                                Staff Member #{{ staff.id }}
-                            {% endif %}
+                    <div class="list-item-content">
+                        <div class="list-item-title">
+                            {{ staff.user.get_full_name|default:staff.user.username }}
                         </div>
-                        <div class="notification-desc">
+                        <div class="list-item-desc">
                             Staff verification pending
                         </div>
-                        <div class="notification-meta">
+                        <div class="list-item-meta">
                             <span><i class="far fa-clock"></i> {{ staff.verification_submitted_at|timesince }} ago</span>
-                            {% if staff.user and staff.user.email %}
                             <span><i class="fas fa-envelope"></i> {{ staff.user.email }}</span>
-                            {% elif staff.created_user and staff.created_user.email %}
-                            <span><i class="fas fa-envelope"></i> {{ staff.created_user.email }}</span>
-                            {% endif %}
                         </div>
-                    </div>
-                    <div class="notification-action">
-                        <a href="{% url 'staff:admin_verify_list' %}" class="action-btn">
-                            <i class="fas fa-eye"></i> Review
-                        </a>
                     </div>
                 </div>
                 {% empty %}
@@ -596,59 +709,24 @@
                     <p>No pending verifications</p>
                 </div>
                 {% endfor %}
-            </div>
-            {% if pending_verifications %}
-            <div class="card-footer">
-                <a href="{% url 'staff:admin_verify_list' %}">
-                    View All Verifications <i class="fas fa-arrow-right ms-2"></i>
-                </a>
-            </div>
-            {% endif %}
-        </div>
 
-        <!-- Staff Applications Section -->
-        <div class="notification-card">
-            <div class="card-header">
-                <h2>
-                    <i class="fas fa-file-alt"></i>
-                    Pending Staff Applications
-                </h2>
-                <span class="badge-count">{{ pending_applications|length }} pending</span>
-            </div>
-            <div class="card-body">
+                <!-- Staff Applications - FIXED -->
                 {% for application in pending_applications %}
-                <div class="notification-item">
-                    <div class="notification-icon info">
+                <div class="notification-list-item" data-id="app-{{ application.id }}" data-type="application" onclick="showNotificationDetail('application', {{ application.id|safe }})">
+                    <div class="list-item-icon info">
                         <i class="fas fa-user-plus"></i>
                     </div>
-                    <div class="notification-content">
-                        <div class="notification-title">
-                            {% if application.created_user %}
-                                {% if application.created_user.get_full_name %}
-                                    {{ application.created_user.get_full_name }}
-                                {% elif application.created_user.username %}
-                                    {{ application.created_user.username }}
-                                {% else %}
-                                    User #{{ application.created_user.id }}
-                                {% endif %}
-                            {% else %}
-                                Unknown User (Application #{{ application.id }})
-                            {% endif %}
+                    <div class="list-item-content">
+                        <div class="list-item-title">
+                            {{ application.first_name }} {{ application.last_name }}
                         </div>
-                        <div class="notification-desc">
-                            Applied for {{ application.get_position_display }} position
+                        <div class="list-item-desc">
+                            Applied for {{ application.get_position_display }}
                         </div>
-                        <div class="notification-meta">
-                            <span><i class="far fa-clock"></i> {{ application.created_at|timesince }} ago</span>
-                            {% if application.created_user and application.created_user.email %}
-                            <span><i class="fas fa-envelope"></i> {{ application.created_user.email }}</span>
-                            {% endif %}
+                        <div class="list-item-meta">
+                            <span><i class="far fa-clock"></i> {{ application.application_date|timesince }} ago</span>
+                            <span><i class="fas fa-envelope"></i> {{ application.email }}</span>
                         </div>
-                    </div>
-                    <div class="notification-action">
-                        <a href="{% url 'staff:application_list' %}" class="action-btn">
-                            <i class="fas fa-eye"></i> Review
-                        </a>
                     </div>
                 </div>
                 {% empty %}
@@ -657,298 +735,515 @@
                     <p>No pending applications</p>
                 </div>
                 {% endfor %}
-            </div>
-            {% if pending_applications %}
-            <div class="card-footer">
-                <a href="{% url 'staff:application_list' %}">
-                    View All Applications <i class="fas fa-arrow-right ms-2"></i>
-                </a>
-            </div>
-            {% endif %}
-        </div>
 
-        <!-- Low Stock Products -->
-        <div class="notification-card">
-            <div class="card-header">
-                <h2>
-                    <i class="fas fa-exclamation"></i>
-                    Low Stock Products
-                </h2>
-                <span class="badge-count">{{ low_stock_products|length }} items</span>
-            </div>
-            <div class="card-body">
+                <!-- Low Stock Products -->
                 {% for product in low_stock_products %}
-                <div class="notification-item">
-                    <div class="notification-icon warning">
+                <div class="notification-list-item" data-id="product-{{ product.id }}" data-type="product" onclick="showNotificationDetail('product', {{ product.id|safe }})">
+                    <div class="list-item-icon warning">
                         <i class="fas fa-box"></i>
                     </div>
-                    <div class="notification-content">
-                        <div class="notification-title">
+                    <div class="list-item-content">
+                        <div class="list-item-title">
                             {{ product.display_name }}
                         </div>
-                        <div class="notification-desc">
+                        <div class="list-item-desc">
                             Current stock: {{ product.quantity }} units
-                            {% if product.reorder_level %} | Reorder at: {{ product.reorder_level }}{% endif %}
                         </div>
-                        <div class="notification-meta">
+                        <div class="list-item-meta">
                             <span><i class="fas fa-tag"></i> {{ product.category.name }}</span>
                             <span><i class="fas fa-dollar-sign"></i> KES {{ product.selling_price|intcomma }}</span>
                         </div>
                     </div>
-                    <div class="notification-action">
-                        <a href="{% url 'inventory:product_restock' %}?product={{ product.pk }}" class="action-btn">
-                            <i class="fas fa-plus-circle"></i> Restock
-                        </a>
-                    </div>
                 </div>
-                {% empty %}
-                <div class="empty-state">
-                    <i class="fas fa-check-circle" style="color: #16a34a;"></i>
-                    <p>No low stock products</p>
+                {% endfor %}
+
+                <!-- Recent Activity -->
+                {% for activity in recent_activity %}
+                <div class="notification-list-item" data-id="activity-{{ activity.id }}" data-type="activity" onclick="showNotificationDetail('activity', {{ activity.id|safe }})">
+                    <div class="list-item-icon {% if activity.entry_type == 'purchase' %}success{% elif activity.entry_type == 'sale' %}critical{% else %}info{% endif %}">
+                        <i class="fas fa-{% if activity.entry_type == 'purchase' %}plus-circle{% elif activity.entry_type == 'sale' %}minus-circle{% else %}undo{% endif %}"></i>
+                    </div>
+                    <div class="list-item-content">
+                        <div class="list-item-title">
+                            {{ activity.product.display_name }}
+                        </div>
+                        <div class="list-item-desc">
+                            {{ activity.get_entry_type_display }}: {% if activity.quantity > 0 %}+{% endif %}{{ activity.quantity }} units
+                        </div>
+                        <div class="list-item-meta">
+                            <span><i class="far fa-clock"></i> {{ activity.created_at|timesince }} ago</span>
+                            <span><i class="fas fa-user"></i> {{ activity.created_by.get_full_name|default:activity.created_by.username }}</span>
+                        </div>
+                    </div>
                 </div>
                 {% endfor %}
             </div>
-            {% if low_stock_products %}
-            <div class="card-footer">
-                <a href="{% url 'inventory:product_list' %}?status=lowstock">
-                    View All Low Stock <i class="fas fa-arrow-right ms-2"></i>
-                </a>
-            </div>
-            {% endif %}
-        </div>
-    </div>
-    {% endif %}
-
-    <!-- Main Content - Stock & Returns -->
-    <div class="two-column">
-        <!-- Left Column - Stock Alerts & Returns -->
-        <div>
-            <!-- Stock Alerts Section -->
-            <div class="notification-card">
-                <div class="card-header">
-                    <h2>
-                        <i class="fas fa-exclamation-triangle"></i>
-                        Stock Alerts
-                    </h2>
-                    <span class="badge-count">{{ stock_alerts|length }} active</span>
-                </div>
-                <div class="card-body">
-                    {% for alert in stock_alerts %}
-                    <div class="notification-item unread">
-                        <div class="notification-icon 
-                            {% if alert.severity == 'critical' or alert.severity == 'danger' %}critical
-                            {% elif alert.severity == 'warning' %}warning
-                            {% else %}info{% endif %}">
-                            <i class="fas fa-{% if alert.severity == 'critical' or alert.severity == 'danger' %}exclamation-circle{% elif alert.severity == 'warning' %}exclamation-triangle{% else %}info-circle{% endif %}"></i>
-                        </div>
-                        <div class="notification-content">
-                            <div class="notification-title">
-                                {{ alert.product.display_name }}
-                                <span class="notification-badge 
-                                    {% if alert.severity == 'critical' or alert.severity == 'danger' %}badge-critical
-                                    {% elif alert.severity == 'warning' %}badge-warning
-                                    {% else %}badge-info{% endif %}">
-                                    {{ alert.get_severity_display }}
-                                </span>
-                            </div>
-                            <div class="notification-desc">
-                                {{ alert.get_alert_type_display }} - Current stock: {{ alert.current_stock }}
-                                {% if alert.threshold %} (Threshold: {{ alert.threshold }}){% endif %}
-                            </div>
-                            <div class="notification-meta">
-                                <span><i class="far fa-clock"></i> {{ alert.last_alerted|timesince|default:'Just now' }} ago</span>
-                                <span><i class="fas fa-box"></i> {{ alert.product.product_code }}</span>
-                            </div>
-                        </div>
-                        <div class="notification-action">
-                            <a href="{% url 'inventory:restock_alert_combined' alert.id %}"  class="action-btn">
-                                <i class="fas fa-plus-circle"></i> Restock
-                            </a>
-                            <a href="{% url 'inventory:dismiss_alert' alert.pk %}?next={% url 'staff:notifications_page' %}" class="action-btn">
-                                <i class="fas fa-check"></i> Dismiss
-                            </a>
-                        </div>
-                    </div>
-                    {% empty %}
-                    <div class="empty-state">
-                        <i class="fas fa-check-circle" style="color: #16a34a;"></i>
-                        <p>No active stock alerts</p>
-                    </div>
-                    {% endfor %}
-                </div>
-                {% if stock_alerts %}
-                <div class="card-footer">
-                    <a href="{% url 'inventory:stock_alerts' %}">
-                        View All Alerts <i class="fas fa-arrow-right ms-2"></i>
-                    </a>
-                </div>
-                {% endif %}
-            </div>
-
-            <!-- Pending Returns Section -->
-            <div class="notification-card">
-                <div class="card-header">
-                    <h2>
-                        <i class="fas fa-clock"></i>
-                        Pending Returns
-                    </h2>
-                    <span class="badge-count">{{ pending_returns|length }} pending</span>
-                </div>
-                <div class="card-body">
-                    {% for return in pending_returns %}
-                    <div class="notification-item">
-                        <div class="notification-icon warning">
-                            <i class="fas fa-hourglass-half"></i>
-                        </div>
-                        <div class="notification-content">
-                            <div class="notification-title">
-                                {{ return.product_name }}
-                                <span class="notification-badge badge-warning">{{ return.get_status_display }}</span>
-                            </div>
-                            <div class="notification-desc">
-                                Return #{{ return.return_id }} - Refund: KES {{ return.refund_amount|intcomma }}
-                            </div>
-                            <div class="notification-meta">
-                                <span><i class="far fa-clock"></i> {{ return.requested_at|timesince }} ago</span>
-                                {% if return.requested_by %}
-                                <span><i class="fas fa-user"></i> {{ return.requested_by.get_full_name|default:return.requested_by.username }}</span>
-                                {% endif %}
-                            </div>
-                        </div>
-                        <div class="notification-action">
-                            <a href="{% url 'inventory:return_detail' return.pk %}" class="action-btn">
-                                <i class="fas fa-eye"></i> View
-                            </a>
-                        </div>
-                    </div>
-                    {% empty %}
-                    <div class="empty-state">
-                        <i class="fas fa-check-circle" style="color: #16a34a;"></i>
-                        <p>No pending returns</p>
-                    </div>
-                    {% endfor %}
-                </div>
-                {% if pending_returns %}
-                <div class="card-footer">
-                    <a href="{% url 'inventory:return_list' %}?status=submitted">
-                        View All Pending Returns <i class="fas fa-arrow-right ms-2"></i>
-                    </a>
-                </div>
-                {% endif %}
-            </div>
         </div>
 
-        <!-- Right Column - Verified Returns & Recent Activity -->
-        <div>
-            <!-- Verified Returns Section -->
-            <div class="notification-card">
-                <div class="card-header">
-                    <h2>
-                        <i class="fas fa-check-circle"></i>
-                        Verified Returns
-                    </h2>
-                    <span class="badge-count">{{ verified_returns|length }} verified</span>
-                </div>
-                <div class="card-body">
-                    {% for return in verified_returns %}
-                    <div class="notification-item">
-                        <div class="notification-icon success">
-                            <i class="fas fa-check"></i>
-                        </div>
-                        <div class="notification-content">
-                            <div class="notification-title">
-                                {{ return.product_name }}
-                                <span class="notification-badge badge-success">Verified</span>
-                            </div>
-                            <div class="notification-desc">
-                                Return #{{ return.return_id }} - Ready for approval
-                            </div>
-                            <div class="notification-meta">
-                                <span><i class="far fa-clock"></i> {{ return.verified_at|timesince }} ago</span>
-                                {% if return.verified_by %}
-                                <span><i class="fas fa-user"></i> {{ return.verified_by.get_full_name|default:return.verified_by.username }}</span>
-                                {% endif %}
-                            </div>
-                        </div>
-                        <div class="notification-action">
-                            <a href="{% url 'inventory:return_detail' return.pk %}" class="action-btn">
-                                <i class="fas fa-eye"></i> View
-                            </a>
-                        </div>
-                    </div>
-                    {% empty %}
-                    <div class="empty-state">
-                        <i class="fas fa-check-circle" style="color: #16a34a;"></i>
-                        <p>No verified returns</p>
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
-
-            <!-- Recent Activity Section -->
-            <div class="notification-card">
-                <div class="card-header">
-                    <h2>
-                        <i class="fas fa-history"></i>
-                        Recent Activity (Last 7 Days)
-                    </h2>
-                    <span class="badge-count">{{ recent_activity|length }} events</span>
-                </div>
-                <div class="card-body">
-                    {% for activity in recent_activity %}
-                    <div class="notification-item">
-                        <div class="notification-icon 
-                            {% if activity.entry_type == 'purchase' %}success
-                            {% elif activity.entry_type == 'sale' %}critical
-                            {% else %}info{% endif %}">
-                            <i class="fas fa-{% if activity.entry_type == 'purchase' %}plus-circle{% elif activity.entry_type == 'sale' %}minus-circle{% else %}undo{% endif %}"></i>
-                        </div>
-                        <div class="notification-content">
-                            <div class="notification-title">
-                                {{ activity.product.display_name }}
-                            </div>
-                            <div class="notification-desc">
-                                {{ activity.get_entry_type_display }}: 
-                                <strong>{% if activity.quantity > 0 %}+{% endif %}{{ activity.quantity }}</strong> units
-                                {% if activity.total_amount %} - KES {{ activity.total_amount|intcomma }}{% endif %}
-                            </div>
-                            <div class="notification-meta">
-                                <span><i class="far fa-clock"></i> {{ activity.created_at|timesince }} ago</span>
-                                {% if activity.created_by %}
-                                <span><i class="fas fa-user"></i> {{ activity.created_by.get_full_name|default:activity.created_by.username }}</span>
-                                {% endif %}
-                                {% if activity.reference_id %}
-                                <span><i class="fas fa-hashtag"></i> {{ activity.reference_id }}</span>
-                                {% endif %}
-                            </div>
-                        </div>
-                    </div>
-                    {% empty %}
-                    <div class="empty-state">
-                        <i class="fas fa-history"></i>
-                        <p>No recent activity</p>
-                    </div>
-                    {% endfor %}
-                </div>
-                {% if recent_activity %}
-                <div class="card-footer">
-                    <a href="{% url 'inventory:stock_movements' %}">
-                        View All Activity <i class="fas fa-arrow-right ms-2"></i>
-                    </a>
-                </div>
-                {% endif %}
+        <!-- Column B: Notification Detail -->
+        <div class="notification-detail" id="notificationDetail">
+            <div class="empty-detail">
+                <i class="fas fa-bell"></i>
+                <h3>Select a notification</h3>
+                <p>Choose an item from the list to view its details and take action</p>
             </div>
         </div>
     </div>
 </div>
 
 <script>
-    function markAllAsRead() {
-        // This would typically make an AJAX call to mark all notifications as read
-        // For now, just show a message
-        alert('All notifications marked as read (This feature is coming soon!)');
+    let currentFilter = 'all';
+
+    function filterNotifications(type) {
+        currentFilter = type;
+        // Update summary cards
+        document.querySelectorAll('.summary-card').forEach(card => {
+            card.classList.remove('active');
+        });
+        event.currentTarget.classList.add('active');
         
-        // TODO: Implement mark all as read functionality
+        // Filter notification list items
+        const items = document.querySelectorAll('.notification-list-item');
+        items.forEach(item => {
+            if (type === 'critical' || type === 'warning') {
+                const severity = item.querySelector('.list-item-badge')?.textContent.toLowerCase();
+                if (severity && severity.includes(type)) {
+                    item.style.display = 'flex';
+                } else {
+                    item.style.display = 'none';
+                }
+            } else if (type === 'returns') {
+                if (item.dataset.type === 'return') {
+                    item.style.display = 'flex';
+                } else {
+                    item.style.display = 'none';
+                }
+            } else if (type === 'verified') {
+                if (item.dataset.type === 'verified') {
+                    item.style.display = 'flex';
+                } else {
+                    item.style.display = 'none';
+                }
+            } else if (type === 'staff') {
+                if (item.dataset.type === 'staff' || item.dataset.type === 'application') {
+                    item.style.display = 'flex';
+                } else {
+                    item.style.display = 'none';
+                }
+            } else if (type === 'applications') {
+                if (item.dataset.type === 'application') {
+                    item.style.display = 'flex';
+                } else {
+                    item.style.display = 'none';
+                }
+            }
+        });
+        
+        updateNotificationCount();
     }
+
+    function changeFilter(filter) {
+        currentFilter = filter;
+        
+        // Update filter tabs
+        document.querySelectorAll('.filter-tab').forEach(tab => {
+            tab.classList.remove('active');
+        });
+        event.currentTarget.classList.add('active');
+        
+        // Show/hide notifications based on filter
+        const items = document.querySelectorAll('.notification-list-item');
+        items.forEach(item => {
+            if (filter === 'all') {
+                item.style.display = 'flex';
+            } else if (filter === 'unread') {
+                if (item.classList.contains('unread')) {
+                    item.style.display = 'flex';
+                } else {
+                    item.style.display = 'none';
+                }
+            } else if (filter === 'alerts') {
+                if (item.dataset.type === 'alert' || item.dataset.type === 'product') {
+                    item.style.display = 'flex';
+                } else {
+                    item.style.display = 'none';
+                }
+            } else if (filter === 'returns') {
+                if (item.dataset.type === 'return' || item.dataset.type === 'verified') {
+                    item.style.display = 'flex';
+                } else {
+                    item.style.display = 'none';
+                }
+            } else if (filter === 'staff') {
+                if (item.dataset.type === 'staff' || item.dataset.type === 'application') {
+                    item.style.display = 'flex';
+                } else {
+                    item.style.display = 'none';
+                }
+            }
+        });
+        
+        updateNotificationCount();
+    }
+
+    function updateNotificationCount() {
+        const visibleItems = document.querySelectorAll('.notification-list-item[style*="flex"]').length;
+        document.getElementById('notificationCount').textContent = visibleItems + ' items';
+    }
+
+    function showNotificationDetail(type, id) {
+        // Remove selected class from all items
+        document.querySelectorAll('.notification-list-item').forEach(item => {
+            item.classList.remove('selected');
+        });
+        
+        // Add selected class to clicked item
+        if (event && event.currentTarget) {
+            event.currentTarget.classList.add('selected');
+        }
+        
+        const detailContainer = document.getElementById('notificationDetail');
+        
+        // Get the clicked item data
+        const clickedItem = event?.currentTarget;
+        if (!clickedItem) return;
+        
+        // Extract data from the clicked item
+        const title = clickedItem.querySelector('.list-item-title')?.childNodes[0]?.textContent?.trim() || 'Notification';
+        const desc = clickedItem.querySelector('.list-item-desc')?.textContent || '';
+        const timeElement = clickedItem.querySelector('.list-item-meta span:first-child');
+        const time = timeElement ? timeElement.textContent : 'Just now';
+        const badge = clickedItem.querySelector('.list-item-badge')?.textContent || '';
+        
+        let detailHtml = '';
+        
+        if (type === 'alert') {
+            const severity = badge.toLowerCase();
+            const code = clickedItem.querySelector('.list-item-meta span:last-child')?.textContent || '';
+            
+            detailHtml = `
+                <div class="detail-header">
+                    <h3><i class="fas fa-exclamation-triangle"></i> Stock Alert</h3>
+                    <div class="detail-meta">
+                        <span><i class="far fa-clock"></i> ${time}</span>
+                        <span><i class="fas fa-tag"></i> ${code}</span>
+                    </div>
+                </div>
+                <div class="detail-body">
+                    <div class="detail-section">
+                        <h4><i class="fas fa-info-circle"></i> Alert Information</h4>
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <div class="info-label">Product</div>
+                                <div class="info-value">${title}</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">Severity</div>
+                                <div class="info-value">
+                                    <span class="list-item-badge badge-${severity}">${badge}</span>
+                                </div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">Current Stock</div>
+                                <div class="info-value">${desc.split(':')[1]?.trim() || 'N/A'}</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">Last Alerted</div>
+                                <div class="info-value">${time}</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="detail-section">
+                        <h4><i class="fas fa-cog"></i> Actions</h4>
+                        <div class="detail-actions">
+                            <a href="/inventory/stock-alerts/${id}/restock/" class="action-btn primary">
+                                <i class="fas fa-plus-circle"></i> Restock
+                            </a>
+                            <a href="/inventory/stock-alerts/${id}/dismiss/?next=/staff/notifications/" class="action-btn">
+                                <i class="fas fa-check"></i> Dismiss
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } else if (type === 'return') {
+            const returnIdMatch = desc.match(/#([A-Z0-9-]+)/);
+            const returnId = returnIdMatch ? returnIdMatch[1] : id;
+            const refundMatch = desc.match(/KES\s+([\d,]+)/);
+            const refundAmount = refundMatch ? refundMatch[1] : '0';
+            
+            detailHtml = `
+                <div class="detail-header">
+                    <h3><i class="fas fa-undo-alt"></i> Return Request</h3>
+                    <div class="detail-meta">
+                        <span><i class="far fa-clock"></i> ${time}</span>
+                        <span><i class="fas fa-hashtag"></i> #${returnId}</span>
+                    </div>
+                </div>
+                <div class="detail-body">
+                    <div class="detail-section">
+                        <h4><i class="fas fa-box"></i> Return Information</h4>
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <div class="info-label">Product</div>
+                                <div class="info-value">${title}</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">Return ID</div>
+                                <div class="info-value">${returnId}</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">Refund Amount</div>
+                                <div class="info-value">KES ${refundAmount}</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">Status</div>
+                                <div class="info-value">
+                                    <span class="list-item-badge badge-warning">Pending</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="detail-section">
+                        <h4><i class="fas fa-cog"></i> Actions</h4>
+                        <div class="detail-actions">
+                            <a href="/inventory/returns/${id}/" class="action-btn primary">
+                                <i class="fas fa-eye"></i> View Details
+                            </a>
+                            <a href="/inventory/returns/${id}/approve/" class="action-btn">
+                                <i class="fas fa-check-circle"></i> Approve
+                            </a>
+                            <a href="/inventory/returns/${id}/reject/" class="action-btn">
+                                <i class="fas fa-times-circle"></i> Reject
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } else if (type === 'verified') {
+            const returnIdMatch = desc.match(/#([A-Z0-9-]+)/);
+            const returnId = returnIdMatch ? returnIdMatch[1] : id;
+            
+            detailHtml = `
+                <div class="detail-header">
+                    <h3><i class="fas fa-check-circle"></i> Verified Return</h3>
+                    <div class="detail-meta">
+                        <span><i class="far fa-clock"></i> ${time}</span>
+                        <span><i class="fas fa-hashtag"></i> #${returnId}</span>
+                    </div>
+                </div>
+                <div class="detail-body">
+                    <div class="detail-section">
+                        <h4><i class="fas fa-box"></i> Return Information</h4>
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <div class="info-label">Product</div>
+                                <div class="info-value">${title}</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">Return ID</div>
+                                <div class="info-value">${returnId}</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">Status</div>
+                                <div class="info-value">
+                                    <span class="list-item-badge badge-success">Verified</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="detail-section">
+                        <h4><i class="fas fa-cog"></i> Actions</h4>
+                        <div class="detail-actions">
+                            <a href="/inventory/returns/${id}/" class="action-btn primary">
+                                <i class="fas fa-eye"></i> View Details
+                            </a>
+                            <a href="/inventory/returns/${id}/approve/" class="action-btn">
+                                <i class="fas fa-check-circle"></i> Approve
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } else if (type === 'staff') {
+            const email = clickedItem.querySelector('.list-item-meta span:last-child')?.textContent?.trim() || '';
+            
+            detailHtml = `
+                <div class="detail-header">
+                    <h3><i class="fas fa-id-card"></i> Staff Verification</h3>
+                    <div class="detail-meta">
+                        <span><i class="far fa-clock"></i> ${time}</span>
+                    </div>
+                </div>
+                <div class="detail-body">
+                    <div class="detail-section">
+                        <h4><i class="fas fa-user"></i> Applicant Information</h4>
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <div class="info-label">Name</div>
+                                <div class="info-value">${title}</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">Email</div>
+                                <div class="info-value">${email}</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">Status</div>
+                                <div class="info-value">
+                                    <span class="list-item-badge badge-warning">Pending Verification</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="detail-section">
+                        <h4><i class="fas fa-cog"></i> Actions</h4>
+                        <div class="detail-actions">
+                            <a href="/staff/admin/verify/" class="action-btn primary">
+                                <i class="fas fa-check-circle"></i> Review
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } else if (type === 'application') {
+            const fullName = clickedItem.querySelector('.list-item-title')?.textContent?.trim() || 'Unknown';
+            const position = clickedItem.querySelector('.list-item-desc')?.textContent?.replace('Applied for ', '') || 'Unknown Position';
+            const email = clickedItem.querySelector('.list-item-meta span:last-child')?.textContent?.trim() || '';
+            
+            detailHtml = `
+                <div class="detail-header">
+                    <h3><i class="fas fa-file-alt"></i> Staff Application</h3>
+                    <div class="detail-meta">
+                        <span><i class="far fa-clock"></i> ${time}</span>
+                    </div>
+                </div>
+                <div class="detail-body">
+                    <div class="detail-section">
+                        <h4><i class="fas fa-user"></i> Applicant Information</h4>
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <div class="info-label">Name</div>
+                                <div class="info-value">${fullName}</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">Email</div>
+                                <div class="info-value">${email}</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">Position</div>
+                                <div class="info-value">${position}</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">Status</div>
+                                <div class="info-value">
+                                    <span class="list-item-badge badge-warning">Pending</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="detail-section">
+                        <h4><i class="fas fa-cog"></i> Actions</h4>
+                        <div class="detail-actions">
+                            <a href="/staff/applications/${id}/" class="action-btn primary">
+                                <i class="fas fa-eye"></i> Review Application
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } else if (type === 'product') {
+            const stockMatch = desc.match(/(\d+)/);
+            const stock = stockMatch ? stockMatch[1] : '0';
+            
+            detailHtml = `
+                <div class="detail-header">
+                    <h3><i class="fas fa-box"></i> Low Stock Alert</h3>
+                    <div class="detail-meta">
+                        <span><i class="far fa-clock"></i> ${time}</span>
+                    </div>
+                </div>
+                <div class="detail-body">
+                    <div class="detail-section">
+                        <h4><i class="fas fa-info-circle"></i> Product Information</h4>
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <div class="info-label">Product</div>
+                                <div class="info-value">${title}</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">Current Stock</div>
+                                <div class="info-value">${stock} units</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="detail-section">
+                        <h4><i class="fas fa-cog"></i> Actions</h4>
+                        <div class="detail-actions">
+                            <a href="/inventory/restock/?product=${id}" class="action-btn primary">
+                                <i class="fas fa-plus-circle"></i> Restock Now
+                            </a>
+                            <a href="/inventory/products/${id}/" class="action-btn">
+                                <i class="fas fa-eye"></i> View Product
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } else if (type === 'activity') {
+            const descParts = desc.split(':');
+            const activityType = descParts[0]?.trim() || '';
+            const quantity = descParts[1]?.trim() || '';
+            
+            detailHtml = `
+                <div class="detail-header">
+                    <h3><i class="fas fa-history"></i> Activity Details</h3>
+                    <div class="detail-meta">
+                        <span><i class="far fa-clock"></i> ${time}</span>
+                    </div>
+                </div>
+                <div class="detail-body">
+                    <div class="detail-section">
+                        <h4><i class="fas fa-info-circle"></i> Activity Information</h4>
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <div class="info-label">Product</div>
+                                <div class="info-value">${title}</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">Type</div>
+                                <div class="info-value">${activityType}</div>
+                            </div>
+                            <div class="info-item">
+                                <div class="info-label">Quantity</div>
+                                <div class="info-value">${quantity}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        if (detailHtml) {
+            detailContainer.innerHTML = detailHtml;
+        }
+    }
+
+    function markAllAsRead() {
+        document.querySelectorAll('.notification-list-item').forEach(item => {
+            item.classList.remove('unread');
+        });
+        alert('All notifications marked as read');
+    }
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', function() {
+        updateNotificationCount();
+    });
 </script>
 {% endblock %}

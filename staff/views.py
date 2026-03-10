@@ -3627,6 +3627,15 @@ def password_change(request):
 
 
 
+
+
+
+
+
+
+
+
+
 @login_required
 def notifications_page(request):
     """Display all notifications for the user"""
@@ -3704,12 +3713,12 @@ def notifications_page(request):
         pending_verifications = Staff.objects.filter(
             verification_submitted_at__isnull=False,
             is_identity_verified=False
-        )[:10]
+        ).select_related('user')[:10]
         
-        # Pending staff applications
+        # Pending staff applications - FIXED: Use correct field names
         pending_applications = StaffApplication.objects.filter(
             status='pending'
-        ).select_related('created_user')[:10]
+        ).order_by('-application_date')[:10]  # Using application_date field
     
     # ============================================
     # NOTIFICATION COUNTS BY TYPE
@@ -3727,17 +3736,6 @@ def notifications_page(request):
         'pending_applications': pending_applications.count(),
     }
     
-    # Debug: Print the first staff object to see its attributes
-    if pending_verifications:
-        first_staff = pending_verifications[0]
-        print("=== STAFF MODEL ATTRIBUTES ===")
-        print(f"Staff object: {first_staff}")
-        print(f"Has 'user' attribute: {hasattr(first_staff, 'user')}")
-        print(f"Has 'created_user' attribute: {hasattr(first_staff, 'created_user')}")
-        print(f"Has 'user_id' attribute: {hasattr(first_staff, 'user_id')}")
-        print(f"All attributes: {dir(first_staff)}")
-        print("================================")
-    
     context = {
         'stock_alerts': stock_alerts,
         'pending_returns': pending_returns,
@@ -3753,6 +3751,9 @@ def notifications_page(request):
     }
     
     return render(request, 'staff/notifications_page.html', context)
+
+
+
 
 
 
