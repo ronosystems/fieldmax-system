@@ -14,7 +14,7 @@
     </div>
 
     <div class="row">
-        <!-- Selected Products Column -->
+        <!-- Selected Products Column (Left) -->
         <div class="col-md-5">
             <div class="card mb-4">
                 <div class="card-header bg-primary text-white">
@@ -53,7 +53,7 @@
             </div>
         </div>
 
-        <!-- Transfer Form Column -->
+        <!-- Transfer Form Column (Right) -->
         <div class="col-md-7">
             <div class="card">
                 <div class="card-header bg-success text-white">
@@ -66,76 +66,126 @@
                         <!-- Hidden SKUs field -->
                         <input type="hidden" name="skus" id="skusInput" value="{{ skus_string }}">
 
-                        <!-- Sender Info (Read-only) -->
-                        <div class="mb-4">
-                            <label class="form-label fw-bold">Transferring From (Current Owner)</label>
-                            <div class="bg-light p-3 rounded">
-                                <div class="d-flex align-items-center">
-                                    <div class="user-avatar me-3">
-                                        <i class="fas fa-user-circle fa-2x text-primary"></i>
+                        <!-- Two Column Layout for Sender and Receiver -->
+                        <div class="row mb-4">
+                            <!-- Sender Column -->
+                            <div class="col-md-6">
+                                <div class="card h-100 border-primary">
+                                    <div class="card-header bg-primary text-white py-2">
+                                        <h6 class="mb-0"><i class="fas fa-user-circle me-2"></i>SENDER</h6>
                                     </div>
-                                    <div>
-                                        <h6 class="mb-1">{{ request.user.get_full_name|default:request.user.username }}</h6>
-                                        <small class="text-muted">{{ request.user.email }}</small>
-                                        <br>
-                                        <span class="badge bg-info mt-1">Current Owner</span>
+                                    <div class="card-body">
+                                        <div class="d-flex align-items-center">
+                                            <div class="user-avatar me-3" style="width: 60px; height: 60px; font-size: 24px;">
+                                                {{ request.user.first_name|first|default:request.user.username|first|upper }}
+                                            </div>
+                                            <div>
+                                                <h5 class="mb-1">{{ request.user.get_full_name|default:request.user.username }}</h5>
+                                                <p class="mb-1 text-muted small">{{ request.user.email }}</p>
+                                                <span class="badge bg-info">
+                                                    <i class="fas fa-user-tag me-1"></i>
+                                                    {% if request.user.is_superuser %}
+                                                        Administrator
+                                                    {% elif request.user.is_staff %}
+                                                        Staff
+                                                    {% else %}
+                                                        User
+                                                    {% endif %}
+                                                </span>
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Receiver Search -->
-                        <div class="mb-4">
-                            <label class="form-label fw-bold required">Transfer To (New Owner)</label>
-                            <div class="position-relative">
-                                <input type="text" 
-                                       class="form-control form-control-lg" 
-                                       id="userSearch" 
-                                       placeholder="Search by username, name or email..."
-                                       autocomplete="off">
-                                <input type="hidden" name="receiver_id" id="receiverId" required>
-                                
-                                <!-- Suggestions dropdown -->
-                                <div id="userSuggestions" class="list-group mt-1" 
-                                     style="position: absolute; z-index: 1000; width: 100%; max-height: 300px; overflow-y: auto; display: none; box-shadow: 0 5px 15px rgba(0,0,0,0.2);">
                                 </div>
                             </div>
                             
-                            <!-- Selected User Display -->
-                            <div id="selectedUserCard" class="mt-3 p-3 bg-success bg-opacity-10 rounded" style="display: none;">
-                                <div class="d-flex align-items-center">
-                                    <div class="me-3">
-                                        <i class="fas fa-check-circle fa-2x text-success"></i>
+                            <!-- Receiver Column -->
+                            <div class="col-md-6">
+                                <div class="card h-100 border-success">
+                                    <div class="card-header bg-success text-white py-2">
+                                        <h6 class="mb-0"><i class="fas fa-user-plus me-2"></i>RECEIVER</h6>
                                     </div>
-                                    <div class="flex-grow-1">
-                                        <h6 class="mb-1" id="selectedUserName"></h6>
-                                        <small class="text-muted" id="selectedUserEmail"></small>
+                                    <div class="card-body">
+                                        <!-- Receiver Search -->
+                                        <div class="position-relative mb-2">
+                                            <input type="text" 
+                                                   class="form-control" 
+                                                   id="userSearch" 
+                                                   placeholder="Search by username, name or email..."
+                                                   autocomplete="off">
+                                            <input type="hidden" name="receiver_id" id="receiverId" required>
+                                            
+                                            <!-- Suggestions dropdown -->
+                                            <div id="userSuggestions" class="list-group mt-1" 
+                                                 style="position: absolute; z-index: 1000; width: 100%; max-height: 300px; overflow-y: auto; display: none; box-shadow: 0 5px 15px rgba(0,0,0,0.2);">
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Selected User Display -->
+                                        <div id="selectedUserCard" style="display: none;">
+                                            <div class="d-flex align-items-center p-2 bg-success bg-opacity-10 rounded">
+                                                <div class="me-3">
+                                                    <i class="fas fa-check-circle fa-2x text-success"></i>
+                                                </div>
+                                                <div class="flex-grow-1">
+                                                    <h6 class="mb-1" id="selectedUserName"></h6>
+                                                    <small class="text-muted" id="selectedUserEmail"></small>
+                                                </div>
+                                                <button type="button" class="btn btn-sm btn-outline-danger" id="clearUserBtn">
+                                                    <i class="fas fa-times"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- No selection message -->
+                                        <div id="noReceiverMsg" class="text-center text-muted py-3">
+                                            <i class="fas fa-arrow-up me-2"></i>Search and select a receiver above
+                                        </div>
                                     </div>
-                                    <button type="button" class="btn btn-sm btn-outline-danger" id="clearUserBtn">
-                                        <i class="fas fa-times"></i> Change
-                                    </button>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Transfer Summary -->
-                        <div class="card bg-light mb-4">
+                        <!-- Transfer Summary (Now at the bottom) -->
+                        <div class="card bg-light border-info mb-4">
+                            <div class="card-header bg-info text-white py-2">
+                                <h6 class="mb-0"><i class="fas fa-chart-pie me-2"></i>TRANSFER SUMMARY</h6>
+                            </div>
                             <div class="card-body">
-                                <h6 class="fw-bold mb-3">Transfer Summary</h6>
                                 <div class="row">
-                                    <div class="col-6">
-                                        <p class="mb-1">Total Products:</p>
-                                        <p class="mb-1">Single Items:</p>
-                                        <p class="mb-1">Bulk Items:</p>
-                                        <p class="mb-1">Current Owner:</p>
-                                        <p class="mb-1">New Owner:</p>
+                                    <div class="col-md-3">
+                                        <div class="text-center p-2">
+                                            <span class="text-muted d-block">Total Products</span>
+                                            <span class="h3 text-primary">{{ selected_products|length }}</span>
+                                        </div>
                                     </div>
-                                    <div class="col-6">
-                                        <p class="mb-1 fw-bold">{{ selected_products|length }}</p>
-                                        <p class="mb-1 fw-bold">{{ single_count }}</p>
-                                        <p class="mb-1 fw-bold">{{ bulk_count }}</p>
-                                        <p class="mb-1 fw-bold">{{ request.user.username }}</p>
-                                        <p class="mb-1 fw-bold" id="summaryReceiver">Not selected</p>
+                                    <div class="col-md-3">
+                                        <div class="text-center p-2">
+                                            <span class="text-muted d-block">Single Items</span>
+                                            <span class="h3 text-info">{{ single_count }}</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="text-center p-2">
+                                            <span class="text-muted d-block">Bulk Items</span>
+                                            <span class="h3 text-secondary">{{ bulk_count }}</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="text-center p-2">
+                                            <span class="text-muted d-block">Receiver</span>
+                                            <span class="h6 text-success d-block" id="summaryReceiver">Not selected</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Transfer Direction Arrow -->
+                                <div class="row mt-2">
+                                    <div class="col-12 text-center">
+                                        <div class="d-flex justify-content-center align-items-center">
+                                            <span class="badge bg-primary p-2">{{ request.user.username }}</span>
+                                            <i class="fas fa-arrow-right fa-2x mx-3 text-success"></i>
+                                            <span class="badge bg-success p-2" id="summaryReceiver2">???</span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -191,6 +241,20 @@
         align-items: center;
         justify-content: center;
         color: white;
+        font-weight: bold;
+    }
+    .card {
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        transition: transform 0.2s;
+    }
+    .card:hover {
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+    .border-primary {
+        border-left: 4px solid #007bff !important;
+    }
+    .border-success {
+        border-left: 4px solid #28a745 !important;
     }
 </style>
 {% endblock %}
@@ -211,7 +275,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const selectedUserName = document.getElementById('selectedUserName');
     const selectedUserEmail = document.getElementById('selectedUserEmail');
     const clearUserBtn = document.getElementById('clearUserBtn');
+    const noReceiverMsg = document.getElementById('noReceiverMsg');
     const summaryReceiver = document.getElementById('summaryReceiver');
+    const summaryReceiver2 = document.getElementById('summaryReceiver2');
     const transferForm = document.getElementById('transferForm');
     const submitBtn = document.getElementById('submitBtn');
     
@@ -281,10 +347,12 @@ document.addEventListener('DOMContentLoaded', function() {
         selectedUserName.textContent = name;
         selectedUserEmail.textContent = email;
         selectedUserCard.style.display = 'block';
+        if (noReceiverMsg) noReceiverMsg.style.display = 'none';
         userSearch.value = '';
         userSearch.disabled = true;
         userSuggestions.style.display = 'none';
         summaryReceiver.textContent = name;
+        if (summaryReceiver2) summaryReceiver2.textContent = name;
     };
     
     // Clear selected user
@@ -292,9 +360,11 @@ document.addEventListener('DOMContentLoaded', function() {
         clearUserBtn.addEventListener('click', function() {
             receiverId.value = '';
             selectedUserCard.style.display = 'none';
+            if (noReceiverMsg) noReceiverMsg.style.display = 'block';
             userSearch.disabled = false;
             userSearch.focus();
             summaryReceiver.textContent = 'Not selected';
+            if (summaryReceiver2) summaryReceiver2.textContent = '???';
         });
     }
     
