@@ -34,6 +34,29 @@ urlpatterns = [
     path('payments/add/', views.payment_add, name='payment_add'),
     path('payments/<int:pk>/', views.payment_detail, name='payment_detail'),
     
+    # ===== ADD THESE MISSING COMMISSION URLS =====
+    
+    # Commission Dashboard (Admin/Manager)
+    path('commissions/dashboard/', views.commission_dashboard, name='commission_dashboard'),
+    
+    # My Commissions (for logged in user)
+    path('commissions/my/', views.my_commissions, name='my_commissions'),
+    
+    # Seller Commission Detail (Admin only)
+    path('commissions/seller/<int:seller_id>/', views.seller_commission_detail, name='seller_commission_detail'),
+    
+    # Pay Commission (AJAX endpoint)
+    path('commissions/pay/<int:transaction_id>/', views.pay_commission, name='pay_commission'),
+    
+    # Bulk Pay Commission (AJAX endpoint)
+    path('commissions/bulk-pay/', views.bulk_pay_commission, name='bulk_pay_commission'),
+    
+    # Commission Report
+    path('commissions/report/', views.commission_report, name='commission_report'),
+    
+    # Export Commission Report (CSV)
+    path('commissions/export/', views.export_commission_report, name='export_commission_report'),
+    
     # API for Sales integration
     path('api/sale-to-credit/<str:sale_id>/', views.convert_sale_to_credit, name='convert_sale_to_credit'),
 ]

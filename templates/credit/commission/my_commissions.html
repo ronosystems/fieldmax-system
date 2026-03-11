@@ -1,0 +1,670 @@
+{% extends 'credit/staff_base.html' %}
+{% load humanize %}
+{% load static %}
+
+{% block title %}My Commissions - FieldMax Credit{% endblock %}
+
+{% block page_icon %}fas fa-coins{% endblock %}
+{% block page_title %}My Commissions{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'credit:dashboard' %}">Dashboard</a></li>
+<li class="breadcrumb-item active">My Commissions</li>
+{% endblock %}
+
+{% block page_actions %}
+<div class="btn-group" role="group">
+    <button type="button" class="btn btn-outline-custom btn-sm" onclick="window.print()">
+        <i class="fas fa-print me-2"></i>Print
+    </button>
+    <a href="{% url 'credit:commission_report' %}?seller={{ request.user.id }}" class="btn btn-outline-custom btn-sm">
+        <i class="fas fa-chart-bar me-2"></i>Full Report
+    </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="my-commissions">
+
+    <!-- Welcome Banner -->
+    <div class="alert alert-info d-flex align-items-center mb-4" style="background: var(--primary-gradient); color: white; border: none;">
+        <i class="fas fa-hand-holding-usd fa-2x me-3"></i>
+        <div>
+            <h5 class="mb-1">Welcome, {{ request.user.get_full_name|default:request.user.username }}!</h5>
+            <p class="mb-0">Track all your commission earnings and payments in one place.</p>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="stats-grid mb-4">
+        <!-- Total Earned Card -->
+        <div class="stat-card">
+            <div class="stat-icon primary">
+                <i class="fas fa-coins"></i>
+            </div>
+            <div class="stat-value">KES {{ summary.total_earned|floatformat:2|intcomma }}</div>
+            <div class="stat-label">Total Commission Earned</div>
+            <div class="stat-trend">
+                <i class="fas fa-calendar me-1"></i>All Time
+            </div>
+        </div>
+
+        <!-- Paid Card -->
+        <div class="stat-card">
+            <div class="stat-icon success">
+                <i class="fas fa-check-circle"></i>
+            </div>
+            <div class="stat-value">KES {{ summary.total_paid|floatformat:2|intcomma }}</div>
+            <div class="stat-label">Paid to You</div>
+            <div class="stat-trend">
+                <i class="fas fa-percentage me-1"></i>
+                {% if summary.total_earned > 0 %}
+                    {% widthratio summary.total_paid summary.total_earned 100 %}% Collected
+                {% else %}0% Collected{% endif %}
+            </div>
+        </div>
+
+        <!-- Pending Card -->
+        <div class="stat-card">
+            <div class="stat-icon warning">
+                <i class="fas fa-clock"></i>
+            </div>
+            <div class="stat-value">KES {{ summary.total_pending|floatformat:2|intcomma }}</div>
+            <div class="stat-label">Pending Payment</div>
+            <div class="stat-trend {% if pending_count > 0 %}down{% endif %}">
+                <i class="fas fa-hourglass-half me-1"></i>{{ pending_count }} Transactions
+            </div>
+        </div>
+
+        <!-- This Month Card -->
+        <div class="stat-card">
+            <div class="stat-icon info">
+                <i class="fas fa-calendar-alt"></i>
+            </div>
+            <div class="stat-value">KES {{ month_earnings|floatformat:2|intcomma }}</div>
+            <div class="stat-label">This Month's Earnings</div>
+            <div class="stat-trend">
+                <i class="fas fa-chart-line me-1"></i>
+                {% if summary.total_earned > 0 %}
+                    {% widthratio month_earnings summary.total_earned 100 %}% of Total
+                {% else %}0%{% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Progress Section -->
+    <div class="commission-summary-card mb-4">
+        <div class="row align-items-center">
+            <div class="col-md-4">
+                <div class="commission-label">Collection Progress</div>
+                <div class="commission-amount">{{ paid_count }} of {{ transactions.paginator.count }} Paid</div>
+            </div>
+            <div class="col-md-8">
+                <div class="commission-progress">
+                    <div class="commission-progress-bar" 
+                         style="width: {% widthratio paid_count transactions.paginator.count 100 %}%"></div>
+                </div>
+                <div class="d-flex justify-content-between mt-2">
+                    <small class="text-success">
+                        <i class="fas fa-check-circle me-1"></i>Paid: KES {{ summary.total_paid|floatformat:0|intcomma }}
+                    </small>
+                    <small class="text-warning">
+                        <i class="fas fa-clock me-1"></i>Pending: KES {{ summary.total_pending|floatformat:0|intcomma }}
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Payment History (if available) -->
+    {% if payment_history %}
+    <div class="card-custom mb-4">
+        <div class="card-header-custom">
+            <h5 class="mb-0"><i class="fas fa-history me-2"></i>Recent Payments Received</h5>
+        </div>
+        <div class="card-body-custom p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Transaction</th>
+                            <th>Customer</th>
+                            <th>Company</th>
+                            <th class="text-end">Amount</th>
+                            <th>Paid By</th>
+                            <th>Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for payment in payment_history %}
+                        <tr>
+                            <td>{{ payment.paid_date|date:"d M Y" }}</td>
+                            <td>
+                                <a href="{% url 'credit:transaction_detail' payment.transaction.id %}" class="text-decoration-none">
+                                    {{ payment.transaction.transaction_id }}
+                                </a>
+                            </td>
+                            <td>{{ payment.transaction.customer.full_name|truncatechars:20 }}</td>
+                            <td>{{ payment.transaction.credit_company.name|truncatechars:15 }}</td>
+                            <td class="text-end fw-bold text-success">KES {{ payment.amount|floatformat:2|intcomma }}</td>
+                            <td>{{ payment.paid_by.get_full_name|default:payment.paid_by.username }}</td>
+                            <td>
+                                {% if payment.notes %}
+                                <i class="fas fa-comment-dots" data-bs-toggle="tooltip" title="{{ payment.notes }}"></i>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Commissions Table -->
+    <div class="card-custom">
+        <div class="card-header-custom d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-list me-2"></i>My Commission Transactions</h5>
+            <span class="badge bg-light text-dark">{{ transactions.paginator.count }} Total</span>
+        </div>
+        <div class="card-body-custom p-0">
+            <!-- Filters -->
+            <div class="p-3 border-bottom">
+                <form method="get" class="row g-2">
+                    <div class="col-md-3">
+                        <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
+                            <option value="">All Status</option>
+                            <option value="pending" {% if request.GET.status == 'pending' %}selected{% endif %}>Pending</option>
+                            <option value="paid" {% if request.GET.status == 'paid' %}selected{% endif %}>Paid</option>
+                            <option value="cancelled" {% if request.GET.status == 'cancelled' %}selected{% endif %}>Cancelled</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <select name="company" class="form-select form-select-sm" onchange="this.form.submit()">
+                            <option value="">All Companies</option>
+                            {% for company in companies %}
+                            <option value="{{ company.id }}" {% if request.GET.company == company.id|stringformat:"i" %}selected{% endif %}>
+                                {{ company.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <input type="text" name="search" class="form-control form-control-sm" 
+                               placeholder="Search by ID or Customer..." value="{{ request.GET.search|default:'' }}">
+                    </div>
+                    <div class="col-md-3">
+                        <button type="submit" class="btn btn-sm btn-primary-custom w-100">
+                            <i class="fas fa-filter me-2"></i>Apply Filters
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Table -->
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Transaction ID</th>
+                            <th>Date</th>
+                            <th>Customer</th>
+                            <th>Company</th>
+                            <th>Product</th>
+                            <th class="text-end">Sale Amount</th>
+                            <th class="text-end">Commission</th>
+                            <th>Status</th>
+                            <th>Paid Date</th>
+                            <th class="text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for trans in transactions %}
+                        <tr>
+                            <td>
+                                <a href="{% url 'credit:transaction_detail' trans.id %}" class="text-decoration-none fw-bold">
+                                    {{ trans.transaction_id }}
+                                </a>
+                            </td>
+                            <td>{{ trans.paid_date|date:"d M Y"|default:trans.transaction_date|date:"d M Y" }}</td>
+                            <td>{{ trans.customer.full_name|truncatechars:20 }}</td>
+                            <td>{{ trans.credit_company.name|truncatechars:15 }}</td>
+                            <td>{{ trans.product.name|truncatechars:15 }}</td>
+                            <td class="text-end">KES {{ trans.ceiling_price|floatformat:0|intcomma }}</td>
+                            <td class="text-end fw-bold">KES {{ trans.commission_amount|floatformat:2|intcomma }}</td>
+                            <td>
+                                {% if trans.commission_status == 'paid' %}
+                                    <span class="badge badge-commission-paid">
+                                        <i class="fas fa-check-circle me-1"></i>Paid
+                                    </span>
+                                {% elif trans.commission_status == 'pending' %}
+                                    <span class="badge badge-commission-pending">
+                                        <i class="fas fa-clock me-1"></i>Pending
+                                    </span>
+                                {% elif trans.commission_status == 'cancelled' %}
+                                    <span class="badge bg-secondary">
+                                        <i class="fas fa-times-circle me-1"></i>Cancelled
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if trans.commission_paid_date %}
+                                    {{ trans.commission_paid_date|date:"d M Y" }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <a href="{% url 'credit:transaction_detail' trans.id %}" 
+                                   class="btn btn-sm btn-commission-view" 
+                                   data-bs-toggle="tooltip" 
+                                   title="View Details">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                {% if trans.commission_status == 'pending' and request.user.is_superuser %}
+                                <button class="btn btn-sm btn-commission-pay pay-commission-btn ms-1"
+                                        data-transaction-id="{{ trans.id }}"
+                                        data-seller="{{ request.user.get_full_name|default:request.user.username }}"
+                                        data-amount="{{ trans.commission_amount }}"
+                                        data-bs-toggle="tooltip"
+                                        title="Pay Commission">
+                                    <i class="fas fa-check-circle"></i>
+                                </button>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="10" class="text-center py-5">
+                                <i class="fas fa-coins fa-3x mb-3" style="color: var(--text-secondary);"></i>
+                                <h5 class="text-secondary">No Commission Transactions Found</h5>
+                                <p class="text-secondary">You haven't earned any commissions yet.</p>
+                                <a href="{% url 'credit:transaction_create' %}" class="btn btn-primary-custom mt-2">
+                                    <i class="fas fa-plus-circle me-2"></i>Create New Transaction
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            {% if transactions.paginator.num_pages > 1 %}
+            <div class="p-3 border-top">
+                <nav aria-label="Page navigation">
+                    <ul class="pagination justify-content-center mb-0">
+                        {% if transactions.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page=1{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.company %}&company={{ request.GET.company }}{% endif %}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}">
+                                <i class="fas fa-angle-double-left"></i>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ transactions.previous_page_number }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.company %}&company={{ request.GET.company }}{% endif %}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}">
+                                <i class="fas fa-angle-left"></i>
+                            </a>
+                        </li>
+                        {% endif %}
+
+                        {% for num in transactions.paginator.page_range %}
+                            {% if transactions.number == num %}
+                            <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                            {% elif num > transactions.number|add:'-3' and num < transactions.number|add:'3' %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ num }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.company %}&company={{ request.GET.company }}{% endif %}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}">
+                                    {{ num }}
+                                </a>
+                            </li>
+                            {% endif %}
+                        {% endfor %}
+
+                        {% if transactions.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ transactions.next_page_number }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.company %}&company={{ request.GET.company }}{% endif %}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}">
+                                <i class="fas fa-angle-right"></i>
+                            </a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ transactions.paginator.num_pages }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.company %}&company={{ request.GET.company }}{% endif %}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}">
+                                <i class="fas fa-angle-double-right"></i>
+                            </a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Weekly/Monthly Summary (Optional) -->
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card-custom">
+                <div class="card-header-custom">
+                    <h5 class="mb-0"><i class="fas fa-calendar-week me-2"></i>This Week's Earnings</h5>
+                </div>
+                <div class="card-body-custom text-center">
+                    <h2 class="text-primary mb-0">KES {{ week_earnings|floatformat:2|intcomma }}</h2>
+                    <small class="text-secondary">{{ week_earnings|floatformat:0 }} from {{ transactions|length }} transactions</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card-custom">
+                <div class="card-header-custom">
+                    <h5 class="mb-0"><i class="fas fa-calendar-month me-2"></i>This Month's Earnings</h5>
+                </div>
+                <div class="card-body-custom text-center">
+                    <h2 class="text-success mb-0">KES {{ month_earnings|floatformat:2|intcomma }}</h2>
+                    <small class="text-secondary">{{ month_earnings|floatformat:0 }} from {{ month_count|default:0 }} transactions</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Pay Commission Modal (for admin, but included here for consistency) -->
+{% if request.user.is_superuser %}
+<div class="modal fade" id="payCommissionModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content" style="background: var(--card-bg); color: var(--text-primary);">
+            <div class="modal-header" style="background: var(--primary-gradient); color: white;">
+                <h5 class="modal-title">
+                    <i class="fas fa-hand-holding-usd me-2"></i>Pay Commission
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="singlePayCommissionForm">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <input type="hidden" name="transaction_id" id="payTransactionId">
+                    
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        You are about to pay commission for this transaction.
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="payNotes" class="form-label">Payment Notes (Optional)</label>
+                        <textarea class="form-control" id="payNotes" name="notes" rows="2"></textarea>
+                    </div>
+                    
+                    <div class="payment-details p-3" style="background: var(--commission-bg-light); border-radius: 8px;">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span>Transaction:</span>
+                            <span class="fw-bold" id="payTransactionRef"></span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span>Seller:</span>
+                            <span class="fw-bold" id="paySellerName"></span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span>Amount:</span>
+                            <span class="fw-bold text-success" id="payAmount"></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-commission-pay" id="singlePayBtn">
+                        <i class="fas fa-check-circle me-2"></i>Confirm Payment
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    
+    // Initialize tooltips
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.map(function(tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+    
+    // Pay commission button (for admin)
+    $('.pay-commission-btn').click(function() {
+        const transactionId = $(this).data('transaction-id');
+        const sellerName = $(this).data('seller');
+        const amount = $(this).data('amount');
+        
+        // If we have a modal, show it
+        if ($('#payCommissionModal').length) {
+            $('#payTransactionId').val(transactionId);
+            $('#payTransactionRef').text('#' + transactionId.toString().slice(-8));
+            $('#paySellerName').text(sellerName);
+            $('#payAmount').text('KES ' + amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+            $('#payCommissionModal').modal('show');
+        } else {
+            // Fallback to confirm dialog
+            if (confirm(`Pay commission of KES ${amount.toLocaleString()} to ${sellerName}?`)) {
+                const $btn = $(this);
+                const notes = prompt('Enter payment notes (optional):');
+                
+                $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-2"></span>');
+                
+                $.ajax({
+                    url: '{% url "credit:pay_commission" 0 %}'.replace('0', transactionId),
+                    method: 'POST',
+                    data: {
+                        notes: notes || '',
+                        csrfmiddlewaretoken: '{{ csrf_token }}'
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            alert(response.message);
+                            location.reload();
+                        } else {
+                            alert('Error: ' + response.error);
+                            $btn.prop('disabled', false).html('<i class="fas fa-check-circle me-2"></i>Pay');
+                        }
+                    },
+                    error: function() {
+                        alert('Error processing request');
+                        $btn.prop('disabled', false).html('<i class="fas fa-check-circle me-2"></i>Pay');
+                    }
+                });
+            }
+        }
+    });
+    
+    // Single pay commission form submission
+    $('#singlePayCommissionForm').submit(function(e) {
+        e.preventDefault();
+        
+        const transactionId = $('#payTransactionId').val();
+        const notes = $('#payNotes').val();
+        
+        $('#singlePayBtn').prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-2"></span>Processing...');
+        
+        $.ajax({
+            url: '{% url "credit:pay_commission" 0 %}'.replace('0', transactionId),
+            method: 'POST',
+            data: {
+                notes: notes,
+                csrfmiddlewaretoken: '{{ csrf_token }}'
+            },
+            success: function(response) {
+                if (response.success) {
+                    $('#payCommissionModal').modal('hide');
+                    alert(response.message);
+                    location.reload();
+                } else {
+                    alert('Error: ' + response.error);
+                    $('#singlePayBtn').prop('disabled', false).html('<i class="fas fa-check-circle me-2"></i>Confirm Payment');
+                }
+            },
+            error: function() {
+                alert('Error processing request');
+                $('#singlePayBtn').prop('disabled', false).html('<i class="fas fa-check-circle me-2"></i>Confirm Payment');
+            }
+        });
+    });
+    
+    // Format currency function
+    window.formatCurrency = function(amount) {
+        return 'KES ' + parseFloat(amount).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    };
+    
+});
+</script>
+
+<style>
+    /* My Commissions specific styles */
+    .my-commissions .stat-card {
+        transition: transform 0.2s;
+    }
+    
+    .my-commissions .stat-card:hover {
+        transform: translateY(-5px);
+    }
+    
+    .badge-commission-pending {
+        background: var(--commission-pending);
+        color: #000;
+        padding: 5px 10px;
+        border-radius: 50px;
+        font-size: 0.75rem;
+    }
+    
+    .badge-commission-paid {
+        background: var(--commission-paid);
+        color: white;
+        padding: 5px 10px;
+        border-radius: 50px;
+        font-size: 0.75rem;
+    }
+    
+    .commission-summary-card {
+        background: var(--card-bg);
+        border-left: 5px solid var(--primary-color);
+        border-radius: 10px;
+        padding: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .commission-progress {
+        height: 10px;
+        background: var(--border-color);
+        border-radius: 5px;
+        overflow: hidden;
+    }
+    
+    .commission-progress-bar {
+        height: 100%;
+        background: var(--primary-gradient);
+        border-radius: 5px;
+        transition: width 0.3s ease;
+    }
+    
+    .btn-commission-view {
+        background: transparent;
+        border: 1px solid var(--primary-color);
+        color: var(--primary-color);
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        transition: all 0.3s;
+    }
+    
+    .btn-commission-view:hover {
+        background: var(--primary-color);
+        color: white;
+    }
+    
+    .btn-commission-pay {
+        background: var(--commission-paid);
+        border: none;
+        color: white;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        transition: all 0.3s;
+    }
+    
+    .btn-commission-pay:hover {
+        background: #218838;
+        transform: translateY(-2px);
+        color: white;
+    }
+    
+    /* Table styles */
+    .table th {
+        background: var(--light-bg);
+        color: var(--text-secondary);
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .table td {
+        vertical-align: middle;
+    }
+    
+    /* Pagination */
+    .pagination .page-link {
+        background: var(--card-bg);
+        color: var(--text-primary);
+        border-color: var(--border-color);
+    }
+    
+    .pagination .page-item.active .page-link {
+        background: var(--primary-gradient);
+        border-color: var(--primary-color);
+        color: white;
+    }
+    
+    /* Dark theme adjustments */
+    [data-theme="dark"] .badge-commission-pending {
+        color: #000;
+    }
+    
+    [data-theme="dark"] .table th {
+        background: var(--sidebar-solid);
+    }
+    
+    /* Responsive */
+    @media (max-width: 768px) {
+        .stats-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .table-responsive {
+            font-size: 0.85rem;
+        }
+        
+        .btn-sm {
+            padding: 0.2rem 0.4rem;
+            font-size: 0.75rem;
+        }
+    }
+    
+    /* Print styles */
+    @media print {
+        .btn-group, .pagination, .modal, .floating-commission-btn {
+            display: none !important;
+        }
+        
+        .stat-card {
+            break-inside: avoid;
+        }
+        
+        .table {
+            break-inside: auto;
+        }
+    }
+</style>
+{% endblock %}

@@ -2,11 +2,14 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db import transaction
-from django.db.models import Q, Sum, Count
+from django.db.models import Q, Sum, Count, DecimalField, Value, ExpressionWrapper, F, FloatField, Case, When
+from django.db.models.functions import Coalesce
 from django.utils import timezone
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from decimal import Decimal
 import logging
+import calendar
+import json
 from django.http import JsonResponse
 from django.conf import settings
 from django.core.paginator import Paginator
@@ -15,37 +18,34 @@ from django.core.mail import send_mail
 from django.template.loader import render_to_string
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
-from django.db.models import F, Value, CharField
-from django.db.models.functions import Concat
 
 from .models import (
     CreditCompany, CreditCustomer, CreditTransaction, 
-    CompanyPayment, CreditTransactionLog
+    CompanyPayment, CreditTransactionLog,
+    # Commission models
+    SellerCommission, SellerCommissionSummary
 )
 from inventory.models import Product
-from django.db.models import Sum, Count, Avg, Q, F
-from django.utils import timezone
-from django.contrib.auth.decorators import login_required
-from django.shortcuts import render
-from .models import CreditTransaction, CreditCompany, CreditCustomer, CompanyPayment
-from decimal import Decimal
-from datetime import timedelta, date
-from django.shortcuts import render
-from django.contrib.auth.decorators import login_required
-from django.db.models import Sum, Count, Q, DecimalField, Value, ExpressionWrapper, F, FloatField, Case, When
-from django.db.models.functions import Coalesce
-from django.utils import timezone
-from django.conf import settings
-from decimal import Decimal
-import logging
-import calendar
-from datetime import timedelta, datetime, date
-
-from .models import CreditTransaction, CreditCustomer, CreditCompany, CompanyPayment
 from django.contrib.auth import get_user_model
+
+
+
+
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
+
+
+
+
+
+
+
+
+
+# ====================================
+# HELPER FUNCTIONS
+# ====================================
 
 def get_payment_method_color(method):
     """Get color for payment method"""
@@ -70,18 +70,558 @@ def get_day_suffix(day):
     else:
         return 'th'
 
+def get_commission_status_color(status):
+    """Get color for commission status"""
+    colors = {
+        'pending': 'warning',
+        'paid': 'success',
+        'cancelled': 'danger',
+    }
+    return colors.get(status, 'secondary')
+
+# ====================================
+# COMMISSION VIEWS
+# ====================================
+
+@login_required
+def commission_dashboard(request):
+    """Main commission dashboard for admin/supervisors"""
+    
+    # Overall statistics
+    total_commission = CreditTransaction.objects.filter(
+        payment_status='paid'
+    ).aggregate(
+        total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
+    )['total']
+    
+    paid_commission = CreditTransaction.objects.filter(
+        commission_status='paid'
+    ).aggregate(
+        total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
+    )['total']
+    
+    pending_commission = CreditTransaction.objects.filter(
+        payment_status='paid',
+        commission_status='pending'
+    ).aggregate(
+        total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
+    )['total']
+    
+    # This month's commission
+    today = timezone.now().date()
+    month_start = timezone.make_aware(datetime.combine(today.replace(day=1), datetime.min.time()))
+    month_end = timezone.make_aware(datetime.combine(today, datetime.max.time()))
+    
+    month_commission = CreditTransaction.objects.filter(
+        paid_date__range=[month_start, month_end],
+        payment_status='paid'
+    ).aggregate(
+        total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
+    )['total']
+    
+    # This week's commission
+    week_start = timezone.make_aware(datetime.combine(today - timedelta(days=today.weekday()), datetime.min.time()))
+    week_commission = CreditTransaction.objects.filter(
+        paid_date__gte=week_start,
+        payment_status='paid'
+    ).aggregate(
+        total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
+    )['total']
+    
+    # Top sellers
+    top_sellers = SellerCommissionSummary.objects.select_related('seller').order_by('-total_earned')[:10]
+    
+    # Recent commission payments
+    recent_payments = SellerCommission.objects.filter(
+        status='paid'
+    ).select_related('seller', 'transaction', 'paid_by').order_by('-paid_date')[:20]
+    
+    # Pending commissions
+    pending_commissions = CreditTransaction.objects.filter(
+        payment_status='paid',
+        commission_status='pending'
+    ).select_related('dealer', 'customer', 'credit_company').order_by('paid_date')[:50]
+    
+    # Commission by company
+    company_commission = CreditCompany.objects.filter(
+        transactions__payment_status='paid'
+    ).annotate(
+        total_commission=Coalesce(
+            Sum('transactions__commission_amount'),
+            Value(0, output_field=DecimalField())
+        ),
+        pending_commission=Coalesce(
+            Sum('transactions__commission_amount', 
+                filter=Q(transactions__commission_status='pending')),
+            Value(0, output_field=DecimalField())
+        ),
+        paid_commission=Coalesce(
+            Sum('transactions__commission_amount',
+                filter=Q(transactions__commission_status='paid')),
+            Value(0, output_field=DecimalField())
+        ),
+        transaction_count=Count('transactions', filter=Q(transactions__payment_status='paid'))
+    ).filter(total_commission__gt=0).order_by('-total_commission')[:10]
+    
+    # Monthly trend (last 6 months)
+    monthly_trend = []
+    for i in range(5, -1, -1):
+        month_date = today.replace(day=1) - timedelta(days=30*i)
+        month_start = timezone.make_aware(datetime.combine(month_date.replace(day=1), datetime.min.time()))
+        
+        if i == 0:
+            month_end = timezone.make_aware(datetime.combine(today, datetime.max.time()))
+        else:
+            next_month = month_date.replace(day=28) + timedelta(days=4)
+            month_end = timezone.make_aware(datetime.combine(next_month.replace(day=1) - timedelta(days=1), datetime.max.time()))
+        
+        month_earned = CreditTransaction.objects.filter(
+            paid_date__range=[month_start, month_end],
+            payment_status='paid'
+        ).aggregate(
+            total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
+        )['total']
+        
+        month_paid = CreditTransaction.objects.filter(
+            commission_paid_date__range=[month_start, month_end],
+            commission_status='paid'
+        ).aggregate(
+            total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
+        )['total']
+        
+        monthly_trend.append({
+            'month': month_date.strftime('%b %Y'),
+            'earned': month_earned,
+            'paid': month_paid,
+        })
+    
+    context = {
+        'total_commission': total_commission,
+        'paid_commission': paid_commission,
+        'pending_commission': pending_commission,
+        'month_commission': month_commission,
+        'week_commission': week_commission,
+        'top_sellers': top_sellers,
+        'recent_payments': recent_payments,
+        'pending_commissions': pending_commissions,
+        'company_commission': company_commission,
+        'monthly_trend': monthly_trend,
+        'pending_count': pending_commissions.count(),
+    }
+    
+    return render(request, 'credit/commission/dashboard.html', context)
+
+
+@login_required
+def my_commissions(request):
+    """View for sellers to see their own commissions"""
+    seller = request.user
+    
+    # Get or create summary
+    summary, created = SellerCommissionSummary.objects.get_or_create(seller=seller)
+    if created or (timezone.now() - summary.updated_at).days > 1:
+        summary.update_from_transactions()
+    
+    # Get transactions with commission
+    transactions = CreditTransaction.objects.filter(
+        dealer=seller,
+        payment_status='paid'
+    ).select_related(
+        'customer', 'credit_company', 'product'
+    ).order_by('-paid_date')
+    
+    # Pagination
+    paginator = Paginator(transactions, 20)
+    page = request.GET.get('page')
+    transactions_page = paginator.get_page(page)
+    
+    # Monthly earnings for current month
+    today = timezone.now().date()
+    month_start = timezone.make_aware(datetime.combine(today.replace(day=1), datetime.min.time()))
+    month_earnings = transactions.filter(
+        paid_date__gte=month_start
+    ).aggregate(
+        total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
+    )['total']
+    
+    # This week's earnings
+    week_start = timezone.make_aware(datetime.combine(today - timedelta(days=today.weekday()), datetime.min.time()))
+    week_earnings = transactions.filter(
+        paid_date__gte=week_start
+    ).aggregate(
+        total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
+    )['total']
+    
+    # Commission history (payments received)
+    payment_history = SellerCommission.objects.filter(
+        seller=seller,
+        status='paid'
+    ).select_related('paid_by', 'transaction').order_by('-paid_date')[:10]
+    
+    context = {
+        'summary': summary,
+        'transactions': transactions_page,
+        'month_earnings': month_earnings,
+        'week_earnings': week_earnings,
+        'payment_history': payment_history,
+        'pending_count': transactions.filter(commission_status='pending').count(),
+        'paid_count': transactions.filter(commission_status='paid').count(),
+    }
+    
+    return render(request, 'credit/commission/my_commissions.html', context)
+
+
+@login_required
+def seller_commission_detail(request, seller_id):
+    """Admin view for detailed seller commission info"""
+    # Check if user has permission (staff or superuser)
+    if not (request.user.is_staff or request.user.is_superuser):
+        messages.error(request, "You don't have permission to view this page.")
+        return redirect('credit:my_commissions')
+    
+    seller = get_object_or_404(User, id=seller_id)
+    
+    # Get or create summary
+    summary, created = SellerCommissionSummary.objects.get_or_create(seller=seller)
+    if created or (timezone.now() - summary.updated_at).days > 1:
+        summary.update_from_transactions()
+    
+    # Get all transactions with commission
+    transactions = CreditTransaction.objects.filter(
+        dealer=seller
+    ).select_related(
+        'customer', 'credit_company', 'product'
+    ).order_by('-transaction_date')
+    
+    # Filter by status
+    status = request.GET.get('status')
+    if status:
+        if status == 'pending':
+            transactions = transactions.filter(payment_status='paid', commission_status='pending')
+        elif status == 'paid':
+            transactions = transactions.filter(commission_status='paid')
+        elif status == 'cancelled':
+            transactions = transactions.filter(commission_status='cancelled')
+    
+    # Payment history
+    payment_history = SellerCommission.objects.filter(
+        seller=seller,
+        status='paid'
+    ).select_related('paid_by', 'transaction').order_by('-paid_date')
+    
+    # Monthly breakdown
+    monthly_breakdown = []
+    for i in range(11, -1, -1):
+        month_date = timezone.now().date().replace(day=1) - timedelta(days=30*i)
+        month_start = timezone.make_aware(datetime.combine(month_date.replace(day=1), datetime.min.time()))
+        
+        if i == 0:
+            month_end = timezone.make_aware(datetime.combine(timezone.now().date(), datetime.max.time()))
+        else:
+            next_month = month_date.replace(day=28) + timedelta(days=4)
+            month_end = timezone.make_aware(datetime.combine(next_month.replace(day=1) - timedelta(days=1), datetime.max.time()))
+        
+        month_earned = CreditTransaction.objects.filter(
+            dealer=seller,
+            paid_date__range=[month_start, month_end],
+            payment_status='paid'
+        ).aggregate(
+            total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
+        )['total']
+        
+        month_paid = CreditTransaction.objects.filter(
+            dealer=seller,
+            commission_paid_date__range=[month_start, month_end],
+            commission_status='paid'
+        ).aggregate(
+            total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
+        )['total']
+        
+        if month_earned > 0 or month_paid > 0:
+            monthly_breakdown.append({
+                'month': month_date.strftime('%B %Y'),
+                'month_short': month_date.strftime('%b %Y'),
+                'earned': month_earned,
+                'paid': month_paid,
+                'pending': month_earned - month_paid,
+            })
+    
+    context = {
+        'seller': seller,
+        'summary': summary,
+        'transactions': transactions,
+        'payment_history': payment_history,
+        'monthly_breakdown': monthly_breakdown,
+        'total_paid': payment_history.aggregate(total=Sum('amount'))['total'] or 0,
+    }
+    
+    return render(request, 'credit/commission/seller_detail.html', context)
+
+
+@login_required
+def pay_commission(request, transaction_id):
+    """Pay commission for a specific transaction"""
+    # Check permission
+    if not (request.user.is_staff or request.user.is_superuser):
+        return JsonResponse({'success': False, 'error': 'Permission denied'})
+    
+    if request.method == 'POST':
+        try:
+            transaction = get_object_or_404(CreditTransaction, id=transaction_id)
+            
+            if transaction.commission_status == 'paid':
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Commission already paid'
+                })
+            
+            if transaction.payment_status != 'paid':
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Transaction must be paid by company first'
+                })
+            
+            notes = request.POST.get('notes', '')
+            
+            # Mark commission as paid
+            transaction.mark_commission_as_paid(
+                paid_by=request.user,
+                notes=notes
+            )
+            
+            return JsonResponse({
+                'success': True,
+                'message': f'Commission of KSH {transaction.commission_amount} marked as paid',
+                'commission_amount': float(transaction.commission_amount),
+                'seller': transaction.dealer.get_full_name() or transaction.dealer.username
+            })
+            
+        except Exception as e:
+            logger.error(f"Error paying commission: {str(e)}")
+            return JsonResponse({'success': False, 'error': str(e)})
+    
+    return JsonResponse({'success': False, 'error': 'Invalid request method'})
+
+
+@login_required
+def bulk_pay_commission(request):
+    """Pay multiple commissions at once"""
+    # Check permission
+    if not (request.user.is_staff or request.user.is_superuser):
+        return JsonResponse({'success': False, 'error': 'Permission denied'})
+    
+    if request.method == 'POST':
+        try:
+            transaction_ids = request.POST.getlist('transaction_ids')
+            notes = request.POST.get('notes', '')
+            
+            if not transaction_ids:
+                return JsonResponse({'success': False, 'error': 'No transactions selected'})
+            
+            transactions = CreditTransaction.objects.filter(
+                id__in=transaction_ids,
+                payment_status='paid',
+                commission_status='pending'
+            )
+            
+            if not transactions.exists():
+                return JsonResponse({'success': False, 'error': 'No eligible transactions found'})
+            
+            count = 0
+            total_amount = 0
+            
+            for transaction in transactions:
+                transaction.mark_commission_as_paid(
+                    paid_by=request.user,
+                    notes=notes
+                )
+                count += 1
+                total_amount += transaction.commission_amount
+            
+            return JsonResponse({
+                'success': True,
+                'message': f'Paid {count} commissions totaling KSH {total_amount}',
+                'count': count,
+                'total_amount': float(total_amount)
+            })
+            
+        except Exception as e:
+            logger.error(f"Error in bulk pay commission: {str(e)}")
+            return JsonResponse({'success': False, 'error': str(e)})
+    
+    return JsonResponse({'success': False, 'error': 'Invalid request method'})
+
+
+@login_required
+def commission_report(request):
+    """Generate commission reports with filters"""
+    # Check permission
+    if not (request.user.is_staff or request.user.is_superuser):
+        messages.error(request, "You don't have permission to view this page.")
+        return redirect('credit:dashboard')
+    
+    # Get filter parameters
+    seller_id = request.GET.get('seller')
+    company_id = request.GET.get('company')
+    date_from = request.GET.get('date_from')
+    date_to = request.GET.get('date_to')
+    status = request.GET.get('status')
+    
+    # Base queryset
+    commissions = SellerCommission.objects.select_related(
+        'seller', 'transaction', 'paid_by', 
+        'transaction__credit_company', 'transaction__customer'
+    )
+    
+    # Apply filters
+    if seller_id:
+        commissions = commissions.filter(seller_id=seller_id)
+    
+    if company_id:
+        commissions = commissions.filter(transaction__credit_company_id=company_id)
+    
+    if date_from:
+        date_from_aware = timezone.make_aware(datetime.strptime(date_from, '%Y-%m-%d'))
+        commissions = commissions.filter(created_at__date__gte=date_from_aware)
+    
+    if date_to:
+        date_to_aware = timezone.make_aware(datetime.strptime(date_to, '%Y-%m-%d') + timedelta(days=1))
+        commissions = commissions.filter(created_at__lt=date_to_aware)
+    
+    if status:
+        commissions = commissions.filter(status=status)
+    
+    # Order by most recent
+    commissions = commissions.order_by('-created_at')
+    
+    # Pagination
+    paginator = Paginator(commissions, 50)
+    page = request.GET.get('page')
+    commissions_page = paginator.get_page(page)
+    
+    # Summary statistics
+    total_commission = commissions.aggregate(
+        total=Coalesce(Sum('amount'), Value(0, output_field=DecimalField()))
+    )['total']
+    
+    paid_total = commissions.filter(status='paid').aggregate(
+        total=Coalesce(Sum('amount'), Value(0, output_field=DecimalField()))
+    )['total']
+    
+    pending_total = commissions.filter(status='pending').aggregate(
+        total=Coalesce(Sum('amount'), Value(0, output_field=DecimalField()))
+    )['total']
+    
+    # Get filter options
+    sellers = User.objects.filter(commissions_earned__isnull=False).distinct()
+    companies = CreditCompany.objects.filter(transactions__seller_commission_record__isnull=False).distinct()
+    
+    context = {
+        'commissions': commissions_page,
+        'total_commission': total_commission,
+        'paid_total': paid_total,
+        'pending_total': pending_total,
+        'sellers': sellers,
+        'companies': companies,
+        'status_choices': SellerCommission._meta.get_field('status').choices,
+        'filters': {
+            'seller_id': int(seller_id) if seller_id else None,
+            'company_id': int(company_id) if company_id else None,
+            'date_from': date_from,
+            'date_to': date_to,
+            'status': status,
+        }
+    }
+    
+    return render(request, 'credit/commission/report.html', context)
+
+
+@login_required
+def export_commission_report(request):
+    """Export commission report as CSV"""
+    # Check permission
+    if not (request.user.is_staff or request.user.is_superuser):
+        return JsonResponse({'success': False, 'error': 'Permission denied'})
+    
+    import csv
+    from django.http import HttpResponse
+    
+    # Create HttpResponse with CSV header
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="commission_report_{timezone.now().strftime("%Y%m%d_%H%M%S")}.csv"'
+    
+    # Get filter parameters from request
+    seller_id = request.GET.get('seller')
+    company_id = request.GET.get('company')
+    date_from = request.GET.get('date_from')
+    date_to = request.GET.get('date_to')
+    status = request.GET.get('status')
+    
+    # Base queryset
+    commissions = SellerCommission.objects.select_related(
+        'seller', 'transaction', 'paid_by', 
+        'transaction__credit_company', 'transaction__customer'
+    )
+    
+    # Apply filters (same as report view)
+    if seller_id:
+        commissions = commissions.filter(seller_id=seller_id)
+    if company_id:
+        commissions = commissions.filter(transaction__credit_company_id=company_id)
+    if date_from:
+        date_from_aware = timezone.make_aware(datetime.strptime(date_from, '%Y-%m-%d'))
+        commissions = commissions.filter(created_at__date__gte=date_from_aware)
+    if date_to:
+        date_to_aware = timezone.make_aware(datetime.strptime(date_to, '%Y-%m-%d') + timedelta(days=1))
+        commissions = commissions.filter(created_at__lt=date_to_aware)
+    if status:
+        commissions = commissions.filter(status=status)
+    
+    commissions = commissions.order_by('-created_at')
+    
+    # Create CSV writer
+    writer = csv.writer(response)
+    
+    # Write headers
+    writer.writerow([
+        'Date', 'Seller', 'Transaction ID', 'Customer', 'Company',
+        'Amount', 'Status', 'Paid Date', 'Paid By', 'Notes'
+    ])
+    
+    # Write data rows
+    for commission in commissions:
+        writer.writerow([
+            commission.created_at.strftime('%Y-%m-%d %H:%M'),
+            commission.seller.get_full_name() or commission.seller.username,
+            commission.transaction.transaction_id,
+            commission.transaction.customer.full_name,
+            commission.transaction.credit_company.name,
+            f'{commission.amount:.2f}',
+            commission.get_status_display(),
+            commission.paid_date.strftime('%Y-%m-%d %H:%M') if commission.paid_date else '',
+            commission.paid_by.get_full_name() or commission.paid_by.username if commission.paid_by else '',
+            commission.notes
+        ])
+    
+    return response
+
+
+# ====================================
+# STATISTICS VIEW (UPDATED WITH COMMISSION)
+# ====================================
+
 @login_required
 def credit_statistics(request):
     """Credit statistics dashboard with daily, weekly, and monthly breakdowns"""
     
     # Date ranges
     today = timezone.now().date()
-    start_of_day = timezone.make_aware(timezone.datetime.combine(today, timezone.datetime.min.time()))
-    end_of_day = timezone.make_aware(timezone.datetime.combine(today, timezone.datetime.max.time()))
+    start_of_day = timezone.make_aware(datetime.combine(today, datetime.min.time()))
+    end_of_day = timezone.make_aware(datetime.combine(today, datetime.max.time()))
     
-    start_of_week = timezone.make_aware(timezone.datetime.combine(today - timedelta(days=today.weekday()), timezone.datetime.min.time()))
-    start_of_month = timezone.make_aware(timezone.datetime.combine(today.replace(day=1), timezone.datetime.min.time()))
-    start_of_year = timezone.make_aware(timezone.datetime.combine(today.replace(month=1, day=1), timezone.datetime.min.time()))
+    start_of_week = timezone.make_aware(datetime.combine(today - timedelta(days=today.weekday()), datetime.min.time()))
+    start_of_month = timezone.make_aware(datetime.combine(today.replace(day=1), datetime.min.time()))
+    start_of_year = timezone.make_aware(datetime.combine(today.replace(month=1, day=1), datetime.min.time()))
     
     # Base queryset - exclude reversed transactions
     transactions_qs = CreditTransaction.objects.exclude(payment_status='reversed')
@@ -92,17 +632,17 @@ def credit_statistics(request):
     
     # All time totals
     total_transactions = transactions_qs.count()
-    total_value = transactions_qs.aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
+    total_value = transactions_qs.aggregate(total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())))['total']
     
     # Pending payments (company hasn't paid yet)
     pending_transactions = transactions_qs.filter(payment_status='pending')
     pending_count = pending_transactions.count()
-    pending_value = pending_transactions.aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
+    pending_value = pending_transactions.aggregate(total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())))['total']
     
     # Paid transactions
     paid_transactions = transactions_qs.filter(payment_status='paid')
     paid_count = paid_transactions.count()
-    paid_value = paid_transactions.aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
+    paid_value = paid_transactions.aggregate(total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())))['total']
     
     # Cancelled transactions
     cancelled_count = CreditTransaction.objects.filter(payment_status='cancelled').count()
@@ -111,39 +651,67 @@ def credit_statistics(request):
     # Today's transactions
     today_transactions = transactions_qs.filter(transaction_date__range=[start_of_day, end_of_day])
     today_count = today_transactions.count()
-    today_value = today_transactions.aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
+    today_value = today_transactions.aggregate(total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())))['total']
     
     # This month's transactions
     month_transactions = transactions_qs.filter(transaction_date__gte=start_of_month)
     month_count = month_transactions.count()
-    month_value = month_transactions.aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
+    month_value = month_transactions.aggregate(total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())))['total']
     
     # Average values
     avg_transaction_value = total_value / total_transactions if total_transactions > 0 else 0
     
     # ============================================
+    # COMMISSION STATISTICS (NEW)
+    # ============================================
+    total_commission = paid_transactions.aggregate(
+        total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
+    )['total']
+    
+    paid_commission = paid_transactions.filter(
+        commission_status='paid'
+    ).aggregate(
+        total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
+    )['total']
+    
+    pending_commission = paid_transactions.filter(
+        commission_status='pending'
+    ).aggregate(
+        total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
+    )['total']
+    
+    # ============================================
     # DAILY BREAKDOWN - Monday to Sunday
     # ============================================
     daily_credit_breakdown = []
+    daily_credit_total_commission = 0
+    
     for i in range(7):
         day = start_of_week.date() + timedelta(days=i)
-        day_start = timezone.make_aware(timezone.datetime.combine(day, timezone.datetime.min.time()))
-        day_end = timezone.make_aware(timezone.datetime.combine(day, timezone.datetime.max.time()))
+        day_start = timezone.make_aware(datetime.combine(day, datetime.min.time()))
+        day_end = timezone.make_aware(datetime.combine(day, datetime.max.time()))
         
         day_transactions = transactions_qs.filter(transaction_date__range=[day_start, day_end])
-        day_value = day_transactions.aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
+        day_value = day_transactions.aggregate(total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())))['total']
         day_count = day_transactions.count()
         
         # Calculate collection rate for the day
-        day_paid = day_transactions.filter(payment_status='paid').aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
+        day_paid = day_transactions.filter(payment_status='paid').aggregate(total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())))['total']
         day_collection_rate = (day_paid / day_value * 100) if day_value > 0 else 0
+        
+        # Calculate commission for the day
+        day_commission = day_transactions.filter(payment_status='paid').aggregate(
+            total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
+        )['total']
+        daily_credit_total_commission += day_commission
         
         daily_credit_breakdown.append({
             'day': day.strftime('%A'),
             'date': day.strftime('%Y-%m-%d'),
             'value': day_value,
             'count': day_count,
-            'collection_rate': day_collection_rate
+            'collection_rate': day_collection_rate,
+            'commission': day_commission,
         })
 
     # After the daily_credit_breakdown loop — compute true Mon-Sun totals
@@ -161,14 +729,17 @@ def credit_statistics(request):
         'value': daily_credit_total_value,
         'collection_rate': (daily_credit_paid / daily_credit_total_value * 100)
                        if daily_credit_total_value > 0 else 0,
+        'commission': daily_credit_total_commission,
     }
-    
     
     # Week totals for collection rate
     week_transactions = transactions_qs.filter(transaction_date__gte=start_of_week)
-    week_credit_value = week_transactions.aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
-    week_paid = week_transactions.filter(payment_status='paid').aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
+    week_credit_value = week_transactions.aggregate(total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())))['total']
+    week_paid = week_transactions.filter(payment_status='paid').aggregate(total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())))['total']
     week_collection_rate = (week_paid / week_credit_value * 100) if week_credit_value > 0 else 0
+    week_commission = week_transactions.filter(payment_status='paid').aggregate(
+        total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
+    )['total']
     
     # ============================================
     # WEEKLY BREAKDOWN - By Date Ranges of Current Month
@@ -201,16 +772,21 @@ def credit_statistics(request):
         week_start = date(current_year, current_month, start_day)
         week_end = date(current_year, current_month, end_day)
         
-        week_start_aware = timezone.make_aware(timezone.datetime.combine(week_start, timezone.datetime.min.time()))
-        week_end_aware = timezone.make_aware(timezone.datetime.combine(week_end, timezone.datetime.max.time()))
+        week_start_aware = timezone.make_aware(datetime.combine(week_start, datetime.min.time()))
+        week_end_aware = timezone.make_aware(datetime.combine(week_end, datetime.max.time()))
         
         week_trans = transactions_qs.filter(transaction_date__range=[week_start_aware, week_end_aware])
-        week_value = week_trans.aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
+        week_value = week_trans.aggregate(total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())))['total']
         week_count = week_trans.count()
         
         # Calculate collection rate for the week
-        week_paid = week_trans.filter(payment_status='paid').aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
+        week_paid = week_trans.filter(payment_status='paid').aggregate(total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())))['total']
         week_collection = (week_paid / week_value * 100) if week_value > 0 else 0
+        
+        # Calculate commission for the week
+        week_commission_value = week_trans.filter(payment_status='paid').aggregate(
+            total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
+        )['total']
         
         # Format date range
         month_name = week_start.strftime('%b')
@@ -223,13 +799,17 @@ def credit_statistics(request):
             'week_range': date_range,
             'value': week_value,
             'count': week_count,
-            'collection_rate': week_collection
+            'collection_rate': week_collection,
+            'commission': week_commission_value,
         })
     
     # Month totals
-    month_credit_value = month_transactions.aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
-    month_paid = month_transactions.filter(payment_status='paid').aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
+    month_credit_value = month_transactions.aggregate(total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())))['total']
+    month_paid = month_transactions.filter(payment_status='paid').aggregate(total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())))['total']
     month_collection_rate = (month_paid / month_credit_value * 100) if month_credit_value > 0 else 0
+    month_commission = month_transactions.filter(payment_status='paid').aggregate(
+        total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
+    )['total']
     
     # ============================================
     # MONTHLY BREAKDOWN - Last 12 months
@@ -241,16 +821,21 @@ def credit_statistics(request):
         month_end = date(month_date.year, month_date.month, 
                         calendar.monthrange(month_date.year, month_date.month)[1])
         
-        month_start_aware = timezone.make_aware(timezone.datetime.combine(month_start, timezone.datetime.min.time()))
-        month_end_aware = timezone.make_aware(timezone.datetime.combine(month_end, timezone.datetime.max.time()))
+        month_start_aware = timezone.make_aware(datetime.combine(month_start, datetime.min.time()))
+        month_end_aware = timezone.make_aware(datetime.combine(month_end, datetime.max.time()))
         
         month_trans = transactions_qs.filter(transaction_date__range=[month_start_aware, month_end_aware])
-        month_value = month_trans.aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
+        month_value = month_trans.aggregate(total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())))['total']
         month_count = month_trans.count()
         
         # Calculate paid amount for the month
-        month_paid_amount = month_trans.filter(payment_status='paid').aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
+        month_paid_amount = month_trans.filter(payment_status='paid').aggregate(total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())))['total']
         month_collection = (month_paid_amount / month_value * 100) if month_value > 0 else 0
+        
+        # Calculate commission for the month
+        month_commission_value = month_trans.filter(payment_status='paid').aggregate(
+            total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
+        )['total']
         
         monthly_credit_breakdown.append({
             'month': month_start.strftime('%B %Y'),
@@ -258,15 +843,19 @@ def credit_statistics(request):
             'value': month_value,
             'count': month_count,
             'paid_value': month_paid_amount,
-            'collection_rate': month_collection
+            'collection_rate': month_collection,
+            'commission': month_commission_value,
         })
     
     # Year totals
     year_transactions = transactions_qs.filter(transaction_date__gte=start_of_year)
-    year_credit_value = year_transactions.aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
-    year_paid_value = year_transactions.filter(payment_status='paid').aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
+    year_credit_value = year_transactions.aggregate(total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())))['total']
+    year_paid_value = year_transactions.filter(payment_status='paid').aggregate(total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())))['total']
     year_collection_rate = (year_paid_value / year_credit_value * 100) if year_credit_value > 0 else 0
     year_count = year_transactions.count()
+    year_commission = year_transactions.filter(payment_status='paid').aggregate(
+        total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
+    )['total']
     
     # ============================================
     # COMPANY BREAKDOWN
@@ -278,9 +867,14 @@ def credit_statistics(request):
         company_pending = company_transactions.filter(payment_status='pending')
         company_paid = company_transactions.filter(payment_status='paid')
         
-        total = company_transactions.aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
-        pending = company_pending.aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
-        paid = company_paid.aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
+        total = company_transactions.aggregate(total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())))['total']
+        pending = company_pending.aggregate(total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())))['total']
+        paid = company_paid.aggregate(total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())))['total']
+        
+        # Company commission
+        company_commission_value = company_paid.aggregate(
+            total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
+        )['total']
         
         company_stats.append({
             'name': company.name,
@@ -293,6 +887,7 @@ def credit_statistics(request):
             'paid_value': paid,
             'pending_percentage': (pending / total * 100) if total > 0 else 0,
             'paid_percentage': (paid / total * 100) if total > 0 else 0,
+            'commission': company_commission_value,
         })
     
     # Sort by total value descending
@@ -325,7 +920,7 @@ def credit_statistics(request):
     ).order_by('-total_credit_value')[:10]
     
     # ============================================
-    # TOP SELLERS (DEALERS) - FIXED
+    # TOP SELLERS (DEALERS) - UPDATED WITH COMMISSION
     # ============================================
     
     # First, get the base queryset with annotations for counts and sums
@@ -346,6 +941,19 @@ def credit_statistics(request):
         paid_credit=Coalesce(
             Sum('credit_transactions__ceiling_price', 
                 filter=Q(credit_transactions__payment_status='paid'),
+                output_field=DecimalField()),
+            Value(0, output_field=DecimalField())
+        ),
+        # Commission annotations
+        total_commission=Coalesce(
+            Sum('credit_transactions__commission_amount',
+                filter=Q(credit_transactions__payment_status='paid'),
+                output_field=DecimalField()),
+            Value(0, output_field=DecimalField())
+        ),
+        paid_commission=Coalesce(
+            Sum('credit_transactions__commission_amount',
+                filter=Q(credit_transactions__commission_status='paid'),
                 output_field=DecimalField()),
             Value(0, output_field=DecimalField())
         )
@@ -372,6 +980,9 @@ def credit_statistics(request):
             'pending_credit': seller.pending_credit,
             'paid_credit': seller.paid_credit,
             'collection_rate': collection_rate,
+            'total_commission': seller.total_commission,
+            'paid_commission': seller.paid_commission,
+            'pending_commission': seller.total_commission - seller.paid_commission,
         })
     
     # ============================================
@@ -381,11 +992,11 @@ def credit_statistics(request):
     monthly_trend = []
     for i in range(5, -1, -1):
         month_date = today.replace(day=1) - timedelta(days=30*i)
-        month_start = timezone.make_aware(timezone.datetime.combine(month_date, timezone.datetime.min.time()))
+        month_start = timezone.make_aware(datetime.combine(month_date, datetime.min.time()))
         
         if i > 0:
             next_month = month_date.replace(day=28) + timedelta(days=4)
-            month_end = timezone.make_aware(timezone.datetime.combine(next_month.replace(day=1) - timedelta(days=1), timezone.datetime.max.time()))
+            month_end = timezone.make_aware(datetime.combine(next_month.replace(day=1) - timedelta(days=1), datetime.max.time()))
         else:
             month_end = end_of_day
         
@@ -394,9 +1005,9 @@ def credit_statistics(request):
         
         monthly_trend.append({
             'month': month_date.strftime('%b %Y'),
-            'total_value': month_trans.aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00'),
+            'total_value': month_trans.aggregate(total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())))['total'],
             'total_count': month_trans.count(),
-            'paid_value': month_paid.aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00'),
+            'paid_value': month_paid.aggregate(total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())))['total'],
             'paid_count': month_paid.count(),
         })
     
@@ -406,11 +1017,11 @@ def credit_statistics(request):
     
     payment_methods = []
     payments_qs = CompanyPayment.objects.all()
-    total_payments = payments_qs.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+    total_payments = payments_qs.aggregate(total=Coalesce(Sum('amount'), Value(0, output_field=DecimalField())))['total']
     
     for method, _ in CompanyPayment.PAYMENT_METHODS:
         method_payments = payments_qs.filter(payment_method=method)
-        amount = method_payments.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        amount = method_payments.aggregate(total=Coalesce(Sum('amount'), Value(0, output_field=DecimalField())))['total']
         count = method_payments.count()
         percentage = (amount / total_payments * 100) if total_payments > 0 else 0
         
@@ -447,7 +1058,7 @@ def credit_statistics(request):
         aging['total'] += 1
     
     # ============================================
-    # CONTEXT DICTIONARY
+    # CONTEXT DICTIONARY - UPDATED WITH COMMISSION
     # ============================================
     
     context = {
@@ -462,6 +1073,11 @@ def credit_statistics(request):
         'reversed_count': reversed_count,
         'avg_transaction_value': avg_transaction_value,
         
+        # Commission overview
+        'total_commission': total_commission,
+        'paid_commission': paid_commission,
+        'pending_commission': pending_commission,
+        
         # Time periods
         'today_count': today_count,
         'today_value': today_value,
@@ -472,12 +1088,14 @@ def credit_statistics(request):
         'daily_credit_breakdown': daily_credit_breakdown,
         'week_credit_value': week_credit_value,
         'week_collection_rate': week_collection_rate,
+        'week_commission': week_commission,
         'daily_credit_totals': daily_credit_totals,
         
         # Weekly breakdown (Week 1-4)
         'weekly_credit_breakdown': weekly_credit_breakdown,
         'month_credit_value': month_credit_value,
         'month_collection_rate': month_collection_rate,
+        'month_commission': month_commission,
         
         # Monthly breakdown (Last 12 months)
         'monthly_credit_breakdown': monthly_credit_breakdown,
@@ -485,6 +1103,7 @@ def credit_statistics(request):
         'year_paid_value': year_paid_value,
         'year_collection_rate': year_collection_rate,
         'year_count': year_count,
+        'year_commission': year_commission,
         
         # Companies
         'company_stats': company_stats,
@@ -494,7 +1113,7 @@ def credit_statistics(request):
         'top_customers': top_customers,
         'total_customers': CreditCustomer.objects.filter(is_active=True).count(),
         
-        # Top sellers (dealers)
+        # Top sellers (dealers) - UPDATED
         'top_sellers': top_sellers_list,
         
         # Trends
@@ -512,43 +1131,61 @@ def credit_statistics(request):
     return render(request, 'credit/statistics.html', context)
 
 
-
+# ====================================
+# DASHBOARD VIEW (UPDATED WITH COMMISSION)
+# ====================================
 
 @login_required
 def dashboard(request):
-    """Credit dashboard with overview"""
+    """Credit dashboard with overview - UPDATED WITH COMMISSION"""
     
     # Summary stats
     total_pending = CreditTransaction.objects.filter(payment_status='pending').aggregate(
-        total=Sum('ceiling_price')
-    )['total'] or Decimal('0')
+        total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField()))
+    )['total']
     
     total_paid = CreditTransaction.objects.filter(payment_status='paid').aggregate(
-        total=Sum('ceiling_price')
-    )['total'] or Decimal('0')
+        total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField()))
+    )['total']
     
     pending_count = CreditTransaction.objects.filter(payment_status='pending').count()
     paid_count = CreditTransaction.objects.filter(payment_status='paid').count()
     cancelled_count = CreditTransaction.objects.filter(payment_status='cancelled').count()
     
-    # Companies summary - REMOVE ANNOTATIONS, just get the companies
-    companies = CreditCompany.objects.filter(is_active=True)[:5]  # Get top 5 active companies
+    # Commission stats
+    total_commission = CreditTransaction.objects.filter(payment_status='paid').aggregate(
+        total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
+    )['total']
+    
+    pending_commission = CreditTransaction.objects.filter(
+        payment_status='paid', 
+        commission_status='pending'
+    ).aggregate(
+        total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
+    )['total']
+    
+    # Companies summary
+    companies = CreditCompany.objects.filter(is_active=True)[:5]
     
     # Recent transactions
     recent_transactions = CreditTransaction.objects.select_related(
         'customer', 'credit_company', 'product'
     ).order_by('-transaction_date')[:10]
     
-    # Chart data (last 30 days)
-    from datetime import timedelta, date
-    import json
+    # Commission summary for current user if seller
+    user_commission_summary = None
+    if request.user.credit_transactions.exists():
+        summary, created = SellerCommissionSummary.objects.get_or_create(seller=request.user)
+        user_commission_summary = summary
     
+    # Chart data (last 30 days) - include commission
     today = date.today()
     thirty_days_ago = today - timedelta(days=30)
     
     chart_labels = []
     credit_data = []
     payment_data = []
+    commission_data = []
     
     for i in range(30):
         day = thirty_days_ago + timedelta(days=i)
@@ -557,17 +1194,24 @@ def dashboard(request):
         # Credit created on this day
         day_credit = CreditTransaction.objects.filter(
             transaction_date__date=day
-        ).aggregate(total=Sum('ceiling_price'))['total'] or 0
+        ).aggregate(total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())))['total']
         
         # Payments on this day (when transactions were marked as paid)
         day_payments = CreditTransaction.objects.filter(
             paid_date__date=day,
             payment_status='paid'
-        ).aggregate(total=Sum('ceiling_price'))['total'] or 0
+        ).aggregate(total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())))['total']
+        
+        # Commission earned on this day
+        day_commission = CreditTransaction.objects.filter(
+            paid_date__date=day,
+            payment_status='paid'
+        ).aggregate(total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField())))['total']
         
         chart_labels.append(day.strftime('%d %b'))
         credit_data.append(float(day_credit))
         payment_data.append(float(day_payments))
+        commission_data.append(float(day_commission))
     
     context = {
         'total_pending': total_pending,
@@ -575,16 +1219,18 @@ def dashboard(request):
         'pending_count': pending_count,
         'paid_count': paid_count,
         'cancelled_count': cancelled_count,
+        'total_commission': total_commission,
+        'pending_commission': pending_commission,
         'companies': companies,
         'recent_transactions': recent_transactions,
+        'user_commission_summary': user_commission_summary,
         'chart_labels': json.dumps(chart_labels),
         'credit_data': json.dumps(credit_data),
         'payment_data': json.dumps(payment_data),
+        'commission_data': json.dumps(commission_data),
     }
     
     return render(request, 'credit/dashboard.html', context)
-
-
 
 
 # ====================================
@@ -594,7 +1240,6 @@ def dashboard(request):
 @login_required
 def company_list(request):
     """List all credit companies"""
-    # Remove the annotations - use the model properties instead
     companies = CreditCompany.objects.all()
     
     # Optional: Filter by status if needed
@@ -617,7 +1262,6 @@ def company_list(request):
         'companies': companies,
     }
     return render(request, 'credit/companies/list.html', context)
-
 
 
 @login_required
@@ -644,17 +1288,23 @@ def company_add(request):
 
 @login_required
 def company_detail(request, pk):
-    """View company details"""
+    """View company details - UPDATED WITH COMMISSION"""
     company = get_object_or_404(CreditCompany, pk=pk)
     
     # Get transactions
     pending_transactions = company.transactions.filter(payment_status='pending').order_by('-transaction_date')
     paid_transactions = company.transactions.filter(payment_status='paid').order_by('-transaction_date')
     
+    # Company commission summary
+    company_commission = paid_transactions.aggregate(
+        total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
+    )['total']
+    
     context = {
         'company': company,
         'pending_transactions': pending_transactions,
         'paid_transactions': paid_transactions,
+        'company_commission': company_commission,
     }
     return render(request, 'credit/companies/detail.html', context)
 
@@ -682,6 +1332,7 @@ def company_edit(request, pk):
     context = {'company': company}
     return render(request, 'credit/companies/edit.html', context)
 
+
 # ====================================
 # CUSTOMER VIEWS
 # ====================================
@@ -689,7 +1340,6 @@ def company_edit(request, pk):
 @login_required
 def customer_list(request):
     """List all credit customers"""
-    # Remove the annotations - use the model properties instead
     customers = CreditCustomer.objects.all()
     
     # Apply filters
@@ -715,8 +1365,6 @@ def customer_list(request):
         'customers': customers,
     }
     return render(request, 'credit/customers/list.html', context)
-
-
 
 
 @login_required
@@ -745,7 +1393,7 @@ def customer_add(request):
                 # Check if this customer has any active credit transactions
                 active_transactions = CreditTransaction.objects.filter(
                     customer=existing_customer,
-                    payment_status__in=['pending', 'Active']  # Assuming 'Active' is a valid status for ongoing loans
+                    payment_status__in=['pending', 'Active']
                 ).exists()
                 
                 if active_transactions:
@@ -832,9 +1480,6 @@ def customer_add(request):
     return render(request, 'credit/customers/add.html')
 
 
-
-
-
 @login_required
 def customer_detail(request, pk):
     """View customer details"""
@@ -848,8 +1493,6 @@ def customer_detail(request, pk):
         'transactions': transactions,
     }
     return render(request, 'credit/customers/detail.html', context)
-
-
 
 
 @login_required
@@ -898,18 +1541,15 @@ def customer_edit(request, pk):
     return render(request, 'credit/customers/edit.html', context)
 
 
-
-
-
 # ====================================
-# TRANSACTION VIEWS
+# TRANSACTION VIEWS - UPDATED WITH COMMISSION
 # ====================================
 
 @login_required
 def transaction_list(request):
-    """List all credit transactions"""
+    """List all credit transactions - UPDATED WITH COMMISSION FILTERS"""
     transactions = CreditTransaction.objects.select_related(
-        'customer', 'credit_company', 'product'
+        'customer', 'credit_company', 'product', 'dealer'
     ).order_by('-transaction_date')
     
     # Filters
@@ -921,16 +1561,26 @@ def transaction_list(request):
     if company_id:
         transactions = transactions.filter(credit_company_id=company_id)
     
+    # Commission status filter
+    commission_status = request.GET.get('commission_status')
+    if commission_status:
+        transactions = transactions.filter(commission_status=commission_status)
+    
+    # Seller filter
+    seller_id = request.GET.get('seller')
+    if seller_id:
+        transactions = transactions.filter(dealer_id=seller_id)
+    
     context = {
         'transactions': transactions,
+        'commission_status_choices': CreditTransaction.COMMISSION_STATUS,
     }
     return render(request, 'credit/transactions/list.html', context)
 
 
-
 @login_required
 def transaction_create(request):
-    """Create a new credit transaction"""
+    """Create a new credit transaction - UPDATED WITH COMMISSION"""
     if request.method == 'POST':
         try:
             with transaction.atomic():
@@ -941,6 +1591,10 @@ def transaction_create(request):
                 ceiling_price = Decimal(request.POST.get('ceiling_price', '0'))
                 imei = request.POST.get('imei', '')
                 notes = request.POST.get('notes', '')
+                
+                # Commission fields
+                commission_type = request.POST.get('commission_type', 'percentage')
+                commission_value = Decimal(request.POST.get('commission_value', '0'))
                 
                 # Get related objects
                 company = CreditCompany.objects.get(id=company_id)
@@ -966,7 +1620,13 @@ def transaction_create(request):
                     )
                     return redirect('credit:transaction_create')
                 
-                # Create transaction
+                # Calculate commission amount
+                if commission_type == 'percentage':
+                    commission_amount = (ceiling_price * commission_value) / Decimal('100.00')
+                else:
+                    commission_amount = commission_value
+                
+                # Create transaction with commission
                 credit_transaction = CreditTransaction.objects.create(
                     credit_company=company,
                     customer=customer,
@@ -974,13 +1634,23 @@ def transaction_create(request):
                     product=product,
                     ceiling_price=ceiling_price,
                     imei=imei,
-                    notes=notes
+                    notes=notes,
+                    # Commission fields
+                    commission_type=commission_type,
+                    commission_value=commission_value,
+                    commission_amount=round(commission_amount, 2),
+                )
+                
+                # Create commission record
+                SellerCommission.objects.create(
+                    seller=request.user,
+                    transaction=credit_transaction,
+                    amount=round(commission_amount, 2)
                 )
                 
                 # ============================================
                 # UPDATE PRODUCT STATUS (Single item only)
                 # ============================================
-                # For single items, mark as sold
                 if product.category.is_single_item:
                     product.status = 'sold'
                     product.quantity = 0
@@ -995,7 +1665,7 @@ def transaction_create(request):
                         unit_price=ceiling_price,
                         total_amount=ceiling_price,
                         reference_id=credit_transaction.transaction_id,
-                        notes=f'Credit sale - {customer.full_name} via {company.name}',
+                        notes=f'Credit sale - {customer.full_name} via {company.name} (Commission: KSH {commission_amount})',
                         created_by=request.user
                     )
                 
@@ -1004,20 +1674,23 @@ def transaction_create(request):
                     transaction=credit_transaction,
                     action='created',
                     performed_by=request.user,
-                    notes=f'Product {product.product_code} - New status: {product.status}'
+                    notes=f'Product {product.product_code} - Commission: KSH {commission_amount}'
                 )
+                
+                # Update seller commission summary
+                summary, _ = SellerCommissionSummary.objects.get_or_create(seller=request.user)
+                summary.update_from_transactions()
                 
                 logger.info(
                     f"[CREDIT TRANSACTION] Created: {credit_transaction.transaction_id} | "
                     f"Product: {product.product_code} | "
-                    f"Type: Single | "
-                    f"Status: {product.status}"
+                    f"Commission: KSH {commission_amount}"
                 )
                 
                 messages.success(
                     request, 
                     f'Credit transaction #{credit_transaction.transaction_id} created successfully. '
-                    f'Product {product.product_code} has been marked as sold.'
+                    f'Commission of KSH {commission_amount} will be paid when company pays.'
                 )
                 return redirect('credit:transaction_receipt', pk=credit_transaction.pk)
                 
@@ -1030,18 +1703,10 @@ def transaction_create(request):
     companies = CreditCompany.objects.filter(is_active=True)
     customers = CreditCustomer.objects.filter(is_active=True)
     
-    # ============================================
-    # GET ONLY SINGLE ITEMS AVAILABLE FOR CREDIT
-    # ============================================
-    
     # Get IDs of products that already have ANY credit transaction
     products_with_credit = CreditTransaction.objects.values_list('product_id', flat=True).distinct()
     
     # Filter products:
-    # 1. Category is single item (category__is_single_item=True)
-    # 2. Status = 'available'
-    # 3. Quantity > 0 (has stock)
-    # 4. NOT in products_with_credit (no existing credit transaction)
     products = Product.objects.filter(
         category__item_type='single',
         status='available',
@@ -1067,10 +1732,9 @@ def transaction_create(request):
         'companies': companies,
         'customers': customers,
         'products': products,
+        'commission_types': CreditTransaction._meta.get_field('commission_type').choices,
     }
     return render(request, 'credit/transactions/create.html', context)
-
-
 
 
 @login_required
@@ -1087,32 +1751,44 @@ def transaction_receipt(request, pk):
     return render(request, 'credit/transactions/receipt.html', context)
 
 
-
 @login_required
 def transaction_detail(request, pk):
-    """View transaction details"""
+    """View transaction details - UPDATED WITH COMMISSION"""
     transaction = get_object_or_404(
         CreditTransaction.objects.select_related('customer', 'credit_company', 'product', 'dealer'),
         pk=pk
     )
     logs = transaction.logs.all().order_by('-created_at')
     
+    # Get commission record
+    try:
+        commission_record = transaction.seller_commission_record
+    except SellerCommission.DoesNotExist:
+        commission_record = None
+    
     context = {
         'transaction': transaction,
         'logs': logs,
+        'commission_record': commission_record,
     }
     return render(request, 'credit/transactions/detail.html', context)
 
+
 @login_required
 def transaction_pay(request, pk):
-    """Mark a transaction as paid"""
+    """Mark a transaction as paid - UPDATED WITH COMMISSION"""
     transaction = get_object_or_404(CreditTransaction, pk=pk)
     
     if request.method == 'POST':
         try:
             payment_ref = request.POST.get('payment_reference', '')
             transaction.mark_as_paid(payment_ref=payment_ref, paid_by=request.user)
-            messages.success(request, f'Transaction #{transaction.transaction_id} marked as paid.')
+            
+            messages.success(
+                request, 
+                f'Transaction #{transaction.transaction_id} marked as paid. '
+                f'Commission of KSH {transaction.commission_amount} is now pending for seller.'
+            )
         except Exception as e:
             messages.error(request, f'Error marking transaction as paid: {str(e)}')
         
@@ -1120,9 +1796,10 @@ def transaction_pay(request, pk):
     
     return render(request, 'credit/transactions/pay.html', {'transaction': transaction})
 
+
 @login_required
 def transaction_cancel(request, pk):
-    """Cancel a transaction"""
+    """Cancel a transaction - UPDATED WITH COMMISSION"""
     transaction = get_object_or_404(CreditTransaction, pk=pk)
     
     if request.method == 'POST':
@@ -1138,11 +1815,9 @@ def transaction_cancel(request, pk):
     return render(request, 'credit/transactions/cancel.html', {'transaction': transaction})
 
 
-
-
 @login_required
 def transaction_reverse(request, pk):
-    """Reverse a credit transaction (restore product to inventory)"""
+    """Reverse a credit transaction - UPDATED WITH COMMISSION"""
     transaction = get_object_or_404(CreditTransaction, pk=pk)
     
     if request.method == 'POST':
@@ -1158,7 +1833,7 @@ def transaction_reverse(request, pk):
                 messages.error(request, 'Paid transactions cannot be reversed. Please contact admin.')
                 return redirect('credit:transaction_detail', pk=pk)
             
-            # Reverse the transaction
+            # Reverse the transaction (commission will be cancelled automatically)
             transaction.reverse_transaction(
                 reversed_by=request.user,
                 reason=reason
@@ -1167,7 +1842,7 @@ def transaction_reverse(request, pk):
             messages.success(
                 request, 
                 f'Transaction #{transaction.transaction_id} reversed successfully. '
-                f'Product {transaction.product.product_code} is now available again.'
+                f'Commission has been cancelled.'
             )
             return redirect('credit:transaction_detail', pk=pk)
             
@@ -1176,10 +1851,6 @@ def transaction_reverse(request, pk):
             return redirect('credit:transaction_detail', pk=pk)
     
     return render(request, 'credit/transactions/reverse.html', {'transaction': transaction})
-
-
-
-
 
 
 # ====================================
@@ -1194,9 +1865,10 @@ def payment_list(request):
     context = {'payments': payments}
     return render(request, 'credit/payments/list.html', context)
 
+
 @login_required
 def payment_add(request):
-    """Add a new company payment"""
+    """Add a new company payment - UPDATED WITH COMMISSION"""
     if request.method == 'POST':
         try:
             with transaction.atomic():
@@ -1225,10 +1897,19 @@ def payment_add(request):
                     )
                     payment.transactions.set(transactions)
                 
-                # Process payment
+                # Process payment (this will mark transactions as paid and create commission records)
                 payment.process_payment()
                 
-                messages.success(request, f'Payment #{payment.payment_id} recorded and processed.')
+                # Calculate total commission generated from these transactions
+                total_commission = transactions.aggregate(
+                    total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
+                )['total']
+                
+                messages.success(
+                    request, 
+                    f'Payment #{payment.payment_id} recorded and processed. '
+                    f'Total commission generated: KSH {total_commission}'
+                )
                 return redirect('credit:payment_detail', pk=payment.pk)
                 
         except Exception as e:
@@ -1246,23 +1927,31 @@ def payment_add(request):
     }
     return render(request, 'credit/payments/add.html', context)
 
+
 @login_required
 def payment_detail(request, pk):
-    """View payment details"""
+    """View payment details - UPDATED WITH COMMISSION"""
     payment = get_object_or_404(
         CompanyPayment.objects.select_related('credit_company', 'created_by'),
         pk=pk
     )
     transactions = payment.transactions.all()
     
+    # Calculate total commission from this payment
+    total_commission = transactions.aggregate(
+        total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
+    )['total']
+    
     context = {
         'payment': payment,
         'transactions': transactions,
+        'total_commission': total_commission,
     }
     return render(request, 'credit/payments/detail.html', context)
 
+
 # ====================================
-# SALES INTEGRATION API
+# SALES INTEGRATION API - UPDATED WITH COMMISSION
 # ====================================
 
 @login_required
@@ -1281,6 +1970,11 @@ def convert_sale_to_credit(request, sale_id):
                 'error': 'This is not a credit sale'
             })
         
+        # Default commission values (can be customized later)
+        commission_type = 'percentage'
+        commission_value = Decimal('5')  # Default 5%
+        commission_amount = (sale.total_amount * commission_value) / Decimal('100.00')
+        
         # Create credit transaction
         credit_transaction = CreditTransaction.objects.create(
             credit_company=None,  # To be assigned later
@@ -1294,7 +1988,18 @@ def convert_sale_to_credit(request, sale_id):
             dealer=sale.seller,
             product=sale.items.first().product,
             ceiling_price=sale.total_amount,
-            notes=f"From sale #{sale.sale_id}"
+            notes=f"From sale #{sale.sale_id}",
+            # Commission fields
+            commission_type=commission_type,
+            commission_value=commission_value,
+            commission_amount=round(commission_amount, 2),
+        )
+        
+        # Create commission record
+        SellerCommission.objects.create(
+            seller=sale.seller,
+            transaction=credit_transaction,
+            amount=round(commission_amount, 2)
         )
         
         # Link back to sale
@@ -1303,7 +2008,8 @@ def convert_sale_to_credit(request, sale_id):
         
         return JsonResponse({
             'success': True,
-            'credit_transaction_id': credit_transaction.transaction_id
+            'credit_transaction_id': credit_transaction.transaction_id,
+            'commission_amount': float(commission_amount)
         })
         
     except Exception as e:

@@ -13,7 +13,7 @@ from sales.models import Sale
 from django.db.models import Q
 from django.db.models import Sum, Count
 from django.utils.text import slugify
-from django.db import transaction
+from django.db import transaction as db_transaction
 from django.utils.crypto import get_random_string
 import random
 import string
@@ -133,9 +133,6 @@ class CreditCompany(models.Model):
         return self.transactions.filter(payment_status='paid').count()
 
 
-
-
-
 # ====================================
 # CREDIT CUSTOMER (Your customers)
 # ====================================
@@ -249,9 +246,179 @@ class CreditCustomer(models.Model):
         return self.transactions.filter(
             payment_status='paid'
         ).count()
+
+
+# ====================================
+# SELLER COMMISSION (Track commissions earned by sellers)
+# ====================================
+class SellerCommission(models.Model):
+    """
+    Track commissions earned by sellers from credit transactions
+    """
+    seller = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='commissions_earned'
+    )
     
+    transaction = models.OneToOneField(
+        'CreditTransaction',
+        on_delete=models.CASCADE,
+        related_name='seller_commission_record'
+    )
+    
+    amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        help_text="Commission amount earned"
+    )
+    
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ('pending', 'Pending'),
+            ('paid', 'Paid'),
+            ('cancelled', 'Cancelled'),
+        ],
+        default='pending'
+    )
+    
+    paid_date = models.DateTimeField(null=True, blank=True)
+    paid_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='commission_payouts_made'
+    )
+    
+    notes = models.TextField(blank=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['seller', 'status']),
+            models.Index(fields=['status']),
+        ]
+    
+    def __str__(self):
+        return f"{self.seller.username} - KSH {self.amount} - {self.status}"
+    
+    def mark_as_paid(self, paid_by=None, notes=""):
+        """Mark commission as paid"""
+        self.status = 'paid'
+        self.paid_date = timezone.now()
+        self.paid_by = paid_by
+        if notes:
+            self.notes = notes
+        self.save()
+        
+        # Also update the transaction
+        self.transaction.commission_status = 'paid'
+        self.transaction.commission_paid_date = self.paid_date
+        self.transaction.commission_paid_by = paid_by
+        self.transaction.save()
+        
+        # Log commission payment
+        CreditTransactionLog.objects.create(
+            transaction=self.transaction,
+            action='commission_paid',
+            performed_by=paid_by,
+            notes=f"Commission of KSH {self.amount} paid to seller. {notes}"
+        )
 
 
+# ====================================
+# SELLER COMMISSION SUMMARY
+# ====================================
+class SellerCommissionSummary(models.Model):
+    """
+    Summary of commissions for each seller (updated periodically)
+    """
+    seller = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name='commission_summary'
+    )
+    
+    total_earned = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        help_text="Total commissions earned (including paid and pending)"
+    )
+    
+    total_paid = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        help_text="Total commissions paid out"
+    )
+    
+    total_pending = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        help_text="Total commissions pending payment"
+    )
+    
+    last_paid_date = models.DateTimeField(null=True, blank=True)
+    last_paid_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0
+    )
+    
+    transactions_count = models.IntegerField(default=0)
+    paid_transactions_count = models.IntegerField(default=0)
+    
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = 'Seller Commission Summary'
+        verbose_name_plural = 'Seller Commission Summaries'
+    
+    def __str__(self):
+        return f"{self.seller.username} - Earned: KSH {self.total_earned}, Paid: KSH {self.total_paid}"
+    
+    def update_from_transactions(self):
+        """Update summary from seller's transactions"""
+        transactions = CreditTransaction.objects.filter(
+            dealer=self.seller,
+            payment_status='paid'  # Only count paid transactions
+        )
+        
+        self.total_earned = transactions.aggregate(
+            total=models.Sum('commission_amount')
+        )['total'] or 0
+        
+        self.total_paid = transactions.filter(
+            commission_status='paid'
+        ).aggregate(
+            total=models.Sum('commission_amount')
+        )['total'] or 0
+        
+        self.total_pending = self.total_earned - self.total_paid
+        
+        self.transactions_count = transactions.count()
+        self.paid_transactions_count = transactions.filter(
+            commission_status='paid'
+        ).count()
+        
+        last_paid = transactions.filter(
+            commission_status='paid',
+            commission_paid_date__isnull=False
+        ).order_by('-commission_paid_date').first()
+        
+        if last_paid:
+            self.last_paid_date = last_paid.commission_paid_date
+            self.last_paid_amount = last_paid.commission_amount
+        
+        self.save()
+        return self
 
 
 # ====================================
@@ -260,7 +427,7 @@ class CreditCustomer(models.Model):
 class CreditTransaction(models.Model):
     """
     Records when you give a phone to customer under a credit company's plan
-    Now with reversal functionality
+    Now with commission tracking for sellers
     """
     
     PAYMENT_STATUS = [
@@ -268,6 +435,12 @@ class CreditTransaction(models.Model):
         ('paid', 'Paid by Company'),         # Company has paid you
         ('cancelled', 'Cancelled'),          # Transaction cancelled
         ('reversed', 'Reversed'),            # Transaction reversed, product available
+    ]
+    
+    COMMISSION_STATUS = [
+        ('pending', 'Pending Payment'),      # Commission not yet paid to seller
+        ('paid', 'Paid to Seller'),          # Commission has been paid
+        ('cancelled', 'Cancelled'),          # Commission cancelled (if transaction reversed)
     ]
     
     # Transaction ID (auto-generated in Sale format: #SALE-XXXX)
@@ -288,7 +461,7 @@ class CreditTransaction(models.Model):
         related_name='transactions'
     )
     
-    # You (the dealer)
+    # You (the dealer/seller)
     dealer = models.ForeignKey(
         User,
         on_delete=models.PROTECT,
@@ -316,6 +489,56 @@ class CreditTransaction(models.Model):
         max_digits=12,
         decimal_places=2,
         help_text="Amount the credit company will pay you"
+    )
+    
+    # ===== COMMISSION FIELDS =====
+    commission_type = models.CharField(
+        max_length=20,
+        choices=[
+            ('percentage', 'Percentage'),
+            ('fixed', 'Fixed Amount'),
+        ],
+        default='percentage',
+        help_text="How commission is calculated"
+    )
+    
+    commission_value = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        help_text="Percentage (e.g., 5 for 5%) or fixed amount in KSH"
+    )
+    
+    commission_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=0,
+        help_text="Calculated commission amount (auto-filled)"
+    )
+    
+    commission_status = models.CharField(
+        max_length=20,
+        choices=COMMISSION_STATUS,
+        default='pending'
+    )
+    
+    commission_paid_date = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When commission was paid to seller"
+    )
+    
+    commission_paid_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='commission_payments_made'
+    )
+    
+    commission_notes = models.TextField(
+        blank=True,
+        help_text="Notes about commission payment"
     )
     
     # Dates
@@ -379,6 +602,8 @@ class CreditTransaction(models.Model):
             models.Index(fields=['credit_company', 'payment_status']),
             models.Index(fields=['-transaction_date']),
             models.Index(fields=['etr_receipt_number']),
+            models.Index(fields=['commission_status']),  # Added for commission queries
+            models.Index(fields=['dealer', 'commission_status']),  # Added for seller queries
         ]
         constraints = [
             models.UniqueConstraint(
@@ -400,6 +625,10 @@ class CreditTransaction(models.Model):
         if self.product and not self.product_name:
             self.product_name = self.product.name
             self.product_code = self.product.product_code
+        
+        # Calculate commission amount if not set and ceiling_price exists
+        if self.ceiling_price and self.commission_value and not self.commission_amount:
+            self.calculate_commission()
         
         super().save(*args, **kwargs)
     
@@ -477,6 +706,20 @@ class CreditTransaction(models.Model):
         
         return transaction_id, etr_number
     
+    def calculate_commission(self):
+        """Calculate commission amount based on type and value"""
+        if self.commission_type == 'percentage':
+            # Percentage of ceiling price
+            self.commission_amount = (self.ceiling_price * self.commission_value) / Decimal('100.00')
+        else:
+            # Fixed amount
+            self.commission_amount = self.commission_value
+        
+        # Round to 2 decimal places
+        self.commission_amount = round(self.commission_amount, 2)
+        
+        return self.commission_amount
+    
     def mark_as_paid(self, payment_ref='', paid_by=None):
         """Mark as paid when the credit company sends money"""
         self.payment_status = 'paid'
@@ -505,10 +748,50 @@ class CreditTransaction(models.Model):
             performed_by=paid_by or self.dealer,
             notes=f'Paid - Ref: {payment_ref}'
         )
+        
+        # Update seller commission summary
+        self._update_seller_commission_summary()
+    
+    def mark_commission_as_paid(self, paid_by=None, notes=""):
+        """Mark commission as paid to seller"""
+        self.commission_status = 'paid'
+        self.commission_paid_date = timezone.now()
+        self.commission_paid_by = paid_by
+        if notes:
+            self.commission_notes = notes
+        self.save()
+        
+        # Update the SellerCommission record
+        try:
+            commission_record = self.seller_commission_record
+            commission_record.mark_as_paid(paid_by=paid_by, notes=notes)
+        except SellerCommission.DoesNotExist:
+            # Create one if it doesn't exist (for backward compatibility)
+            SellerCommission.objects.create(
+                seller=self.dealer,
+                transaction=self,
+                amount=self.commission_amount,
+                status='paid',
+                paid_date=self.commission_paid_date,
+                paid_by=paid_by,
+                notes=notes
+            )
+        
+        # Update summary
+        self._update_seller_commission_summary()
+        
+        # Log commission payment
+        CreditTransactionLog.objects.create(
+            transaction=self,
+            action='commission_paid',
+            performed_by=paid_by,
+            notes=f"Commission of KSH {self.commission_amount} paid to seller. {notes}"
+        )
     
     def cancel(self, reason='', cancelled_by=None):
         """Cancel the transaction"""
         self.payment_status = 'cancelled'
+        self.commission_status = 'cancelled'
         self.notes = f"{self.notes}\nCancelled: {reason}".strip()
         self.save()
         
@@ -523,18 +806,31 @@ class CreditTransaction(models.Model):
                     self.product.status = 'available'
             self.product.save()
         
+        # Update commission record if exists
+        try:
+            commission_record = self.seller_commission_record
+            commission_record.status = 'cancelled'
+            commission_record.notes = f"Cancelled: {reason}"
+            commission_record.save()
+        except SellerCommission.DoesNotExist:
+            pass
+        
         CreditTransactionLog.objects.create(
             transaction=self,
             action='cancelled',
             performed_by=cancelled_by or self.dealer,
             notes=reason
         )
+        
+        # Update summary
+        self._update_seller_commission_summary()
     
     def reverse_transaction(self, reversed_by=None, reason=""):
         """
         Reverse a credit transaction:
         - Mark transaction as reversed
         - Make product available again
+        - Cancel commission
         - Create reversal log
         """
         if self.payment_status == 'reversed':
@@ -542,8 +838,6 @@ class CreditTransaction(models.Model):
         
         if self.payment_status == 'paid':
             raise ValidationError("Paid transactions cannot be reversed. Please contact admin.")
-        
-        from django.db import transaction as db_transaction
         
         with db_transaction.atomic():
             # Store old status
@@ -580,18 +874,31 @@ class CreditTransaction(models.Model):
             
             # Update transaction status
             self.payment_status = 'reversed'
+            self.commission_status = 'cancelled'  # Cancel commission on reversal
             self.reversal_reason = reason
             self.reversed_at = timezone.now()
             self.reversed_by = reversed_by
             self.save()
+            
+            # Update commission record if exists
+            try:
+                commission_record = self.seller_commission_record
+                commission_record.status = 'cancelled'
+                commission_record.notes = f"Reversed: {reason}"
+                commission_record.save()
+            except SellerCommission.DoesNotExist:
+                pass
             
             # Create reversal log
             CreditTransactionLog.objects.create(
                 transaction=self,
                 action='reversed',
                 performed_by=reversed_by,
-                notes=f"Transaction reversed. Product restored. Reason: {reason}"
+                notes=f"Transaction reversed. Product restored. Commission cancelled. Reason: {reason}"
             )
+            
+            # Update summary
+            self._update_seller_commission_summary()
             
             logger.info(
                 f"[CREDIT REVERSAL] Transaction: {self.transaction_id} | "
@@ -603,14 +910,31 @@ class CreditTransaction(models.Model):
             )
             
             return True
-
+    
+    def _update_seller_commission_summary(self):
+        """Update or create seller commission summary"""
+        summary, created = SellerCommissionSummary.objects.get_or_create(
+            seller=self.dealer
+        )
+        summary.update_from_transactions()
+    
+    def get_seller_commission_info(self):
+        """Get commission information for the seller"""
+        return {
+            'seller': self.dealer.get_full_name() or self.dealer.username,
+            'commission_type': self.get_commission_type_display(),
+            'commission_value': self.commission_value,
+            'commission_amount': self.commission_amount,
+            'commission_status': self.get_commission_status_display(),
+            'commission_paid_date': self.commission_paid_date
+        }
+    
     @property
     def days_since_given(self):
         """Days since phone was given to customer"""
         delta = date.today() - self.transaction_date.date()
         return delta.days
     
-    # ===== ADD THIS PROPERTY =====
     @property
     def etr_number(self):
         """Get just the ETR number (last 4 digits)"""
@@ -619,11 +943,7 @@ class CreditTransaction(models.Model):
         if self.transaction_id and self.transaction_id.startswith('#SALE-'):
             return self.transaction_id.replace('#SALE-', '')
         return "0000"
-    
 
-
-
-    
 
 # ====================================
 # COMPANY PAYMENT (Bulk payments from a company)
@@ -728,6 +1048,8 @@ class CreditTransactionLog(models.Model):
         ('cancelled', 'Cancelled'),
         ('reversed', 'Reversed'),
         ('updated', 'Updated'),
+        ('commission_paid', 'Commission Paid to Seller'),
+        ('commission_cancelled', 'Commission Cancelled'),
     ]
     
     transaction = models.ForeignKey(
@@ -750,3 +1072,141 @@ class CreditTransactionLog(models.Model):
     
     def __str__(self):
         return f"{self.transaction.transaction_id} - {self.action} - {self.created_at.date()}"
+
+
+# ====================================
+# HELPER FUNCTIONS
+# ====================================
+
+def create_credit_transaction_with_commission(
+    credit_company, customer, dealer, product,
+    ceiling_price, commission_type='percentage',
+    commission_value=0, imei='', company_reference='',
+    notes=''
+):
+    """
+    Helper function to create a credit transaction with commission
+    """
+    # Calculate commission
+    if commission_type == 'percentage':
+        commission_amount = (ceiling_price * commission_value) / Decimal('100.00')
+    else:
+        commission_amount = commission_value
+    
+    # Round to 2 decimal places
+    commission_amount = round(commission_amount, 2)
+    
+    with db_transaction.atomic():
+        # Create transaction
+        transaction = CreditTransaction.objects.create(
+            credit_company=credit_company,
+            customer=customer,
+            dealer=dealer,
+            product=product,
+            ceiling_price=ceiling_price,
+            commission_type=commission_type,
+            commission_value=commission_value,
+            commission_amount=commission_amount,
+            imei=imei,
+            company_reference=company_reference,
+            notes=notes
+        )
+        
+        # Create commission record
+        SellerCommission.objects.create(
+            seller=dealer,
+            transaction=transaction,
+            amount=commission_amount
+        )
+        
+        # Update product status
+        if product.category.is_single_item:
+            product.status = 'sold'
+            product.quantity = 0
+        else:
+            product.quantity -= 1
+            if product.quantity <= 0:
+                product.status = 'sold'
+            elif product.quantity <= product.reorder_level:
+                product.status = 'lowstock'
+        product.save()
+        
+        # Create stock entry
+        from inventory.models import StockEntry
+        StockEntry.objects.create(
+            product=product,
+            quantity=-1,
+            entry_type='credit_sale',
+            unit_price=ceiling_price,
+            total_amount=ceiling_price,
+            reference_id=transaction.transaction_id,
+            notes=f'Credit sale to {customer.full_name} via {credit_company.name}',
+            created_by=dealer
+        )
+        
+        # Create log
+        CreditTransactionLog.objects.create(
+            transaction=transaction,
+            action='created',
+            performed_by=dealer,
+            notes=f"Created with commission: KSH {commission_amount}"
+        )
+        
+        # Update seller commission summary
+        summary, _ = SellerCommissionSummary.objects.get_or_create(seller=dealer)
+        summary.update_from_transactions()
+        
+        logger.info(
+            f"[CREDIT TRANSACTION] Created: {transaction.transaction_id} | "
+            f"Seller: {dealer.username} | Commission: KSH {commission_amount}"
+        )
+    
+    return transaction
+
+
+# Add commission-related methods to User via monkey-patching or mixin
+# These can be used in views by importing the functions
+
+def get_user_total_commission(user):
+    """Get total commission earned by a user"""
+    return CreditTransaction.objects.filter(
+        dealer=user,
+        payment_status='paid'
+    ).aggregate(
+        total=models.Sum('commission_amount')
+    )['total'] or Decimal('0.00')
+
+
+def get_user_pending_commission(user):
+    """Get pending commission for a user"""
+    return CreditTransaction.objects.filter(
+        dealer=user,
+        payment_status='paid',
+        commission_status='pending'
+    ).aggregate(
+        total=models.Sum('commission_amount')
+    )['total'] or Decimal('0.00')
+
+
+def get_user_paid_commission(user):
+    """Get paid commission for a user"""
+    return CreditTransaction.objects.filter(
+        dealer=user,
+        commission_status='paid'
+    ).aggregate(
+        total=models.Sum('commission_amount')
+    )['total'] or Decimal('0.00')
+
+
+def get_user_commission_summary(user):
+    """Get commission summary for a user"""
+    return {
+        'total_earned': get_user_total_commission(user),
+        'pending': get_user_pending_commission(user),
+        'paid': get_user_paid_commission(user),
+        'transactions': CreditTransaction.objects.filter(dealer=user).count(),
+        'paid_transactions': CreditTransaction.objects.filter(
+            dealer=user, 
+            commission_status='paid'
+        ).count()
+    }
