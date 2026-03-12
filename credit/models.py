@@ -438,9 +438,11 @@ class CreditTransaction(models.Model):
     ]
     
     COMMISSION_STATUS = [
-        ('pending', 'Pending Payment'),      # Commission not yet paid to seller
-        ('paid', 'Paid to Seller'),          # Commission has been paid
-        ('cancelled', 'Cancelled'),          # Commission cancelled (if transaction reversed)
+        ('not_set', 'Not Set'),                # For transactions where company hasn't paid
+        ('requested', 'Requested'),            # New status - commission requested but not approved
+        ('approved', 'Approved'),              # Approved for payment
+        ('paid', 'Paid to Seller'),            # Commission has been paid
+        ('cancelled', 'Cancelled'),            # Commission cancelled
     ]
     
     # Transaction ID (auto-generated in Sale format: #SALE-XXXX)
@@ -519,7 +521,7 @@ class CreditTransaction(models.Model):
     commission_status = models.CharField(
         max_length=20,
         choices=COMMISSION_STATUS,
-        default='pending'
+        default='not_set' 
     )
     
     commission_paid_date = models.DateTimeField(

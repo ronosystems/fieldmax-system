@@ -1214,7 +1214,7 @@
                     <li><a class="dropdown-item" href="#"><i class="fas fa-user me-2"></i>Profile</a></li>
                     <li><a class="dropdown-item" href="#"><i class="fas fa-cog me-2"></i>Settings</a></li>
                     <!-- My Commissions Link -->
-                    <li><a class="dropdown-item" href="{% url 'credit:my_commissions' %}"><i class="fas fa-coins me-2" style="color: var(--primary-color);"></i>My Commissions</a></li>
+                    <li><a class="dropdown-item" href="#"><i class="fas fa-coins me-2" style="color: var(--primary-color);"></i>My Commissions</a></li>
                     <li><hr class="dropdown-divider"></li>
                     <li>
                         <form method="POST" action="{% url 'logout' %}" id="logout-form">
@@ -1257,46 +1257,39 @@
                 </a>
             </div>
             
-            <!-- ===== COMMISSION SECTION ===== -->
+            <!-- ===== SIMPLIFIED COMMISSION SECTION ===== -->
             <div class="menu-section">
                 <div class="menu-section-title">COMMISSIONS</div>
                 
-                <!-- Commission Dashboard (Admin/Manager) -->
-                {% if request.user.is_staff or request.user.is_superuser %}
-                <a href="{% url 'credit:commission_dashboard' %}" class="menu-item commission-menu-item {% if 'commission_dashboard' in request.path %}active{% endif %}">
+                <!-- Commission Dashboard -->
+                <a href="{% url 'credit:commission_dashboard' %}" class="menu-item {% if 'commission_dashboard' in request.path %}active{% endif %}">
                     <i class="fas fa-chart-line"></i>
                     <span class="menu-text">Commission Dashboard</span>
-                    {% if pending_commission_count %}
-                    <span class="badge-menu commission-badge">{{ pending_commission_count }}</span>
-                    {% endif %}
-                </a>
-                {% endif %}
-                
-                <!-- My Commissions (All users) -->
-                <a href="{% url 'credit:my_commissions' %}" class="menu-item commission-menu-item {% if 'my_commissions' in request.path %}active{% endif %}">
-                    <i class="fas fa-coins"></i>
-                    <span class="menu-text">My Commissions</span>
-                    {% if my_pending_commission_count %}
-                    <span class="badge-menu commission-badge">{{ my_pending_commission_count }}</span>
-                    {% endif %}
                 </a>
                 
-                <!-- Commission Report (Admin only) -->
-                {% if request.user.is_superuser %}
+                <!-- Request Commissions -->
+                <a href="{% url 'credit:request_commission' %}" class="menu-item {% if 'request_commission' in request.path %}active{% endif %}">
+                    <i class="fas fa-hand-holding-usd"></i>
+                    <span class="menu-text">Request Commissions</span>
+                </a>
+                
+                <!-- Approve Commissions -->
+                <a href="{% url 'credit:approve_commission' %}" class="menu-item {% if 'approve_commission' in request.path %}active{% endif %}">
+                    <i class="fas fa-check-double"></i>
+                    <span class="menu-text">Approve Commissions</span>
+                </a>
+                
+                <!-- Pay Commissions -->
+                <a href="{% url 'credit:pay_commission' %}" class="menu-item {% if 'pay_commission' in request.path %}active{% endif %}">
+                    <i class="fas fa-hand-holding-usd"></i>
+                    <span class="menu-text">Pay Commissions</span>
+                </a>
+                
+                <!-- Commissions Report -->
                 <a href="{% url 'credit:commission_report' %}" class="menu-item {% if 'commission_report' in request.path %}active{% endif %}">
                     <i class="fas fa-file-invoice"></i>
-                    <span class="menu-text">Commission Report</span>
+                    <span class="menu-text">Commissions Report</span>
                 </a>
-                
-                <!-- Bulk Pay Commission (Admin only) -->
-                <a href="#" class="menu-item" data-bs-toggle="modal" data-bs-target="#bulkPayCommissionModal">
-                    <i class="fas fa-hand-holding-usd"></i>
-                    <span class="menu-text">Bulk Pay Commission</span>
-                    {% if pending_commission_count %}
-                    <span class="badge-menu commission-badge">{{ pending_commission_count }}</span>
-                    {% endif %}
-                </a>
-                {% endif %}
             </div>
             
             <!-- Customers -->
@@ -1417,12 +1410,12 @@
     
     <!-- Floating Commission Button - For all users -->
     {% if my_pending_commission_count and my_pending_commission_count > 0 %}
-    <a href="{% url 'credit:my_commissions' %}" class="floating-commission-btn" data-bs-toggle="tooltip" title="You have pending commissions!">
+    <a href="#" class="floating-commission-btn" data-bs-toggle="tooltip" title="You have pending commissions!">
         <i class="fas fa-coins"></i>
         <span class="badge">{{ my_pending_commission_count }}</span>
     </a>
     {% else %}
-    <a href="{% url 'credit:my_commissions' %}" class="floating-commission-btn" data-bs-toggle="tooltip" title="My Commissions">
+    <a href="#" class="floating-commission-btn" data-bs-toggle="tooltip" title="My Commissions">
         <i class="fas fa-coins"></i>
     </a>
     {% endif %}
@@ -1683,7 +1676,7 @@
                     $btn.prop('disabled', true).html('<span class="loading-spinner"></span>');
                     
                     $.ajax({
-                        url: '{% url "credit:pay_commission" 0 %}'.replace('0', transactionId),
+                        url: '{% url "credit:pay_commission_submit" 0 %}'.replace('0', transactionId),
                         method: 'POST',
                         data: {
                             notes: notes || '',

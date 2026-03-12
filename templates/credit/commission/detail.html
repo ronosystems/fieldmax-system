@@ -1,0 +1,708 @@
+{% extends 'credit/staff_base.html' %}
+{% load humanize %}
+{% load static %}
+
+{% block title %}Commission Details - FieldMax Credit{% endblock %}
+
+{% block page_icon %}fas fa-info-circle{% endblock %}
+{% block page_title %}Commission Details{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'staff:credit_manager_dashboard' %}">Dashboard</a></li>
+<li class="breadcrumb-item"><a href="{% url 'credit:commission_dashboard' %}">Commission Dashboard</a></li>
+<li class="breadcrumb-item active">Commission Details</li>
+{% endblock %}
+
+{% block content %}
+<div class="commission-detail">
+
+    <!-- Back Button -->
+    <div class="mb-4">
+        <a href="{% url 'credit:commission_dashboard' %}" class="btn btn-outline-custom">
+            <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+        </a>
+    </div>
+
+    <!-- Header with Commission Amount -->
+    <div class="detail-header mb-4">
+        <div class="header-left">
+            <h2>{{ transaction.transaction_id }}</h2>
+            <p class="text-muted mb-0">Commission Details</p>
+        </div>
+        <div class="header-right">
+            <div class="commission-badge">
+                <span class="label">COMMISSION AMOUNT</span>
+                <span class="amount">KES {{ transaction.commission_amount|default:0|floatformat:2|intcomma }}</span>
+                <span class="status-badge 
+                    {% if transaction.commission_status == 'paid' %}bg-success
+                    {% elif transaction.commission_status == 'approved' %}bg-primary
+                    {% elif transaction.commission_status == 'requested' %}bg-info
+                    {% elif transaction.commission_status == 'not_set' %}bg-secondary
+                    {% elif transaction.commission_status == 'cancelled' %}bg-danger
+                    {% endif %}">
+                    {{ transaction.get_commission_status_display }}
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <!-- All Detail Cards in One Row -->
+    <div class="details-grid mb-4">
+        <!-- Seller Card -->
+        <div class="detail-card">
+            <div class="card-header">
+                <i class="fas fa-user-circle"></i>
+                <h3>Seller</h3>
+            </div>
+            <div class="card-body">
+                <div class="detail-row">
+                    <span class="label">Name:</span>
+                    <span class="value">{{ transaction.dealer.get_full_name|default:transaction.dealer.username }}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="label">Username:</span>
+                    <span class="value">@{{ transaction.dealer.username }}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="label">Email:</span>
+                    <span class="value">{{ transaction.dealer.email|default:'—' }}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="label">Phone:</span>
+                    <span class="value">{{ transaction.dealer.profile.phone_number|default:'—' }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Product Card -->
+        <div class="detail-card">
+            <div class="card-header">
+                <i class="fas fa-box"></i>
+                <h3>Product</h3>
+            </div>
+            <div class="card-body">
+                <div class="detail-row">
+                    <span class="label">Name:</span>
+                    <span class="value">{{ transaction.product.name }}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="label">SKU:</span>
+                    <span class="value"><span class="sku-badge">{{ transaction.product.product_code }}</span></span>
+                </div>
+                {% if transaction.imei %}
+                <div class="detail-row">
+                    <span class="label">IMEI:</span>
+                    <span class="value">{{ transaction.imei }}</span>
+                </div>
+                {% endif %}
+                <div class="detail-row">
+                    <span class="label">Selling Price:</span>
+                    <span class="value price">KES {{ transaction.ceiling_price|floatformat:2|intcomma }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Customer Card -->
+        <div class="detail-card">
+            <div class="card-header">
+                <i class="fas fa-user"></i>
+                <h3>Customer</h3>
+            </div>
+            <div class="card-body">
+                <div class="detail-row">
+                    <span class="label">Name:</span>
+                    <span class="value">{{ transaction.customer.full_name }}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="label">Phone:</span>
+                    <span class="value">{{ transaction.customer.phone_number }}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="label">ID Number:</span>
+                    <span class="value">{{ transaction.customer.id_number }}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="label">Location:</span>
+                    <span class="value">{{ transaction.customer.town|default:transaction.customer.county|default:'—' }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Transaction Card -->
+        <div class="detail-card">
+            <div class="card-header">
+                <i class="fas fa-file-invoice"></i>
+                <h3>Transaction</h3>
+            </div>
+            <div class="card-body">
+                <div class="detail-row">
+                    <span class="label">ID:</span>
+                    <span class="value">{{ transaction.transaction_id }}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="label">Date:</span>
+                    <span class="value">{{ transaction.transaction_date|date:"d M Y H:i" }}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="label">Company:</span>
+                    <span class="value">{{ transaction.credit_company.name }}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="label">Company Payment:</span>
+                    <span class="value">
+                        {% if transaction.payment_status == 'paid' %}
+                            <span class="badge-small bg-success">Paid</span>
+                        {% else %}
+                            <span class="badge-small bg-warning">Pending</span>
+                        {% endif %}
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Commission Timeline Section -->
+    <div class="timeline-card">
+        <div class="timeline-header">
+            <i class="fas fa-history"></i>
+            <h3>Commission Timeline</h3>
+        </div>
+        <div class="timeline-body">
+            <!-- Request Step -->
+            <div class="timeline-step">
+                <div class="step-icon {% if transaction.commission_status != 'not_set' %}completed{% endif %}">
+                    <i class="fas fa-paper-plane"></i>
+                </div>
+                <div class="step-content">
+                    <div class="step-title">Commission Requested</div>
+                    <div class="step-details">
+                        {% if transaction.commission_status != 'not_set' %}
+                            <div class="step-person">
+                                <i class="fas fa-user"></i>
+                                <span>{{ transaction.commission_paid_by.get_full_name|default:transaction.commission_paid_by.username|default:'Unknown' }}</span>
+                            </div>
+                            <div class="step-time">
+                                <i class="fas fa-clock"></i>
+                                <span>{{ transaction.commission_paid_date|date:"d M Y H:i"|default:'—' }}</span>
+                            </div>
+                        {% else %}
+                            <div class="step-not-completed">Not yet requested</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Approval Step -->
+            <div class="timeline-step">
+                <div class="step-icon {% if transaction.commission_status == 'approved' or transaction.commission_status == 'paid' %}completed{% endif %}">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <div class="step-content">
+                    <div class="step-title">Commission Approved</div>
+                    <div class="step-details">
+                        {% if transaction.commission_status == 'approved' or transaction.commission_status == 'paid' %}
+                            <div class="step-person">
+                                <i class="fas fa-user"></i>
+                                <span>
+                                    {% with approver=transaction.commission_notes %}
+                                        {% if 'Approved by:' in approver %}
+                                            {{ approver|cut:'Approved by:' }}
+                                        {% else %}
+                                            {{ transaction.commission_paid_by.get_full_name|default:transaction.commission_paid_by.username|default:'Unknown' }}
+                                        {% endif %}
+                                    {% endwith %}
+                                </span>
+                            </div>
+                            <div class="step-time">
+                                <i class="fas fa-clock"></i>
+                                <span>{{ transaction.commission_paid_date|date:"d M Y H:i"|default:'—' }}</span>
+                            </div>
+                        {% else %}
+                            <div class="step-not-completed">Not yet approved</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Payment Step -->
+            <div class="timeline-step">
+                <div class="step-icon {% if transaction.commission_status == 'paid' %}completed{% endif %}">
+                    <i class="fas fa-hand-holding-usd"></i>
+                </div>
+                <div class="step-content">
+                    <div class="step-title">Commission Paid</div>
+                    <div class="step-details">
+                        {% if transaction.commission_status == 'paid' %}
+                            <div class="step-person">
+                                <i class="fas fa-user"></i>
+                                <span>{{ transaction.commission_paid_by.get_full_name|default:transaction.commission_paid_by.username }}</span>
+                            </div>
+                            <div class="step-time">
+                                <i class="fas fa-clock"></i>
+                                <span>{{ transaction.commission_paid_date|date:"d M Y H:i" }}</span>
+                            </div>
+                            {% if transaction.payment_reference %}
+                            <div class="step-reference">
+                                <i class="fas fa-hashtag"></i>
+                                <span>Ref: {{ transaction.payment_reference }}</span>
+                            </div>
+                            {% endif %}
+                        {% else %}
+                            <div class="step-not-completed">Not yet paid</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notes Section -->
+    {% if transaction.commission_notes %}
+    <div class="notes-card">
+        <div class="notes-header">
+            <i class="fas fa-sticky-note"></i>
+            <h3>Additional Notes</h3>
+        </div>
+        <div class="notes-body">
+            {{ transaction.commission_notes }}
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Initialize tooltips if needed
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.map(function(tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+});
+</script>
+
+<style>
+    .commission-detail {
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+
+    /* Back Button */
+    .btn-outline-custom {
+        border: 2px solid var(--primary-color);
+        color: var(--primary-color);
+        background: transparent;
+        padding: 8px 20px;
+        border-radius: 8px;
+        font-weight: 500;
+        transition: all 0.3s;
+    }
+
+    .btn-outline-custom:hover {
+        background: var(--primary-color);
+        color: white;
+        transform: translateX(-5px);
+    }
+
+    /* Header with Commission Amount */
+    .detail-header {
+        background: var(--card-bg);
+        border-radius: 12px;
+        padding: 20px 30px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        border: 1px solid var(--border-color);
+    }
+
+    .header-left h2 {
+        margin: 0;
+        color: var(--text-primary);
+        font-size: 1.5rem;
+        font-weight: 600;
+    }
+
+    .header-left p {
+        color: var(--text-secondary);
+        font-size: 0.9rem;
+    }
+
+    .commission-badge {
+        text-align: right;
+    }
+
+    .commission-badge .label {
+        display: block;
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 5px;
+    }
+
+    .commission-badge .amount {
+        display: block;
+        font-size: 2rem;
+        font-weight: 700;
+        color: var(--primary-color);
+        line-height: 1.2;
+        margin-bottom: 8px;
+    }
+
+    .status-badge {
+        display: inline-block;
+        padding: 6px 16px;
+        border-radius: 50px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: white;
+    }
+
+    .status-badge.bg-success { background: var(--success-color); }
+    .status-badge.bg-primary { background: var(--primary-color); }
+    .status-badge.bg-info { background: var(--info-color); }
+    .status-badge.bg-secondary { background: var(--text-secondary); }
+    .status-badge.bg-danger { background: var(--danger-color); }
+
+    /* Details Grid - 4 Cards in One Row */
+    .details-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 20px;
+    }
+
+    .detail-card {
+        background: var(--card-bg);
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        border: 1px solid var(--border-color);
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .detail-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+    }
+
+    .card-header {
+        background: var(--primary-gradient);
+        padding: 15px 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .card-header i {
+        font-size: 1.1rem;
+        color: white;
+    }
+
+    .card-header h3 {
+        margin: 0;
+        color: white;
+        font-size: 0.95rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .card-body {
+        padding: 15px;
+    }
+
+    .detail-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--border-color);
+        font-size: 0.9rem;
+    }
+
+    .detail-row:last-child {
+        border-bottom: none;
+    }
+
+    .detail-row .label {
+        color: var(--text-secondary);
+        font-weight: 500;
+    }
+
+    .detail-row .value {
+        color: var(--text-primary);
+        font-weight: 600;
+        text-align: right;
+    }
+
+    .detail-row .value.price {
+        color: var(--success-color);
+    }
+
+    .sku-badge {
+        background: var(--primary-color);
+        color: white;
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 500;
+    }
+
+    .badge-small {
+        display: inline-block;
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-size: 0.7rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        color: white;
+    }
+
+    .badge-small.bg-success { background: var(--success-color); }
+    .badge-small.bg-warning { background: var(--warning-color); color: #000; }
+
+    /* Timeline Card */
+    .timeline-card {
+        background: var(--card-bg);
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        border: 1px solid var(--border-color);
+        margin-top: 20px;
+    }
+
+    .timeline-header {
+        background: var(--primary-gradient);
+        padding: 15px 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .timeline-header i {
+        font-size: 1.1rem;
+        color: white;
+    }
+
+    .timeline-header h3 {
+        margin: 0;
+        color: white;
+        font-size: 0.95rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .timeline-body {
+        padding: 25px;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    .timeline-step {
+        display: flex;
+        gap: 20px;
+        position: relative;
+    }
+
+    .timeline-step:not(:last-child) {
+        padding-bottom: 20px;
+    }
+
+    .timeline-step:not(:last-child):before {
+        content: '';
+        position: absolute;
+        left: 22px;
+        top: 45px;
+        bottom: 0;
+        width: 2px;
+        background: var(--border-color);
+    }
+
+    .step-icon {
+        width: 45px;
+        height: 45px;
+        border-radius: 50%;
+        background: var(--border-color);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-secondary);
+        font-size: 1.2rem;
+        z-index: 1;
+        flex-shrink: 0;
+    }
+
+    .step-icon.completed {
+        background: var(--success-color);
+        color: white;
+    }
+
+    .step-content {
+        flex-grow: 1;
+    }
+
+    .step-title {
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 8px;
+        font-size: 1rem;
+    }
+
+    .step-details {
+        background: var(--light-bg);
+        padding: 12px 15px;
+        border-radius: 8px;
+    }
+
+    .step-person, .step-time, .step-reference {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--text-primary);
+        margin-bottom: 4px;
+        font-size: 0.9rem;
+    }
+
+    .step-person i, .step-time i, .step-reference i {
+        width: 16px;
+        color: var(--primary-color);
+        font-size: 0.9rem;
+    }
+
+    .step-not-completed {
+        color: var(--text-secondary);
+        font-style: italic;
+        padding: 5px 0;
+        font-size: 0.9rem;
+    }
+
+    .step-reference {
+        margin-top: 6px;
+        padding-top: 6px;
+        border-top: 1px dashed var(--border-color);
+    }
+
+    /* Notes Card */
+    .notes-card {
+        background: var(--card-bg);
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        border: 1px solid var(--border-color);
+        margin-top: 20px;
+    }
+
+    .notes-header {
+        background: var(--primary-gradient);
+        padding: 15px 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .notes-header i {
+        font-size: 1.1rem;
+        color: white;
+    }
+
+    .notes-header h3 {
+        margin: 0;
+        color: white;
+        font-size: 0.95rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .notes-body {
+        padding: 20px;
+        color: var(--text-primary);
+        line-height: 1.6;
+        background: var(--commission-bg-light);
+        font-size: 0.95rem;
+    }
+
+    /* Dark Theme Adjustments */
+    [data-theme="dark"] .detail-card,
+    [data-theme="dark"] .timeline-card,
+    [data-theme="dark"] .notes-card,
+    [data-theme="dark"] .detail-header {
+        background: var(--card-bg);
+        border-color: var(--border-color);
+    }
+
+    [data-theme="dark"] .step-details {
+        background: var(--sidebar-solid);
+    }
+
+    [data-theme="dark"] .step-icon:not(.completed) {
+        background: var(--sidebar-solid);
+        color: var(--text-secondary);
+    }
+
+    /* Responsive */
+    @media (max-width: 1200px) {
+        .details-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    @media (max-width: 768px) {
+        .detail-header {
+            flex-direction: column;
+            text-align: center;
+            gap: 15px;
+        }
+
+        .commission-badge {
+            text-align: center;
+        }
+
+        .details-grid {
+            grid-template-columns: 1fr;
+            gap: 15px;
+        }
+
+        .timeline-step {
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .timeline-step:not(:last-child):before {
+            left: 22px;
+            top: 40px;
+        }
+
+        .detail-row {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 4px;
+        }
+
+        .detail-row .value {
+            text-align: left;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .commission-badge .amount {
+            font-size: 1.5rem;
+        }
+
+        .timeline-body {
+            padding: 15px;
+        }
+
+        .step-details {
+            padding: 10px;
+        }
+    }
+</style>
+{% endblock %}

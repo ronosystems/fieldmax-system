@@ -39,10 +39,6 @@ logger = logging.getLogger(__name__)
 
 
 
-
-
-
-
 # ====================================
 # HELPER FUNCTIONS
 # ====================================
@@ -79,531 +75,8 @@ def get_commission_status_color(status):
     }
     return colors.get(status, 'secondary')
 
-# ====================================
-# COMMISSION VIEWS
-# ====================================
-
-@login_required
-def commission_dashboard(request):
-    """Main commission dashboard for admin/supervisors"""
-    
-    # Overall statistics
-    total_commission = CreditTransaction.objects.filter(
-        payment_status='paid'
-    ).aggregate(
-        total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
-    )['total']
-    
-    paid_commission = CreditTransaction.objects.filter(
-        commission_status='paid'
-    ).aggregate(
-        total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
-    )['total']
-    
-    pending_commission = CreditTransaction.objects.filter(
-        payment_status='paid',
-        commission_status='pending'
-    ).aggregate(
-        total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
-    )['total']
-    
-    # This month's commission
-    today = timezone.now().date()
-    month_start = timezone.make_aware(datetime.combine(today.replace(day=1), datetime.min.time()))
-    month_end = timezone.make_aware(datetime.combine(today, datetime.max.time()))
-    
-    month_commission = CreditTransaction.objects.filter(
-        paid_date__range=[month_start, month_end],
-        payment_status='paid'
-    ).aggregate(
-        total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
-    )['total']
-    
-    # This week's commission
-    week_start = timezone.make_aware(datetime.combine(today - timedelta(days=today.weekday()), datetime.min.time()))
-    week_commission = CreditTransaction.objects.filter(
-        paid_date__gte=week_start,
-        payment_status='paid'
-    ).aggregate(
-        total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
-    )['total']
-    
-    # Top sellers
-    top_sellers = SellerCommissionSummary.objects.select_related('seller').order_by('-total_earned')[:10]
-    
-    # Recent commission payments
-    recent_payments = SellerCommission.objects.filter(
-        status='paid'
-    ).select_related('seller', 'transaction', 'paid_by').order_by('-paid_date')[:20]
-    
-    # Pending commissions
-    pending_commissions = CreditTransaction.objects.filter(
-        payment_status='paid',
-        commission_status='pending'
-    ).select_related('dealer', 'customer', 'credit_company').order_by('paid_date')[:50]
-    
-    # Commission by company
-    company_commission = CreditCompany.objects.filter(
-        transactions__payment_status='paid'
-    ).annotate(
-        total_commission=Coalesce(
-            Sum('transactions__commission_amount'),
-            Value(0, output_field=DecimalField())
-        ),
-        pending_commission=Coalesce(
-            Sum('transactions__commission_amount', 
-                filter=Q(transactions__commission_status='pending')),
-            Value(0, output_field=DecimalField())
-        ),
-        paid_commission=Coalesce(
-            Sum('transactions__commission_amount',
-                filter=Q(transactions__commission_status='paid')),
-            Value(0, output_field=DecimalField())
-        ),
-        transaction_count=Count('transactions', filter=Q(transactions__payment_status='paid'))
-    ).filter(total_commission__gt=0).order_by('-total_commission')[:10]
-    
-    # Monthly trend (last 6 months)
-    monthly_trend = []
-    for i in range(5, -1, -1):
-        month_date = today.replace(day=1) - timedelta(days=30*i)
-        month_start = timezone.make_aware(datetime.combine(month_date.replace(day=1), datetime.min.time()))
-        
-        if i == 0:
-            month_end = timezone.make_aware(datetime.combine(today, datetime.max.time()))
-        else:
-            next_month = month_date.replace(day=28) + timedelta(days=4)
-            month_end = timezone.make_aware(datetime.combine(next_month.replace(day=1) - timedelta(days=1), datetime.max.time()))
-        
-        month_earned = CreditTransaction.objects.filter(
-            paid_date__range=[month_start, month_end],
-            payment_status='paid'
-        ).aggregate(
-            total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
-        )['total']
-        
-        month_paid = CreditTransaction.objects.filter(
-            commission_paid_date__range=[month_start, month_end],
-            commission_status='paid'
-        ).aggregate(
-            total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
-        )['total']
-        
-        monthly_trend.append({
-            'month': month_date.strftime('%b %Y'),
-            'earned': month_earned,
-            'paid': month_paid,
-        })
-    
-    context = {
-        'total_commission': total_commission,
-        'paid_commission': paid_commission,
-        'pending_commission': pending_commission,
-        'month_commission': month_commission,
-        'week_commission': week_commission,
-        'top_sellers': top_sellers,
-        'recent_payments': recent_payments,
-        'pending_commissions': pending_commissions,
-        'company_commission': company_commission,
-        'monthly_trend': monthly_trend,
-        'pending_count': pending_commissions.count(),
-    }
-    
-    return render(request, 'credit/commission/dashboard.html', context)
 
 
-@login_required
-def my_commissions(request):
-    """View for sellers to see their own commissions"""
-    seller = request.user
-    
-    # Get or create summary
-    summary, created = SellerCommissionSummary.objects.get_or_create(seller=seller)
-    if created or (timezone.now() - summary.updated_at).days > 1:
-        summary.update_from_transactions()
-    
-    # Get transactions with commission
-    transactions = CreditTransaction.objects.filter(
-        dealer=seller,
-        payment_status='paid'
-    ).select_related(
-        'customer', 'credit_company', 'product'
-    ).order_by('-paid_date')
-    
-    # Pagination
-    paginator = Paginator(transactions, 20)
-    page = request.GET.get('page')
-    transactions_page = paginator.get_page(page)
-    
-    # Monthly earnings for current month
-    today = timezone.now().date()
-    month_start = timezone.make_aware(datetime.combine(today.replace(day=1), datetime.min.time()))
-    month_earnings = transactions.filter(
-        paid_date__gte=month_start
-    ).aggregate(
-        total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
-    )['total']
-    
-    # This week's earnings
-    week_start = timezone.make_aware(datetime.combine(today - timedelta(days=today.weekday()), datetime.min.time()))
-    week_earnings = transactions.filter(
-        paid_date__gte=week_start
-    ).aggregate(
-        total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
-    )['total']
-    
-    # Commission history (payments received)
-    payment_history = SellerCommission.objects.filter(
-        seller=seller,
-        status='paid'
-    ).select_related('paid_by', 'transaction').order_by('-paid_date')[:10]
-    
-    context = {
-        'summary': summary,
-        'transactions': transactions_page,
-        'month_earnings': month_earnings,
-        'week_earnings': week_earnings,
-        'payment_history': payment_history,
-        'pending_count': transactions.filter(commission_status='pending').count(),
-        'paid_count': transactions.filter(commission_status='paid').count(),
-    }
-    
-    return render(request, 'credit/commission/my_commissions.html', context)
-
-
-@login_required
-def seller_commission_detail(request, seller_id):
-    """Admin view for detailed seller commission info"""
-    # Check if user has permission (staff or superuser)
-    if not (request.user.is_staff or request.user.is_superuser):
-        messages.error(request, "You don't have permission to view this page.")
-        return redirect('credit:my_commissions')
-    
-    seller = get_object_or_404(User, id=seller_id)
-    
-    # Get or create summary
-    summary, created = SellerCommissionSummary.objects.get_or_create(seller=seller)
-    if created or (timezone.now() - summary.updated_at).days > 1:
-        summary.update_from_transactions()
-    
-    # Get all transactions with commission
-    transactions = CreditTransaction.objects.filter(
-        dealer=seller
-    ).select_related(
-        'customer', 'credit_company', 'product'
-    ).order_by('-transaction_date')
-    
-    # Filter by status
-    status = request.GET.get('status')
-    if status:
-        if status == 'pending':
-            transactions = transactions.filter(payment_status='paid', commission_status='pending')
-        elif status == 'paid':
-            transactions = transactions.filter(commission_status='paid')
-        elif status == 'cancelled':
-            transactions = transactions.filter(commission_status='cancelled')
-    
-    # Payment history
-    payment_history = SellerCommission.objects.filter(
-        seller=seller,
-        status='paid'
-    ).select_related('paid_by', 'transaction').order_by('-paid_date')
-    
-    # Monthly breakdown
-    monthly_breakdown = []
-    for i in range(11, -1, -1):
-        month_date = timezone.now().date().replace(day=1) - timedelta(days=30*i)
-        month_start = timezone.make_aware(datetime.combine(month_date.replace(day=1), datetime.min.time()))
-        
-        if i == 0:
-            month_end = timezone.make_aware(datetime.combine(timezone.now().date(), datetime.max.time()))
-        else:
-            next_month = month_date.replace(day=28) + timedelta(days=4)
-            month_end = timezone.make_aware(datetime.combine(next_month.replace(day=1) - timedelta(days=1), datetime.max.time()))
-        
-        month_earned = CreditTransaction.objects.filter(
-            dealer=seller,
-            paid_date__range=[month_start, month_end],
-            payment_status='paid'
-        ).aggregate(
-            total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
-        )['total']
-        
-        month_paid = CreditTransaction.objects.filter(
-            dealer=seller,
-            commission_paid_date__range=[month_start, month_end],
-            commission_status='paid'
-        ).aggregate(
-            total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
-        )['total']
-        
-        if month_earned > 0 or month_paid > 0:
-            monthly_breakdown.append({
-                'month': month_date.strftime('%B %Y'),
-                'month_short': month_date.strftime('%b %Y'),
-                'earned': month_earned,
-                'paid': month_paid,
-                'pending': month_earned - month_paid,
-            })
-    
-    context = {
-        'seller': seller,
-        'summary': summary,
-        'transactions': transactions,
-        'payment_history': payment_history,
-        'monthly_breakdown': monthly_breakdown,
-        'total_paid': payment_history.aggregate(total=Sum('amount'))['total'] or 0,
-    }
-    
-    return render(request, 'credit/commission/seller_detail.html', context)
-
-
-@login_required
-def pay_commission(request, transaction_id):
-    """Pay commission for a specific transaction"""
-    # Check permission
-    if not (request.user.is_staff or request.user.is_superuser):
-        return JsonResponse({'success': False, 'error': 'Permission denied'})
-    
-    if request.method == 'POST':
-        try:
-            transaction = get_object_or_404(CreditTransaction, id=transaction_id)
-            
-            if transaction.commission_status == 'paid':
-                return JsonResponse({
-                    'success': False,
-                    'error': 'Commission already paid'
-                })
-            
-            if transaction.payment_status != 'paid':
-                return JsonResponse({
-                    'success': False,
-                    'error': 'Transaction must be paid by company first'
-                })
-            
-            notes = request.POST.get('notes', '')
-            
-            # Mark commission as paid
-            transaction.mark_commission_as_paid(
-                paid_by=request.user,
-                notes=notes
-            )
-            
-            return JsonResponse({
-                'success': True,
-                'message': f'Commission of KSH {transaction.commission_amount} marked as paid',
-                'commission_amount': float(transaction.commission_amount),
-                'seller': transaction.dealer.get_full_name() or transaction.dealer.username
-            })
-            
-        except Exception as e:
-            logger.error(f"Error paying commission: {str(e)}")
-            return JsonResponse({'success': False, 'error': str(e)})
-    
-    return JsonResponse({'success': False, 'error': 'Invalid request method'})
-
-
-@login_required
-def bulk_pay_commission(request):
-    """Pay multiple commissions at once"""
-    # Check permission
-    if not (request.user.is_staff or request.user.is_superuser):
-        return JsonResponse({'success': False, 'error': 'Permission denied'})
-    
-    if request.method == 'POST':
-        try:
-            transaction_ids = request.POST.getlist('transaction_ids')
-            notes = request.POST.get('notes', '')
-            
-            if not transaction_ids:
-                return JsonResponse({'success': False, 'error': 'No transactions selected'})
-            
-            transactions = CreditTransaction.objects.filter(
-                id__in=transaction_ids,
-                payment_status='paid',
-                commission_status='pending'
-            )
-            
-            if not transactions.exists():
-                return JsonResponse({'success': False, 'error': 'No eligible transactions found'})
-            
-            count = 0
-            total_amount = 0
-            
-            for transaction in transactions:
-                transaction.mark_commission_as_paid(
-                    paid_by=request.user,
-                    notes=notes
-                )
-                count += 1
-                total_amount += transaction.commission_amount
-            
-            return JsonResponse({
-                'success': True,
-                'message': f'Paid {count} commissions totaling KSH {total_amount}',
-                'count': count,
-                'total_amount': float(total_amount)
-            })
-            
-        except Exception as e:
-            logger.error(f"Error in bulk pay commission: {str(e)}")
-            return JsonResponse({'success': False, 'error': str(e)})
-    
-    return JsonResponse({'success': False, 'error': 'Invalid request method'})
-
-
-@login_required
-def commission_report(request):
-    """Generate commission reports with filters"""
-    # Check permission
-    if not (request.user.is_staff or request.user.is_superuser):
-        messages.error(request, "You don't have permission to view this page.")
-        return redirect('credit:dashboard')
-    
-    # Get filter parameters
-    seller_id = request.GET.get('seller')
-    company_id = request.GET.get('company')
-    date_from = request.GET.get('date_from')
-    date_to = request.GET.get('date_to')
-    status = request.GET.get('status')
-    
-    # Base queryset
-    commissions = SellerCommission.objects.select_related(
-        'seller', 'transaction', 'paid_by', 
-        'transaction__credit_company', 'transaction__customer'
-    )
-    
-    # Apply filters
-    if seller_id:
-        commissions = commissions.filter(seller_id=seller_id)
-    
-    if company_id:
-        commissions = commissions.filter(transaction__credit_company_id=company_id)
-    
-    if date_from:
-        date_from_aware = timezone.make_aware(datetime.strptime(date_from, '%Y-%m-%d'))
-        commissions = commissions.filter(created_at__date__gte=date_from_aware)
-    
-    if date_to:
-        date_to_aware = timezone.make_aware(datetime.strptime(date_to, '%Y-%m-%d') + timedelta(days=1))
-        commissions = commissions.filter(created_at__lt=date_to_aware)
-    
-    if status:
-        commissions = commissions.filter(status=status)
-    
-    # Order by most recent
-    commissions = commissions.order_by('-created_at')
-    
-    # Pagination
-    paginator = Paginator(commissions, 50)
-    page = request.GET.get('page')
-    commissions_page = paginator.get_page(page)
-    
-    # Summary statistics
-    total_commission = commissions.aggregate(
-        total=Coalesce(Sum('amount'), Value(0, output_field=DecimalField()))
-    )['total']
-    
-    paid_total = commissions.filter(status='paid').aggregate(
-        total=Coalesce(Sum('amount'), Value(0, output_field=DecimalField()))
-    )['total']
-    
-    pending_total = commissions.filter(status='pending').aggregate(
-        total=Coalesce(Sum('amount'), Value(0, output_field=DecimalField()))
-    )['total']
-    
-    # Get filter options
-    sellers = User.objects.filter(commissions_earned__isnull=False).distinct()
-    companies = CreditCompany.objects.filter(transactions__seller_commission_record__isnull=False).distinct()
-    
-    context = {
-        'commissions': commissions_page,
-        'total_commission': total_commission,
-        'paid_total': paid_total,
-        'pending_total': pending_total,
-        'sellers': sellers,
-        'companies': companies,
-        'status_choices': SellerCommission._meta.get_field('status').choices,
-        'filters': {
-            'seller_id': int(seller_id) if seller_id else None,
-            'company_id': int(company_id) if company_id else None,
-            'date_from': date_from,
-            'date_to': date_to,
-            'status': status,
-        }
-    }
-    
-    return render(request, 'credit/commission/report.html', context)
-
-
-@login_required
-def export_commission_report(request):
-    """Export commission report as CSV"""
-    # Check permission
-    if not (request.user.is_staff or request.user.is_superuser):
-        return JsonResponse({'success': False, 'error': 'Permission denied'})
-    
-    import csv
-    from django.http import HttpResponse
-    
-    # Create HttpResponse with CSV header
-    response = HttpResponse(content_type='text/csv')
-    response['Content-Disposition'] = f'attachment; filename="commission_report_{timezone.now().strftime("%Y%m%d_%H%M%S")}.csv"'
-    
-    # Get filter parameters from request
-    seller_id = request.GET.get('seller')
-    company_id = request.GET.get('company')
-    date_from = request.GET.get('date_from')
-    date_to = request.GET.get('date_to')
-    status = request.GET.get('status')
-    
-    # Base queryset
-    commissions = SellerCommission.objects.select_related(
-        'seller', 'transaction', 'paid_by', 
-        'transaction__credit_company', 'transaction__customer'
-    )
-    
-    # Apply filters (same as report view)
-    if seller_id:
-        commissions = commissions.filter(seller_id=seller_id)
-    if company_id:
-        commissions = commissions.filter(transaction__credit_company_id=company_id)
-    if date_from:
-        date_from_aware = timezone.make_aware(datetime.strptime(date_from, '%Y-%m-%d'))
-        commissions = commissions.filter(created_at__date__gte=date_from_aware)
-    if date_to:
-        date_to_aware = timezone.make_aware(datetime.strptime(date_to, '%Y-%m-%d') + timedelta(days=1))
-        commissions = commissions.filter(created_at__lt=date_to_aware)
-    if status:
-        commissions = commissions.filter(status=status)
-    
-    commissions = commissions.order_by('-created_at')
-    
-    # Create CSV writer
-    writer = csv.writer(response)
-    
-    # Write headers
-    writer.writerow([
-        'Date', 'Seller', 'Transaction ID', 'Customer', 'Company',
-        'Amount', 'Status', 'Paid Date', 'Paid By', 'Notes'
-    ])
-    
-    # Write data rows
-    for commission in commissions:
-        writer.writerow([
-            commission.created_at.strftime('%Y-%m-%d %H:%M'),
-            commission.seller.get_full_name() or commission.seller.username,
-            commission.transaction.transaction_id,
-            commission.transaction.customer.full_name,
-            commission.transaction.credit_company.name,
-            f'{commission.amount:.2f}',
-            commission.get_status_display(),
-            commission.paid_date.strftime('%Y-%m-%d %H:%M') if commission.paid_date else '',
-            commission.paid_by.get_full_name() or commission.paid_by.username if commission.paid_by else '',
-            commission.notes
-        ])
-    
-    return response
 
 
 # ====================================
@@ -2017,3 +1490,719 @@ def convert_sale_to_credit(request, sale_id):
             'success': False,
             'error': str(e)
         })
+    
+
+
+
+
+# ====================================
+# COMMISSION VIEWS - 5 BUTTONS
+# ====================================
+@login_required
+def commission_dashboard(request):
+    """Commission Dashboard - Using actual model statuses"""
+    
+    # Get all transactions with commission info
+    transactions = CreditTransaction.objects.select_related(
+        'dealer', 'product'
+    ).order_by('-transaction_date')
+    
+    # Apply filters
+    seller_id = request.GET.get('seller')
+    status = request.GET.get('status')
+    date_from = request.GET.get('date_from')
+    date_to = request.GET.get('date_to')
+    
+    if seller_id:
+        transactions = transactions.filter(dealer_id=seller_id)
+    
+    if status:
+        transactions = transactions.filter(commission_status=status)
+    
+    if date_from:
+        date_from_aware = timezone.make_aware(datetime.strptime(date_from, '%Y-%m-%d'))
+        transactions = transactions.filter(transaction_date__date__gte=date_from_aware)
+    
+    if date_to:
+        date_to_aware = timezone.make_aware(datetime.strptime(date_to, '%Y-%m-%d') + timedelta(days=1))
+        transactions = transactions.filter(transaction_date__lt=date_to_aware)
+    
+    # Get unique sellers
+    sellers = User.objects.filter(credit_transactions__isnull=False).distinct()
+    total_sellers = sellers.count()
+    
+    # Calculate totals for each transaction
+    transaction_list = []
+    total_selling = 0
+    total_buying = 0
+    total_profit_sum = 0
+    total_commission_sum = 0
+    total_owner_balance = 0
+    
+    for trans in transactions:
+        selling_price = trans.ceiling_price
+        buying_price = getattr(trans.product, 'buying_price', 0) or 0
+        total_profit = selling_price - buying_price
+        seller_commission = trans.commission_amount or 0
+        owner_commission = total_profit - seller_commission
+        
+        # Add to transaction list with calculated fields
+        transaction_list.append({
+            'id': trans.id,
+            'transaction_id': trans.transaction_id,
+            'transaction_date': trans.transaction_date,
+            'dealer': trans.dealer,
+            'product': trans.product,
+            'imei': trans.imei,
+            'selling_price': selling_price,
+            'buying_price': buying_price,
+            'total_profit': total_profit,
+            'seller_commission': seller_commission,
+            'owner_commission': owner_commission,
+            'commission_status': trans.commission_status,
+            'commission_status_display': trans.get_commission_status_display(),
+        })
+        
+        # Update totals
+        total_selling += selling_price
+        total_buying += buying_price
+        total_profit_sum += total_profit
+        total_commission_sum += seller_commission
+        total_owner_balance += owner_commission
+    
+    # Status counts and totals
+    status_counts = {
+        'not_set': transactions.filter(commission_status='not_set').count(),
+        'requested': transactions.filter(commission_status='requested').count(),
+        'approved': transactions.filter(commission_status='approved').count(),
+        'paid': transactions.filter(commission_status='paid').count(),
+        'cancelled': transactions.filter(commission_status='cancelled').count(),
+    }
+    
+    status_totals = {
+        'pending': transactions.filter(commission_status__in=['requested', 'approved']).aggregate(
+            total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
+        )['total'],
+        'requested': transactions.filter(commission_status='requested').aggregate(
+            total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
+        )['total'],
+        'approved': transactions.filter(commission_status='approved').aggregate(
+            total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
+        )['total'],
+        'paid': transactions.filter(commission_status='paid').aggregate(
+            total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
+        )['total'],
+    }
+    
+    context = {
+        'transactions': transaction_list,  # Use the processed list
+        'sellers': sellers,
+        'total_sellers': total_sellers,
+        
+        # Totals for footer
+        'total_selling': total_selling,
+        'total_buying': total_buying,
+        'total_profit_sum': total_profit_sum,
+        'total_commission_sum': total_commission_sum,
+        'total_owner_balance': total_owner_balance,
+        
+        # Counts
+        'pending_count': status_counts['requested'] + status_counts['approved'],
+        'requested_count': status_counts['requested'],
+        'approved_count': status_counts['approved'],
+        'paid_count': status_counts['paid'],
+        'cancelled_count': status_counts['cancelled'],
+        'not_set_count': status_counts['not_set'],
+        
+        # Totals
+        'pending_total': status_totals['pending'],
+        'requested_total': status_totals['requested'],
+        'approved_total': status_totals['approved'],
+        'paid_total': status_totals['paid'],
+    }
+    
+    return render(request, 'credit/commission/dashboard.html', context)
+
+
+
+
+
+
+
+@login_required
+def request_commission_list(request):
+    """
+    Request Commissions page - Show transactions where seller commission is not yet set.
+    This completely ignores company payment status.
+    """
+    
+    # Only show transactions where commission status is 'not_set'
+    # No filtering on payment_status at all
+    transactions_needing_commission = CreditTransaction.objects.filter(
+        commission_status='not_set'  # Only where commission hasn't been set
+    ).select_related(
+        'dealer', 'product', 'customer'
+    ).order_by('-transaction_date')[:20]
+    
+    context = {
+        'transactions_needing_commission': transactions_needing_commission,
+        'total_pending': transactions_needing_commission.count(),
+    }
+    
+    return render(request, 'credit/commission/request.html', context)
+
+
+
+
+@login_required
+def commission_detail(request, pk):
+    """Display detailed commission information including requester/approver/payer"""
+    transaction = get_object_or_404(
+        CreditTransaction.objects.select_related(
+            'dealer', 'customer', 'product', 'credit_company',
+            'commission_paid_by'
+        ),
+        pk=pk
+    )
+    
+    # Get commission record
+    try:
+        commission_record = transaction.seller_commission_record
+    except SellerCommission.DoesNotExist:
+        commission_record = None
+    
+    context = {
+        'transaction': transaction,
+        'commission_record': commission_record,
+    }
+    
+    return render(request, 'credit/commission/detail.html', context)
+
+
+
+
+
+@login_required
+def search_transaction(request):
+    """Search for transaction by SKU or Transaction ID"""
+    query = request.GET.get('q', '').strip()
+    
+    if not query or len(query) < 3:
+        return JsonResponse({'success': False, 'error': 'Search query too short'})
+    
+    try:
+        # Search by transaction ID or product SKU
+        transaction = CreditTransaction.objects.select_related(
+            'dealer', 'customer', 'product'
+        ).filter(
+            Q(transaction_id__icontains=query) |
+            Q(product__product_code__icontains=query) |
+            Q(imei__icontains=query)
+        ).first()
+        
+        if not transaction:
+            return JsonResponse({'success': False, 'error': 'No transaction found'})
+        
+        # Calculate profit (you can adjust this based on your business logic)
+        # For now, using ceiling_price as profit or you can calculate actual profit
+        profit = transaction.ceiling_price  # Replace with actual profit calculation if available
+        
+        data = {
+            'success': True,
+            'transaction': {
+                'id': transaction.id,
+                'transaction_id': transaction.transaction_id,
+                'date': transaction.transaction_date.strftime('%d %b %Y'),
+                'seller': transaction.dealer.get_full_name() or transaction.dealer.username,
+                'customer': transaction.customer.full_name,
+                'product': transaction.product.name,
+                'sku': transaction.product.product_code,
+                'price': float(transaction.ceiling_price),
+                'profit': float(profit),
+                'payment_status': transaction.payment_status,
+                'commission_status': transaction.commission_status,
+                'commission_status_display': transaction.get_commission_status_display(),
+            }
+        }
+        
+        return JsonResponse(data)
+        
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+
+
+@login_required
+def search_seller_commission_status(request):
+    """
+    Search for a transaction and return the SELLER'S COMMISSION status only.
+    This completely ignores the company payment status.
+    """
+    query = request.GET.get('q', '').strip()
+    
+    if not query or len(query) < 3:
+        return JsonResponse({'success': False, 'error': 'Please enter at least 3 characters'})
+    
+    try:
+        transaction = CreditTransaction.objects.select_related(
+            'dealer', 'customer', 'product'
+        ).filter(
+            Q(transaction_id__icontains=query) |
+            Q(product__product_code__icontains=query)
+        ).first()
+        
+        if not transaction:
+            return JsonResponse({'success': False, 'error': 'Transaction not found'})
+        
+        # Return ONLY commission-related information - NO payment status
+        data = {
+            'success': True,
+            'transaction': {
+                'id': transaction.id,
+                'transaction_id': transaction.transaction_id,
+                'date': transaction.transaction_date.strftime('%d %b %Y'),
+                'seller': {
+                    'id': transaction.dealer.id,
+                    'name': transaction.dealer.get_full_name() or transaction.dealer.username,
+                },
+                'customer': {
+                    'name': transaction.customer.full_name,
+                },
+                'product': {
+                    'name': transaction.product.name,
+                    'sku': transaction.product.product_code,
+                },
+                'sale': {
+                    'price': float(transaction.ceiling_price),
+                },
+                'commission': {
+                    'status': transaction.commission_status,
+                    'status_display': transaction.get_commission_status_display(),
+                    'amount': float(transaction.commission_amount) if transaction.commission_amount else 0,
+                    # ONLY 'not_set' can be requested - no more 'pending'
+                    'can_request': transaction.commission_status == 'not_set',
+                    'paid_date': transaction.commission_paid_date.strftime('%d %b %Y') if transaction.commission_paid_date else None,
+                }
+            }
+        }
+        
+        return JsonResponse(data)
+        
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+
+@login_required
+def request_commission_submit(request, pk):
+    """Submit commission request for a transaction - ONLY checks commission status"""
+    if request.method == 'POST':
+        try:
+            transaction = get_object_or_404(CreditTransaction, pk=pk)
+            
+            # ONLY allow 'not_set' - no more 'pending'
+            if transaction.commission_status != 'not_set':
+                return JsonResponse({
+                    'success': False, 
+                    'error': f'Commission already {transaction.get_commission_status_display()}'
+                })
+            
+            commission_amount = Decimal(request.POST.get('commission_amount', '0'))
+            notes = request.POST.get('notes', '')
+            
+            # Validate amount
+            if commission_amount <= 0:
+                return JsonResponse({'success': False, 'error': 'Amount must be greater than 0'})
+            
+            if commission_amount > transaction.ceiling_price:
+                return JsonResponse({'success': False, 'error': 'Amount cannot exceed total price'})
+            
+            # Update transaction
+            transaction.commission_amount = commission_amount
+            transaction.commission_status = 'requested'  # Changes from not_set to requested
+            transaction.commission_notes = notes
+            transaction.save()
+            
+            # Create or update commission record
+            SellerCommission.objects.update_or_create(
+                transaction=transaction,
+                defaults={
+                    'seller': transaction.dealer,
+                    'amount': commission_amount,
+                    'status': 'pending',  # SellerCommission uses 'pending' for requested
+                    'notes': notes
+                }
+            )
+            
+            # Create log
+            CreditTransactionLog.objects.create(
+                transaction=transaction,
+                action='commission_requested',
+                performed_by=request.user,
+                notes=f"Commission requested: KES {commission_amount}"
+            )
+            
+            return JsonResponse({
+                'success': True,
+                'message': f'Commission of KES {commission_amount} set for {transaction.transaction_id}',
+                'transaction_id': transaction.transaction_id,
+                'amount': float(commission_amount)
+            })
+            
+        except CreditTransaction.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Transaction not found'})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+    
+    return JsonResponse({'success': False, 'error': 'Invalid request method'})
+
+
+
+
+@login_required
+def approve_commission_list(request):
+    """3. Approve Commissions - Show requested commissions pending approval"""
+    
+    # Get requested commissions
+    requested_transactions = CreditTransaction.objects.filter(
+        commission_status='requested'
+    ).select_related(
+        'dealer', 'customer', 'credit_company', 'product'
+    ).order_by('-commission_paid_date')
+    
+    # Filter by seller if provided
+    seller_id = request.GET.get('seller')
+    if seller_id:
+        requested_transactions = requested_transactions.filter(dealer_id=seller_id)
+    
+    # Get sellers for filter dropdown
+    sellers = User.objects.filter(
+        credit_transactions__commission_status='requested'
+    ).distinct().order_by('first_name', 'last_name')
+    
+    context = {
+        'transactions': requested_transactions,
+        'sellers': sellers,
+        'count': requested_transactions.count(),
+    }
+    
+    return render(request, 'credit/commission/approve.html', context)
+
+
+@login_required
+def approve_commission_submit(request, pk):
+    """Approve a commission request"""
+    if request.method == 'POST':
+        transaction = get_object_or_404(CreditTransaction, pk=pk, commission_status='requested')
+        
+        try:
+            notes = request.POST.get('notes', '')
+            
+            # Update transaction
+            transaction.commission_status = 'approved'
+            transaction.commission_notes = f"Approved: {notes}" if notes else "Approved"
+            transaction.save()
+            
+            # Update commission record
+            SellerCommission.objects.filter(transaction=transaction).update(
+                status='approved',
+                notes=f"Approved: {notes}" if notes else "Approved"
+            )
+            
+            return JsonResponse({
+                'success': True,
+                'message': f'Commission approved for {transaction.transaction_id}'
+            })
+            
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+    
+    return JsonResponse({'success': False, 'error': 'Invalid request'})
+
+
+@login_required
+def pay_commission_list(request):
+    """4. Pay Commissions - Show approved commissions ready for payment"""
+    
+    # Get approved commissions
+    approved_transactions = CreditTransaction.objects.filter(
+        commission_status='approved'
+    ).select_related(
+        'dealer', 'customer', 'credit_company', 'product'
+    ).order_by('-commission_paid_date')
+    
+    # Filter by seller if provided
+    seller_id = request.GET.get('seller')
+    if seller_id:
+        approved_transactions = approved_transactions.filter(dealer_id=seller_id)
+    
+    # Get sellers for filter dropdown
+    sellers = User.objects.filter(
+        credit_transactions__commission_status='approved'
+    ).distinct().order_by('first_name', 'last_name')
+    
+    context = {
+        'transactions': approved_transactions,
+        'sellers': sellers,
+        'count': approved_transactions.count(),
+    }
+    
+    return render(request, 'credit/commission/pay.html', context)
+
+
+@login_required
+def pay_commission_submit(request, pk):
+    """Pay a commission"""
+    if request.method == 'POST':
+        transaction = get_object_or_404(CreditTransaction, pk=pk, commission_status='approved')
+        
+        try:
+            notes = request.POST.get('notes', '')
+            
+            # Update transaction
+            transaction.commission_status = 'paid'
+            transaction.commission_paid_date = timezone.now()
+            transaction.commission_paid_by = request.user
+            transaction.commission_notes = f"Paid: {notes}" if notes else "Paid"
+            transaction.save()
+            
+            # Update commission record
+            SellerCommission.objects.filter(transaction=transaction).update(
+                status='paid',
+                paid_date=timezone.now(),
+                paid_by=request.user,
+                notes=f"Paid: {notes}" if notes else "Paid"
+            )
+            
+            return JsonResponse({
+                'success': True,
+                'message': f'Commission paid for {transaction.transaction_id}'
+            })
+            
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+    
+    return JsonResponse({'success': False, 'error': 'Invalid request'})
+
+
+
+
+
+@login_required
+def bulk_pay_commission(request):
+    """Bulk pay multiple commissions at once"""
+    if request.method == 'POST':
+        try:
+            transaction_ids = request.POST.getlist('transaction_ids')
+            notes = request.POST.get('notes', '')
+            
+            if not transaction_ids:
+                return JsonResponse({'success': False, 'error': 'No transactions selected'})
+            
+            transactions = CreditTransaction.objects.filter(
+                id__in=transaction_ids,
+                commission_status='approved'
+            )
+            
+            count = 0
+            total_amount = 0
+            
+            for transaction in transactions:
+                transaction.commission_status = 'paid'
+                transaction.commission_paid_date = timezone.now()
+                transaction.commission_paid_by = request.user
+                transaction.commission_notes = f"Bulk paid: {notes}" if notes else "Bulk paid"
+                transaction.save()
+                
+                SellerCommission.objects.filter(transaction=transaction).update(
+                    status='paid',
+                    paid_date=timezone.now(),
+                    paid_by=request.user,
+                    notes=f"Bulk paid: {notes}" if notes else "Bulk paid"
+                )
+                
+                count += 1
+                total_amount += transaction.commission_amount
+            
+            return JsonResponse({
+                'success': True,
+                'message': f'Paid {count} commissions totaling KES {total_amount}',
+                'count': count,
+                'total_amount': float(total_amount)
+            })
+            
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+    
+    return JsonResponse({'success': False, 'error': 'Invalid request'})
+
+
+
+
+@login_required
+def commission_report(request):
+    """Commission Report page"""
+    
+    # Get all commission records
+    commissions = SellerCommission.objects.select_related(
+        'seller', 'transaction', 'paid_by',
+        'transaction__customer', 'transaction__product',
+        'transaction__credit_company', 'transaction__dealer'
+    ).order_by('-created_at')
+    
+    # Apply filters
+    seller_id = request.GET.get('seller')
+    status = request.GET.get('status')
+    date_from = request.GET.get('date_from')
+    date_to = request.GET.get('date_to')
+    
+    if seller_id:
+        commissions = commissions.filter(seller_id=seller_id)
+    
+    if status:
+        commissions = commissions.filter(status=status)
+    
+    if date_from:
+        date_from_aware = timezone.make_aware(datetime.strptime(date_from, '%Y-%m-%d'))
+        commissions = commissions.filter(created_at__date__gte=date_from_aware)
+    
+    if date_to:
+        date_to_aware = timezone.make_aware(datetime.strptime(date_to, '%Y-%m-%d') + timedelta(days=1))
+        commissions = commissions.filter(created_at__lt=date_to_aware)
+    
+    # Calculate totals
+    total_commission = commissions.aggregate(
+        total=Coalesce(Sum('amount'), Value(0, output_field=DecimalField()))
+    )['total']
+    
+    paid_total = commissions.filter(status='paid').aggregate(
+        total=Coalesce(Sum('amount'), Value(0, output_field=DecimalField()))
+    )['total']
+    
+    pending_total = commissions.filter(status='pending').aggregate(
+        total=Coalesce(Sum('amount'), Value(0, output_field=DecimalField()))
+    )['total']
+    
+    total_sale_amount = commissions.aggregate(
+        total=Coalesce(Sum('transaction__ceiling_price'), Value(0, output_field=DecimalField()))
+    )['total']
+    
+    # Get filter options
+    sellers = User.objects.filter(commissions_earned__isnull=False).distinct()
+    
+    context = {
+        'commissions': commissions,
+        'total_commission': total_commission,
+        'paid_total': paid_total,
+        'pending_total': pending_total,
+        'pending_count': commissions.filter(status='pending').count(),
+        'total_transactions': commissions.count(),
+        'total_sale_amount': total_sale_amount,
+        'sellers': sellers,
+        'status_choices': SellerCommission._meta.get_field('status').choices,
+        'filters': {
+            'seller_id': int(seller_id) if seller_id else None,
+            'status': status,
+            'date_from': date_from,
+            'date_to': date_to,
+        }
+    }
+    
+    return render(request, 'credit/commission/report.html', context)
+
+
+
+
+
+@login_required
+def export_commission_report(request):
+    """Export commission report as CSV"""
+    # Check permission
+    if not (request.user.is_staff or request.user.is_superuser):
+        return JsonResponse({'success': False, 'error': 'Permission denied'})
+    
+    import csv
+    from django.http import HttpResponse
+    
+    # Create HttpResponse with CSV header
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="commission_report_{timezone.now().strftime("%Y%m%d_%H%M%S")}.csv"'
+    
+    # Get filter parameters from request
+    seller_id = request.GET.get('seller')
+    status = request.GET.get('status')
+    date_from = request.GET.get('date_from')
+    date_to = request.GET.get('date_to')
+    
+    # Base queryset
+    commissions = SellerCommission.objects.select_related(
+        'seller', 'transaction', 'paid_by', 
+        'transaction__credit_company', 'transaction__customer',
+        'transaction__product', 'transaction__dealer'
+    )
+    
+    # Apply filters
+    if seller_id:
+        commissions = commissions.filter(seller_id=seller_id)
+    
+    if status:
+        commissions = commissions.filter(status=status)
+    
+    if date_from:
+        date_from_aware = timezone.make_aware(datetime.strptime(date_from, '%Y-%m-%d'))
+        commissions = commissions.filter(created_at__date__gte=date_from_aware)
+    
+    if date_to:
+        date_to_aware = timezone.make_aware(datetime.strptime(date_to, '%Y-%m-%d') + timedelta(days=1))
+        commissions = commissions.filter(created_at__lt=date_to_aware)
+    
+    commissions = commissions.order_by('-created_at')
+    
+    # Create CSV writer
+    writer = csv.writer(response)
+    
+    # Write headers
+    writer.writerow([
+        'Date', 
+        'Transaction ID', 
+        'Seller Name', 
+        'Seller Username',
+        'Customer Name', 
+        'Customer Phone',
+        'Product Name',
+        'Product SKU',
+        'Sale Amount',
+        'Commission Amount',
+        'Status',
+        'Requested By',
+        'Approved By',
+        'Paid By',
+        'Paid Date',
+        'Payment Reference',
+        'Notes'
+    ])
+    
+    # Write data rows
+    for commission in commissions:
+        writer.writerow([
+            commission.created_at.strftime('%Y-%m-%d %H:%M'),
+            commission.transaction.transaction_id,
+            commission.seller.get_full_name() or commission.seller.username,
+            commission.seller.username,
+            commission.transaction.customer.full_name,
+            commission.transaction.customer.phone_number,
+            commission.transaction.product.name,
+            commission.transaction.product.product_code,
+            f'{commission.transaction.ceiling_price:.2f}',
+            f'{commission.amount:.2f}',
+            commission.get_status_display(),
+            commission.transaction.commission_paid_by.get_full_name() if commission.transaction.commission_paid_by else '',
+            commission.paid_by.get_full_name() if commission.paid_by and commission.status == 'paid' else '',
+            commission.paid_by.get_full_name() if commission.paid_by and commission.status == 'paid' else '',
+            commission.paid_date.strftime('%Y-%m-%d %H:%M') if commission.paid_date else '',
+            commission.transaction.payment_reference or '',
+            commission.notes or commission.transaction.commission_notes or ''
+        ])
+    
+    return response

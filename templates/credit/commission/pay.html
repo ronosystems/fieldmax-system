@@ -1,0 +1,476 @@
+{% extends 'credit/staff_base.html' %}
+{% load humanize %}
+{% load static %}
+
+{% block title %}Pay Commissions - FieldMax Credit{% endblock %}
+
+{% block page_icon %}fas fa-hand-holding-usd{% endblock %}
+{% block page_title %}Pay Commissions{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'staff:credit_manager_dashboard' %}">Dashboard</a></li>
+<li class="breadcrumb-item"><a href="{% url 'credit:commission_dashboard' %}">Commission Dashboard</a></li>
+<li class="breadcrumb-item active">Pay Commissions</li>
+{% endblock %}
+
+{% block content %}
+<div class="pay-commissions">
+
+    <!-- Summary Card -->
+    <div class="stats-grid mb-4">
+        <div class="stat-card">
+            <div class="stat-icon success">
+                <i class="fas fa-check-circle"></i>
+            </div>
+            <div class="stat-value">{{ transactions|length }}</div>
+            <div class="stat-label">Approved for Payment</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon primary">
+                <i class="fas fa-coins"></i>
+            </div>
+            <div class="stat-value">KES {{ total_amount|default:0|floatformat:2|intcomma }}</div>
+            <div class="stat-label">Total to Pay</div>
+        </div>
+    </div>
+
+    <!-- Filter Section -->
+    <div class="card-custom mb-4">
+        <div class="card-header-custom">
+            <h5 class="mb-0"><i class="fas fa-filter me-2"></i>Filter Payments</h5>
+        </div>
+        <div class="card-body-custom">
+            <form method="get" id="filterForm">
+                <div class="row">
+                    <div class="col-md-4">
+                        <label for="seller" class="form-label">Seller</label>
+                        <select name="seller" id="seller" class="form-select">
+                            <option value="">All Sellers</option>
+                            {% for seller in sellers %}
+                            <option value="{{ seller.id }}" {% if request.GET.seller == seller.id|stringformat:"i" %}selected{% endif %}>
+                                {{ seller.get_full_name|default:seller.username }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="date_from" class="form-label">Date From</label>
+                        <input type="date" class="form-control" id="date_from" name="date_from" value="{{ request.GET.date_from|default:'' }}">
+                    </div>
+                    <div class="col-md-4">
+                        <label for="date_to" class="form-label">Date To</label>
+                        <input type="date" class="form-control" id="date_to" name="date_to" value="{{ request.GET.date_to|default:'' }}">
+                    </div>
+                    <div class="col-12 mt-3">
+                        <button type="submit" class="btn btn-primary-custom">
+                            <i class="fas fa-search me-2"></i>Apply Filter
+                        </button>
+                        <a href="{% url 'credit:pay_commission' %}" class="btn btn-secondary ms-2">
+                            <i class="fas fa-undo me-2"></i>Reset
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Approved Commissions Table -->
+    <div class="card-custom">
+        <div class="card-header-custom d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-list me-2"></i>Approved Commissions Ready for Payment</h5>
+            <span class="badge bg-success">{{ transactions|length }} Approved</span>
+        </div>
+        <div class="card-body-custom p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th width="40">
+                                <input type="checkbox" id="selectAll" class="form-check-input">
+                            </th>
+                            <th>Transaction ID</th>
+                            <th>Date Approved</th>
+                            <th>Seller</th>
+                            <th>Customer</th>
+                            <th>Product</th>
+                            <th class="text-end">Sale Amount</th>
+                            <th class="text-end">Commission</th>
+                            <th>Payment Reference</th>
+                            <th class="text-center">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for trans in transactions %}
+                        <tr id="row-{{ trans.id }}">
+                            <td>
+                                <input type="checkbox" class="form-check-input transaction-checkbox" value="{{ trans.id }}" data-amount="{{ trans.commission_amount }}">
+                            </td>
+                            <td>
+                                <strong>{{ trans.transaction_id }}</strong>
+                            </td>
+                            <td>{{ trans.commission_paid_date|date:"d M Y H:i"|default:trans.transaction_date|date:"d M Y" }}</td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <div class="user-avatar me-2">
+                                        {{ trans.dealer.first_name|first|default:trans.dealer.username|first|upper }}
+                                    </div>
+                                    {{ trans.dealer.get_full_name|default:trans.dealer.username }}
+                                </div>
+                            </td>
+                            <td>{{ trans.customer.full_name|truncatechars:20 }}</td>
+                            <td>{{ trans.product.name|truncatechars:20 }}</td>
+                            <td class="text-end">KES {{ trans.ceiling_price|floatformat:2|intcomma }}</td>
+                            <td class="text-end fw-bold text-success">KES {{ trans.commission_amount|floatformat:2|intcomma }}</td>
+                            <td>
+                                <input type="text" class="form-control form-control-sm payment-ref" 
+                                       id="ref-{{ trans.id }}" 
+                                       placeholder="Enter reference" 
+                                       style="min-width: 120px;">
+                            </td>
+                            <td class="text-center">
+                                <button class="btn btn-sm btn-success pay-single-btn"
+                                        data-id="{{ trans.id }}"
+                                        data-transaction="{{ trans.transaction_id }}"
+                                        data-seller="{{ trans.dealer.get_full_name|default:trans.dealer.username }}"
+                                        data-amount="{{ trans.commission_amount }}">
+                                    <i class="fas fa-hand-holding-usd me-1"></i>Pay
+                                </button>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="10" class="text-center py-5">
+                                <i class="fas fa-check-circle text-success fa-3x mb-3"></i>
+                                <h5 class="text-secondary">No Approved Commissions</h5>
+                                <p class="text-secondary">All approved commissions have been paid.</p>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Bulk Actions -->
+            {% if transactions %}
+            <div class="p-3 border-top">
+                <div class="row align-items-center">
+                    <div class="col-md-4">
+                        <strong id="selectedCount">0</strong> selected | 
+                        Total: <strong id="selectedTotal">KES 0</strong>
+                    </div>
+                    <div class="col-md-4">
+                        <input type="text" class="form-control" id="bulkReference" placeholder="Enter payment reference for all selected">
+                    </div>
+                    <div class="col-md-4">
+                        <button class="btn btn-success w-100" id="bulkPayBtn" disabled>
+                            <i class="fas fa-hand-holding-usd me-2"></i>Pay Selected
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Success Message (inline) -->
+    <div id="successMessage" class="alert alert-success mt-3" style="display: none;">
+        <i class="fas fa-check-circle me-2"></i>
+        <span id="successText"></span>
+    </div>
+
+    <!-- Error Message (inline) -->
+    <div id="errorMessage" class="alert alert-danger mt-3" style="display: none;">
+        <i class="fas fa-exclamation-circle me-2"></i>
+        <span id="errorText"></span>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    
+    // Select all functionality
+    $('#selectAll').change(function() {
+        $('.transaction-checkbox').prop('checked', $(this).prop('checked'));
+        updateSelectedTotal();
+        updateBulkButton();
+    });
+    
+    $('.transaction-checkbox').change(function() {
+        const allChecked = $('.transaction-checkbox:checked').length === $('.transaction-checkbox').length;
+        $('#selectAll').prop('checked', allChecked);
+        updateSelectedTotal();
+        updateBulkButton();
+    });
+    
+    function updateSelectedTotal() {
+        let total = 0;
+        let count = 0;
+        
+        $('.transaction-checkbox:checked').each(function() {
+            const amount = parseFloat($(this).data('amount')) || 0;
+            total += amount;
+            count++;
+        });
+        
+        $('#selectedCount').text(count);
+        $('#selectedTotal').text('KES ' + total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+    }
+    
+    function updateBulkButton() {
+        const count = $('.transaction-checkbox:checked').length;
+        $('#bulkPayBtn').prop('disabled', count === 0);
+    }
+    
+    // Single pay button
+    $('.pay-single-btn').click(function() {
+        const id = $(this).data('id');
+        const transactionRef = $(this).data('transaction');
+        const sellerName = $(this).data('seller');
+        const amount = $(this).data('amount');
+        
+        // Get reference from the input field in the same row
+        const reference = $(`#ref-${id}`).val().trim();
+        
+        if (!reference) {
+            alert('Please enter a payment reference');
+            $(`#ref-${id}`).focus();
+            return;
+        }
+        
+        if (confirm(`Pay commission of KES ${amount.toLocaleString()} to ${sellerName}?`)) {
+            const $btn = $(this);
+            $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-2"></span>');
+            
+            $.ajax({
+                url: '{% url "credit:pay_commission_submit" 0 %}'.replace('0', id),
+                method: 'POST',
+                data: {
+                    payment_reference: reference,
+                    notes: `Paid via ${reference}`,
+                    csrfmiddlewaretoken: '{{ csrf_token }}'
+                },
+                success: function(response) {
+                    if (response.success) {
+                        $('#successText').text(`Commission for ${transactionRef} paid successfully!`);
+                        $('#successMessage').show();
+                        
+                        // Remove the row
+                        $(`#row-${id}`).fadeOut(300, function() {
+                            $(this).remove();
+                            updateSelectedTotal();
+                            updateBulkButton();
+                            
+                            if ($('tbody tr').length === 0) {
+                                setTimeout(function() {
+                                    location.reload();
+                                }, 1000);
+                            }
+                        });
+                        
+                        setTimeout(function() {
+                            $('#successMessage').fadeOut();
+                        }, 3000);
+                        
+                    } else {
+                        $('#errorText').text(response.error || 'Payment failed');
+                        $('#errorMessage').show();
+                        $btn.prop('disabled', false).html('<i class="fas fa-hand-holding-usd me-1"></i>Pay');
+                        
+                        setTimeout(function() {
+                            $('#errorMessage').fadeOut();
+                        }, 3000);
+                    }
+                },
+                error: function(xhr) {
+                    $('#errorText').text('An error occurred. Please try again.');
+                    $('#errorMessage').show();
+                    $btn.prop('disabled', false).html('<i class="fas fa-hand-holding-usd me-1"></i>Pay');
+                    
+                    setTimeout(function() {
+                        $('#errorMessage').fadeOut();
+                    }, 3000);
+                }
+            });
+        }
+    });
+    
+    // Bulk pay button
+    $('#bulkPayBtn').click(function() {
+        const selectedIds = [];
+        $('.transaction-checkbox:checked').each(function() {
+            selectedIds.push($(this).val());
+        });
+        
+        if (selectedIds.length === 0) {
+            alert('Please select at least one commission to pay.');
+            return;
+        }
+        
+        const bulkReference = $('#bulkReference').val().trim();
+        
+        if (!bulkReference) {
+            alert('Please enter a payment reference for bulk payment');
+            $('#bulkReference').focus();
+            return;
+        }
+        
+        // Calculate total
+        let totalAmount = 0;
+        selectedIds.forEach(function(id) {
+            const amount = parseFloat($(`.transaction-checkbox[value="${id}"]`).data('amount')) || 0;
+            totalAmount += amount;
+        });
+        
+        if (confirm(`Pay ${selectedIds.length} commissions totaling KES ${totalAmount.toLocaleString()}?`)) {
+            const $btn = $('#bulkPayBtn');
+            $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-2"></span>Processing...');
+            
+            // Process one by one
+            let completed = 0;
+            let successful = 0;
+            let failed = 0;
+            
+            selectedIds.forEach(function(id) {
+                $.ajax({
+                    url: '{% url "credit:pay_commission_submit" 0 %}'.replace('0', id),
+                    method: 'POST',
+                    data: {
+                        payment_reference: bulkReference,
+                        notes: `Bulk paid via ${bulkReference}`,
+                        csrfmiddlewaretoken: '{{ csrf_token }}'
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            successful++;
+                            $(`#row-${id}`).fadeOut(300, function() {
+                                $(this).remove();
+                            });
+                        } else {
+                            failed++;
+                        }
+                    },
+                    error: function() {
+                        failed++;
+                    },
+                    complete: function() {
+                        completed++;
+                        if (completed === selectedIds.length) {
+                            $('#successText').text(`Paid ${successful} commissions. ${failed} failed.`);
+                            $('#successMessage').show();
+                            
+                            updateSelectedTotal();
+                            updateBulkButton();
+                            $('#bulkReference').val('');
+                            
+                            if ($('tbody tr').length === 0) {
+                                setTimeout(function() {
+                                    location.reload();
+                                }, 1000);
+                            }
+                            
+                            setTimeout(function() {
+                                $('#successMessage').fadeOut();
+                            }, 3000);
+                            
+                            $btn.prop('disabled', false).html('<i class="fas fa-hand-holding-usd me-2"></i>Pay Selected');
+                        }
+                    }
+                });
+            });
+        }
+    });
+    
+    // Auto-submit on filter change
+    $('#seller').change(function() {
+        $('#filterForm').submit();
+    });
+    
+    // Allow Enter key in reference fields to trigger pay
+    $('.payment-ref').keypress(function(e) {
+        if (e.which === 13) {
+            e.preventDefault();
+            const id = $(this).attr('id').replace('ref-', '');
+            $(`button[data-id="${id}"]`).click();
+        }
+    });
+    
+    $('#bulkReference').keypress(function(e) {
+        if (e.which === 13) {
+            e.preventDefault();
+            $('#bulkPayBtn').click();
+        }
+    });
+    
+});
+</script>
+
+<style>
+    .pay-commissions .card-custom {
+        margin-bottom: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .user-avatar {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        background: var(--primary-gradient);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: 600;
+        font-size: 0.8rem;
+    }
+    
+    .table th {
+        background: var(--light-bg);
+        color: var(--text-secondary);
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        padding: 12px 10px;
+    }
+    
+    .table td {
+        vertical-align: middle;
+        padding: 12px 5px;
+    }
+    
+    .payment-ref {
+        min-width: 120px;
+    }
+    
+    /* Selected row highlight */
+    tr:has(.transaction-checkbox:checked) {
+        background-color: rgba(40, 167, 69, 0.1);
+    }
+    
+    [data-theme="dark"] tr:has(.transaction-checkbox:checked) {
+        background-color: rgba(40, 167, 69, 0.2);
+    }
+    
+    [data-theme="dark"] .table th {
+        background: var(--sidebar-solid);
+    }
+    
+    @media (max-width: 768px) {
+        .table-responsive {
+            font-size: 0.8rem;
+        }
+        
+        .user-avatar {
+            width: 25px;
+            height: 25px;
+            font-size: 0.7rem;
+        }
+        
+        .payment-ref {
+            min-width: 80px;
+            font-size: 0.75rem;
+        }
+    }
+</style>
+{% endblock %}

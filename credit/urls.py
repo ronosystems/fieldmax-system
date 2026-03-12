@@ -33,30 +33,36 @@ urlpatterns = [
     path('payments/', views.payment_list, name='payment_list'),
     path('payments/add/', views.payment_add, name='payment_add'),
     path('payments/<int:pk>/', views.payment_detail, name='payment_detail'),
+
+    # ===== COMMISSION URLS (5 buttons) =====
     
-    # ===== ADD THESE MISSING COMMISSION URLS =====
-    
-    # Commission Dashboard (Admin/Manager)
+    # 1. Commission Dashboard
     path('commissions/dashboard/', views.commission_dashboard, name='commission_dashboard'),
+    path('commissions/<int:pk>/', views.commission_detail, name='commission_detail'),
     
-    # My Commissions (for logged in user)
-    path('commissions/my/', views.my_commissions, name='my_commissions'),
+    # 2. Request Commissions - List eligible transactions
+    path('commissions/request/', views.request_commission_list, name='request_commission'),
     
-    # Seller Commission Detail (Admin only)
-    path('commissions/seller/<int:seller_id>/', views.seller_commission_detail, name='seller_commission_detail'),
+    # 3. Approve Commissions - List requested commissions
+    path('commissions/approve/', views.approve_commission_list, name='approve_commission'),
     
-    # Pay Commission (AJAX endpoint)
-    path('commissions/pay/<int:transaction_id>/', views.pay_commission, name='pay_commission'),
+    # 4. Pay Commissions - List approved commissions
+    path('commissions/pay/', views.pay_commission_list, name='pay_commission'),
     
-    # Bulk Pay Commission (AJAX endpoint)
-    path('commissions/bulk-pay/', views.bulk_pay_commission, name='bulk_pay_commission'),
-    
-    # Commission Report
+    # 5. Commissions Report - All commissions report
     path('commissions/report/', views.commission_report, name='commission_report'),
     
-    # Export Commission Report (CSV)
-    path('commissions/export/', views.export_commission_report, name='export_commission_report'),
+    # ===== AJAX endpoints for actions =====
+    path('commissions/request/<int:pk>/submit/', views.request_commission_submit, name='request_commission_submit'),
+    path('commissions/approve/<int:pk>/submit/', views.approve_commission_submit, name='approve_commission_submit'),
+    path('commissions/pay/<int:pk>/submit/', views.pay_commission_submit, name='pay_commission_submit'),
+    path('commissions/bulk-pay/', views.bulk_pay_commission, name='bulk_pay_commission'),
     
     # API for Sales integration
-    path('api/sale-to-credit/<str:sale_id>/', views.convert_sale_to_credit, name='convert_sale_to_credit'),
+    path('api/search-seller-commission/', views.search_seller_commission_status, name='search_seller_commission'),
+    path('api/sale-to-credit/<str:sale_id>/', views.convert_sale_to_credit, name='convert_sale_to_credit'),  
+    path('api/search-transaction/', views.search_transaction, name='search_transaction'),  
+
+    path('commissions/report/', views.commission_report, name='commission_report'),
+    path('commissions/report/export/', views.export_commission_report, name='export_commission_report'),
 ]

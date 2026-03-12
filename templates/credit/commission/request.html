@@ -1,0 +1,639 @@
+{% extends 'credit/staff_base.html' %}
+{% load humanize %}
+{% load static %}
+
+{% block title %}Request Seller Commission - FieldMax Credit{% endblock %}
+
+{% block page_icon %}fas fa-hand-holding-usd{% endblock %}
+{% block page_title %}Request Seller Commission{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'staff:credit_manager_dashboard' %}">Dashboard</a></li>
+<li class="breadcrumb-item"><a href="{% url 'credit:commission_dashboard' %}">Commission Dashboard</a></li>
+<li class="breadcrumb-item active">Request Seller Commission</li>
+{% endblock %}
+
+{% block content %}
+<div class="request-commission">
+
+    <!-- Search Box -->
+    <div class="card-custom mb-4">
+        <div class="card-header-custom">
+            <h5 class="mb-0"><i class="fas fa-search me-2"></i>Find Transaction for Seller Commission</h5>
+        </div>
+        <div class="card-body-custom">
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="mb-3">
+                        <label for="searchInput" class="form-label fw-bold">Enter Transaction ID or Product SKU</label>
+                        <div class="input-group input-group-lg">
+                            <input type="text" class="form-control" id="searchInput" 
+                                   placeholder="e.g., #SALE-0001 or IPHONE-13-PRO" autocomplete="off">
+                            <button class="btn btn-primary-custom" type="button" id="searchBtn">
+                                <i class="fas fa-search me-2"></i>Find Transaction
+                            </button>
+                        </div>
+                        <small class="text-secondary">Search by Transaction ID or Product SKU to set seller commission</small>
+                        <div id="searchError" class="text-danger mt-2" style="display: none;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Indicator -->
+    <div id="loadingIndicator" class="text-center my-5" style="display: none;">
+        <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-2">Searching for transaction...</p>
+    </div>
+
+    <!-- Transaction Result Card -->
+    <div id="resultCard" class="card-custom" style="display: none;">
+        <div class="card-header-custom" id="resultHeader">
+            <h5 class="mb-0"><i class="fas fa-file-invoice me-2"></i>Transaction Found</h5>
+        </div>
+        <div class="card-body-custom">
+            <!-- Transaction Info -->
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <table class="table table-sm borderless">
+                        <tr>
+                            <td width="40%"><strong>Transaction ID:</strong></td>
+                            <td id="displayTransactionId" class="fw-bold">-</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Date:</strong></td>
+                            <td id="displayDate">-</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Seller:</strong></td>
+                            <td id="displaySeller">-</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Customer:</strong></td>
+                            <td id="displayCustomer">-</td>
+                        </tr>
+                    </table>
+                </div>
+                <div class="col-md-6">
+                    <table class="table table-sm borderless">
+                        <tr>
+                            <td width="40%"><strong>Product SKU:</strong></td>
+                            <td id="displaySku">-</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Product Name:</strong></td>
+                            <td id="displayProduct">-</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Total Price:</strong></td>
+                            <td id="displayPrice" class="fw-bold text-primary">-</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Seller Commission Status:</strong></td>
+                            <td id="displayStatus">-</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Commission Input Section (only shown if status is not_set) -->
+            <div id="commissionInputSection" style="display: none;">
+                <hr>
+                <h5 class="mb-3 text-success"><i class="fas fa-coins me-2"></i>Set Seller Commission Amount</h5>
+                <form id="commissionForm">
+                    {% csrf_token %}
+                    <input type="hidden" id="transactionId" name="transaction_id">
+                    
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="mb-3">
+                                <label for="commissionAmount" class="form-label fw-bold">Commission Amount (KES)</label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-success text-white">KES</span>
+                                    <input type="number" 
+                                           step="0.01" 
+                                           min="0" 
+                                           class="form-control form-control-lg" 
+                                           id="commissionAmount" 
+                                           name="commission_amount" 
+                                           placeholder="Enter amount for seller"
+                                           required>
+                                </div>
+                                <div class="form-text" id="amountHelp"></div>
+                                <div class="invalid-feedback" id="amountError"></div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <button type="submit" class="btn btn-success btn-lg w-100" id="submitBtn">
+                                <i class="fas fa-save me-2"></i>Set Commission
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="commissionNotes" class="form-label">Notes (Optional)</label>
+                        <textarea class="form-control" id="commissionNotes" name="notes" rows="2" 
+                                  placeholder="Add any notes about this commission..."></textarea>
+                    </div>
+
+                    <!-- Success Message (inline, not modal) -->
+                    <div id="successMessage" class="alert alert-success mt-3" style="display: none;">
+                        <i class="fas fa-check-circle me-2"></i>
+                        <span id="successText"></span>
+                    </div>
+
+                    <!-- Error Message (inline, not modal) -->
+                    <div id="errorMessage" class="alert alert-danger mt-3" style="display: none;">
+                        <i class="fas fa-exclamation-circle me-2"></i>
+                        <span id="errorText"></span>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Already Processed Message -->
+            <div id="alreadyProcessedMessage" class="alert alert-warning mt-3" style="display: none;">
+                <i class="fas fa-info-circle me-2"></i>
+                <span id="processedMessageText"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Transactions Awaiting Commission (Status = not_set) -->
+    <div class="card-custom mt-4">
+        <div class="card-header-custom bg-info d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-clock me-2"></i>Transactions Awaiting Seller Commission</h5>
+            <span class="badge bg-dark">{{ transactions_needing_commission|length }} Pending</span>
+        </div>
+        <div class="card-body-custom p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Transaction ID</th>
+                            <th>Date</th>
+                            <th>SKU</th>
+                            <th>Product</th>
+                            <th>Seller</th>
+                            <th class="text-end">Price</th>
+                            <th class="text-center">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for trans in transactions_needing_commission %}
+                        <tr>
+                            <td>
+                                <strong>{{ trans.transaction_id }}</strong>
+                            </td>
+                            <td>{{ trans.transaction_date|date:"d M Y" }}</td>
+                            <td><span class="badge bg-secondary">{{ trans.product.product_code }}</span></td>
+                            <td>{{ trans.product.name|truncatechars:25 }}</td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <div class="user-avatar me-2">
+                                        {{ trans.dealer.first_name|first|default:trans.dealer.username|first|upper }}
+                                    </div>
+                                    {{ trans.dealer.get_full_name|default:trans.dealer.username }}
+                                </div>
+                            </td>
+                            <td class="text-end fw-bold">KES {{ trans.ceiling_price|floatformat:0|intcomma }}</td>
+                            <td class="text-center">
+                                <button class="btn btn-sm btn-success quick-select"
+                                        data-id="{{ trans.id }}"
+                                        data-transaction="{{ trans.transaction_id }}"
+                                        data-date="{{ trans.transaction_date|date:'d M Y' }}"
+                                        data-seller="{{ trans.dealer.get_full_name|default:trans.dealer.username }}"
+                                        data-customer="{{ trans.customer.full_name }}"
+                                        data-sku="{{ trans.product.product_code }}"
+                                        data-product="{{ trans.product.name }}"
+                                        data-price="{{ trans.ceiling_price }}">
+                                    <i class="fas fa-plus-circle me-1"></i>Set Commission
+                                </button>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center py-4">
+                                <i class="fas fa-check-circle text-success fa-2x mb-2"></i>
+                                <h5 class="text-secondary">No Pending Commissions</h5>
+                                <p class="text-secondary">All seller commissions have been set.</p>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Note about commission status -->
+    <div class="alert alert-info mt-3 mb-0">
+        <i class="fas fa-info-circle me-2"></i>
+        <strong>Note:</strong> 
+        <ul class="mb-0 mt-1">
+            <li><strong class="text-secondary">Not Set</strong> - Commission can be set for this transaction</li>
+            <li><strong class="text-info">Requested</strong> - Commission requested, pending approval</li>
+            <li><strong class="text-primary">Approved</strong> - Commission approved, ready for payment</li>
+            <li><strong class="text-success">Paid</strong> - Commission already paid to seller</li>
+            <li><strong class="text-danger">Cancelled</strong> - Commission cancelled</li>
+        </ul>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    
+    // Search button click
+    $('#searchBtn').click(function() {
+        performSearch();
+    });
+    
+    // Enter key press
+    $('#searchInput').keypress(function(e) {
+        if (e.which === 13) {
+            e.preventDefault();
+            performSearch();
+        }
+    });
+    
+    function performSearch() {
+        const searchTerm = $('#searchInput').val().trim();
+        
+        // Clear previous errors and messages
+        $('#searchError').hide().text('');
+        $('#successMessage').hide();
+        $('#errorMessage').hide();
+        
+        if (searchTerm.length < 3) {
+            $('#searchError').text('Please enter at least 3 characters').show();
+            return;
+        }
+        
+        // Show loading, hide results
+        $('#loadingIndicator').show();
+        $('#resultCard').hide();
+        $('#searchBtn').prop('disabled', true);
+        
+        $.ajax({
+            url: '{% url "credit:search_seller_commission" %}',
+            method: 'GET',
+            data: { q: searchTerm },
+            timeout: 10000,
+            success: function(response) {
+                if (response.success) {
+                    displayTransaction(response.transaction);
+                } else {
+                    $('#searchError').text(response.error || 'Transaction not found').show();
+                    $('#resultCard').hide();
+                }
+            },
+            error: function(xhr, status, error) {
+                let errorMsg = 'Search failed. Please try again.';
+                if (status === 'timeout') {
+                    errorMsg = 'Search timed out. Please try again.';
+                }
+                $('#searchError').text(errorMsg).show();
+                $('#resultCard').hide();
+            },
+            complete: function() {
+                $('#loadingIndicator').hide();
+                $('#searchBtn').prop('disabled', false);
+            }
+        });
+    }
+    
+    function displayTransaction(trans) {
+        // Fill transaction details
+        $('#displayTransactionId').text(trans.transaction_id);
+        $('#displayDate').text(trans.date);
+        $('#displaySeller').text(trans.seller.name);
+        $('#displayCustomer').text(trans.customer.name);
+        $('#displaySku').text(trans.product.sku);
+        $('#displayProduct').text(trans.product.name);
+        $('#displayPrice').text('KES ' + formatNumber(trans.sale.price));
+        
+        // Set status badge based on commission status
+        let statusHtml = '';
+        let canRequest = false;
+        let statusMessage = '';
+        
+        // Handle all possible statuses
+        switch(trans.commission.status) {
+            case 'not_set':
+                statusHtml = '<span class="badge bg-secondary">Not Set</span>';
+                canRequest = true;
+                statusMessage = 'Commission not set - you can set it now';
+                break;
+            case 'pending':
+                statusHtml = '<span class="badge bg-warning text-dark">Pending</span>';
+                canRequest = true;
+                statusMessage = 'This transaction has pending status - you can set commission now';
+                break;
+            case 'requested':
+                statusHtml = '<span class="badge bg-info">Requested</span>';
+                canRequest = false;
+                statusMessage = 'Commission has been requested and is pending approval';
+                break;
+            case 'approved':
+                statusHtml = '<span class="badge bg-primary">Approved</span>';
+                canRequest = false;
+                statusMessage = 'Commission has been approved and is ready for payment';
+                break;
+            case 'paid':
+                statusHtml = '<span class="badge bg-success">Paid</span>';
+                canRequest = false;
+                statusMessage = 'Commission has already been paid to the seller';
+                break;
+            case 'cancelled':
+                statusHtml = '<span class="badge bg-danger">Cancelled</span>';
+                canRequest = false;
+                statusMessage = 'Commission has been cancelled';
+                break;
+            default:
+                statusHtml = '<span class="badge bg-secondary">' + (trans.commission.status_display || trans.commission.status || 'Unknown') + '</span>';
+                canRequest = true;
+                statusMessage = 'Commission status unknown - you can set it now';
+        }
+        
+        $('#displayStatus').html(statusHtml);
+        
+        // Store transaction ID
+        $('#transactionId').val(trans.id);
+        
+        // Clear any previous messages
+        $('#successMessage').hide();
+        $('#errorMessage').hide();
+        
+        // Show/hide commission input based on can_request flag
+        if (canRequest) {
+            $('#commissionInputSection').show();
+            $('#alreadyProcessedMessage').hide();
+            
+            // Set suggested amount (5% of sale price)
+            const suggested = trans.sale.price * 0.05;
+            $('#amountHelp').html('<i class="fas fa-info-circle me-1"></i>Suggested: KES ' + formatNumber(suggested) + ' (5% of sale price)');
+            
+            // Clear fields
+            $('#commissionAmount').val('').removeClass('is-invalid');
+            $('#commissionNotes').val('');
+            $('#amountError').text('');
+            $('#submitBtn').prop('disabled', false);
+        } else {
+            $('#commissionInputSection').hide();
+            $('#alreadyProcessedMessage').show();
+            $('#processedMessageText').text(statusMessage);
+        }
+        
+        // Show result card
+        $('#resultCard').show();
+        
+        // Scroll to results
+        $('html, body').animate({
+            scrollTop: $('#resultCard').offset().top - 100
+        }, 500);
+    }
+    
+    // Quick select from recent transactions
+    $('.quick-select').click(function() {
+        const trans = {
+            transaction_id: $(this).data('transaction'),
+            date: $(this).data('date'),
+            seller: { name: $(this).data('seller') },
+            customer: { name: $(this).data('customer') },
+            product: {
+                sku: $(this).data('sku'),
+                name: $(this).data('product')
+            },
+            sale: {
+                price: $(this).data('price')
+            },
+            commission: {
+                status: 'not_set'
+            },
+            id: $(this).data('id')
+        };
+        
+        displayTransaction(trans);
+        
+        // Fill search box with transaction ID
+        $('#searchInput').val(trans.transaction_id);
+    });
+    
+    // Form submission - saves directly, no modal
+    $('#commissionForm').submit(function(e) {
+        e.preventDefault();
+        
+        const amount = parseFloat($('#commissionAmount').val());
+        const transactionId = $('#transactionId').val();
+        
+        // Validate amount
+        if (!amount || amount <= 0) {
+            $('#commissionAmount').addClass('is-invalid');
+            $('#amountError').text('Please enter a valid commission amount');
+            return;
+        }
+        
+        // Get price from displayed details
+        const priceText = $('#displayPrice').text().replace('KES', '').replace(/,/g, '');
+        const price = parseFloat(priceText) || 0;
+        
+        if (amount > price) {
+            $('#commissionAmount').addClass('is-invalid');
+            $('#amountError').text('Commission cannot exceed total price');
+            return;
+        }
+        
+        // Hide any previous messages
+        $('#successMessage').hide();
+        $('#errorMessage').hide();
+        
+        // Disable submit button
+        $('#submitBtn').prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-2"></span>Saving...');
+        
+        $.ajax({
+            url: '{% url "credit:request_commission_submit" 0 %}'.replace('0', transactionId),
+            method: 'POST',
+            data: {
+                commission_amount: amount,
+                notes: $('#commissionNotes').val(),
+                csrfmiddlewaretoken: '{{ csrf_token }}'
+            },
+            timeout: 10000,
+            success: function(response) {
+                if (response.success) {
+                    // Show success message inline
+                    $('#successText').text('Commission of KES ' + formatNumber(amount) + ' set for seller!');
+                    $('#successMessage').show();
+                    
+                    // Clear the form
+                    $('#commissionAmount').val('');
+                    $('#commissionNotes').val('');
+                    
+                    // Optionally hide the commission section after 3 seconds
+                    setTimeout(function() {
+                        $('#commissionInputSection').slideUp();
+                        $('#successMessage').slideUp();
+                    }, 3000);
+                    
+                    // Scroll to show the success message
+                    $('html, body').animate({
+                        scrollTop: $('#successMessage').offset().top - 100
+                    }, 500);
+                    
+                } else {
+                    // Show error message inline
+                    $('#errorText').text(response.error || 'Could not submit commission request');
+                    $('#errorMessage').show();
+                }
+            },
+            error: function(xhr, status, error) {
+                let errorMsg = 'An error occurred. Please try again.';
+                if (xhr.responseJSON && xhr.responseJSON.error) {
+                    errorMsg = xhr.responseJSON.error;
+                }
+                $('#errorText').text(errorMsg);
+                $('#errorMessage').show();
+            },
+            complete: function() {
+                $('#submitBtn').prop('disabled', false).html('<i class="fas fa-save me-2"></i>Set Commission');
+            }
+        });
+    });
+    
+    // Live validation on commission amount
+    $('#commissionAmount').on('input', function() {
+        const amount = parseFloat($(this).val()) || 0;
+        const priceText = $('#displayPrice').text().replace('KES', '').replace(/,/g, '');
+        const price = parseFloat(priceText) || 0;
+        
+        if (amount > price) {
+            $(this).addClass('is-invalid');
+            $('#amountError').text('Commission cannot exceed total price');
+            $('#submitBtn').prop('disabled', true);
+        } else if (amount <= 0) {
+            $(this).addClass('is-invalid');
+            $('#amountError').text('Amount must be greater than 0');
+            $('#submitBtn').prop('disabled', true);
+        } else {
+            $(this).removeClass('is-invalid');
+            $('#amountError').text('');
+            $('#submitBtn').prop('disabled', false);
+        }
+    });
+    
+    // Helper functions
+    function formatNumber(num) {
+        return parseFloat(num).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
+    
+});
+</script>
+
+<style>
+    .request-commission .card-custom {
+        margin-bottom: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .user-avatar {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        background: var(--primary-gradient);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: 600;
+        font-size: 0.8rem;
+    }
+    
+    .borderless td, .borderless tr {
+        border: none;
+        background: transparent;
+        padding: 8px 5px;
+    }
+    
+    .table th {
+        background: var(--light-bg);
+        color: var(--text-secondary);
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        padding: 12px 10px;
+    }
+    
+    .table td {
+        vertical-align: middle;
+        padding: 12px 10px;
+    }
+    
+    .badge {
+        padding: 5px 10px;
+        font-size: 0.75rem;
+        font-weight: 500;
+    }
+    
+    .input-group-lg .form-control,
+    .input-group-lg .btn {
+        font-size: 1.1rem;
+        padding: 0.75rem 1rem;
+    }
+    
+    /* Status badge colors */
+    .badge.bg-info {
+        background-color: #17a2b8 !important;
+    }
+    
+    .badge.bg-primary {
+        background-color: #007bff !important;
+    }
+    
+    .badge.bg-success {
+        background-color: #28a745 !important;
+    }
+    
+    .badge.bg-danger {
+        background-color: #dc3545 !important;
+    }
+    
+    .badge.bg-warning {
+        background-color: #ffc107 !important;
+    }
+    
+    .badge.bg-secondary {
+        background-color: #6c757d !important;
+    }
+    
+    /* Dark theme adjustments */
+    [data-theme="dark"] .table th {
+        background: var(--sidebar-solid);
+    }
+    
+    [data-theme="dark"] .borderless td {
+        color: var(--text-primary);
+    }
+    
+    /* Responsive */
+    @media (max-width: 768px) {
+        .input-group-lg .form-control,
+        .input-group-lg .btn {
+            font-size: 1rem;
+        }
+        
+        .table {
+            font-size: 0.85rem;
+        }
+        
+        .user-avatar {
+            width: 25px;
+            height: 25px;
+            font-size: 0.7rem;
+        }
+    }
+</style>
+{% endblock %}

@@ -8,658 +8,221 @@
 {% block page_title %}Commission Dashboard{% endblock %}
 
 {% block breadcrumb %}
-<li class="breadcrumb-item"><a href="{% url 'credit:dashboard' %}">Dashboard</a></li>
+<li class="breadcrumb-item"><a href="{% url 'staff:credit_manager_dashboard' %}">Dashboard</a></li>
 <li class="breadcrumb-item active">Commission Dashboard</li>
-{% endblock %}
-
-{% block page_actions %}
-<div class="btn-group" role="group">
-    <a href="{% url 'credit:commission_report' %}" class="btn btn-outline-custom btn-sm">
-        <i class="fas fa-file-invoice me-2"></i>Full Report
-    </a>
-    <a href="{% url 'credit:commission_report' %}?format=csv" class="btn btn-outline-custom btn-sm">
-        <i class="fas fa-download me-2"></i>Export
-    </a>
-    {% if request.user.is_superuser %}
-    <button type="button" class="btn btn-outline-custom btn-sm" data-bs-toggle="modal" data-bs-target="#bulkPayCommissionModal">
-        <i class="fas fa-hand-holding-usd me-2"></i>Bulk Pay
-    </button>
-    {% endif %}
-</div>
 {% endblock %}
 
 {% block content %}
 <div class="commission-dashboard">
 
-    <!-- Summary Cards -->
-    <div class="stats-grid">
-        <!-- Total Commission Card -->
-        <div class="stat-card">
-            <div class="stat-icon primary">
-                <i class="fas fa-coins"></i>
-            </div>
-            <div class="stat-value">KES {{ total_commission|floatformat:2|intcomma }}</div>
-            <div class="stat-label">Total Commission Earned</div>
-            <div class="stat-trend">
-                <i class="fas fa-calendar me-1"></i>All Time
-            </div>
-        </div>
 
-        <!-- Paid Commission Card -->
-        <div class="stat-card">
-            <div class="stat-icon success">
-                <i class="fas fa-check-circle"></i>
-            </div>
-            <div class="stat-value">KES {{ paid_commission|floatformat:2|intcomma }}</div>
-            <div class="stat-label">Paid to Sellers</div>
-            <div class="stat-trend">
-                <i class="fas fa-percentage me-1"></i>
-                {% if total_commission > 0 %}
-                    {{ paid_commission|floatformat:0|divisibleby:total_commission|floatformat:1 }}%
-                {% else %}0%{% endif %}
-            </div>
+    <!-- Filter Section -->
+    <div class="card-custom mb-4">
+        <div class="card-header-custom">
+            <h5 class="mb-0"><i class="fas fa-filter me-2"></i>Filter Transactions</h5>
         </div>
-
-        <!-- Pending Commission Card -->
-        <div class="stat-card">
-            <div class="stat-icon warning">
-                <i class="fas fa-clock"></i>
-            </div>
-            <div class="stat-value">KES {{ pending_commission|floatformat:2|intcomma }}</div>
-            <div class="stat-label">Pending Payment</div>
-            <div class="stat-trend {% if pending_count > 0 %}down{% endif %}">
-                <i class="fas fa-users me-1"></i>{{ pending_count }} Sellers
-            </div>
-        </div>
-
-        <!-- This Month Card -->
-        <div class="stat-card">
-            <div class="stat-icon info">
-                <i class="fas fa-calendar-alt"></i>
-            </div>
-            <div class="stat-value">KES {{ month_commission|floatformat:2|intcomma }}</div>
-            <div class="stat-label">This Month</div>
-            <div class="stat-trend">
-                <i class="fas fa-chart-line me-1"></i>{% widthratio month_commission total_commission 100 %}% of total
-            </div>
-        </div>
-    </div>
-
-    <!-- Charts Row -->
-    <div class="row mb-4">
-        <div class="col-md-8">
-            <div class="card-custom">
-                <div class="card-header-custom">
-                    <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i>Commission Trend (Last 6 Months)</h5>
-                </div>
-                <div class="card-body-custom">
-                    <canvas id="commissionTrendChart" height="100"></canvas>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card-custom">
-                <div class="card-header-custom">
-                    <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Commission Status</h5>
-                </div>
-                <div class="card-body-custom">
-                    <canvas id="commissionStatusChart" height="200"></canvas>
-                    <div class="mt-3 text-center">
-                        <span class="badge badge-commission-pending me-2">Pending: KES {{ pending_commission|floatformat:0|intcomma }}</span>
-                        <span class="badge badge-commission-paid">Paid: KES {{ paid_commission|floatformat:0|intcomma }}</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Top Sellers & Recent Payments Row -->
-    <div class="row mb-4">
-        <!-- Top Sellers -->
-        <div class="col-md-6">
-            <div class="card-custom">
-                <div class="card-header-custom">
-                    <h5 class="mb-0"><i class="fas fa-trophy me-2"></i>Top Sellers by Commission</h5>
-                </div>
-                <div class="card-body-custom p-0">
-                    <div class="table-responsive">
-                        <table class="table table-hover mb-0">
-                            <thead>
-                                <tr>
-                                    <th>Seller</th>
-                                    <th class="text-end">Total Earned</th>
-                                    <th class="text-end">Paid</th>
-                                    <th class="text-end">Pending</th>
-                                    <th class="text-center">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for seller in top_sellers %}
-                                <tr>
-                                    <td>
-                                        <div class="d-flex align-items-center">
-                                            <div class="user-avatar me-2" style="width: 35px; height: 35px; font-size: 0.9rem;">
-                                                {{ seller.seller.first_name|first|default:seller.seller.username|first|upper }}
-                                            </div>
-                                            <div>
-                                                <strong>{{ seller.seller.get_full_name|default:seller.seller.username }}</strong>
-                                                <br>
-                                                <small class="text-secondary">{{ seller.transactions_count }} transactions</small>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td class="text-end fw-bold">KES {{ seller.total_earned|floatformat:0|intcomma }}</td>
-                                    <td class="text-end text-success">KES {{ seller.total_paid|floatformat:0|intcomma }}</td>
-                                    <td class="text-end text-warning">KES {{ seller.total_pending|floatformat:0|intcomma }}</td>
-                                    <td class="text-center">
-                                        <a href="{% url 'credit:seller_commission_detail' seller.seller.id %}" class="btn btn-sm btn-commission-view" data-bs-toggle="tooltip" title="View Details">
-                                            <i class="fas fa-eye"></i>
-                                        </a>
-                                    </td>
-                                </tr>
-                                {% empty %}
-                                <tr>
-                                    <td colspan="5" class="text-center py-4">
-                                        <i class="fas fa-info-circle me-2"></i>No seller data available
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Recent Commission Payments -->
-        <div class="col-md-6">
-            <div class="card-custom">
-                <div class="card-header-custom">
-                    <h5 class="mb-0"><i class="fas fa-history me-2"></i>Recent Commission Payments</h5>
-                </div>
-                <div class="card-body-custom p-0">
-                    <div class="table-responsive">
-                        <table class="table table-hover mb-0">
-                            <thead>
-                                <tr>
-                                    <th>Date</th>
-                                    <th>Seller</th>
-                                    <th>Transaction</th>
-                                    <th class="text-end">Amount</th>
-                                    <th>Paid By</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for payment in recent_payments %}
-                                <tr>
-                                    <td>{{ payment.paid_date|date:"d M Y" }}</td>
-                                    <td>
-                                        <div class="d-flex align-items-center">
-                                            <div class="user-avatar me-2" style="width: 30px; height: 30px; font-size: 0.8rem;">
-                                                {{ payment.seller.first_name|first|default:payment.seller.username|first|upper }}
-                                            </div>
-                                            {{ payment.seller.get_full_name|default:payment.seller.username }}
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <a href="{% url 'credit:transaction_detail' payment.transaction.id %}" class="text-decoration-none">
-                                            {{ payment.transaction.transaction_id }}
-                                        </a>
-                                    </td>
-                                    <td class="text-end fw-bold text-success">KES {{ payment.amount|floatformat:0|intcomma }}</td>
-                                    <td>{{ payment.paid_by.get_full_name|default:payment.paid_by.username }}</td>
-                                </tr>
-                                {% empty %}
-                                <tr>
-                                    <td colspan="5" class="text-center py-4">
-                                        <i class="fas fa-info-circle me-2"></i>No recent payments
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Pending Commissions & Company Breakdown Row -->
-    <div class="row">
-        <!-- Pending Commissions -->
-        <div class="col-md-7">
-            <div class="card-custom">
-                <div class="card-header-custom d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0"><i class="fas fa-clock me-2"></i>Pending Commissions ({{ pending_commissions|length }})</h5>
-                    {% if pending_commissions %}
-                    <button class="btn btn-sm btn-light" onclick="$('#pendingCommissionsTable').slideToggle()">
-                        <i class="fas fa-chevron-down"></i>
-                    </button>
-                    {% endif %}
-                </div>
-                <div class="card-body-custom p-0" id="pendingCommissionsTable">
-                    <div class="table-responsive">
-                        <table class="table table-hover mb-0">
-                            <thead>
-                                <tr>
-                                    <th>Transaction</th>
-                                    <th>Seller</th>
-                                    <th>Customer</th>
-                                    <th>Company</th>
-                                    <th class="text-end">Commission</th>
-                                    <th>Paid Date</th>
-                                    <th class="text-center">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for trans in pending_commissions %}
-                                <tr>
-                                    <td>
-                                        <a href="{% url 'credit:transaction_detail' trans.id %}" class="text-decoration-none">
-                                            {{ trans.transaction_id }}
-                                        </a>
-                                    </td>
-                                    <td>
-                                        <div class="d-flex align-items-center">
-                                            <div class="user-avatar me-2" style="width: 30px; height: 30px; font-size: 0.8rem;">
-                                                {{ trans.dealer.first_name|first|default:trans.dealer.username|first|upper }}
-                                            </div>
-                                            {{ trans.dealer.get_full_name|default:trans.dealer.username }}
-                                        </div>
-                                    </td>
-                                    <td>{{ trans.customer.full_name|truncatechars:15 }}</td>
-                                    <td>{{ trans.credit_company.name|truncatechars:12 }}</td>
-                                    <td class="text-end fw-bold text-warning">KES {{ trans.commission_amount|floatformat:0|intcomma }}</td>
-                                    <td>{{ trans.paid_date|date:"d M Y" }}</td>
-                                    <td class="text-center">
-                                        {% if request.user.is_superuser or request.user.is_staff %}
-                                        <button class="btn btn-sm btn-commission-pay pay-commission-btn" 
-                                                data-transaction-id="{{ trans.id }}"
-                                                data-seller="{{ trans.dealer.get_full_name|default:trans.dealer.username }}"
-                                                data-amount="{{ trans.commission_amount }}">
-                                            <i class="fas fa-check-circle me-1"></i>Pay
-                                        </button>
-                                        {% endif %}
-                                    </td>
-                                </tr>
-                                {% empty %}
-                                <tr>
-                                    <td colspan="7" class="text-center py-4">
-                                        <i class="fas fa-check-circle text-success me-2"></i>No pending commissions! All paid up.
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Commission by Company -->
-        <div class="col-md-5">
-            <div class="card-custom">
-                <div class="card-header-custom">
-                    <h5 class="mb-0"><i class="fas fa-building me-2"></i>Commission by Company</h5>
-                </div>
-                <div class="card-body-custom p-0">
-                    <div class="table-responsive">
-                        <table class="table table-hover mb-0">
-                            <thead>
-                                <tr>
-                                    <th>Company</th>
-                                    <th class="text-end">Total Comm.</th>
-                                    <th class="text-end">Pending</th>
-                                    <th class="text-end">Paid</th>
-                                    <th class="text-center">Txns</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for company in company_commission %}
-                                <tr>
-                                    <td>
-                                        <strong>{{ company.name|truncatechars:15 }}</strong>
-                                    </td>
-                                    <td class="text-end fw-bold">KES {{ company.total_commission|floatformat:0|intcomma }}</td>
-                                    <td class="text-end text-warning">KES {{ company.pending_commission|floatformat:0|intcomma }}</td>
-                                    <td class="text-end text-success">KES {{ company.paid_commission|floatformat:0|intcomma }}</td>
-                                    <td class="text-center">{{ company.transaction_count }}</td>
-                                </tr>
-                                {% empty %}
-                                <tr>
-                                    <td colspan="5" class="text-center py-4">
-                                        <i class="fas fa-info-circle me-2"></i>No company data
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Monthly Breakdown (Hidden by default) -->
-    <div class="row mt-4">
-        <div class="col-12">
-            <div class="card-custom">
-                <div class="card-header-custom d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0"><i class="fas fa-calendar-alt me-2"></i>Monthly Breakdown</h5>
-                    <button class="btn btn-sm btn-light" onclick="$('#monthlyBreakdown').slideToggle()">
-                        <i class="fas fa-chevron-down"></i>
-                    </button>
-                </div>
-                <div class="card-body-custom p-0" id="monthlyBreakdown" style="display: none;">
-                    <div class="table-responsive">
-                        <table class="table table-hover mb-0">
-                            <thead>
-                                <tr>
-                                    <th>Month</th>
-                                    <th class="text-end">Commission Earned</th>
-                                    <th class="text-end">Commission Paid</th>
-                                    <th class="text-end">Pending</th>
-                                    <th class="text-center">Collection Rate</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for month in monthly_trend %}
-                                <tr>
-                                    <td><strong>{{ month.month }}</strong></td>
-                                    <td class="text-end">KES {{ month.earned|floatformat:0|intcomma }}</td>
-                                    <td class="text-end text-success">KES {{ month.paid|floatformat:0|intcomma }}</td>
-                                    <td class="text-end text-warning">KES {{ month.earned|add:month.paid|floatformat:0|intcomma }}</td>
-                                    <td class="text-center">
-                                        {% if month.earned > 0 %}
-                                        <div class="progress" style="height: 20px;">
-                                            <div class="progress-bar bg-success" 
-                                                 style="width: {% widthratio month.paid month.earned 100 %}%"
-                                                 role="progressbar">
-                                                {% widthratio month.paid month.earned 100 %}%
-                                            </div>
-                                        </div>
-                                        {% else %}
-                                        <span class="badge bg-secondary">No data</span>
-                                        {% endif %}
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-</div>
-
-<!-- Bulk Pay Commission Modal -->
-{% if request.user.is_superuser %}
-<div class="modal fade" id="bulkPayCommissionModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content" style="background: var(--card-bg); color: var(--text-primary);">
-            <div class="modal-header" style="background: var(--primary-gradient); color: white;">
-                <h5 class="modal-title">
-                    <i class="fas fa-hand-holding-usd me-2"></i>Bulk Pay Commission
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <form id="bulkPayCommissionForm">
-                {% csrf_token %}
-                <div class="modal-body">
-                    <div class="alert alert-info">
-                        <i class="fas fa-info-circle me-2"></i>
-                        Select pending commissions to pay. Only unpaid commissions are shown.
+        <div class="card-body-custom">
+            <form method="get" id="filterForm">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label for="seller" class="form-label">Seller</label>
+                        <select name="seller" id="seller" class="form-select">
+                            <option value="">All Sellers</option>
+                            {% for seller in sellers %}
+                            <option value="{{ seller.id }}" {% if request.GET.seller == seller.id|stringformat:"i" %}selected{% endif %}>
+                                {{ seller.get_full_name|default:seller.username }}
+                            </option>
+                            {% endfor %}
+                        </select>
                     </div>
                     
-                    <div class="mb-3">
-                        <label for="bulkNotes" class="form-label">Payment Notes (Optional)</label>
-                        <textarea class="form-control" id="bulkNotes" name="notes" rows="2" 
-                                  placeholder="Enter any notes about this bulk payment..."></textarea>
+                    <div class="col-md-3">
+                        <label for="status" class="form-label">Commission Status</label>
+                        <select name="status" id="status" class="form-select">
+                            <option value="">All Status</option>
+                            <option value="not_set" {% if request.GET.status == 'not_set' %}selected{% endif %}>Not Set</option>
+                            <option value="requested" {% if request.GET.status == 'requested' %}selected{% endif %}>Requested</option>
+                            <option value="approved" {% if request.GET.status == 'approved' %}selected{% endif %}>Approved</option>
+                            <option value="paid" {% if request.GET.status == 'paid' %}selected{% endif %}>Paid</option>
+                            <option value="cancelled" {% if request.GET.status == 'cancelled' %}selected{% endif %}>Cancelled</option>
+                        </select>
                     </div>
                     
-                    <div class="table-responsive">
-                        <table class="table table-hover" id="pendingCommissionsTable">
-                            <thead>
-                                <tr>
-                                    <th><input type="checkbox" id="selectAllPending"></th>
-                                    <th>Transaction</th>
-                                    <th>Seller</th>
-                                    <th>Customer</th>
-                                    <th>Company</th>
-                                    <th class="text-end">Amount</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for trans in pending_commissions %}
-                                <tr>
-                                    <td>
-                                        <input type="checkbox" name="transaction_ids" value="{{ trans.id }}" 
-                                               class="pending-checkbox">
-                                    </td>
-                                    <td>{{ trans.transaction_id }}</td>
-                                    <td>{{ trans.dealer.get_full_name|default:trans.dealer.username }}</td>
-                                    <td>{{ trans.customer.full_name|truncatechars:15 }}</td>
-                                    <td>{{ trans.credit_company.name|truncatechars:12 }}</td>
-                                    <td class="text-end fw-bold">KES {{ trans.commission_amount|floatformat:0|intcomma }}</td>
-                                </tr>
-                                {% empty %}
-                                <tr>
-                                    <td colspan="6" class="text-center py-3">
-                                        No pending commissions available
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                            <tfoot>
-                                <tr>
-                                    <th colspan="5" class="text-end">Total Selected:</th>
-                                    <th class="text-end" id="selectedTotal">KES 0</th>
-                                </tr>
-                            </tfoot>
-                        </table>
+                    <div class="col-md-3">
+                        <label for="date_from" class="form-label">Date From</label>
+                        <input type="date" class="form-control" id="date_from" name="date_from" value="{{ request.GET.date_from|default:'' }}">
                     </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-commission-pay" id="bulkPayBtn">
-                        <i class="fas fa-check-circle me-2"></i>Pay Selected
-                    </button>
+                    
+                    <div class="col-md-3">
+                        <label for="date_to" class="form-label">Date To</label>
+                        <input type="date" class="form-control" id="date_to" name="date_to" value="{{ request.GET.date_to|default:'' }}">
+                    </div>
+                    
+                    <div class="col-12 d-flex justify-content-end">
+                        <button type="submit" class="btn btn-primary-custom">
+                            <i class="fas fa-search me-2"></i>Apply Filters
+                        </button>
+                        <a href="{% url 'credit:commission_dashboard' %}" class="btn btn-secondary ms-2">
+                            <i class="fas fa-undo me-2"></i>Reset
+                        </a>
+                    </div>
                 </div>
             </form>
         </div>
     </div>
+
+    <!-- Transactions Table -->
+    <div class="card-custom">
+        <div class="card-header-custom d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-list me-2"></i>Commission Transactions</h5>
+            <span class="badge bg-primary">{{ transactions|length }} Transactions</span>
+        </div>
+        <div class="card-body-custom p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0" id="transactionsTable">
+                    <thead>
+                        <tr>
+                            <th>Transaction ID</th>
+                            <th>Seller</th>
+                            <th>Product</th>
+                            <th class="text-end">Selling Price</th>
+                            <th class="text-end">Buying Price</th>
+                            <th class="text-end">Total Profit</th>
+                            <th class="text-end">Seller Commission</th>
+                            <th class="text-end">Owner Commission</th>
+                            <th>Status</th>
+                            <th class="text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for trans in transactions %}
+                        <tr>
+                            <td>
+                                <strong>{{ trans.transaction_id }}</strong>
+                                <br>
+                                <small class="text-secondary">{{ trans.transaction_date|date:"d M Y" }}</small>
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <div class="user-avatar me-2">
+                                        {{ trans.dealer.first_name|first|default:trans.dealer.username|first|upper }}
+                                    </div>
+                                    <div>
+                                        <strong>{{ trans.dealer.get_full_name|default:trans.dealer.username }}</strong>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                {{ trans.product.name|truncatechars:20 }}
+                                <br>
+                                <small class="text-secondary">{{ trans.product.product_code }}</small>
+                                {% if trans.imei %}
+                                <br><small class="text-secondary">IMEI: {{ trans.imei }}</small>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                KES {{ trans.selling_price|floatformat:2|intcomma }}
+                            </td>
+                            <td class="text-end text-danger">
+                                KES {{ trans.buying_price|floatformat:2|intcomma }}
+                            </td>
+                            <td class="text-end fw-bold text-primary">
+                                KES {{ trans.total_profit|floatformat:2|intcomma }}
+                            </td>
+                            <td class="text-end">
+                                {% if trans.seller_commission > 0 %}
+                                    <strong class="
+                                        {% if trans.commission_status == 'paid' %}text-success
+                                        {% elif trans.commission_status == 'approved' %}text-primary
+                                        {% elif trans.commission_status == 'requested' %}text-info
+                                        {% else %}text-warning{% endif %}">
+                                        KES {{ trans.seller_commission|floatformat:2|intcomma }}
+                                    </strong>
+                                {% else %}
+                                    <span class="text-secondary">—</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end fw-bold {% if trans.owner_commission > 0 %}text-success{% else %}text-secondary{% endif %}">
+                                KES {{ trans.owner_commission|floatformat:2|intcomma }}
+                            </td>
+                            <td>
+                                {% if trans.commission_status == 'not_set' %}
+                                    <span class="badge bg-secondary">
+                                        <i class="fas fa-ban me-1"></i>Not Set
+                                    </span>
+                                {% elif trans.commission_status == 'requested' %}
+                                    <span class="badge bg-info">
+                                        <i class="fas fa-paper-plane me-1"></i>Requested
+                                    </span>
+                                {% elif trans.commission_status == 'approved' %}
+                                    <span class="badge bg-primary">
+                                        <i class="fas fa-check-circle me-1"></i>Approved
+                                    </span>
+                                {% elif trans.commission_status == 'paid' %}
+                                    <span class="badge bg-success">
+                                        <i class="fas fa-hand-holding-usd me-1"></i>Paid
+                                    </span>
+                                {% elif trans.commission_status == 'cancelled' %}
+                                    <span class="badge bg-danger">
+                                        <i class="fas fa-times-circle me-1"></i>Cancelled
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <a href="{% url 'credit:commission_detail' trans.id %}" 
+                                   class="btn btn-sm btn-info" 
+                                   data-bs-toggle="tooltip" 
+                                   title="View Details - See Requester/Approver/Payer Info">
+                                    <i class="fas fa-info-circle me-1"></i>Details
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="10" class="text-center py-5">
+                                <i class="fas fa-coins fa-3x mb-3" style="color: var(--text-secondary);"></i>
+                                <h5 class="text-secondary">No Transactions Found</h5>
+                                <p class="text-secondary">No commission transactions match your criteria.</p>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot>
+                        <tr style="background: var(--light-bg); font-weight: bold;">
+                            <td colspan="3" class="text-end">Totals:</td>
+                            <td class="text-end">KES {{ total_selling|default:0|floatformat:2|intcomma }}</td>
+                            <td class="text-end">KES {{ total_buying|default:0|floatformat:2|intcomma }}</td>
+                            <td class="text-end text-primary">KES {{ total_profit_sum|default:0|floatformat:2|intcomma }}</td>
+                            <td class="text-end">KES {{ total_commission_sum|default:0|floatformat:2|intcomma }}</td>
+                            <td class="text-end text-success">KES {{ total_owner_balance|default:0|floatformat:2|intcomma }}</td>
+                            <td colspan="2"></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
 </div>
-{% endif %}
 
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
 <script>
 $(document).ready(function() {
     
-    // ============================================
-    // CHARTS
-    // ============================================
-    
-    // Commission Trend Chart
-    const trendCtx = document.getElementById('commissionTrendChart').getContext('2d');
-    new Chart(trendCtx, {
-        type: 'line',
-        data: {
-            labels: [{% for month in monthly_trend %}'{{ month.month }}',{% endfor %}],
-            datasets: [{
-                label: 'Commission Earned',
-                data: [{% for month in monthly_trend %}{{ month.earned }},{% endfor %}],
-                borderColor: '#6f42c1',
-                backgroundColor: 'rgba(111, 66, 193, 0.1)',
-                tension: 0.4,
-                fill: true
-            }, {
-                label: 'Commission Paid',
-                data: [{% for month in monthly_trend %}{{ month.paid }},{% endfor %}],
-                borderColor: '#28a745',
-                backgroundColor: 'rgba(40, 167, 69, 0.1)',
-                tension: 0.4,
-                fill: true
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    display: true,
-                    position: 'bottom'
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        callback: function(value) {
-                            return 'KES ' + value.toLocaleString();
-                        }
-                    }
-                }
-            }
-        }
+    // Auto-submit on filter change
+    $('#seller, #status').change(function() {
+        $('#filterForm').submit();
     });
     
-    // Commission Status Pie Chart
-    const statusCtx = document.getElementById('commissionStatusChart').getContext('2d');
-    new Chart(statusCtx, {
-        type: 'doughnut',
-        data: {
-            labels: ['Paid (KES {{ paid_commission|floatformat:0|intcomma }})', 'Pending (KES {{ pending_commission|floatformat:0|intcomma }})'],
-            datasets: [{
-                data: [{{ paid_commission }}, {{ pending_commission }}],
-                backgroundColor: ['#28a745', '#ffc107'],
-                borderWidth: 0
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: {
-                    display: false
-                }
-            },
-            cutout: '70%'
-        }
-    });
-    
-    // ============================================
-    // BULK PAY COMMISSION
-    // ============================================
-    
-    // Select All checkbox
-    $('#selectAllPending').change(function() {
-        $('.pending-checkbox').prop('checked', $(this).prop('checked'));
-        updateSelectedTotal();
-    });
-    
-    // Individual checkboxes
-    $('.pending-checkbox').change(function() {
-        updateSelectedTotal();
-        $('#selectAllPending').prop('checked', 
-            $('.pending-checkbox:checked').length === $('.pending-checkbox').length
-        );
-    });
-    
-    // Update total when checkboxes change
-    function updateSelectedTotal() {
-        let total = 0;
-        $('.pending-checkbox:checked').each(function() {
-            const row = $(this).closest('tr');
-            const amount = parseFloat(row.find('td:last').text().replace('KES', '').replace(/,/g, ''));
-            total += amount;
-        });
-        $('#selectedTotal').text('KES ' + total.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0}));
-    }
-    
-    // Bulk pay form submission
-    $('#bulkPayCommissionForm').submit(function(e) {
-        e.preventDefault();
+    // Date validation
+    $('#date_from, #date_to').change(function() {
+        const dateFrom = $('#date_from').val();
+        const dateTo = $('#date_to').val();
         
-        const selectedIds = [];
-        $('.pending-checkbox:checked').each(function() {
-            selectedIds.push($(this).val());
-        });
-        
-        if (selectedIds.length === 0) {
-            alert('Please select at least one commission to pay.');
-            return;
-        }
-        
-        const notes = $('#bulkNotes').val();
-        
-        $('#bulkPayBtn').prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-2"></span>Processing...');
-        
-        $.ajax({
-            url: '{% url "credit:bulk_pay_commission" %}',
-            method: 'POST',
-            data: {
-                transaction_ids: selectedIds,
-                notes: notes,
-                csrfmiddlewaretoken: '{{ csrf_token }}'
-            },
-            success: function(response) {
-                if (response.success) {
-                    alert(response.message);
-                    $('#bulkPayCommissionModal').modal('hide');
-                    location.reload();
-                } else {
-                    alert('Error: ' + response.error);
-                    $('#bulkPayBtn').prop('disabled', false).html('<i class="fas fa-check-circle me-2"></i>Pay Selected');
-                }
-            },
-            error: function(xhr, status, error) {
-                alert('Error processing request: ' + error);
-                $('#bulkPayBtn').prop('disabled', false).html('<i class="fas fa-check-circle me-2"></i>Pay Selected');
-            }
-        });
-    });
-    
-    // ============================================
-    // INDIVIDUAL PAY COMMISSION
-    // ============================================
-    
-    $('.pay-commission-btn').click(function() {
-        const transactionId = $(this).data('transaction-id');
-        const sellerName = $(this).data('seller');
-        const amount = $(this).data('amount');
-        
-        if (confirm(`Pay commission of KES ${amount.toLocaleString()} to ${sellerName}?`)) {
-            const $btn = $(this);
-            const notes = prompt('Enter payment notes (optional):');
-            
-            $btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-2"></span>');
-            
-            $.ajax({
-                url: '{% url "credit:pay_commission" 0 %}'.replace('0', transactionId),
-                method: 'POST',
-                data: {
-                    notes: notes || '',
-                    csrfmiddlewaretoken: '{{ csrf_token }}'
-                },
-                success: function(response) {
-                    if (response.success) {
-                        alert(response.message);
-                        location.reload();
-                    } else {
-                        alert('Error: ' + response.error);
-                        $btn.prop('disabled', false).html('<i class="fas fa-check-circle me-2"></i>Pay');
-                    }
-                },
-                error: function() {
-                    alert('Error processing request');
-                    $btn.prop('disabled', false).html('<i class="fas fa-check-circle me-2"></i>Pay');
-                }
-            });
+        if (dateFrom && dateTo && dateFrom > dateTo) {
+            alert('"Date From" cannot be later than "Date To"');
+            $(this).val('');
         }
     });
     
@@ -669,47 +232,31 @@ $(document).ready(function() {
         return new bootstrap.Tooltip(tooltipTriggerEl);
     });
     
+    // Initialize DataTable for better sorting/filtering if needed
+    if ($('#transactionsTable').length && $('#transactionsTable tbody tr').length > 10) {
+        $('#transactionsTable').DataTable({
+            "paging": true,
+            "ordering": true,
+            "info": true,
+            "searching": true,
+            "pageLength": 25,
+            "language": {
+                "search": "Search:",
+                "lengthMenu": "Show _MENU_ entries",
+                "info": "Showing _START_ to _END_ of _TOTAL_ entries",
+                "infoEmpty": "Showing 0 to 0 of 0 entries",
+                "infoFiltered": "(filtered from _MAX_ total entries)"
+            }
+        });
+    }
+    
 });
 </script>
 
 <style>
-    /* Additional styles for commission dashboard */
     .commission-dashboard .card-custom {
         margin-bottom: 20px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    
-    .commission-dashboard .table td {
-        vertical-align: middle;
-    }
-    
-    .badge-commission-pending {
-        background: var(--commission-pending);
-        color: #000;
-        padding: 5px 10px;
-        border-radius: 50px;
-    }
-    
-    .badge-commission-paid {
-        background: var(--commission-paid);
-        color: white;
-        padding: 5px 10px;
-        border-radius: 50px;
-    }
-    
-    .progress {
-        background-color: var(--border-color);
-        border-radius: 10px;
-        overflow: hidden;
-    }
-    
-    .progress-bar {
-        transition: width 0.3s ease;
-    }
-    
-    #pendingCommissionsTable {
-        max-height: 400px;
-        overflow-y: auto;
     }
     
     .user-avatar {
@@ -725,32 +272,105 @@ $(document).ready(function() {
         font-size: 0.9rem;
     }
     
-    /* Dark theme adjustments */
-    [data-theme="dark"] .badge-commission-pending {
-        color: #000;
+    .table th {
+        background: var(--light-bg);
+        color: var(--text-secondary);
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        white-space: nowrap;
+        padding: 12px 8px;
     }
     
-    [data-theme="dark"] .table {
-        color: var(--text-primary);
+    .table td {
+        vertical-align: middle;
+        padding: 12px 8px;
+        font-size: 0.9rem;
     }
     
-    /* Responsive adjustments */
+    .badge {
+        padding: 5px 8px;
+        font-size: 0.7rem;
+        font-weight: 500;
+        white-space: nowrap;
+    }
+    
+    .btn-info {
+        background-color: #17a2b8;
+        border-color: #17a2b8;
+        color: white;
+        padding: 0.25rem 0.75rem;
+        font-size: 0.8rem;
+    }
+    
+    .btn-info:hover {
+        background-color: #138496;
+        border-color: #117a8b;
+        color: white;
+    }
+    
+    /* Status-specific badge colors */
+    .badge.bg-info {
+        background-color: #17a2b8 !important;
+    }
+    
+    .badge.bg-primary {
+        background-color: #007bff !important;
+    }
+    
+    .badge.bg-success {
+        background-color: #28a745 !important;
+    }
+    
+    .badge.bg-danger {
+        background-color: #dc3545 !important;
+    }
+    
+    .badge.bg-secondary {
+        background-color: #6c757d !important;
+    }
+    
+    [data-theme="dark"] .table th {
+        background: var(--sidebar-solid);
+    }
+    
+    [data-theme="dark"] .badge.bg-info {
+        background-color: #138496 !important;
+    }
+    
+    [data-theme="dark"] .badge.bg-primary {
+        background-color: #0056b3 !important;
+    }
+    
+    @media (max-width: 1200px) {
+        .table {
+            font-size: 0.8rem;
+        }
+        
+        .badge {
+            font-size: 0.65rem;
+            padding: 3px 6px;
+        }
+    }
+    
     @media (max-width: 768px) {
-        .commission-dashboard .stats-grid {
+        .stats-grid {
             grid-template-columns: 1fr;
         }
         
-        .commission-dashboard .row > div {
-            margin-bottom: 20px;
-        }
-        
         .table-responsive {
-            font-size: 0.9rem;
+            font-size: 0.75rem;
         }
         
-        .btn-sm {
-            padding: 0.25rem 0.5rem;
-            font-size: 0.8rem;
+        .user-avatar {
+            width: 25px;
+            height: 25px;
+            font-size: 0.7rem;
+        }
+        
+        .btn-info {
+            font-size: 0.7rem;
+            padding: 0.2rem 0.5rem;
         }
     }
 </style>

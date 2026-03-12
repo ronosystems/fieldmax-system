@@ -8,7 +8,7 @@
 {% block page_title %}Commission Report{% endblock %}
 
 {% block breadcrumb %}
-<li class="breadcrumb-item"><a href="{% url 'credit:dashboard' %}">Dashboard</a></li>
+<li class="breadcrumb-item"><a href="{% url 'staff:credit_manager_dashboard' %}">Dashboard</a></li>
 <li class="breadcrumb-item"><a href="{% url 'credit:commission_dashboard' %}">Commission Dashboard</a></li>
 <li class="breadcrumb-item active">Commission Report</li>
 {% endblock %}
@@ -27,7 +27,51 @@
 {% block content %}
 <div class="commission-report">
 
-    <!-- Filter Card -->
+    <!-- Summary Cards -->
+    <div class="stats-grid mb-4">
+        <div class="stat-card">
+            <div class="stat-icon primary">
+                <i class="fas fa-coins"></i>
+            </div>
+            <div class="stat-value">KES {{ total_commission|default:0|floatformat:2|intcomma }}</div>
+            <div class="stat-label">Total Commission</div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-icon success">
+                <i class="fas fa-check-circle"></i>
+            </div>
+            <div class="stat-value">KES {{ paid_total|default:0|floatformat:2|intcomma }}</div>
+            <div class="stat-label">Paid</div>
+            <div class="stat-trend">
+                <i class="fas fa-percentage me-1"></i>
+                {% if total_commission > 0 %}
+                    {% widthratio paid_total total_commission 100 %}% Paid
+                {% else %}0%{% endif %}
+            </div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-icon warning">
+                <i class="fas fa-clock"></i>
+            </div>
+            <div class="stat-value">KES {{ pending_total|default:0|floatformat:2|intcomma }}</div>
+            <div class="stat-label">Pending</div>
+            <div class="stat-trend">
+                <i class="fas fa-hourglass-half me-1"></i>{{ pending_count|default:0 }} Transactions
+            </div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-icon info">
+                <i class="fas fa-list"></i>
+            </div>
+            <div class="stat-value">{{ total_transactions|default:0 }}</div>
+            <div class="stat-label">Total Records</div>
+        </div>
+    </div>
+
+    <!-- Filter Section -->
     <div class="card-custom mb-4">
         <div class="card-header-custom">
             <h5 class="mb-0"><i class="fas fa-filter me-2"></i>Filter Report</h5>
@@ -42,18 +86,6 @@
                             {% for seller in sellers %}
                             <option value="{{ seller.id }}" {% if filters.seller_id == seller.id %}selected{% endif %}>
                                 {{ seller.get_full_name|default:seller.username }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    
-                    <div class="col-md-3">
-                        <label for="company" class="form-label">Credit Company</label>
-                        <select name="company" id="company" class="form-select select2">
-                            <option value="">All Companies</option>
-                            {% for company in companies %}
-                            <option value="{{ company.id }}" {% if filters.company_id == company.id %}selected{% endif %}>
-                                {{ company.name }}
                             </option>
                             {% endfor %}
                         </select>
@@ -83,178 +115,121 @@
                                value="{{ filters.date_to|default:'' }}">
                     </div>
                     
-                    <div class="col-12 d-flex justify-content-end gap-2">
-                        <button type="button" class="btn btn-secondary" onclick="resetFilters()">
-                            <i class="fas fa-undo me-2"></i>Reset
-                        </button>
-                        <button type="submit" class="btn btn-primary-custom">
-                            <i class="fas fa-search me-2"></i>Apply Filters
-                        </button>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <div class="btn-group w-100">
+                            <button type="submit" class="btn btn-primary-custom">
+                                <i class="fas fa-search me-2"></i>Apply
+                            </button>
+                            <a href="{% url 'credit:commission_report' %}" class="btn btn-secondary">
+                                <i class="fas fa-undo me-2"></i>Reset
+                            </a>
+                        </div>
                     </div>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Summary Cards -->
-    <div class="stats-grid mb-4">
-        <!-- Total Commission Card -->
-        <div class="stat-card">
-            <div class="stat-icon primary">
-                <i class="fas fa-coins"></i>
-            </div>
-            <div class="stat-value">KES {{ total_commission|floatformat:2|intcomma }}</div>
-            <div class="stat-label">Total Commission</div>
-            <div class="stat-trend">
-                <i class="fas fa-chart-line me-1"></i>Filtered Total
-            </div>
-        </div>
-
-        <!-- Paid Commission Card -->
-        <div class="stat-card">
-            <div class="stat-icon success">
-                <i class="fas fa-check-circle"></i>
-            </div>
-            <div class="stat-value">KES {{ paid_total|floatformat:2|intcomma }}</div>
-            <div class="stat-label">Paid Commission</div>
-            <div class="stat-trend">
-                <i class="fas fa-percentage me-1"></i>
-                {% if total_commission > 0 %}
-                    {% widthratio paid_total total_commission 100 %}% Paid
-                {% else %}0% Paid{% endif %}
-            </div>
-        </div>
-
-        <!-- Pending Commission Card -->
-        <div class="stat-card">
-            <div class="stat-icon warning">
-                <i class="fas fa-clock"></i>
-            </div>
-            <div class="stat-value">KES {{ pending_total|floatformat:2|intcomma }}</div>
-            <div class="stat-label">Pending Commission</div>
-            <div class="stat-trend {% if pending_total > 0 %}down{% endif %}">
-                <i class="fas fa-hourglass-half me-1"></i>Awaiting Payment
-            </div>
-        </div>
-
-        <!-- Record Count Card -->
-        <div class="stat-card">
-            <div class="stat-icon info">
-                <i class="fas fa-list"></i>
-            </div>
-            <div class="stat-value">{{ commissions.paginator.count }}</div>
-            <div class="stat-label">Total Records</div>
-            <div class="stat-trend">
-                <i class="fas fa-calendar me-1"></i>Filtered Results
-            </div>
-        </div>
-    </div>
-
-    <!-- Commission Records Table -->
+    <!-- Report Table -->
     <div class="card-custom">
         <div class="card-header-custom d-flex justify-content-between align-items-center">
             <h5 class="mb-0"><i class="fas fa-list me-2"></i>Commission Records</h5>
-            <span class="badge bg-light text-dark">{{ commissions.paginator.count }} Records Found</span>
+            <span class="badge bg-primary">{{ commissions|length }} Records</span>
         </div>
         <div class="card-body-custom p-0">
             <div class="table-responsive">
-                <table class="table table-hover mb-0" id="commissionTable">
+                <table class="table table-hover mb-0" id="reportTable">
                     <thead>
                         <tr>
                             <th>Date</th>
-                            <th>Seller</th>
                             <th>Transaction ID</th>
+                            <th>Seller</th>
                             <th>Customer</th>
-                            <th>Company</th>
-                            <th class="text-end">Amount</th>
+                            <th>Product</th>
+                            <th class="text-end">Sale Amount</th>
+                            <th class="text-end">Commission</th>
                             <th>Status</th>
-                            <th>Paid Date</th>
+                            <th>Requested By</th>
+                            <th>Approved By</th>
                             <th>Paid By</th>
-                            <th class="text-center">Actions</th>
+                            <th>Paid Date</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for commission in commissions %}
                         <tr>
-                            <td>{{ commission.created_at|date:"d M Y H:i" }}</td>
+                            <td>{{ commission.created_at|date:"d M Y" }}</td>
                             <td>
-                                <div class="d-flex align-items-center">
-                                    <div class="user-avatar me-2" style="width: 30px; height: 30px; font-size: 0.8rem;">
-                                        {{ commission.seller.first_name|first|default:commission.seller.username|first|upper }}
-                                    </div>
-                                    <div>
-                                        <strong>{{ commission.seller.get_full_name|default:commission.seller.username }}</strong>
-                                    </div>
-                                </div>
-                            </td>
-                            <td>
-                                <a href="{% url 'credit:transaction_detail' commission.transaction.id %}" class="text-decoration-none">
+                                <a href="{% url 'credit:commission_detail' commission.transaction.id %}" class="text-decoration-none fw-bold">
                                     {{ commission.transaction.transaction_id }}
                                 </a>
                             </td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <div class="user-avatar me-2">
+                                        {{ commission.seller.first_name|first|default:commission.seller.username|first|upper }}
+                                    </div>
+                                    {{ commission.seller.get_full_name|default:commission.seller.username }}
+                                </div>
+                            </td>
                             <td>{{ commission.transaction.customer.full_name|truncatechars:20 }}</td>
-                            <td>{{ commission.transaction.credit_company.name|truncatechars:15 }}</td>
-                            <td class="text-end fw-bold">KES {{ commission.amount|floatformat:2|intcomma }}</td>
+                            <td>
+                                {{ commission.transaction.product.name|truncatechars:15 }}
+                                <br>
+                                <small class="text-secondary">{{ commission.transaction.product.product_code }}</small>
+                            </td>
+                            <td class="text-end">KES {{ commission.transaction.ceiling_price|floatformat:2|intcomma }}</td>
+                            <td class="text-end fw-bold text-primary">KES {{ commission.amount|floatformat:2|intcomma }}</td>
                             <td>
                                 {% if commission.status == 'paid' %}
-                                    <span class="badge badge-commission-paid">
-                                        <i class="fas fa-check-circle me-1"></i>Paid
-                                    </span>
+                                    <span class="badge bg-success">Paid</span>
                                 {% elif commission.status == 'pending' %}
-                                    <span class="badge badge-commission-pending">
-                                        <i class="fas fa-clock me-1"></i>Pending
-                                    </span>
+                                    <span class="badge bg-warning text-dark">Pending</span>
                                 {% elif commission.status == 'cancelled' %}
-                                    <span class="badge bg-secondary">
-                                        <i class="fas fa-times-circle me-1"></i>Cancelled
-                                    </span>
+                                    <span class="badge bg-danger">Cancelled</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if commission.transaction.commission_status == 'requested' or commission.transaction.commission_status == 'approved' or commission.transaction.commission_status == 'paid' %}
+                                    {{ commission.transaction.commission_paid_by.get_full_name|default:commission.transaction.commission_paid_by.username|default:'—' }}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if commission.status == 'approved' or commission.status == 'paid' %}
+                                    {% with approver=commission.notes %}
+                                        {% if 'Approved by:' in approver %}
+                                            {{ approver|cut:'Approved by:' }}
+                                        {% else %}
+                                            {{ commission.paid_by.get_full_name|default:commission.paid_by.username|default:'—' }}
+                                        {% endif %}
+                                    {% endwith %}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if commission.status == 'paid' %}
+                                    {{ commission.paid_by.get_full_name|default:commission.paid_by.username }}
+                                {% else %}
+                                    —
                                 {% endif %}
                             </td>
                             <td>
                                 {% if commission.paid_date %}
                                     {{ commission.paid_date|date:"d M Y" }}
                                 {% else %}
-                                    -
+                                    —
                                 {% endif %}
-                            </td>
-                            <td>
-                                {% if commission.paid_by %}
-                                    {{ commission.paid_by.get_full_name|default:commission.paid_by.username }}
-                                {% else %}
-                                    -
-                                {% endif %}
-                            </td>
-                            <td class="text-center">
-                                <div class="btn-group btn-group-sm" role="group">
-                                    <a href="{% url 'credit:transaction_detail' commission.transaction.id %}" 
-                                       class="btn btn-commission-view" 
-                                       data-bs-toggle="tooltip" 
-                                       title="View Transaction">
-                                        <i class="fas fa-eye"></i>
-                                    </a>
-                                    {% if commission.status == 'pending' and request.user.is_superuser %}
-                                    <button class="btn btn-commission-pay pay-commission-btn ms-1"
-                                            data-commission-id="{{ commission.id }}"
-                                            data-transaction-id="{{ commission.transaction.id }}"
-                                            data-seller="{{ commission.seller.get_full_name|default:commission.seller.username }}"
-                                            data-amount="{{ commission.amount }}"
-                                            data-bs-toggle="tooltip"
-                                            title="Pay Commission">
-                                        <i class="fas fa-check-circle"></i>
-                                    </button>
-                                    {% endif %}
-                                </div>
                             </td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="10" class="text-center py-5">
+                            <td colspan="12" class="text-center py-5">
                                 <i class="fas fa-file-invoice fa-3x mb-3" style="color: var(--text-secondary);"></i>
                                 <h5 class="text-secondary">No Commission Records Found</h5>
                                 <p class="text-secondary">Try adjusting your filter criteria.</p>
-                                <button class="btn btn-primary-custom mt-2" onclick="resetFilters()">
-                                    <i class="fas fa-undo me-2"></i>Reset Filters
-                                </button>
                             </td>
                         </tr>
                         {% endfor %}
@@ -262,63 +237,17 @@
                     <tfoot>
                         <tr style="background: var(--light-bg); font-weight: bold;">
                             <td colspan="5" class="text-end">Totals:</td>
-                            <td class="text-end">KES {{ total_commission|floatformat:2|intcomma }}</td>
-                            <td colspan="4"></td>
+                            <td class="text-end">KES {{ total_sale_amount|default:0|floatformat:2|intcomma }}</td>
+                            <td class="text-end">KES {{ total_commission|default:0|floatformat:2|intcomma }}</td>
+                            <td colspan="5"></td>
                         </tr>
                     </tfoot>
                 </table>
             </div>
-
-            <!-- Pagination -->
-            {% if commissions.paginator.num_pages > 1 %}
-            <div class="p-3 border-top">
-                <nav aria-label="Page navigation">
-                    <ul class="pagination justify-content-center mb-0">
-                        {% if commissions.has_previous %}
-                        <li class="page-item">
-                            <a class="page-link" href="?page=1{% if filters.seller_id %}&seller={{ filters.seller_id }}{% endif %}{% if filters.company_id %}&company={{ filters.company_id }}{% endif %}{% if filters.status %}&status={{ filters.status }}{% endif %}{% if filters.date_from %}&date_from={{ filters.date_from }}{% endif %}{% if filters.date_to %}&date_to={{ filters.date_to }}{% endif %}">
-                                <i class="fas fa-angle-double-left"></i>
-                            </a>
-                        </li>
-                        <li class="page-item">
-                            <a class="page-link" href="?page={{ commissions.previous_page_number }}{% if filters.seller_id %}&seller={{ filters.seller_id }}{% endif %}{% if filters.company_id %}&company={{ filters.company_id }}{% endif %}{% if filters.status %}&status={{ filters.status }}{% endif %}{% if filters.date_from %}&date_from={{ filters.date_from }}{% endif %}{% if filters.date_to %}&date_to={{ filters.date_to }}{% endif %}">
-                                <i class="fas fa-angle-left"></i>
-                            </a>
-                        </li>
-                        {% endif %}
-
-                        {% for num in commissions.paginator.page_range %}
-                            {% if commissions.number == num %}
-                            <li class="page-item active"><span class="page-link">{{ num }}</span></li>
-                            {% elif num > commissions.number|add:'-3' and num < commissions.number|add:'3' %}
-                            <li class="page-item">
-                                <a class="page-link" href="?page={{ num }}{% if filters.seller_id %}&seller={{ filters.seller_id }}{% endif %}{% if filters.company_id %}&company={{ filters.company_id }}{% endif %}{% if filters.status %}&status={{ filters.status }}{% endif %}{% if filters.date_from %}&date_from={{ filters.date_from }}{% endif %}{% if filters.date_to %}&date_to={{ filters.date_to }}{% endif %}">
-                                    {{ num }}
-                                </a>
-                            </li>
-                            {% endif %}
-                        {% endfor %}
-
-                        {% if commissions.has_next %}
-                        <li class="page-item">
-                            <a class="page-link" href="?page={{ commissions.next_page_number }}{% if filters.seller_id %}&seller={{ filters.seller_id }}{% endif %}{% if filters.company_id %}&company={{ filters.company_id }}{% endif %}{% if filters.status %}&status={{ filters.status }}{% endif %}{% if filters.date_from %}&date_from={{ filters.date_from }}{% endif %}{% if filters.date_to %}&date_to={{ filters.date_to }}{% endif %}">
-                                <i class="fas fa-angle-right"></i>
-                            </a>
-                        </li>
-                        <li class="page-item">
-                            <a class="page-link" href="?page={{ commissions.paginator.num_pages }}{% if filters.seller_id %}&seller={{ filters.seller_id }}{% endif %}{% if filters.company_id %}&company={{ filters.company_id }}{% endif %}{% if filters.status %}&status={{ filters.status }}{% endif %}{% if filters.date_from %}&date_from={{ filters.date_from }}{% endif %}{% if filters.date_to %}&date_to={{ filters.date_to }}{% endif %}">
-                                <i class="fas fa-angle-double-right"></i>
-                            </a>
-                        </li>
-                        {% endif %}
-                    </ul>
-                </nav>
-            </div>
-            {% endif %}
         </div>
     </div>
 
-    <!-- Chart Section (Optional) -->
+    <!-- Charts Section -->
     <div class="row mt-4">
         <div class="col-md-6">
             <div class="card-custom">
@@ -326,78 +255,23 @@
                     <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Status Distribution</h5>
                 </div>
                 <div class="card-body-custom">
-                    <canvas id="statusChart" height="200"></canvas>
+                    <canvas id="statusChart" height="250"></canvas>
                 </div>
             </div>
         </div>
         <div class="col-md-6">
             <div class="card-custom">
                 <div class="card-header-custom">
-                    <h5 class="mb-0"><i class="fas fa-chart-bar me-2"></i>Top Sellers (Filtered)</h5>
+                    <h5 class="mb-0"><i class="fas fa-chart-bar me-2"></i>Monthly Commission Trend</h5>
                 </div>
                 <div class="card-body-custom">
-                    <canvas id="sellersChart" height="200"></canvas>
+                    <canvas id="trendChart" height="250"></canvas>
                 </div>
             </div>
         </div>
     </div>
 
 </div>
-
-<!-- Pay Commission Modal -->
-{% if request.user.is_superuser %}
-<div class="modal fade" id="payCommissionModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content" style="background: var(--card-bg); color: var(--text-primary);">
-            <div class="modal-header" style="background: var(--primary-gradient); color: white;">
-                <h5 class="modal-title">
-                    <i class="fas fa-hand-holding-usd me-2"></i>Pay Commission
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <form id="payCommissionForm">
-                {% csrf_token %}
-                <div class="modal-body">
-                    <input type="hidden" name="commission_id" id="modalCommissionId">
-                    <input type="hidden" name="transaction_id" id="modalTransactionId">
-                    
-                    <div class="alert alert-info">
-                        <i class="fas fa-info-circle me-2"></i>
-                        You are about to pay commission for this transaction.
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="modalNotes" class="form-label">Payment Notes (Optional)</label>
-                        <textarea class="form-control" id="modalNotes" name="notes" rows="2"></textarea>
-                    </div>
-                    
-                    <div class="payment-details p-3" style="background: var(--commission-bg-light); border-radius: 8px;">
-                        <div class="d-flex justify-content-between mb-2">
-                            <span>Transaction:</span>
-                            <span class="fw-bold" id="modalTransactionRef"></span>
-                        </div>
-                        <div class="d-flex justify-content-between mb-2">
-                            <span>Seller:</span>
-                            <span class="fw-bold" id="modalSellerName"></span>
-                        </div>
-                        <div class="d-flex justify-content-between">
-                            <span>Amount:</span>
-                            <span class="fw-bold text-success" id="modalAmount"></span>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-commission-pay" id="modalPayBtn">
-                        <i class="fas fa-check-circle me-2"></i>Confirm Payment
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-{% endif %}
-
 {% endblock %}
 
 {% block extra_js %}
@@ -417,19 +291,65 @@ $(document).ready(function() {
         return new bootstrap.Tooltip(tooltipTriggerEl);
     });
     
-    // ============================================
-    // CHARTS
-    // ============================================
+    // Export button - preserve filters
+    $('#exportBtn').click(function(e) {
+        const url = new URL($(this).attr('href'), window.location.origin);
+        const params = new URLSearchParams(window.location.search);
+        params.forEach((value, key) => {
+            url.searchParams.set(key, value);
+        });
+        $(this).attr('href', url.toString());
+    });
+    
+    // Date validation
+    $('#date_from, #date_to').change(function() {
+        const dateFrom = $('#date_from').val();
+        const dateTo = $('#date_to').val();
+        
+        if (dateFrom && dateTo && dateFrom > dateTo) {
+            alert('"Date From" cannot be later than "Date To"');
+            $(this).val('');
+        }
+    });
+    
+    // Initialize DataTable
+    if ($('#reportTable').length && $('#reportTable tbody tr').length > 10) {
+        $('#reportTable').DataTable({
+            "paging": true,
+            "ordering": true,
+            "info": true,
+            "searching": true,
+            "pageLength": 25,
+            "language": {
+                "search": "Search:",
+                "lengthMenu": "Show _MENU_ entries",
+                "info": "Showing _START_ to _END_ of _TOTAL_ entries",
+                "infoEmpty": "Showing 0 to 0 of 0 entries",
+                "infoFiltered": "(filtered from _MAX_ total entries)"
+            }
+        });
+    }
     
     // Status Distribution Chart
     const statusCtx = document.getElementById('statusChart').getContext('2d');
+    
+    // Calculate status counts from table
+    let paidCount = 0, pendingCount = 0, cancelledCount = 0;
+    
+    $('#reportTable tbody tr').each(function() {
+        const statusText = $(this).find('td:eq(7)').text().trim();
+        if (statusText.includes('Paid')) paidCount++;
+        else if (statusText.includes('Pending')) pendingCount++;
+        else if (statusText.includes('Cancelled')) cancelledCount++;
+    });
+    
     new Chart(statusCtx, {
         type: 'doughnut',
         data: {
-            labels: ['Paid (KES {{ paid_total|floatformat:0|intcomma }})', 'Pending (KES {{ pending_total|floatformat:0|intcomma }})'],
+            labels: ['Paid', 'Pending', 'Cancelled'],
             datasets: [{
-                data: [{{ paid_total }}, {{ pending_total }}],
-                backgroundColor: ['#28a745', '#ffc107'],
+                data: [paidCount, pendingCount, cancelledCount],
+                backgroundColor: ['#28a745', '#ffc107', '#dc3545'],
                 borderWidth: 0
             }]
         },
@@ -444,40 +364,44 @@ $(document).ready(function() {
         }
     });
     
-    // Top Sellers Chart
-    const sellersCtx = document.getElementById('sellersChart').getContext('2d');
+    // Monthly Trend Chart
+    const trendCtx = document.getElementById('trendChart').getContext('2d');
     
-    // Aggregate seller data from table
-    const sellerData = {};
-    $('#commissionTable tbody tr').each(function() {
-        const sellerName = $(this).find('td:eq(1) strong').text().trim();
-        const amountText = $(this).find('td:eq(5)').text().replace('KES', '').replace(/,/g, '').trim();
+    // Group by month
+    const monthlyData = {};
+    $('#reportTable tbody tr').each(function() {
+        const dateStr = $(this).find('td:eq(0)').text();
+        const amountText = $(this).find('td:eq(6)').text().replace('KES', '').replace(/,/g, '').trim();
         const amount = parseFloat(amountText) || 0;
         
-        if (sellerName && amount > 0) {
-            if (sellerData[sellerName]) {
-                sellerData[sellerName] += amount;
+        if (dateStr && amount > 0) {
+            const month = dateStr.split(' ').slice(1,3).join(' ');
+            if (monthlyData[month]) {
+                monthlyData[month] += amount;
             } else {
-                sellerData[sellerName] = amount;
+                monthlyData[month] = amount;
             }
         }
     });
     
-    // Sort and get top 5
-    const topSellers = Object.entries(sellerData)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5);
+    // Sort months
+    const months = Object.keys(monthlyData).sort((a, b) => {
+        const dateA = new Date(a);
+        const dateB = new Date(b);
+        return dateA - dateB;
+    });
     
-    new Chart(sellersCtx, {
-        type: 'bar',
+    new Chart(trendCtx, {
+        type: 'line',
         data: {
-            labels: topSellers.map(item => item[0]),
+            labels: months,
             datasets: [{
                 label: 'Commission Amount',
-                data: topSellers.map(item => item[1]),
-                backgroundColor: 'rgba(111, 66, 193, 0.7)',
+                data: months.map(m => monthlyData[m]),
                 borderColor: '#6f42c1',
-                borderWidth: 1
+                backgroundColor: 'rgba(111, 66, 193, 0.1)',
+                tension: 0.4,
+                fill: true
             }]
         },
         options: {
@@ -501,121 +425,13 @@ $(document).ready(function() {
         }
     });
     
-    // ============================================
-    // FILTER FUNCTIONALITY
-    // ============================================
-    
-    // Reset filters
-    window.resetFilters = function() {
-        $('#seller').val('').trigger('change');
-        $('#company').val('').trigger('change');
-        $('#status').val('');
-        $('#date_from').val('');
-        $('#date_to').val('');
-        $('#filterForm').submit();
-    };
-    
-    // Export button - ensure filters are preserved
-    $('#exportBtn').click(function(e) {
-        const url = new URL($(this).attr('href'), window.location.origin);
-        const params = new URLSearchParams(window.location.search);
-        params.forEach((value, key) => {
-            url.searchParams.set(key, value);
-        });
-        $(this).attr('href', url.toString());
-    });
-    
-    // ============================================
-    // PAY COMMISSION FUNCTIONALITY
-    // ============================================
-    
-    // Pay commission button
-    $('.pay-commission-btn').click(function() {
-        const commissionId = $(this).data('commission-id');
-        const transactionId = $(this).data('transaction-id');
-        const sellerName = $(this).data('seller');
-        const amount = $(this).data('amount');
-        
-        $('#modalCommissionId').val(commissionId);
-        $('#modalTransactionId').val(transactionId);
-        $('#modalTransactionRef').text('#' + transactionId.toString().slice(-8));
-        $('#modalSellerName').text(sellerName);
-        $('#modalAmount').text('KES ' + amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}));
-        $('#payCommissionModal').modal('show');
-    });
-    
-    // Pay commission form submission
-    $('#payCommissionForm').submit(function(e) {
-        e.preventDefault();
-        
-        const transactionId = $('#modalTransactionId').val();
-        const notes = $('#modalNotes').val();
-        
-        $('#modalPayBtn').prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-2"></span>Processing...');
-        
-        $.ajax({
-            url: '{% url "credit:pay_commission" 0 %}'.replace('0', transactionId),
-            method: 'POST',
-            data: {
-                notes: notes,
-                csrfmiddlewaretoken: '{{ csrf_token }}'
-            },
-            success: function(response) {
-                if (response.success) {
-                    $('#payCommissionModal').modal('hide');
-                    alert(response.message);
-                    location.reload();
-                } else {
-                    alert('Error: ' + response.error);
-                    $('#modalPayBtn').prop('disabled', false).html('<i class="fas fa-check-circle me-2"></i>Confirm Payment');
-                }
-            },
-            error: function(xhr, status, error) {
-                alert('Error processing request: ' + error);
-                $('#modalPayBtn').prop('disabled', false).html('<i class="fas fa-check-circle me-2"></i>Confirm Payment');
-            }
-        });
-    });
-    
-    // Date range validation
-    $('#date_from, #date_to').change(function() {
-        const dateFrom = $('#date_from').val();
-        const dateTo = $('#date_to').val();
-        
-        if (dateFrom && dateTo && dateFrom > dateTo) {
-            alert('"Date From" cannot be later than "Date To"');
-            $(this).val('');
-        }
-    });
-    
-    // Format currency function
-    window.formatCurrency = function(amount) {
-        return 'KES ' + parseFloat(amount).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-    };
-    
 });
 </script>
 
 <style>
-    /* Commission Report specific styles */
     .commission-report .card-custom {
         margin-bottom: 20px;
-    }
-    
-    .badge-commission-pending {
-        background: var(--commission-pending);
-        color: #000;
-        padding: 5px 10px;
-        border-radius: 50px;
-        font-size: 0.75rem;
-    }
-    
-    .badge-commission-paid {
-        background: var(--commission-paid);
-        color: white;
-        padding: 5px 10px;
-        border-radius: 50px;
-        font-size: 0.75rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
     
     .user-avatar {
@@ -623,7 +439,7 @@ $(document).ready(function() {
         height: 30px;
         border-radius: 50%;
         background: var(--primary-gradient);
-        display: flex;
+        display: inline-flex;
         align-items: center;
         justify-content: center;
         color: white;
@@ -631,24 +447,39 @@ $(document).ready(function() {
         font-size: 0.8rem;
     }
     
-    /* Filter form styles */
-    .select2-container--bootstrap-5 .select2-selection {
-        min-height: 38px;
-    }
-    
-    /* Table styles */
     .table th {
         background: var(--light-bg);
         color: var(--text-secondary);
-        font-size: 0.75rem;
+        font-size: 0.7rem;
         text-transform: uppercase;
         letter-spacing: 0.5px;
         white-space: nowrap;
+        padding: 12px 8px;
     }
     
     .table td {
         vertical-align: middle;
-        white-space: nowrap;
+        padding: 12px 8px;
+        font-size: 0.85rem;
+    }
+    
+    .badge {
+        padding: 4px 8px;
+        font-size: 0.7rem;
+        font-weight: 600;
+    }
+    
+    .badge.bg-success {
+        background-color: #28a745 !important;
+    }
+    
+    .badge.bg-warning {
+        background-color: #ffc107 !important;
+        color: #000;
+    }
+    
+    .badge.bg-danger {
+        background-color: #dc3545 !important;
     }
     
     .table tfoot td {
@@ -656,72 +487,39 @@ $(document).ready(function() {
         border-top: 2px solid var(--border-color);
     }
     
-    /* Pagination */
-    .pagination .page-link {
+    /* Select2 customization */
+    .select2-container--bootstrap-5 .select2-selection {
+        min-height: 38px;
+        border-color: var(--border-color);
         background: var(--card-bg);
         color: var(--text-primary);
-        border-color: var(--border-color);
     }
     
-    .pagination .page-item.active .page-link {
-        background: var(--primary-gradient);
-        border-color: var(--primary-color);
-        color: white;
-    }
-    
-    /* Button styles */
-    .btn-commission-view {
-        background: transparent;
-        border: 1px solid var(--primary-color);
-        color: var(--primary-color);
-        padding: 4px 8px;
-        border-radius: 4px;
-        font-size: 0.75rem;
-        transition: all 0.3s;
-    }
-    
-    .btn-commission-view:hover {
-        background: var(--primary-color);
-        color: white;
-    }
-    
-    .btn-commission-pay {
-        background: var(--commission-paid);
-        border: none;
-        color: white;
-        padding: 4px 8px;
-        border-radius: 4px;
-        font-size: 0.75rem;
-        transition: all 0.3s;
-    }
-    
-    .btn-commission-pay:hover {
-        background: #218838;
-        transform: translateY(-1px);
-        color: white;
+    /* Chart containers */
+    canvas {
+        max-height: 250px;
+        width: 100% !important;
     }
     
     /* Dark theme adjustments */
-    [data-theme="dark"] .badge-commission-pending {
-        color: #000;
-    }
-    
     [data-theme="dark"] .table th {
         background: var(--sidebar-solid);
     }
     
+    [data-theme="dark"] .badge.bg-warning {
+        color: #000;
+    }
+    
     /* Print styles */
     @media print {
-        .btn-group, .pagination, .modal, .select2, .form-select, .btn {
+        .btn-group, .pagination, .select2, .form-select, .btn, canvas {
             display: none !important;
         }
         
         .card-custom {
             break-inside: avoid;
-        }
-        
-        .table {
-            break-inside: auto;
+            box-shadow: none !important;
+            border: 1px solid #ddd;
         }
         
         .table th {
@@ -729,23 +527,32 @@ $(document).ready(function() {
             color: #000 !important;
         }
         
-        .badge-commission-pending, .badge-commission-paid {
-            border: 1px solid #000 !important;
+        .badge {
+            border: 1px solid #000;
+            color: #000 !important;
+            background: transparent !important;
         }
     }
     
     /* Responsive */
+    @media (max-width: 1200px) {
+        .table {
+            font-size: 0.8rem;
+        }
+    }
+    
     @media (max-width: 768px) {
         .stats-grid {
             grid-template-columns: 1fr;
         }
         
         .table-responsive {
-            font-size: 0.8rem;
+            font-size: 0.75rem;
         }
         
-        .btn-sm {
-            padding: 0.2rem 0.4rem;
+        .user-avatar {
+            width: 25px;
+            height: 25px;
             font-size: 0.7rem;
         }
     }
