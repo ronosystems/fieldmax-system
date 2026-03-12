@@ -190,27 +190,27 @@
                                 {% endif %}
                             </td>
                             <td>
-                                {% if commission.transaction.commission_status == 'requested' or commission.transaction.commission_status == 'approved' or commission.transaction.commission_status == 'paid' %}
-                                    {{ commission.transaction.commission_paid_by.get_full_name|default:commission.transaction.commission_paid_by.username|default:'—' }}
+                                {% if commission.transaction.commission_paid_by %}
+                                    {{ commission.transaction.commission_paid_by.get_full_name|default:commission.transaction.commission_paid_by.username }}
                                 {% else %}
                                     —
                                 {% endif %}
                             </td>
                             <td>
                                 {% if commission.status == 'approved' or commission.status == 'paid' %}
-                                    {% with approver=commission.notes %}
-                                        {% if 'Approved by:' in approver %}
-                                            {{ approver|cut:'Approved by:' }}
-                                        {% else %}
-                                            {{ commission.paid_by.get_full_name|default:commission.paid_by.username|default:'—' }}
-                                        {% endif %}
-                                    {% endwith %}
+                                    {% if commission.notes and 'Approved by:' in commission.notes %}
+                                        {{ commission.notes|cut:'Approved by:' }}
+                                    {% elif commission.paid_by %}
+                                        {{ commission.paid_by.get_full_name|default:commission.paid_by.username }}
+                                    {% else %}
+                                        —
+                                    {% endif %}
                                 {% else %}
                                     —
                                 {% endif %}
                             </td>
                             <td>
-                                {% if commission.status == 'paid' %}
+                                {% if commission.status == 'paid' and commission.paid_by %}
                                     {{ commission.paid_by.get_full_name|default:commission.paid_by.username }}
                                 {% else %}
                                     —
