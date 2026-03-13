@@ -270,14 +270,31 @@ def store_statistics(request):
         })
     
     # ============================================
-    # STOCK ALERTS
+    # STOCK ALERTS WITH PAGINATION
     # ============================================
-    stock_alerts = StockAlert.objects.filter(
+    # Base queryset for stock alerts
+    alerts_queryset = StockAlert.objects.filter(
         is_active=True,
         is_dismissed=False
-    ).select_related('product').order_by(
+    ).select_related('product', 'product__category').order_by(
         '-severity', '-last_alerted'
-    )[:6]  # Show top 6 alerts
+    )
+    
+    # Get page size from request, default to 20
+    page_size = request.GET.get('page_size', '20')
+    
+    # Create paginator
+    if page_size == 'all':
+        paginator = Paginator(alerts_queryset, alerts_queryset.count()) if alerts_queryset.exists() else Paginator(alerts_queryset, 1)
+    else:
+        paginator = Paginator(alerts_queryset, int(page_size))
+    
+    # Get page number
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+    
+    # Get total count for display
+    total_alerts = alerts_queryset.count()
     
     context = {
         # Products
@@ -312,8 +329,11 @@ def store_statistics(request):
         'recent_returns': recent_returns,
         'recent_suppliers': supplier_list,
         
-        # Stock Alerts
-        'stock_alerts': stock_alerts,
+        # Stock Alerts with Pagination
+        'alerts': page_obj,  # This is now a paginated page object
+        'page_obj': page_obj,  # Explicitly pass page_obj
+        'page_size': page_size,
+        'total_alerts': total_alerts,
     }
     
     return render(request, 'inventory/statistics.html', context)

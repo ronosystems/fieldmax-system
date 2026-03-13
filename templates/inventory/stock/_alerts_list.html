@@ -1,6 +1,24 @@
 {% load inventory_tags %}
 
 {% if alerts %}
+<!-- Pagination Controls - Top -->
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div class="d-flex align-items-center gap-2">
+        <label class="text-muted small">Show:</label>
+        <select class="form-select form-select-sm" style="width: auto;" id="pageSizeSelect" onchange="changePageSize(this.value)">
+            <option value="10" {% if page_size == '10' %}selected{% endif %}>10 entries</option>
+            <option value="20" {% if page_size == '20' %}selected{% endif %}>20 entries</option>
+            <option value="50" {% if page_size == '50' %}selected{% endif %}>50 entries</option>
+            <option value="100" {% if page_size == '100' %}selected{% endif %}>100 entries</option>
+            <option value="all" {% if page_size == 'all' %}selected{% endif %}>All entries</option>
+        </select>
+    </div>
+    
+    <div class="text-muted small">
+        Showing {{ page_obj.start_index }} to {{ page_obj.end_index }} of {{ page_obj.paginator.count }} entries
+    </div>
+</div>
+
 <div class="table-responsive">
     <table class="table table-hover align-middle">
         <thead class="table-light">
@@ -21,7 +39,7 @@
             <tr>
                 <!-- Severity Badge -->
                 <td>
-                    <span class="badge {% if alert.severity == 'critical' %}bg-danger{% else %}bg-warning{% endif %}">
+                    <span class="badge {% if alert.severity == 'critical' %}bg-danger{% elif alert.severity == 'warning' %}bg-warning{% else %}bg-info{% endif %}">
                         {{ alert.get_severity_display|upper }}
                     </span>
                 </td>
@@ -29,6 +47,9 @@
                 <!-- Product Name -->
                 <td>
                     <div class="fw-bold">{{ alert.product.display_name|truncatechars:30 }}</div>
+                    {% if alert.product.brand %}
+                    <small class="text-muted">{{ alert.product.brand }}</small>
+                    {% endif %}
                 </td>
                 
                 <!-- Product Code -->
@@ -46,7 +67,7 @@
                     <div class="d-flex align-items-center">
                         <div class="rounded-circle bg-light d-flex align-items-center justify-content-center me-2" 
                              style="width: 32px; height: 32px;">
-                            <span class="fw-bold {% if alert.current_stock == 0 %}text-danger{% endif %}">
+                            <span class="fw-bold {% if alert.current_stock == 0 %}text-danger{% elif alert.current_stock <= alert.threshold %}text-warning{% endif %}">
                                 {{ alert.current_stock }}
                             </span>
                         </div>
@@ -61,7 +82,11 @@
                 
                 <!-- Alert Type -->
                 <td>
-                    <span class="badge {% if alert.alert_type == 'outofstock' %}bg-danger{% elif alert.alert_type == 'lowstock' %}bg-warning{% else %}bg-info{% endif %} bg-opacity-25 text-dark">
+                    <span class="badge 
+                        {% if alert.alert_type == 'outofstock' %}bg-danger
+                        {% elif alert.alert_type == 'lowstock' %}bg-warning
+                        {% elif alert.alert_type == 'damaged' %}bg-secondary
+                        {% else %}bg-info{% endif %} bg-opacity-25 text-dark">
                         {{ alert.get_alert_type_display }}
                     </span>
                 </td>
@@ -113,14 +138,70 @@
     </table>
 </div>
 
-<!-- Optional: Add summary stats below table -->
+<!-- Pagination Controls - Bottom -->
 <div class="d-flex justify-content-between align-items-center mt-3">
     <div>
-        <span class="text-muted">Total Alerts: <strong>{{ alerts|length }}</strong></span>
+        <span class="text-muted">Total Alerts: <strong>{{ page_obj.paginator.count }}</strong></span>
+        {% if page_size != 'all' %}
+        <span class="text-muted ms-2">(Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }})</span>
+        {% endif %}
     </div>
+    
+    <nav aria-label="Page navigation">
+        <ul class="pagination pagination-sm mb-0">
+            {% if page_obj.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?page=1&page_size={{ page_size }}" aria-label="First">
+                    <span aria-hidden="true">&laquo;&laquo;</span>
+                </a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.previous_page_number }}&page_size={{ page_size }}" aria-label="Previous">
+                    <span aria-hidden="true">&laquo;</span>
+                </a>
+            </li>
+            {% else %}
+            <li class="page-item disabled">
+                <span class="page-link">&laquo;&laquo;</span>
+            </li>
+            <li class="page-item disabled">
+                <span class="page-link">&laquo;</span>
+            </li>
+            {% endif %}
+
+            {% for num in page_obj.paginator.page_range %}
+                {% if page_obj.number == num %}
+                    <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                    <li class="page-item"><a class="page-link" href="?page={{ num }}&page_size={{ page_size }}">{{ num }}</a></li>
+                {% endif %}
+            {% endfor %}
+
+            {% if page_obj.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.next_page_number }}&page_size={{ page_size }}" aria-label="Next">
+                    <span aria-hidden="true">&raquo;</span>
+                </a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}&page_size={{ page_size }}" aria-label="Last">
+                    <span aria-hidden="true">&raquo;&raquo;</span>
+                </a>
+            </li>
+            {% else %}
+            <li class="page-item disabled">
+                <span class="page-link">&raquo;</span>
+            </li>
+            <li class="page-item disabled">
+                <span class="page-link">&raquo;&raquo;</span>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+
     <div class="btn-group">
-        <button class="btn btn-sm btn-outline-secondary" onclick="exportTableToCSV()">
-            <i class="fas fa-download me-1"></i> Export
+        <button class="btn btn-sm btn-outline-secondary" onclick="exportAllAlerts()">
+            <i class="fas fa-download me-1"></i> Export All
         </button>
         <button class="btn btn-sm btn-outline-secondary" onclick="window.print()">
             <i class="fas fa-print me-1"></i> Print
@@ -151,6 +232,21 @@
         background-color: rgba(0,0,0,.02);
     }
     
+    /* Pagination styling */
+    .pagination {
+        margin: 0;
+    }
+    
+    .page-link {
+        padding: 0.3rem 0.6rem;
+        font-size: 0.85rem;
+    }
+    
+    .page-item.active .page-link {
+        background-color: #2563eb;
+        border-color: #2563eb;
+    }
+    
     /* Optional: Make table more compact */
     .table-compact td, .table-compact th {
         padding: 0.5rem;
@@ -165,14 +261,42 @@
         .btn-group-sm .btn {
             padding: 0.2rem 0.4rem;
         }
+        
+        .d-flex.justify-content-between {
+            flex-direction: column;
+            gap: 0.5rem;
+            align-items: flex-start !important;
+        }
+        
+        .pagination {
+            margin: 0.5rem 0;
+        }
     }
 </style>
 
-<!-- Optional: Add export functionality -->
 <script>
-function exportTableToCSV() {
+function changePageSize(size) {
+    // Get current URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    urlParams.set('page_size', size);
+    urlParams.set('page', 1); // Reset to first page when changing page size
+    window.location.search = urlParams.toString();
+}
+
+function exportAllAlerts() {
+    // Redirect to export endpoint that exports ALL alerts, not just current page
+    window.location.href = "{% url 'inventory:export_alerts' %}";
+}
+
+// Optional: Keep the old export function for current page if needed
+function exportCurrentPageToCSV() {
     var csv = [];
     var rows = document.querySelectorAll("table tr");
+    
+    if (rows.length === 0) {
+        alert('No data to export');
+        return;
+    }
     
     for (var i = 0; i < rows.length; i++) {
         var row = [], cols = rows[i].querySelectorAll("td, th");
@@ -180,6 +304,8 @@ function exportTableToCSV() {
         for (var j = 0; j < cols.length; j++) {
             // Clean the text (remove HTML tags, trim)
             var text = cols[j].innerText.replace(/\n/g, ' ').trim();
+            // Remove extra spaces
+            text = text.replace(/\s+/g, ' ');
             row.push('"' + text + '"');
         }
         
@@ -189,11 +315,19 @@ function exportTableToCSV() {
     // Download CSV file
     var csvFile = new Blob([csv.join('\n')], {type: 'text/csv'});
     var downloadLink = document.createElement('a');
-    downloadLink.download = 'stock_alerts.csv';
+    downloadLink.download = 'stock_alerts_page_{{ page_obj.number }}.csv';
     downloadLink.href = window.URL.createObjectURL(csvFile);
     downloadLink.style.display = 'none';
     document.body.appendChild(downloadLink);
     downloadLink.click();
     document.body.removeChild(downloadLink);
 }
+
+// Initialize tooltips
+document.addEventListener('DOMContentLoaded', function() {
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function(tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+});
 </script>
