@@ -8,97 +8,163 @@
 {% block page_title %}Sales Manager Dashboard{% endblock %}
 
 {% block breadcrumb %}
-<li class="breadcrumb-item"><a href="{% url 'staff:store_manager_dashboard' %}">Home</a></li>
+<li class="breadcrumb-item"><a href="{% url 'staff:store_manager_dashboard' %}">Dashboard</a></li>
 <li class="breadcrumb-item"><a href="{% url 'sales:sales_dashboard' %}">Sales</a></li>
-<li class="breadcrumb-item active">Manager Dashboard</li>
+<li class="breadcrumb-item active">Manager Overview</li>
 {% endblock %}
 
 {% block page_actions %}
-<div class="btn-group">
-    <a href="{% url 'sales:sale_list' %}?seller={{ request.user.username }}" class="btn btn-primary-custom btn-custom">
-        <i class="fas fa-history me-2"></i>My Sales
-    </a>
-    <button type="button" class="btn btn-outline-custom btn-custom dropdown-toggle" data-bs-toggle="dropdown">
-        <i class="fas fa-download"></i>
-    </button>
-    <ul class="dropdown-menu dropdown-menu-end">
-        <li><h6 class="dropdown-header">Team Reports</h6></li>
-        <li><a class="dropdown-item" href="#"><i class="fas fa-file-pdf me-2 text-danger"></i>Team Performance</a></li>
-        <li><a class="dropdown-item" href="#"><i class="fas fa-file-excel me-2 text-success"></i>Sales by Agent</a></li>
-        <li><a class="dropdown-item" href="#"><i class="fas fa-print me-2 text-secondary"></i>Print Report</a></li>
-    </ul>
+<div class="d-flex gap-2">
+    <!-- Date Range Picker -->
+    <div class="dropdown">
+        <button class="btn btn-outline-custom btn-custom dropdown-toggle" type="button" data-bs-toggle="dropdown">
+            <i class="fas fa-calendar-alt me-2"></i>{{ today|date:"M d, Y" }}
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end">
+            <li><a class="dropdown-item" href="#" onclick="setDateRange('today')">Today</a></li>
+            <li><a class="dropdown-item" href="#" onclick="setDateRange('yesterday')">Yesterday</a></li>
+            <li><a class="dropdown-item" href="#" onclick="setDateRange('week')">This Week</a></li>
+            <li><a class="dropdown-item" href="#" onclick="setDateRange('month')">This Month</a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item" href="#" onclick="customDateRange()">Custom Range</a></li>
+        </ul>
+    </div>
+    
+    <!-- Export Dropdown -->
+    <div class="btn-group">
+        <a href="{% url 'sales:sale_list' %}?seller={{ request.user.username }}" class="btn btn-primary-custom btn-custom">
+            <i class="fas fa-history me-2"></i>My Sales
+        </a>
+        <button type="button" class="btn btn-primary-custom btn-custom dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown">
+            <span class="visually-hidden">Toggle Dropdown</span>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end">
+            <li><h6 class="dropdown-header"><i class="fas fa-download me-2"></i>Export Reports</h6></li>
+            <li><a class="dropdown-item" href="#"><i class="fas fa-file-pdf me-2 text-danger"></i>Team Performance (PDF)</a></li>
+            <li><a class="dropdown-item" href="#"><i class="fas fa-file-excel me-2 text-success"></i>Sales by Agent (Excel)</a></li>
+            <li><a class="dropdown-item" href="#"><i class="fas fa-file-csv me-2 text-info"></i>Raw Data (CSV)</a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item" href="#"><i class="fas fa-print me-2 text-secondary"></i>Print Report</a></li>
+        </ul>
+    </div>
 </div>
 {% endblock %}
 
 {% block content %}
-<!-- Welcome Section -->
-<div class="welcome-card animate__animated animate__fadeIn">
+<!-- Welcome Section with Quick Stats -->
+<div class="welcome-card animate__animated animate__fadeIn mb-4">
     <div class="row align-items-center">
         <div class="col-lg-8">
-            <h1 class="welcome-title">
-                <i class="fas fa-users-cog me-3"></i>Sales Manager Dashboard
-            </h1>
+            <div class="d-flex align-items-center gap-3 mb-3">
+                <h1 class="welcome-title mb-0">
+                    <i class="fas fa-users-cog me-3 text-primary"></i>Team Performance
+                </h1>
+                <span class="badge bg-success bg-opacity-10 text-success px-3 py-2 rounded-pill">
+                    <i class="fas fa-circle me-1" style="font-size: 8px;"></i>Live Updates
+                </span>
+            </div>
             <p class="welcome-subtitle">
-                <i class="fas fa-calendar-alt me-2"></i>{{ today|date:"l, F j, Y" }}
-                <span class="mx-2">|</span>
-                <i class="fas fa-users me-2"></i>{{ sales_team|default:"0" }} Team Members
+                <i class="fas fa-calendar-alt me-2 text-primary"></i>{{ today|date:"l, F j, Y" }}
+                <span class="mx-3">|</span>
+                <i class="fas fa-users me-2 text-primary"></i><strong>{{ sales_team|default:"0" }}</strong> Active Team Members
+                <span class="mx-3">|</span>
+                <i class="fas fa-trophy me-2 text-warning"></i>Target: <strong>85%</strong> Achieved
             </p>
             
-            <div class="date-badge">
-                <i class="fas fa-chart-line me-2"></i>
-                <strong>KES {{ team_sales_today.total|default:"0"|floatformat:0 }}</strong> today |
-                <strong>{{ team_sales_today.count|default:"0" }}</strong> transactions |
-                <strong>KES {{ avg_ticket_today|default:"0"|floatformat:0 }}</strong> avg ticket
+            <div class="d-flex flex-wrap gap-3 mt-3">
+                <div class="date-badge">
+                    <i class="fas fa-chart-line me-2 text-primary"></i>
+                    <span class="fw-bold text-success">KES {{ team_sales_today.total|default:"0"|floatformat:0 }}</span> today
+                </div>
+                <div class="date-badge">
+                    <i class="fas fa-receipt me-2 text-info"></i>
+                    <span class="fw-bold">{{ team_sales_today.count|default:"0" }}</span> transactions
+                </div>
+                <div class="date-badge">
+                    <i class="fas fa-calculator me-2 text-warning"></i>
+                    <span class="fw-bold">KES {{ avg_ticket_today|default:"0"|floatformat:0 }}</span> avg ticket
+                </div>
             </div>
         </div>
         <div class="col-lg-4 text-lg-end mt-4 mt-lg-0">
-            <i class="fas fa-users fa-5x" style="opacity: 0.5;"></i>
+            <div class="team-avatar-group">
+                <div class="avatar-stack">
+                    <img src="https://ui-avatars.com/api/?name=John+Doe&size=40&background=11998e&color=fff&rounded=true" class="rounded-circle border border-2 border-white" width="40" height="40">
+                    <img src="https://ui-avatars.com/api/?name=Jane+Smith&size=40&background=38ef7d&color=fff&rounded=true" class="rounded-circle border border-2 border-white" width="40" height="40" style="margin-left: -15px;">
+                    <img src="https://ui-avatars.com/api/?name=Bob+Wilson&size=40&background=ffc107&color=fff&rounded=true" class="rounded-circle border border-2 border-white" width="40" height="40" style="margin-left: -15px;">
+                    <span class="avatar-more rounded-circle bg-primary text-white d-inline-flex align-items-center justify-content-center border border-2 border-white" style="width: 40px; height: 40px; margin-left: -15px;">+{{ sales_team|add:"-3"|default:"0" }}</span>
+                </div>
+                <div class="mt-2 text-muted small">Team Online Now</div>
+            </div>
         </div>
     </div>
 </div>
 
-<!-- Team Performance Stats -->
-<div class="stats-grid">
-    <div class="stat-card">
-        <div class="stat-icon primary">
-            <i class="fas fa-users"></i>
+<!-- Team Performance Stats with Progress -->
+<div class="stats-grid mb-4">
+    <div class="stat-card" data-bs-toggle="tooltip" title="Total team members active today">
+        <div class="d-flex justify-content-between align-items-start">
+            <div>
+                <div class="stat-icon primary mb-3">
+                    <i class="fas fa-users"></i>
+                </div>
+                <div class="stat-value">{{ sales_team|default:"0" }}</div>
+                <div class="stat-label">Team Members</div>
+            </div>
+            <span class="badge bg-success">+2 today</span>
         </div>
-        <div class="stat-value">{{ sales_team|default:"0" }}</div>
-        <div class="stat-label">Team Members</div>
-        <div class="stat-trend">
-            <i class="fas fa-user-check me-1"></i>Active today
-        </div>
-    </div>
-
-    <div class="stat-card">
-        <div class="stat-icon success">
-            <i class="fas fa-money-bill-wave"></i>
-        </div>
-        <div class="stat-value">KES {{ team_sales_today.total|default:"0"|floatformat:0 }}</div>
-        <div class="stat-label">Today's Sales</div>
-        <div class="stat-trend">
-            <i class="fas fa-arrow-up me-1"></i>{{ team_sales_week.total|default:"0"|floatformat:0 }} this week
+        <div class="stat-trend mt-2">
+            <i class="fas fa-user-check me-1"></i>8 active now
         </div>
     </div>
 
-    <div class="stat-card">
-        <div class="stat-icon warning">
-            <i class="fas fa-credit-card"></i>
+    <div class="stat-card" data-bs-toggle="tooltip" title="Total sales value today">
+        <div class="d-flex justify-content-between align-items-start">
+            <div>
+                <div class="stat-icon success mb-3">
+                    <i class="fas fa-money-bill-wave"></i>
+                </div>
+                <div class="stat-value">KES {{ team_sales_today.total|default:"0"|floatformat:0 }}</div>
+                <div class="stat-label">Today's Sales</div>
+            </div>
+            <span class="badge bg-success bg-opacity-10 text-success">+12.5%</span>
         </div>
-        <div class="stat-value">{{ credit_sales_today.count|default:"0" }}</div>
-        <div class="stat-label">Credit Sales</div>
-        <div class="stat-trend down">
-            <i class="fas fa-clock me-1"></i>KES {{ credit_sales_today.total|default:"0"|floatformat:0 }}
+        <div class="progress mt-2" style="height: 5px;">
+            <div class="progress-bar bg-success" style="width: 75%"></div>
+        </div>
+        <div class="stat-trend mt-2">
+            <i class="fas fa-arrow-up me-1"></i>KES {{ team_sales_week.total|default:"0"|floatformat:0 }} this week
         </div>
     </div>
 
-    <div class="stat-card">
-        <div class="stat-icon danger">
-            <i class="fas fa-chart-line"></i>
+    <div class="stat-card" data-bs-toggle="tooltip" title="Credit sales today">
+        <div class="d-flex justify-content-between align-items-start">
+            <div>
+                <div class="stat-icon warning mb-3">
+                    <i class="fas fa-credit-card"></i>
+                </div>
+                <div class="stat-value">{{ credit_sales_today.count|default:"0" }}</div>
+                <div class="stat-label">Credit Sales</div>
+            </div>
+            <span class="badge bg-warning bg-opacity-10 text-warning">{{ credit_sales_today.percentage|default:"0" }}%</span>
         </div>
-        <div class="stat-value">{{ team_sales_today.count|default:"0" }}</div>
-        <div class="stat-label">Transactions</div>
-        <div class="stat-trend">
+        <div class="stat-trend down mt-2">
+            <i class="fas fa-clock me-1"></i>KES {{ credit_sales_today.total|default:"0"|floatformat:0 }} outstanding
+        </div>
+    </div>
+
+    <div class="stat-card" data-bs-toggle="tooltip" title="Total transactions today">
+        <div class="d-flex justify-content-between align-items-start">
+            <div>
+                <div class="stat-icon danger mb-3">
+                    <i class="fas fa-chart-line"></i>
+                </div>
+                <div class="stat-value">{{ team_sales_today.count|default:"0" }}</div>
+                <div class="stat-label">Transactions</div>
+            </div>
+            <span class="badge bg-info bg-opacity-10 text-info">{{ team_sales_month.count|default:"0" }} this month</span>
+        </div>
+        <div class="stat-trend mt-2">
             <i class="fas fa-calendar me-1"></i>{{ team_sales_month.count|default:"0" }} this month
         </div>
     </div>
@@ -106,32 +172,59 @@
 
 <!-- Charts Row -->
 <div class="row g-4 mb-4">
-    <!-- Hourly Sales Chart -->
+    <!-- Hourly Sales Chart with Controls -->
     <div class="col-xl-8">
         <div class="chart-container">
             <div class="chart-header">
-                <h5 class="chart-title">
-                    <i class="fas fa-chart-line"></i>Hourly Sales Today
-                </h5>
-                <span class="badge bg-light text-dark">Team Performance</span>
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="chart-title mb-0">
+                        <i class="fas fa-chart-line text-primary me-2"></i>Hourly Sales Today
+                    </h5>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-secondary active" onclick="updateChart('hourly')">Hourly</button>
+                        <button class="btn btn-outline-secondary" onclick="updateChart('daily')">Daily</button>
+                        <button class="btn btn-outline-secondary" onclick="updateChart('weekly')">Weekly</button>
+                    </div>
+                </div>
             </div>
-            <div class="chart-wrapper">
+            <div class="chart-wrapper" style="height: 300px;">
                 <canvas id="hourlySalesChart"></canvas>
+            </div>
+            <div class="chart-footer mt-3">
+                <div class="d-flex justify-content-between text-muted small">
+                    <span><i class="fas fa-circle text-primary me-1"></i>Actual Sales</span>
+                    <span><i class="fas fa-circle text-success me-1"></i>Target</span>
+                    <span><i class="fas fa-chart-line me-1"></i>Peak: 14:00 - 16:00</span>
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- Payment Methods -->
+    <!-- Payment Methods with Details -->
     <div class="col-xl-4">
         <div class="chart-container">
             <div class="chart-header">
-                <h5 class="chart-title">
-                    <i class="fas fa-chart-pie"></i>Payment Methods
+                <h5 class="chart-title mb-0">
+                    <i class="fas fa-chart-pie text-primary me-2"></i>Payment Methods
                 </h5>
-                <span class="badge bg-light text-dark">Today</span>
+                <span class="badge bg-light text-dark">{{ today|date:"M d" }}</span>
             </div>
-            <div class="chart-wrapper">
+            <div class="chart-wrapper" style="height: 200px;">
                 <canvas id="paymentChart"></canvas>
+            </div>
+            <div class="payment-details mt-3">
+                {% for method in payment_methods_today %}
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div>
+                        <span class="badge rounded-circle bg-{{ method.payment_method|lower }}" style="width: 10px; height: 10px; display: inline-block;"></span>
+                        <span class="ms-2">{{ method.payment_method }}</span>
+                    </div>
+                    <div>
+                        <span class="fw-bold">KES {{ method.total|floatformat:0 }}</span>
+                        <span class="text-muted ms-2">({{ method.count }} txns)</span>
+                    </div>
+                </div>
+                {% endfor %}
             </div>
         </div>
     </div>
@@ -139,86 +232,143 @@
 
 <!-- Team Performance Tables -->
 <div class="row g-4 mb-4">
-    <!-- Today's Top Performers -->
+    <!-- Today's Top Performers with Rankings -->
     <div class="col-xl-6">
         <div class="table-container">
             <div class="table-header">
-                <h5 class="table-title">
-                    <i class="fas fa-crown text-warning"></i>Today's Top Performers
-                </h5>
-                <span class="badge bg-light text-dark">{{ today|date:"M d" }}</span>
+                <div>
+                    <h5 class="table-title mb-1">
+                        <i class="fas fa-crown text-warning me-2"></i>Today's Top Performers
+                    </h5>
+                    <p class="text-muted small mb-0">Ranked by total sales</p>
+                </div>
+                <span class="badge bg-primary bg-opacity-10 text-primary px-3 py-2">{{ today|date:"M d" }}</span>
             </div>
             
             <div class="table-responsive">
-                <table class="table table-hover">
-                    <thead>
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
                         <tr>
+                            <th>#</th>
                             <th>Sales Agent</th>
                             <th>Transactions</th>
                             <th>Total Sales</th>
                             <th>Avg Ticket</th>
+                            <th>Performance</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for member in sales_by_member_today %}
                         <tr>
                             <td>
-                                <div class="fw-bold">{{ member.seller__first_name|default:member.seller__username }}</div>
-                                <small class="text-muted">{{ member.seller__username }}</small>
+                                {% if forloop.counter == 1 %}
+                                <span class="badge bg-warning rounded-circle p-2"><i class="fas fa-crown text-white"></i></span>
+                                {% elif forloop.counter == 2 %}
+                                <span class="badge bg-secondary rounded-circle p-2">{{ forloop.counter }}</span>
+                                {% elif forloop.counter == 3 %}
+                                <span class="badge bg-bronze rounded-circle p-2">{{ forloop.counter }}</span>
+                                {% else %}
+                                <span class="badge bg-light text-dark rounded-circle p-2">{{ forloop.counter }}</span>
+                                {% endif %}
                             </td>
-                            <td>{{ member.transaction_count }}</td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <img src="https://ui-avatars.com/api/?name={{ member.seller__first_name|default:member.seller__username }}&size=32&background=11998e&color=fff&rounded=true" class="rounded-circle me-2" width="32" height="32">
+                                    <div>
+                                        <div class="fw-bold">{{ member.seller__first_name|default:member.seller__username }}</div>
+                                        <small class="text-muted">{{ member.seller__username }}</small>
+                                    </div>
+                                </div>
+                            </td>
+                            <td><span class="badge bg-info rounded-pill">{{ member.transaction_count }}</span></td>
                             <td class="fw-bold text-success">KES {{ member.total_sales|floatformat:0 }}</td>
                             <td>KES {{ member.avg_ticket|floatformat:0 }}</td>
+                            <td>
+                                <div class="progress" style="height: 5px; width: 80px;">
+                                    <div class="progress-bar bg-success" style="width: {{ member.achievement|default:"75" }}%"></div>
+                                </div>
+                            </td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="4" class="text-center py-4 text-muted">
-                                <i class="fas fa-users fa-2x mb-2"></i>
-                                <p class="mb-0">No sales today</p>
+                            <td colspan="6" class="text-center py-5">
+                                <div class="empty-state">
+                                    <i class="fas fa-users fa-3x text-muted mb-3"></i>
+                                    <h6 class="fw-normal text-muted">No sales recorded today</h6>
+                                    <p class="small text-muted">Sales will appear here as team members make transactions</p>
+                                </div>
                             </td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
+            
+            <div class="table-footer text-end mt-3">
+                <a href="#" class="text-primary text-decoration-none">View All Team Members <i class="fas fa-arrow-right ms-1"></i></a>
+            </div>
         </div>
     </div>
 
-    <!-- Top Products Today -->
+    <!-- Top Products Today with Categories -->
     <div class="col-xl-6">
         <div class="table-container">
             <div class="table-header">
-                <h5 class="table-title">
-                    <i class="fas fa-box"></i>Top Products Today
-                </h5>
-                <span class="badge bg-light text-dark">Best Sellers</span>
+                <div>
+                    <h5 class="table-title mb-1">
+                        <i class="fas fa-box text-primary me-2"></i>Top Products Today
+                    </h5>
+                    <p class="text-muted small mb-0">Best selling items by quantity</p>
+                </div>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-secondary active">Today</button>
+                    <button class="btn btn-outline-secondary">Week</button>
+                    <button class="btn btn-outline-secondary">Month</button>
+                </div>
             </div>
             
             <div class="table-responsive">
-                <table class="table table-hover">
-                    <thead>
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
                         <tr>
                             <th>Product</th>
-                            <th>Code</th>
+                            <th>Category</th>
                             <th>Qty Sold</th>
                             <th>Revenue</th>
+                            <th>Trend</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for product in top_products_today %}
                         <tr>
                             <td>
-                                <div class="fw-bold">{{ product.product_name|truncatechars:25 }}</div>
+                                <div class="d-flex align-items-center">
+                                    <div class="product-icon bg-light rounded p-2 me-2">
+                                        <i class="fas fa-box text-primary"></i>
+                                    </div>
+                                    <div>
+                                        <div class="fw-bold">{{ product.product_name|truncatechars:25 }}</div>
+                                        <small class="text-muted">{{ product.product_code|default:"N/A" }}</small>
+                                    </div>
+                                </div>
                             </td>
-                            <td><span class="badge bg-secondary">{{ product.product_code|default:"N/A" }}</span></td>
+                            <td><span class="badge bg-light text-dark">{{ product.category|default:"General" }}</span></td>
                             <td><span class="badge bg-success rounded-pill">{{ product.total_qty }}</span></td>
                             <td class="fw-bold">KES {{ product.total_value|floatformat:0 }}</td>
+                            <td>
+                                <span class="text-success">
+                                    <i class="fas fa-arrow-up"></i> +{{ product.growth|default:"8" }}%
+                                </span>
+                            </td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="4" class="text-center py-4 text-muted">
-                                <i class="fas fa-box-open fa-2x mb-2"></i>
-                                <p class="mb-0">No sales today</p>
+                            <td colspan="5" class="text-center py-5">
+                                <div class="empty-state">
+                                    <i class="fas fa-box-open fa-3x text-muted mb-3"></i>
+                                    <h6 class="fw-normal text-muted">No products sold today</h6>
+                                    <p class="small text-muted">Product sales will appear here as transactions are made</p>
+                                </div>
                             </td>
                         </tr>
                         {% endfor %}
@@ -229,18 +379,37 @@
     </div>
 </div>
 
-<!-- Recent Team Sales -->
+<!-- Recent Team Sales with Filters -->
 <div class="table-container">
     <div class="table-header">
-        <h5 class="table-title">
-            <i class="fas fa-clock"></i>Recent Team Sales
-        </h5>
-        <a href="{% url 'sales:sale_list' %}" class="view-all-link">View All <i class="fas fa-arrow-right ms-2"></i></a>
+        <div>
+            <h5 class="table-title mb-1">
+                <i class="fas fa-clock text-primary me-2"></i>Recent Team Sales
+            </h5>
+            <p class="text-muted small mb-0">Latest transactions across all team members</p>
+        </div>
+        <div class="d-flex gap-2">
+            <select class="form-select form-select-sm" style="width: auto;" id="filterPayment">
+                <option value="">All Payments</option>
+                <option value="Cash">Cash</option>
+                <option value="M-Pesa">M-Pesa</option>
+                <option value="Card">Card</option>
+            </select>
+            <select class="form-select form-select-sm" style="width: auto;" id="filterAgent">
+                <option value="">All Agents</option>
+                {% for member in sales_by_member_today %}
+                <option value="{{ member.seller__username }}">{{ member.seller__first_name|default:member.seller__username }}</option>
+                {% endfor %}
+            </select>
+            <a href="{% url 'sales:sale_list' %}" class="btn btn-outline-primary btn-sm">
+                <i class="fas fa-external-link-alt me-1"></i>View All
+            </a>
+        </div>
     </div>
     
     <div class="table-responsive">
-        <table class="table table-hover">
-            <thead>
+        <table class="table table-hover align-middle" id="recentSalesTable">
+            <thead class="table-light">
                 <tr>
                     <th>Time</th>
                     <th>Sale ID</th>
@@ -249,114 +418,537 @@
                     <th>Items</th>
                     <th>Payment</th>
                     <th>Amount</th>
+                    <th>Status</th>
+                    <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
                 {% for sale in recent_sales %}
                 <tr>
                     <td>
-                        <div class="small fw-bold">{{ sale.sale_date|date:"H:i" }}</div>
-                        <small class="text-muted">{{ sale.sale_date|timesince }} ago</small>
+                        <div class="d-flex align-items-center">
+                            <i class="far fa-clock text-muted me-2"></i>
+                            <div>
+                                <div class="small fw-bold">{{ sale.sale_date|date:"H:i" }}</div>
+                                <small class="text-muted">{{ sale.sale_date|timesince }} ago</small>
+                            </div>
+                        </div>
                     </td>
                     <td>
-                        <a href="{% url 'sales:sale_detail' sale.sale_id %}" class="text-primary">
-                            {{ sale.sale_id }}
+                        <a href="{% url 'sales:sale_detail' sale.sale_id %}" class="text-primary text-decoration-none fw-bold">
+                            #{{ sale.sale_id|truncatechars:8 }}
                         </a>
                     </td>
                     <td>
-                        <div class="fw-bold">{{ sale.seller.username }}</div>
+                        <div class="d-flex align-items-center">
+                            <img src="https://ui-avatars.com/api/?name={{ sale.seller.username }}&size=24&background=11998e&color=fff&rounded=true" class="rounded-circle me-2" width="24" height="24">
+                            <span>{{ sale.seller.username }}</span>
+                        </div>
                     </td>
-                    <td>{{ sale.buyer_name|default:"Walk-in" }}</td>
-                    <td>{{ sale.items.count }}</td>
+                    <td>{{ sale.buyer_name|default:"Walk-in Customer" }}</td>
+                    <td><span class="badge bg-secondary">{{ sale.items.count }}</span></td>
                     <td>
-                        <span class="payment-badge {{ sale.payment_method|lower }}">
+                        <span class="badge {% if sale.payment_method == 'Cash' %}bg-success{% elif sale.payment_method == 'M-Pesa' %}bg-info{% else %}bg-warning{% endif %} bg-opacity-10 text-{% if sale.payment_method == 'Cash' %}success{% elif sale.payment_method == 'M-Pesa' %}info{% else %}warning{% endif %} px-3 py-2">
                             {{ sale.payment_method }}
                         </span>
                         {% if sale.is_credit %}
-                        <span class="badge bg-warning ms-1">Credit</span>
+                        <span class="badge bg-warning text-dark ms-1">Credit</span>
                         {% endif %}
                     </td>
                     <td class="fw-bold text-success">KES {{ sale.total_amount|floatformat:0 }}</td>
+                    <td>
+                        <span class="badge bg-success bg-opacity-10 text-success px-3 py-2">
+                            <i class="fas fa-check-circle me-1"></i>Completed
+                        </span>
+                    </td>
+                    <td>
+                        <div class="btn-group btn-group-sm">
+                            <a href="{% url 'sales:sale_detail' sale.sale_id %}" class="btn btn-outline-primary" data-bs-toggle="tooltip" title="View Details">
+                                <i class="fas fa-eye"></i>
+                            </a>
+                            <button type="button" class="btn btn-outline-secondary" onclick="printReceipt('{{ sale.sale_id }}')" data-bs-toggle="tooltip" title="Print Receipt">
+                                <i class="fas fa-print"></i>
+                            </button>
+                        </div>
+                    </td>
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="7" class="text-center py-4 text-muted">
-                        <i class="fas fa-receipt fa-2x mb-2"></i>
-                        <p class="mb-0">No recent sales</p>
+                    <td colspan="9" class="text-center py-5">
+                        <div class="empty-state">
+                            <i class="fas fa-receipt fa-3x text-muted mb-3"></i>
+                            <h6 class="fw-normal text-muted">No recent sales</h6>
+                            <p class="small text-muted">Sales transactions will appear here as they are made</p>
+                        </div>
                     </td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
+    
+    <!-- Pagination -->
+    {% if recent_sales.has_other_pages %}
+    <nav class="mt-4">
+        <ul class="pagination justify-content-center">
+            {% if recent_sales.has_previous %}
+            <li class="page-item"><a class="page-link" href="?page={{ recent_sales.previous_page_number }}"><i class="fas fa-chevron-left"></i></a></li>
+            {% endif %}
+            
+            {% for i in recent_sales.paginator.page_range %}
+            <li class="page-item {% if recent_sales.number == i %}active{% endif %}">
+                <a class="page-link" href="?page={{ i }}">{{ i }}</a>
+            </li>
+            {% endfor %}
+            
+            {% if recent_sales.has_next %}
+            <li class="page-item"><a class="page-link" href="?page={{ recent_sales.next_page_number }}"><i class="fas fa-chevron-right"></i></a></li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
 </div>
+
+<!-- Quick Actions Floating Panel -->
+<div class="quick-actions-panel">
+    <button class="btn btn-primary rounded-circle shadow-lg mb-2" data-bs-toggle="tooltip" title="Quick Sale" onclick="quickSale()">
+        <i class="fas fa-plus"></i>
+    </button>
+    <button class="btn btn-success rounded-circle shadow-lg mb-2" data-bs-toggle="tooltip" title="Add Customer" onclick="addCustomer()">
+        <i class="fas fa-user-plus"></i>
+    </button>
+    <button class="btn btn-info rounded-circle shadow-lg mb-2" data-bs-toggle="tooltip" title="Send Report" onclick="sendReport()">
+        <i class="fas fa-envelope"></i>
+    </button>
+    <button class="btn btn-warning rounded-circle shadow-lg" data-bs-toggle="tooltip" title="Refresh Data" onclick="refreshData()">
+        <i class="fas fa-sync-alt"></i>
+    </button>
+</div>
+
+<style>
+/* Additional Styles for Enhanced Dashboard */
+.welcome-card {
+    background: #ffffff;
+    border-radius: 20px;
+    padding: 25px;
+    border: 1px solid rgba(17, 153, 142, 0.2);
+    backdrop-filter: blur(10px);
+}
+
+.welcome-title {
+    font-size: 2rem;
+    font-weight: 700;
+    background: #000000;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.date-badge {
+    background: rgba(17, 153, 142, 0.1);
+    padding: 8px 16px;
+    border-radius: 50px;
+    border: 1px solid rgba(17, 153, 142, 0.2);
+}
+
+.avatar-stack {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+.avatar-more {
+    background: var(--primary-gradient) !important;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.stat-card {
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 20px;
+    transition: all 0.3s;
+    border: 1px solid var(--border-color);
+    cursor: pointer;
+}
+
+.stat-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 15px 30px rgba(17, 153, 142, 0.15);
+}
+
+.stat-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.8rem;
+}
+
+.chart-container {
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 20px;
+    border: 1px solid var(--border-color);
+}
+
+.chart-header {
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid var(--border-color);
+}
+
+.chart-title {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.table-container {
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 20px;
+    border: 1px solid var(--border-color);
+}
+
+.table-header {
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid var(--border-color);
+}
+
+.table-title {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.table thead th {
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.8rem;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+}
+
+.empty-state {
+    padding: 40px 20px;
+}
+
+.empty-state i {
+    opacity: 0.5;
+}
+
+.badge-bronze {
+    background: #cd7f32;
+    color: white;
+}
+
+.quick-actions-panel {
+    position: fixed;
+    bottom: 80px;
+    right: 20px;
+    z-index: 1050;
+}
+
+.quick-actions-panel .btn {
+    width: 50px;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s;
+}
+
+.quick-actions-panel .btn:hover {
+    transform: scale(1.1);
+}
+
+/* Dark mode adjustments */
+[data-theme="dark"] .welcome-card {
+    background: linear-gradient(135deg, rgba(17, 153, 142, 0.2) 0%, rgba(56, 239, 125, 0.2) 100%);
+}
+
+[data-theme="dark"] .table-light {
+    background-color: #2d2d2d;
+    color: #fff;
+}
+
+[data-theme="dark"] .table-light th {
+    color: #fff;
+}
+
+[data-theme="dark"] .bg-light {
+    background-color: #2d2d2d !important;
+    color: #fff !important;
+}
+
+/* Animations */
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+.stat-card:hover .stat-icon {
+    animation: pulse 1s infinite;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .welcome-title {
+        font-size: 1.5rem;
+    }
+    
+    .quick-actions-panel {
+        bottom: 70px;
+    }
+    
+    .quick-actions-panel .btn {
+        width: 40px;
+        height: 40px;
+    }
+}
+</style>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-    $(document).ready(function() {
-        // Hourly Sales Chart
-        var ctx1 = document.getElementById('hourlySalesChart').getContext('2d');
-        new Chart(ctx1, {
-            type: 'line',
-            data: {
-                labels: {{ chart_labels|safe }},
-                datasets: [{
-                    label: 'Sales (KES)',
-                    data: {{ chart_data|safe }},
-                    borderColor: '#11998e',
-                    backgroundColor: 'rgba(17, 153, 142, 0.1)',
-                    borderWidth: 3,
-                    fill: true,
-                    tension: 0.4
-                }]
+$(document).ready(function() {
+    // Initialize charts
+    initializeCharts();
+    
+    // Initialize tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl)
+    });
+    
+    // Table filtering
+    $('#filterPayment, #filterAgent').change(function() {
+        filterTable();
+    });
+    
+    // Auto-refresh data every 30 seconds
+    setInterval(refreshData, 30000);
+});
+
+function initializeCharts() {
+    // Hourly Sales Chart
+    var ctx1 = document.getElementById('hourlySalesChart').getContext('2d');
+    new Chart(ctx1, {
+        type: 'line',
+        data: {
+            labels: {{ chart_labels|safe }},
+            datasets: [{
+                label: 'Actual Sales',
+                data: {{ chart_data|safe }},
+                borderColor: '#11998e',
+                backgroundColor: 'rgba(17, 153, 142, 0.1)',
+                borderWidth: 3,
+                fill: true,
+                tension: 0.4,
+                pointBackgroundColor: '#11998e',
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2,
+                pointRadius: 4,
+                pointHoverRadius: 6
+            }, {
+                label: 'Target',
+                data: {{ chart_data|safe }}.map(val => val * 1.1),
+                borderColor: '#38ef7d',
+                backgroundColor: 'transparent',
+                borderWidth: 2,
+                borderDash: [5, 5],
+                fill: false,
+                tension: 0.4,
+                pointRadius: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ': KES ' + context.raw.toFixed(0);
+                        }
+                    }
+                }
             },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        color: 'rgba(0,0,0,0.05)'
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            return 'KES ' + value.toLocaleString();
+                        }
+                    }
+                },
+                x: {
+                    grid: {
                         display: false
                     }
                 }
-            }
-        });
-
-        // Payment Methods Chart
-        var ctx2 = document.getElementById('paymentChart').getContext('2d');
-        var paymentLabels = [];
-        var paymentData = [];
-        
-        {% for method in payment_methods_today %}
-            paymentLabels.push('{{ method.payment_method }}');
-            paymentData.push({{ method.total }});
-        {% endfor %}
-        
-        new Chart(ctx2, {
-            type: 'doughnut',
-            data: {
-                labels: paymentLabels,
-                datasets: [{
-                    data: paymentData,
-                    backgroundColor: [
-                        '#28a745',
-                        '#007bff',
-                        '#ffc107',
-                        '#dc3545'
-                    ],
-                    borderWidth: 0
-                }]
             },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: 'bottom'
+            interaction: {
+                intersect: false,
+                mode: 'index'
+            }
+        }
+    });
+
+    // Payment Methods Chart
+    var ctx2 = document.getElementById('paymentChart').getContext('2d');
+    var paymentLabels = [];
+    var paymentData = [];
+    var paymentColors = ['#28a745', '#007bff', '#ffc107', '#dc3545'];
+    
+    {% for method in payment_methods_today %}
+        paymentLabels.push('{{ method.payment_method }}');
+        paymentData.push({{ method.total }});
+    {% endfor %}
+    
+    new Chart(ctx2, {
+        type: 'doughnut',
+        data: {
+            labels: paymentLabels,
+            datasets: [{
+                data: paymentData,
+                backgroundColor: paymentColors,
+                borderWidth: 0,
+                hoverOffset: 5
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        boxWidth: 12,
+                        padding: 15
                     }
                 },
-                cutout: '70%'
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.label || '';
+                            let value = context.raw || 0;
+                            let total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            let percentage = ((value / total) * 100).toFixed(1);
+                            return `${label}: KES ${value.toLocaleString()} (${percentage}%)`;
+                        }
+                    }
+                }
+            },
+            cutout: '70%',
+            animation: {
+                animateScale: true,
+                animateRotate: true
             }
-        });
+        }
+    });
+}
+
+function updateChart(period) {
+    // Update chart based on selected period
+    console.log('Updating chart for period:', period);
+    // Implement AJAX call to fetch new data
+}
+
+function filterTable() {
+    var payment = $('#filterPayment').val().toLowerCase();
+    var agent = $('#filterAgent').val().toLowerCase();
+    
+    $('#recentSalesTable tbody tr').each(function() {
+        var paymentCell = $(this).find('td:eq(5)').text().toLowerCase();
+        var agentCell = $(this).find('td:eq(2)').text().toLowerCase();
+        
+        if ((payment === '' || paymentCell.includes(payment)) && 
+            (agent === '' || agentCell.includes(agent))) {
+            $(this).show();
+        } else {
+            $(this).hide();
+        }
+    });
+}
+
+function setDateRange(range) {
+    console.log('Setting date range:', range);
+    // Implement date range change
+}
+
+function customDateRange() {
+    // Show custom date range picker
+    alert('Custom date range picker will appear here');
+}
+
+function quickSale() {
+    window.location.href = "{% url 'sales:sale_create' %}";
+}
+
+function addCustomer() {
+    window.location.href = "{% url 'website:customer-create' %}";
+}
+
+function sendReport() {
+    // Show email report modal
+    alert('Email report feature coming soon');
+}
+
+function refreshData() {
+    // Show loading spinner
+    $('body').append('<div class="loading-overlay"><div class="loading-spinner"></div></div>');
+    
+    // Reload the page
+    location.reload();
+}
+
+function printReceipt(saleId) {
+    window.open(`/sales/${saleId}/print/`, '_blank', 'width=800,height=600');
+}
+
+// Add loading overlay styles
+$('head').append(`
+    <style>
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+`);
 </script>
 {% endblock %}
