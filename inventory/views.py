@@ -1740,12 +1740,17 @@ def reverse_entry(request, pk):
 
 
 
+
+
 @login_required
 def stock_alerts(request):
     """List all stock alerts with counts and dismissed alerts"""
     
-    # Get active alerts
-    active_alerts = StockAlert.objects.select_related(
+    # Get page size from request, default to 20
+    page_size = request.GET.get('page_size', '20')
+    
+    # Get active alerts queryset
+    active_alerts_qs = StockAlert.objects.select_related(
         'product', 
         'product__category',
         'dismissed_by'
@@ -1758,7 +1763,7 @@ def stock_alerts(request):
         'product__name'
     )
     
-    # Get dismissed alerts (last 50)
+    # Get dismissed alerts (last 50) - no pagination needed for this
     dismissed_alerts = StockAlert.objects.select_related(
         'product',
         'product__category',
@@ -1767,29 +1772,40 @@ def stock_alerts(request):
         is_dismissed=True
     ).order_by('-dismissed_at')[:50]
     
-    # Calculate counts by type
+    # Calculate counts by type (using the queryset before pagination)
     alert_counts = {
-        'needs_reorder': active_alerts.filter(alert_type='needs_reorder').count(),
-        'lowstock': active_alerts.filter(alert_type='lowstock').count(),
-        'outofstock': active_alerts.filter(alert_type='outofstock').count(),
-        'damaged': active_alerts.filter(alert_type='damaged').count(),
-        'total': active_alerts.count()
+        'needs_reorder': active_alerts_qs.filter(alert_type='needs_reorder').count(),
+        'lowstock': active_alerts_qs.filter(alert_type='lowstock').count(),
+        'outofstock': active_alerts_qs.filter(alert_type='outofstock').count(),
+        'damaged': active_alerts_qs.filter(alert_type='damaged').count(),
+        'total': active_alerts_qs.count()
     }
     
     # Count dismissed
     dismissed_count = StockAlert.objects.filter(is_dismissed=True).count()
     
+    # Apply pagination to active alerts
+    if page_size == 'all':
+        paginator = Paginator(active_alerts_qs, active_alerts_qs.count()) if active_alerts_qs.exists() else Paginator(active_alerts_qs, 1)
+    else:
+        paginator = Paginator(active_alerts_qs, int(page_size))
+    
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+    
     context = {
-        'alerts': active_alerts,
+        'alerts': page_obj,  # This is now a paginated page object
+        'page_obj': page_obj,
+        'page_size': page_size,
         'dismissed_alerts': dismissed_alerts,
         'alert_counts': alert_counts,
         'dismissed_count': dismissed_count,
         'page_title': 'Stock Alerts',
-        'show_dismissed': False
+        'show_dismissed': False,
+        'total_alerts': active_alerts_qs.count(),
     }
     
     return render(request, 'inventory/stock/alerts_list.html', context)
-
 
 
 
