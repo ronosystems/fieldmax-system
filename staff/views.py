@@ -538,7 +538,7 @@ def staff_dashboard(request):
             'Credit Manager': 'staff:credit_manager_dashboard',
             'Credit Officer': 'staff:credit_officer_dashboard',
             'Customer Service': 'staff:customer_service_dashboard',
-            'Finance Manager': 'staff:financeF_manager_dashboard',
+            'Finance Manager': 'staff:finance_manager_dashboard',
             'Security Officer': 'staff:security_dashboard',
             'Cleaner': 'staff:cleaner_dashboard',
             'Assistant Manager': 'staff:supervisor_dashboard',
@@ -2031,8 +2031,8 @@ def cashier_dashboard(request):
 # ============================================
 # CREDIT MANAGER DASHBOARD
 # ============================================
-@dashboard_for_role('Credit Manager')
 @login_required
+@dashboard_for_role('Credit Manager')
 def credit_manager_dashboard(request):
     """Dashboard for Credit Manager - oversees all credit operations"""
 
@@ -2596,6 +2596,7 @@ def credit_officer_dashboard(request):
 # CUSTOMER SERVICE DASHBOARD
 # ============================================
 @login_required
+@dashboard_for_role('Customer Service')
 def customer_service_dashboard(request):
     """Dashboard for customer service"""
     from credit.models import CreditCustomer, CreditTransaction
@@ -2644,6 +2645,7 @@ def customer_service_dashboard(request):
 # FINNANCE DASHBOARD
 # ============================================
 @login_required
+@dashboard_for_role('Finance Manager')
 def finance_manager_dashboard(request):
     """Dashboard for finance Manager - overview of all departments"""
     from sales.models import Sale
@@ -2716,6 +2718,7 @@ def finance_manager_dashboard(request):
 # SECURITY OFFICER DASHBOARD
 # ============================================
 @login_required
+@dashboard_for_role('Security Officer')
 def security_dashboard(request):
     """Dashboard for security officer"""
     from inventory.models import Product
@@ -2763,6 +2766,7 @@ def security_dashboard(request):
 # CLEANER DASHBOARD
 # ============================================
 @login_required
+@dashboard_for_role('Cleaner')
 def cleaner_dashboard(request):
     """Dashboard for office cleaner"""
     # Simple dashboard with cleaning schedule, tasks, etc.
