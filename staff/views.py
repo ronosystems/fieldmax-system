@@ -40,6 +40,9 @@ from staff.models import UserProfile
 import random
 import re
 import string
+from functools import wraps
+from django.contrib import messages
+
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -336,6 +339,99 @@ def custom_logout(request):
 
 
 
+
+
+# ============================================
+# CORRECT AUTOREDIRECT DASHBOARD
+# ============================================
+def get_correct_dashboard_url(user):
+    """Get the correct dashboard URL for a user based on their groups"""
+    
+    # Get user's groups
+    user_groups = user.groups.values_list('name', flat=True)
+    
+    # Priority order (first match wins)
+    dashboard_map = [
+        (['Administrator'], 'staff:admin_dashboard'),
+        (['Sales Manager'], 'staff:sales_manager_dashboard'),
+        (['Store Manager', 'Inventory Manager'], 'staff:store_manager_dashboard'),
+        (['Credit Manager'], 'staff:credit_manager_dashboard'),
+        (['Credit Officer'], 'staff:credit_officer_dashboard'),
+        (['Finance Manager'], 'staff:finance_manager_dashboard'),
+        (['Sales Agent'], 'staff:sales_agent_dashboard'),
+        (['Cashier'], 'staff:cashier_dashboard'),
+        (['Customer Service'], 'staff:customer_service_dashboard'),
+        (['Security Officer'], 'staff:security_dashboard'),
+        (['Cleaner'], 'staff:cleaner_dashboard'),
+    ]
+    
+    for groups, dashboard_url in dashboard_map:
+        if any(group in user_groups for group in groups):
+            return dashboard_url
+    
+    return 'staff:staff_stats_dashboard'
+
+def dashboard_for_role(*allowed_roles):
+    """
+    Decorator that checks if user has the right role for this dashboard.
+    If not, automatically redirects to their correct dashboard.
+    
+    Usage:
+        @dashboard_for_role('Store Manager', 'Inventory Manager')
+        def store_manager_dashboard(request):
+            ...
+    """
+    def decorator(view_func):
+        @wraps(view_func)
+        def _wrapped_view(request, *args, **kwargs):
+            # Must be logged in
+            if not request.user.is_authenticated:
+                return redirect('login')
+            
+            # Superusers can access everything
+            if request.user.is_superuser:
+                return view_func(request, *args, **kwargs)
+            
+            # Get user's groups
+            user_groups = set(request.user.groups.values_list('name', flat=True))
+            
+            # Check if user has any of the allowed roles
+            has_permission = bool(set(allowed_roles) & user_groups)
+            
+            if not has_permission:
+                # User doesn't have permission for this dashboard
+                # Get their correct dashboard
+                correct_dashboard = get_correct_dashboard_url(request.user)
+                
+                # Get readable names for the message
+                current_dashboard_name = view_func.__name__.replace('_dashboard', '').replace('_', ' ').title()
+                correct_dashboard_name = correct_dashboard.split(':')[-1].replace('_dashboard', '').replace('_', ' ').title()
+                
+                # Log the redirect
+                logger.info(f"Redirecting {request.user.username} from {current_dashboard_name} to {correct_dashboard_name}")
+                
+                # Add friendly message (optional - remove if you don't want messages)
+                messages.info(
+                    request,
+                    f"👋 You were trying to access the {current_dashboard_name} Dashboard. "
+                    f"We've redirected you to your {correct_dashboard_name} Dashboard."
+                )
+                
+                return redirect(correct_dashboard)
+            
+            # User has permission - show the view
+            return view_func(request, *args, **kwargs)
+        
+        return _wrapped_view
+    return decorator
+
+
+
+
+
+
+
+
 # ============================================
 # MAIN DASHBOARD REDIRECT (Based on Groups)
 # ============================================
@@ -442,7 +538,7 @@ def staff_dashboard(request):
             'Credit Manager': 'staff:credit_manager_dashboard',
             'Credit Officer': 'staff:credit_officer_dashboard',
             'Customer Service': 'staff:customer_service_dashboard',
-            'Supervisor': 'staff:supervisor_dashboard',
+            'Finance Manager': 'staff:financeF_manager_dashboard',
             'Security Officer': 'staff:security_dashboard',
             'Cleaner': 'staff:cleaner_dashboard',
             'Assistant Manager': 'staff:supervisor_dashboard',
@@ -1067,8 +1163,8 @@ def prepare_dashboard_messages(request, dashboard_name=None):
                 dashboard_name = 'Credit Officer'
             elif 'Customer Service' in user_groups:
                 dashboard_name = 'Customer Service'
-            elif 'Supervisor' in user_groups:
-                dashboard_name = 'Supervisor'
+            elif 'Finance Manager' in user_groups:
+                dashboard_name = 'Finance Manager'
             elif 'Security Officer' in user_groups:
                 dashboard_name = 'Security'
             elif 'Cleaner' in user_groups:
@@ -1099,6 +1195,7 @@ def prepare_dashboard_messages(request, dashboard_name=None):
 # ADMIN DASHBOARD
 #==========================================
 @login_required
+@dashboard_for_role('Administrator')
 def admin_dashboard(request):
     """Admin dashboard with full system overview"""
     from django.contrib.auth import get_user_model
@@ -1200,6 +1297,7 @@ def admin_dashboard(request):
 # STORE MANAGER DASHBOARD - FIXED WITH STOCK ALERTS
 # ============================================
 @login_required
+@dashboard_for_role('Store Manager', 'Inventory Manager')
 def store_manager_dashboard(request):
     """Dashboard for store manager"""
     from inventory.models import Product, Category, StockAlert, StockEntry
@@ -1384,6 +1482,7 @@ def store_manager_dashboard(request):
 # SALES AGENT DASHBOARD - WITH PRODUCT LOOKUP
 # ============================================
 @login_required
+@dashboard_for_role('Sales Agent')
 def sales_agent_dashboard(request):
     """Dashboard for sales agents with product price lookup"""
     from sales.models import Sale, SaleItem
@@ -1690,6 +1789,7 @@ def product_lookup_api(request):
 # SALES MANAGER DASHBOARD - CORRECTED VERSION
 # ============================================
 @login_required
+@dashboard_for_role('Sales Manager')
 def sales_manager_dashboard(request):
     """Dashboard for sales manager - oversees all sales team"""
     from sales.models import Sale, SaleItem
@@ -1879,6 +1979,7 @@ def sales_manager_dashboard(request):
 # CASHIER DASHBOARD
 # ============================================
 @login_required
+@dashboard_for_role('Cashier')
 def cashier_dashboard(request):
     """Dashboard for cashier desk"""
     from sales.models import Sale
@@ -1930,7 +2031,7 @@ def cashier_dashboard(request):
 # ============================================
 # CREDIT MANAGER DASHBOARD
 # ============================================
-
+@dashboard_for_role('Credit Manager')
 @login_required
 def credit_manager_dashboard(request):
     """Dashboard for Credit Manager - oversees all credit operations"""
@@ -2223,6 +2324,7 @@ def credit_manager_dashboard(request):
 # CREDIT OFFICER DASHBOARD
 # ============================================
 @login_required
+@dashboard_for_role('Credit Officer')
 def credit_officer_dashboard(request):
     """Dashboard for credit officer showing only their assigned products and transactions"""
     from credit.models import CreditTransaction, CreditCustomer, CreditCompany, CreditTransactionLog
@@ -2539,11 +2641,11 @@ def customer_service_dashboard(request):
 
 
 # ============================================
-# SUPERVISOR DASHBOARD
+# FINNANCE DASHBOARD
 # ============================================
 @login_required
-def supervisor_dashboard(request):
-    """Dashboard for supervisor - overview of all departments"""
+def finance_manager_dashboard(request):
+    """Dashboard for finance Manager - overview of all departments"""
     from sales.models import Sale
     from credit.models import CreditTransaction, CreditCustomer
     from inventory.models import Product
@@ -2605,7 +2707,7 @@ def supervisor_dashboard(request):
         'recent_sales': recent_sales,
         'recent_credits': recent_credits,
     }
-    return render(request, 'staff/dashboards/supervisor_dashboard.html', context)
+    return render(request, 'staff/dashboards/finance_dashboard.html', context)
 
 
 

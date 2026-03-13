@@ -43,7 +43,7 @@ class StaffApplication(models.Model):
         ('credit_manager', 'Credit Manager'),
         ('credit_officer', 'Credit Officer'),
         ('customer_service', 'Customer Service'),
-        ('supervisor', 'Supervisor'),
+        ('finance_manager', 'Finance Manager'),
         ('security', 'Security Officer'),
         ('cleaner', 'Cleaner'),
         ('inventory_manager', 'Inventory Manager'),

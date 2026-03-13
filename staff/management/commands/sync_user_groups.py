@@ -18,7 +18,7 @@ class Command(BaseCommand):
             'credit_manager': 'Credit manager',
             'credit_officer': 'Credit Officer',
             'customer_service': 'Customer Service',
-            'supervisor': 'Supervisor',
+            'finance_manager': 'Finance Manager',
             'security': 'Security Officer',
             'cleaner': 'Cleaner',
             'assistant_manager': 'Assistant Manager',

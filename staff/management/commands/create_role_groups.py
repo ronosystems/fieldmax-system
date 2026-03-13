@@ -13,7 +13,7 @@ class Command(BaseCommand):
         # List of all roles to add as groups
         ROLES = [
             'Administrator',
-            'Supervisor',
+            'finance Manager',
             'Sales Manager',
             'Store Manager',
             'Credit Officer',

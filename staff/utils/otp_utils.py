@@ -91,7 +91,7 @@ def get_user_role(user):
     # Define role hierarchy (highest to lowest)
     role_hierarchy = [
         'Administrator',
-        'Supervisor',
+        'Finance Manager',
         'Sales Manager',
         'Store Manager',
         'Credit Officer',

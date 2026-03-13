@@ -14,7 +14,7 @@ urlpatterns = [
     path('otp-resend/', views.otp_resend, name='otp_resend'),
     path('', views.staff_dashboard, name='staff_dashboard'),
     path('stats-dashboard/', views.staff_stats_dashboard, name='staff_stats_dashboard'),
-    path('logout/', views.custom_logout, name='logout'),  # Keep only one logout
+    path('logout/', views.custom_logout, name='logout'),
     path('password-change/', views.password_change, name='password_change'),
     
     # ============================================
@@ -37,7 +37,7 @@ urlpatterns = [
     path('credit-manager-dashboard/', views.credit_manager_dashboard, name='credit_manager_dashboard'),
     path('credit-officer-dashboard/', views.credit_officer_dashboard, name='credit_officer_dashboard'),
     path('customer-service-dashboard/', views.customer_service_dashboard, name='customer_service_dashboard'),
-    path('supervisor-dashboard/', views.supervisor_dashboard, name='supervisor_dashboard'),
+    path('finance-manager-dashboard/', views.finance_manager_dashboard, name='finance_manager_dashboard'),
     path('security-dashboard/', views.security_dashboard, name='security_dashboard'),
     path('cleaner-dashboard/', views.cleaner_dashboard, name='cleaner_dashboard'),
     
