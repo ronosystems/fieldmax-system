@@ -1,73 +1,199 @@
 {% load inventory_tags %}
 
 {% if alerts %}
-    <div class="row">
-        {% for alert in alerts %}
-        <div class="col-md-3 mb-4">
-            <div class="card shadow-sm h-100">
-                <div class="card-header bg-white py-2">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <span class="badge {% if alert.severity == 'critical' %}bg-danger{% else %}bg-warning{% endif %}">
-                            {{ alert.get_severity_display|upper }}
-                        </span>
-                        <small class="text-muted">{{ alert.product.product_code }}</small>
-                    </div>
-                </div>
+<div class="table-responsive">
+    <table class="table table-hover align-middle">
+        <thead class="table-light">
+            <tr>
+                <th>Severity</th>
+                <th>Product</th>
+                <th>Code</th>
+                <th>Category</th>
+                <th>Current Stock</th>
+                <th>Threshold</th>
+                <th>Alert Type</th>
+                <th>Status</th>
+                <th class="text-end">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for alert in alerts %}
+            <tr>
+                <!-- Severity Badge -->
+                <td>
+                    <span class="badge {% if alert.severity == 'critical' %}bg-danger{% else %}bg-warning{% endif %}">
+                        {{ alert.get_severity_display|upper }}
+                    </span>
+                </td>
                 
-                <div class="card-body">
-                    <h6 class="text-center mb-1">{{ alert.product.display_name|truncatechars:25 }}</h6>
-                    <p class="text-muted text-center small mb-3">{{ alert.product.category.name|default:"Uncategorized" }}</p>
-                    
-                    <div class="text-center mb-3">
-                        <div class="rounded-circle d-flex align-items-center justify-content-center mx-auto bg-light" 
-                             style="width: 70px; height: 70px;">
-                            <span class="h3 mb-0 {% if alert.current_stock == 0 %}text-danger{% endif %}">
+                <!-- Product Name -->
+                <td>
+                    <div class="fw-bold">{{ alert.product.display_name|truncatechars:30 }}</div>
+                </td>
+                
+                <!-- Product Code -->
+                <td>
+                    <code class="bg-light p-1 rounded">{{ alert.product.product_code }}</code>
+                </td>
+                
+                <!-- Category -->
+                <td>
+                    <span class="badge bg-secondary">{{ alert.product.category.name|default:"Uncategorized" }}</span>
+                </td>
+                
+                <!-- Current Stock -->
+                <td>
+                    <div class="d-flex align-items-center">
+                        <div class="rounded-circle bg-light d-flex align-items-center justify-content-center me-2" 
+                             style="width: 32px; height: 32px;">
+                            <span class="fw-bold {% if alert.current_stock == 0 %}text-danger{% endif %}">
                                 {{ alert.current_stock }}
                             </span>
                         </div>
-                        <small class="text-muted d-block mt-1">Current Stock</small>
+                        <small class="text-muted">units</small>
                     </div>
-                    
-                    <div class="small">
-                        <div class="d-flex justify-content-between mb-1">
-                            <span class="text-muted">Threshold:</span>
-                            <span class="fw-bold">{{ alert.threshold }}</span>
-                        </div>
-                        <div class="d-flex justify-content-between mb-1">
-                            <span class="text-muted">Alert Type:</span>
-                            <span class="fw-bold">{{ alert.get_alert_type_display }}</span>
-                        </div>
-                    </div>
-                </div>
+                </td>
                 
-                <div class="card-footer bg-white border-top-0 pt-0 pb-3">
-                    <div class="d-flex gap-2">
-                        <a href="{% url 'inventory:product_detail' alert.product.id %}" class="btn btn-sm btn-outline-info" title="View Details">
+                <!-- Threshold -->
+                <td>
+                    <span class="badge bg-info bg-opacity-25 text-dark">{{ alert.threshold }}</span>
+                </td>
+                
+                <!-- Alert Type -->
+                <td>
+                    <span class="badge {% if alert.alert_type == 'outofstock' %}bg-danger{% elif alert.alert_type == 'lowstock' %}bg-warning{% else %}bg-info{% endif %} bg-opacity-25 text-dark">
+                        {{ alert.get_alert_type_display }}
+                    </span>
+                </td>
+                
+                <!-- Status Indicator -->
+                <td>
+                    {% if alert.current_stock == 0 %}
+                        <span class="badge bg-danger">Out of Stock</span>
+                    {% elif alert.current_stock <= alert.threshold %}
+                        <span class="badge bg-warning">Low Stock</span>
+                    {% else %}
+                        <span class="badge bg-success">Normal</span>
+                    {% endif %}
+                </td>
+                
+                <!-- Action Buttons -->
+                <td class="text-end">
+                    <div class="btn-group btn-group-sm" role="group">
+                        <!-- View Details -->
+                        <a href="{% url 'inventory:product_detail' alert.product.id %}" 
+                           class="btn btn-outline-info" 
+                           title="View Product Details"
+                           data-bs-toggle="tooltip">
                             <i class="fas fa-eye"></i>
                         </a>
                         
+                        <!-- Restock (if applicable) -->
                         {% if alert.alert_type != 'outofstock' and alert.alert_type != 'damaged' %}
                         <a href="{% url 'inventory:restock_alert_combined' alert.id %}" 
-                           class="btn btn-sm btn-outline-primary flex-grow-1">
-                            <i class="fas fa-plus me-1"></i> Restock
+                           class="btn btn-outline-primary"
+                           title="Restock Product"
+                           data-bs-toggle="tooltip">
+                            <i class="fas fa-plus"></i>
                         </a>
                         {% endif %}
                         
+                        <!-- Dismiss Alert -->
                         <a href="{% url 'inventory:dismiss_alert_page' alert.id %}?next={% url 'inventory:stock_alerts' %}" 
-                           class="btn btn-sm btn-outline-success"
-                           title="Dismiss Alert">
+                           class="btn btn-outline-success"
+                           title="Dismiss Alert"
+                           data-bs-toggle="tooltip">
                             <i class="fas fa-check"></i>
                         </a>
                     </div>
-                </div>
-            </div>
-        </div>
-        {% endfor %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Optional: Add summary stats below table -->
+<div class="d-flex justify-content-between align-items-center mt-3">
+    <div>
+        <span class="text-muted">Total Alerts: <strong>{{ alerts|length }}</strong></span>
     </div>
+    <div class="btn-group">
+        <button class="btn btn-sm btn-outline-secondary" onclick="exportTableToCSV()">
+            <i class="fas fa-download me-1"></i> Export
+        </button>
+        <button class="btn btn-sm btn-outline-secondary" onclick="window.print()">
+            <i class="fas fa-print me-1"></i> Print
+        </button>
+    </div>
+</div>
+
 {% else %}
-    <div class="text-center py-5">
-        <i class="fas fa-check-circle fa-4x text-success opacity-50 mb-3"></i>
-        <h5 class="text-success">All Clear!</h5>
-        <p class="text-muted">No alerts to display in this category.</p>
-    </div>
+<div class="text-center py-5">
+    <i class="fas fa-check-circle fa-4x text-success opacity-50 mb-3"></i>
+    <h5 class="text-success">All Clear!</h5>
+    <p class="text-muted">No alerts to display in this category.</p>
+</div>
 {% endif %}
+
+<!-- Add this CSS for better table styling -->
+<style>
+    .table td, .table th {
+        vertical-align: middle;
+        padding: 0.75rem;
+    }
+    
+    .btn-group-sm .btn {
+        padding: 0.25rem 0.5rem;
+    }
+    
+    .table-hover tbody tr:hover {
+        background-color: rgba(0,0,0,.02);
+    }
+    
+    /* Optional: Make table more compact */
+    .table-compact td, .table-compact th {
+        padding: 0.5rem;
+    }
+    
+    /* Responsive table */
+    @media (max-width: 768px) {
+        .table-responsive {
+            font-size: 0.9rem;
+        }
+        
+        .btn-group-sm .btn {
+            padding: 0.2rem 0.4rem;
+        }
+    }
+</style>
+
+<!-- Optional: Add export functionality -->
+<script>
+function exportTableToCSV() {
+    var csv = [];
+    var rows = document.querySelectorAll("table tr");
+    
+    for (var i = 0; i < rows.length; i++) {
+        var row = [], cols = rows[i].querySelectorAll("td, th");
+        
+        for (var j = 0; j < cols.length; j++) {
+            // Clean the text (remove HTML tags, trim)
+            var text = cols[j].innerText.replace(/\n/g, ' ').trim();
+            row.push('"' + text + '"');
+        }
+        
+        csv.push(row.join(','));
+    }
+    
+    // Download CSV file
+    var csvFile = new Blob([csv.join('\n')], {type: 'text/csv'});
+    var downloadLink = document.createElement('a');
+    downloadLink.download = 'stock_alerts.csv';
+    downloadLink.href = window.URL.createObjectURL(csvFile);
+    downloadLink.style.display = 'none';
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
+}
+</script>
