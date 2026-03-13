@@ -29,5 +29,6 @@ urlpatterns = [
     # ===== CATCH-ALL PATTERNS - MUST BE LAST =====
     path('<str:sale_id>/', views.sale_detail, name='sale_detail'),
     path('<str:sale_id>/receipt/', views.sale_receipt, name='sale_receipt'),
+    path('<str:sale_id>/print/', views.sale_receipt, name='sale_print'),
     path('<str:sale_id>/reverse/', views.sale_reverse, name='sale_reverse'),
 ]

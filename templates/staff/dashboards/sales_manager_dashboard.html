@@ -89,12 +89,21 @@
         <div class="col-lg-4 text-lg-end mt-4 mt-lg-0">
             <div class="team-avatar-group">
                 <div class="avatar-stack">
-                    <img src="https://ui-avatars.com/api/?name=John+Doe&size=40&background=11998e&color=fff&rounded=true" class="rounded-circle border border-2 border-white" width="40" height="40">
-                    <img src="https://ui-avatars.com/api/?name=Jane+Smith&size=40&background=38ef7d&color=fff&rounded=true" class="rounded-circle border border-2 border-white" width="40" height="40" style="margin-left: -15px;">
-                    <img src="https://ui-avatars.com/api/?name=Bob+Wilson&size=40&background=ffc107&color=fff&rounded=true" class="rounded-circle border border-2 border-white" width="40" height="40" style="margin-left: -15px;">
-                    <span class="avatar-more rounded-circle bg-primary text-white d-inline-flex align-items-center justify-content-center border border-2 border-white" style="width: 40px; height: 40px; margin-left: -15px;">+{{ sales_team|add:"-3"|default:"0" }}</span>
+                    {% for member in sales_by_member_today|slice:":3" %}
+                    <img src="https://ui-avatars.com/api/?name={{ member.seller__first_name|default:member.seller__username }}&size=40&background=11998e&color=fff&rounded=true" 
+                         class="rounded-circle border border-2 border-white" width="40" height="40" 
+                         {% if not forloop.first %}style="margin-left: -15px;"{% endif %}>
+                    {% empty %}
+                    <img src="https://ui-avatars.com/api/?name=Team&size=40&background=11998e&color=fff&rounded=true" class="rounded-circle border border-2 border-white" width="40" height="40">
+                    <img src="https://ui-avatars.com/api/?name=Members&size=40&background=38ef7d&color=fff&rounded=true" class="rounded-circle border border-2 border-white" width="40" height="40" style="margin-left: -15px;">
+                    {% endfor %}
+                    
+                    {% if sales_by_member_today|length > 3 %}
+                    <span class="avatar-more rounded-circle bg-primary text-white d-inline-flex align-items-center justify-content-center border border-2 border-white" 
+                          style="width: 40px; height: 40px; margin-left: -15px;">+{{ sales_by_member_today|length|add:"-3" }}</span>
+                    {% endif %}
                 </div>
-                <div class="mt-2 text-muted small">Team Online Now</div>
+                <div class="mt-2 text-muted small">Top Performers</div>
             </div>
         </div>
     </div>
@@ -111,10 +120,10 @@
                 <div class="stat-value">{{ sales_team|default:"0" }}</div>
                 <div class="stat-label">Team Members</div>
             </div>
-            <span class="badge bg-success">+2 today</span>
+            <span class="badge bg-success">+{{ sales_by_member_today|length }} today</span>
         </div>
         <div class="stat-trend mt-2">
-            <i class="fas fa-user-check me-1"></i>8 active now
+            <i class="fas fa-user-check me-1"></i>{{ sales_by_member_today|length }} active now
         </div>
     </div>
 
@@ -127,10 +136,14 @@
                 <div class="stat-value">KES {{ team_sales_today.total|default:"0"|floatformat:0 }}</div>
                 <div class="stat-label">Today's Sales</div>
             </div>
-            <span class="badge bg-success bg-opacity-10 text-success">+12.5%</span>
+            <span class="badge bg-success bg-opacity-10 text-success">
+                {% if team_sales_week.total %}
+                    {% widthratio team_sales_today.total|default:0 team_sales_week.total 100 %}%
+                {% else %}0%{% endif %}
+            </span>
         </div>
         <div class="progress mt-2" style="height: 5px;">
-            <div class="progress-bar bg-success" style="width: 75%"></div>
+            <div class="progress-bar bg-success" style="width: {% if team_sales_week.total %}{% widthratio team_sales_today.total|default:0 team_sales_week.total 100 %}{% else %}0{% endif %}%"></div>
         </div>
         <div class="stat-trend mt-2">
             <i class="fas fa-arrow-up me-1"></i>KES {{ team_sales_week.total|default:"0"|floatformat:0 }} this week
@@ -146,7 +159,11 @@
                 <div class="stat-value">{{ credit_sales_today.count|default:"0" }}</div>
                 <div class="stat-label">Credit Sales</div>
             </div>
-            <span class="badge bg-warning bg-opacity-10 text-warning">{{ credit_sales_today.percentage|default:"0" }}%</span>
+            <span class="badge bg-warning bg-opacity-10 text-warning">
+                {% if team_sales_today.count %}
+                    {% widthratio credit_sales_today.count|default:0 team_sales_today.count 100 %}%
+                {% else %}0%{% endif %}
+            </span>
         </div>
         <div class="stat-trend down mt-2">
             <i class="fas fa-clock me-1"></i>KES {{ credit_sales_today.total|default:"0"|floatformat:0 }} outstanding
@@ -172,7 +189,7 @@
 
 <!-- Charts Row -->
 <div class="row g-4 mb-4">
-    <!-- Hourly Sales Chart with Controls -->
+    <!-- Hourly Sales Chart -->
     <div class="col-xl-8">
         <div class="chart-container">
             <div class="chart-header">
@@ -180,10 +197,9 @@
                     <h5 class="chart-title mb-0">
                         <i class="fas fa-chart-line text-primary me-2"></i>Hourly Sales Today
                     </h5>
-                    <div class="btn-group btn-group-sm">
-                        <button class="btn btn-outline-secondary active" onclick="updateChart('hourly')">Hourly</button>
-                        <button class="btn btn-outline-secondary" onclick="updateChart('daily')">Daily</button>
-                        <button class="btn btn-outline-secondary" onclick="updateChart('weekly')">Weekly</button>
+                    <div>
+                        <span class="badge bg-success me-2">Total: KES {{ team_sales_today.total|default:"0"|floatformat:0 }}</span>
+                        <span class="badge bg-info">{{ chart_labels|length }} Hours</span>
                     </div>
                 </div>
             </div>
@@ -192,15 +208,34 @@
             </div>
             <div class="chart-footer mt-3">
                 <div class="d-flex justify-content-between text-muted small">
-                    <span><i class="fas fa-circle text-primary me-1"></i>Actual Sales</span>
-                    <span><i class="fas fa-circle text-success me-1"></i>Target</span>
-                    <span><i class="fas fa-chart-line me-1"></i>Peak: 14:00 - 16:00</span>
+                    <span><i class="fas fa-circle text-primary me-1"></i>Sales (KES)</span>
+                    <span><i class="fas fa-clock me-1"></i>
+                        {% if hourly_sales %}
+                            {% with max_hour=hourly_sales.0 %}
+                                {% for hour in hourly_sales %}
+                                    {% if hour.amount > max_hour.amount %}
+                                        {% with max_hour=hour %}{% endwith %}
+                                    {% endif %}
+                                {% endfor %}
+                                Peak: 
+                                {% for hour in hourly_sales %}
+                                    {% if forloop.counter0 == 0 or hour.amount > max_hour.amount %}
+                                        {% with max_hour=hour %}
+                                            {{ hour.hour }}:00 (KES {{ hour.amount|floatformat:0 }})
+                                        {% endwith %}
+                                    {% endif %}
+                                {% endfor %}
+                            {% endwith %}
+                        {% else %}
+                            No data available
+                        {% endif %}
+                    </span>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Payment Methods with Details -->
+    <!-- Payment Methods -->
     <div class="col-xl-4">
         <div class="chart-container">
             <div class="chart-header">
@@ -213,18 +248,44 @@
                 <canvas id="paymentChart"></canvas>
             </div>
             <div class="payment-details mt-3">
-                {% for method in payment_methods_today %}
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <div>
-                        <span class="badge rounded-circle bg-{{ method.payment_method|lower }}" style="width: 10px; height: 10px; display: inline-block;"></span>
-                        <span class="ms-2">{{ method.payment_method }}</span>
+                {% if payment_methods_today %}
+                    {% for method in payment_methods_today %}
+                    <div class="d-flex justify-content-between align-items-center mb-2 p-2 rounded" style="background: rgba(17, 153, 142, 0.05);">
+                        <div class="d-flex align-items-center">
+                            <span class="badge rounded-circle p-2 me-2" style="background: 
+                                {% if method.payment_method == 'Cash' %}#28a745
+                                {% elif method.payment_method == 'M-Pesa' %}#007bff
+                                {% elif method.payment_method == 'Card' %}#ffc107
+                                {% else %}#6c757d{% endif %}; width: 12px; height: 12px;">
+                            </span>
+                            <span class="fw-bold">{{ method.payment_method }}</span>
+                        </div>
+                        <div class="text-end">
+                            <span class="fw-bold text-success">KES {{ method.total|floatformat:0|default:"0" }}</span>
+                            <br>
+                            <small class="text-muted">{{ method.count|default:"0" }} transactions</small>
+                        </div>
                     </div>
-                    <div>
-                        <span class="fw-bold">KES {{ method.total|floatformat:0 }}</span>
-                        <span class="text-muted ms-2">({{ method.count }} txns)</span>
+                    {% endfor %}
+                    
+                    <!-- Summary -->
+                    <div class="mt-3 pt-2 border-top">
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted">Total Methods:</span>
+                            <span class="fw-bold">{{ payment_methods_today|length }}</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted">Total Amount:</span>
+                            <span class="fw-bold text-success">KES {{ team_sales_today.total|default:"0"|floatformat:0 }}</span>
+                        </div>
                     </div>
-                </div>
-                {% endfor %}
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-credit-card fa-3x text-muted mb-3"></i>
+                        <p class="text-muted mb-1">No payment data for today</p>
+                        <small class="text-muted">Transactions will appear here as sales are made</small>
+                    </div>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -232,7 +293,7 @@
 
 <!-- Team Performance Tables -->
 <div class="row g-4 mb-4">
-    <!-- Today's Top Performers with Rankings -->
+    <!-- Today's Top Performers -->
     <div class="col-xl-6">
         <div class="table-container">
             <div class="table-header">
@@ -264,9 +325,9 @@
                                 {% if forloop.counter == 1 %}
                                 <span class="badge bg-warning rounded-circle p-2"><i class="fas fa-crown text-white"></i></span>
                                 {% elif forloop.counter == 2 %}
-                                <span class="badge bg-secondary rounded-circle p-2">{{ forloop.counter }}</span>
+                                <span class="badge bg-secondary rounded-circle p-2">2</span>
                                 {% elif forloop.counter == 3 %}
-                                <span class="badge bg-bronze rounded-circle p-2">{{ forloop.counter }}</span>
+                                <span class="badge" style="background: #cd7f32; color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;">3</span>
                                 {% else %}
                                 <span class="badge bg-light text-dark rounded-circle p-2">{{ forloop.counter }}</span>
                                 {% endif %}
@@ -285,7 +346,7 @@
                             <td>KES {{ member.avg_ticket|floatformat:0 }}</td>
                             <td>
                                 <div class="progress" style="height: 5px; width: 80px;">
-                                    <div class="progress-bar bg-success" style="width: {{ member.achievement|default:"75" }}%"></div>
+                                    <div class="progress-bar bg-success" style="width: {{ member.avg_ticket|default:0|floatformat:0 }}%"></div>
                                 </div>
                             </td>
                         </tr>
@@ -310,7 +371,7 @@
         </div>
     </div>
 
-    <!-- Top Products Today with Categories -->
+    <!-- Top Products Today -->
     <div class="col-xl-6">
         <div class="table-container">
             <div class="table-header">
@@ -332,10 +393,9 @@
                     <thead class="table-light">
                         <tr>
                             <th>Product</th>
-                            <th>Category</th>
+                            <th>Code</th>
                             <th>Qty Sold</th>
                             <th>Revenue</th>
-                            <th>Trend</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -346,24 +406,16 @@
                                     <div class="product-icon bg-light rounded p-2 me-2">
                                         <i class="fas fa-box text-primary"></i>
                                     </div>
-                                    <div>
-                                        <div class="fw-bold">{{ product.product_name|truncatechars:25 }}</div>
-                                        <small class="text-muted">{{ product.product_code|default:"N/A" }}</small>
-                                    </div>
+                                    <div class="fw-bold">{{ product.product_name|truncatechars:25 }}</div>
                                 </div>
                             </td>
-                            <td><span class="badge bg-light text-dark">{{ product.category|default:"General" }}</span></td>
+                            <td><span class="badge bg-secondary">{{ product.product_code|default:"N/A" }}</span></td>
                             <td><span class="badge bg-success rounded-pill">{{ product.total_qty }}</span></td>
-                            <td class="fw-bold">KES {{ product.total_value|floatformat:0 }}</td>
-                            <td>
-                                <span class="text-success">
-                                    <i class="fas fa-arrow-up"></i> +{{ product.growth|default:"8" }}%
-                                </span>
-                            </td>
+                            <td class="fw-bold text-success">KES {{ product.total_value|floatformat:0 }}</td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="5" class="text-center py-5">
+                            <td colspan="4" class="text-center py-5">
                                 <div class="empty-state">
                                     <i class="fas fa-box-open fa-3x text-muted mb-3"></i>
                                     <h6 class="fw-normal text-muted">No products sold today</h6>
@@ -379,7 +431,7 @@
     </div>
 </div>
 
-<!-- Recent Team Sales with Filters -->
+<!-- Recent Team Sales -->
 <div class="table-container">
     <div class="table-header">
         <div>
@@ -394,12 +446,6 @@
                 <option value="Cash">Cash</option>
                 <option value="M-Pesa">M-Pesa</option>
                 <option value="Card">Card</option>
-            </select>
-            <select class="form-select form-select-sm" style="width: auto;" id="filterAgent">
-                <option value="">All Agents</option>
-                {% for member in sales_by_member_today %}
-                <option value="{{ member.seller__username }}">{{ member.seller__first_name|default:member.seller__username }}</option>
-                {% endfor %}
             </select>
             <a href="{% url 'sales:sale_list' %}" class="btn btn-outline-primary btn-sm">
                 <i class="fas fa-external-link-alt me-1"></i>View All
@@ -418,7 +464,6 @@
                     <th>Items</th>
                     <th>Payment</th>
                     <th>Amount</th>
-                    <th>Status</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -457,24 +502,19 @@
                     </td>
                     <td class="fw-bold text-success">KES {{ sale.total_amount|floatformat:0 }}</td>
                     <td>
-                        <span class="badge bg-success bg-opacity-10 text-success px-3 py-2">
-                            <i class="fas fa-check-circle me-1"></i>Completed
-                        </span>
-                    </td>
-                    <td>
                         <div class="btn-group btn-group-sm">
                             <a href="{% url 'sales:sale_detail' sale.sale_id %}" class="btn btn-outline-primary" data-bs-toggle="tooltip" title="View Details">
                                 <i class="fas fa-eye"></i>
                             </a>
-                            <button type="button" class="btn btn-outline-secondary" onclick="printReceipt('{{ sale.sale_id }}')" data-bs-toggle="tooltip" title="Print Receipt">
+                            <a href="{% url 'sales:sale_print' sale.sale_id %}" target="_blank" class="btn btn-outline-secondary" data-bs-toggle="tooltip" title="Print Receipt">
                                 <i class="fas fa-print"></i>
-                            </button>
+                            </a>
                         </div>
                     </td>
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="9" class="text-center py-5">
+                    <td colspan="8" class="text-center py-5">
                         <div class="empty-state">
                             <i class="fas fa-receipt fa-3x text-muted mb-3"></i>
                             <h6 class="fw-normal text-muted">No recent sales</h6>
@@ -486,27 +526,6 @@
             </tbody>
         </table>
     </div>
-    
-    <!-- Pagination -->
-    {% if recent_sales.has_other_pages %}
-    <nav class="mt-4">
-        <ul class="pagination justify-content-center">
-            {% if recent_sales.has_previous %}
-            <li class="page-item"><a class="page-link" href="?page={{ recent_sales.previous_page_number }}"><i class="fas fa-chevron-left"></i></a></li>
-            {% endif %}
-            
-            {% for i in recent_sales.paginator.page_range %}
-            <li class="page-item {% if recent_sales.number == i %}active{% endif %}">
-                <a class="page-link" href="?page={{ i }}">{{ i }}</a>
-            </li>
-            {% endfor %}
-            
-            {% if recent_sales.has_next %}
-            <li class="page-item"><a class="page-link" href="?page={{ recent_sales.next_page_number }}"><i class="fas fa-chevron-right"></i></a></li>
-            {% endif %}
-        </ul>
-    </nav>
-    {% endif %}
 </div>
 
 <!-- Quick Actions Floating Panel -->
@@ -517,10 +536,7 @@
     <button class="btn btn-success rounded-circle shadow-lg mb-2" data-bs-toggle="tooltip" title="Add Customer" onclick="addCustomer()">
         <i class="fas fa-user-plus"></i>
     </button>
-    <button class="btn btn-info rounded-circle shadow-lg mb-2" data-bs-toggle="tooltip" title="Send Report" onclick="sendReport()">
-        <i class="fas fa-envelope"></i>
-    </button>
-    <button class="btn btn-warning rounded-circle shadow-lg" data-bs-toggle="tooltip" title="Refresh Data" onclick="refreshData()">
+    <button class="btn btn-info rounded-circle shadow-lg mb-2" data-bs-toggle="tooltip" title="Refresh Data" onclick="refreshData()">
         <i class="fas fa-sync-alt"></i>
     </button>
 </div>
@@ -528,7 +544,7 @@
 <style>
 /* Additional Styles for Enhanced Dashboard */
 .welcome-card {
-    background: #ffffff;
+    background: linear-gradient(135deg, rgb(254, 255, 255) 0%, rgb(254, 255, 255) 100%);
     border-radius: 20px;
     padding: 25px;
     border: 1px solid rgba(17, 153, 142, 0.2);
@@ -587,6 +603,11 @@
     font-size: 1.8rem;
 }
 
+.stat-icon.primary { background: linear-gradient(135deg, #11998e, #38ef7d); }
+.stat-icon.success { background: linear-gradient(135deg, #28a745, #20c997); }
+.stat-icon.warning { background: linear-gradient(135deg, #ffc107, #fd7e14); }
+.stat-icon.danger { background: linear-gradient(135deg, #dc3545, #e83e8c); }
+
 .chart-container {
     background: var(--card-bg);
     border-radius: 20px;
@@ -639,11 +660,6 @@
 
 .empty-state i {
     opacity: 0.5;
-}
-
-.badge-bronze {
-    background: #cd7f32;
-    color: white;
 }
 
 .quick-actions-panel {
@@ -717,6 +733,9 @@
 {% block extra_js %}
 <script>
 $(document).ready(function() {
+    // Log data for debugging
+    console.log('Dashboard initialized');
+    
     // Initialize charts
     initializeCharts();
     
@@ -727,158 +746,145 @@ $(document).ready(function() {
     });
     
     // Table filtering
-    $('#filterPayment, #filterAgent').change(function() {
+    $('#filterPayment').change(function() {
         filterTable();
     });
     
-    // Auto-refresh data every 30 seconds
-    setInterval(refreshData, 30000);
+    // Auto-refresh data every 60 seconds
+    setInterval(refreshData, 60000);
 });
 
 function initializeCharts() {
     // Hourly Sales Chart
-    var ctx1 = document.getElementById('hourlySalesChart').getContext('2d');
-    new Chart(ctx1, {
-        type: 'line',
-        data: {
-            labels: {{ chart_labels|safe }},
-            datasets: [{
-                label: 'Actual Sales',
-                data: {{ chart_data|safe }},
-                borderColor: '#11998e',
-                backgroundColor: 'rgba(17, 153, 142, 0.1)',
-                borderWidth: 3,
-                fill: true,
-                tension: 0.4,
-                pointBackgroundColor: '#11998e',
-                pointBorderColor: '#fff',
-                pointBorderWidth: 2,
-                pointRadius: 4,
-                pointHoverRadius: 6
-            }, {
-                label: 'Target',
-                data: {{ chart_data|safe }}.map(val => val * 1.1),
-                borderColor: '#38ef7d',
-                backgroundColor: 'transparent',
-                borderWidth: 2,
-                borderDash: [5, 5],
-                fill: false,
-                tension: 0.4,
-                pointRadius: 0
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    display: false
-                },
-                tooltip: {
-                    mode: 'index',
-                    intersect: false,
-                    callbacks: {
-                        label: function(context) {
-                            return context.dataset.label + ': KES ' + context.raw.toFixed(0);
-                        }
-                    }
-                }
+    var ctx1 = document.getElementById('hourlySalesChart');
+    if (!ctx1) return;
+    
+    ctx1 = ctx1.getContext('2d');
+    
+    var hourlyLabels = {{ chart_labels|safe }};
+    var hourlyData = {{ chart_data|safe }};
+    
+    if (hourlyLabels && hourlyLabels.length > 0 && hourlyData && hourlyData.length > 0) {
+        new Chart(ctx1, {
+            type: 'line',
+            data: {
+                labels: hourlyLabels,
+                datasets: [{
+                    label: 'Sales (KES)',
+                    data: hourlyData,
+                    borderColor: '#11998e',
+                    backgroundColor: 'rgba(17, 153, 142, 0.1)',
+                    borderWidth: 3,
+                    fill: true,
+                    tension: 0.4,
+                    pointBackgroundColor: '#11998e',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2,
+                    pointRadius: 4,
+                    pointHoverRadius: 6
+                }]
             },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    grid: {
-                        color: 'rgba(0,0,0,0.05)'
-                    },
-                    ticks: {
-                        callback: function(value) {
-                            return 'KES ' + value.toLocaleString();
-                        }
-                    }
-                },
-                x: {
-                    grid: {
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
                         display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return 'KES ' + context.raw.toFixed(0);
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            color: 'rgba(0,0,0,0.05)'
+                        },
+                        ticks: {
+                            callback: function(value) {
+                                return 'KES ' + value.toLocaleString();
+                            }
+                        }
                     }
                 }
-            },
-            interaction: {
-                intersect: false,
-                mode: 'index'
             }
-        }
-    });
+        });
+    } else {
+        // Show empty state
+        ctx1.canvas.parentNode.innerHTML = '<div class="text-center py-5"><i class="fas fa-chart-line fa-3x text-muted mb-3"></i><p class="text-muted">No hourly sales data available</p></div>';
+    }
 
     // Payment Methods Chart
-    var ctx2 = document.getElementById('paymentChart').getContext('2d');
+    var ctx2 = document.getElementById('paymentChart');
+    if (!ctx2) return;
+    
+    ctx2 = ctx2.getContext('2d');
+    
     var paymentLabels = [];
     var paymentData = [];
     var paymentColors = ['#28a745', '#007bff', '#ffc107', '#dc3545'];
     
     {% for method in payment_methods_today %}
-        paymentLabels.push('{{ method.payment_method }}');
-        paymentData.push({{ method.total }});
+        paymentLabels.push('{{ method.payment_method|escapejs }}');
+        paymentData.push({{ method.total|default:0 }});
     {% endfor %}
     
-    new Chart(ctx2, {
-        type: 'doughnut',
-        data: {
-            labels: paymentLabels,
-            datasets: [{
-                data: paymentData,
-                backgroundColor: paymentColors,
-                borderWidth: 0,
-                hoverOffset: 5
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'bottom',
-                    labels: {
-                        boxWidth: 12,
-                        padding: 15
-                    }
-                },
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            let label = context.label || '';
-                            let value = context.raw || 0;
-                            let total = context.dataset.data.reduce((a, b) => a + b, 0);
-                            let percentage = ((value / total) * 100).toFixed(1);
-                            return `${label}: KES ${value.toLocaleString()} (${percentage}%)`;
+    if (paymentData.length > 0 && paymentData.some(val => val > 0)) {
+        new Chart(ctx2, {
+            type: 'doughnut',
+            data: {
+                labels: paymentLabels,
+                datasets: [{
+                    data: paymentData,
+                    backgroundColor: paymentColors.slice(0, paymentData.length),
+                    borderWidth: 0,
+                    hoverOffset: 5
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            boxWidth: 12,
+                            padding: 15
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.label || '';
+                                let value = context.raw || 0;
+                                let total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                let percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                                return `${label}: KES ${value.toLocaleString()} (${percentage}%)`;
+                            }
                         }
                     }
-                }
-            },
-            cutout: '70%',
-            animation: {
-                animateScale: true,
-                animateRotate: true
+                },
+                cutout: '70%'
             }
-        }
-    });
-}
-
-function updateChart(period) {
-    // Update chart based on selected period
-    console.log('Updating chart for period:', period);
-    // Implement AJAX call to fetch new data
+        });
+    } else {
+        // Show empty state
+        ctx2.canvas.parentNode.innerHTML = '<div class="text-center py-5"><i class="fas fa-chart-pie fa-3x text-muted mb-3"></i><p class="text-muted">No payment data available</p></div>';
+    }
 }
 
 function filterTable() {
     var payment = $('#filterPayment').val().toLowerCase();
-    var agent = $('#filterAgent').val().toLowerCase();
     
     $('#recentSalesTable tbody tr').each(function() {
         var paymentCell = $(this).find('td:eq(5)').text().toLowerCase();
-        var agentCell = $(this).find('td:eq(2)').text().toLowerCase();
         
-        if ((payment === '' || paymentCell.includes(payment)) && 
-            (agent === '' || agentCell.includes(agent))) {
+        if (payment === '' || paymentCell.includes(payment)) {
             $(this).show();
         } else {
             $(this).hide();
@@ -892,7 +898,6 @@ function setDateRange(range) {
 }
 
 function customDateRange() {
-    // Show custom date range picker
     alert('Custom date range picker will appear here');
 }
 
@@ -904,51 +909,12 @@ function addCustomer() {
     window.location.href = "{% url 'website:customer-create' %}";
 }
 
-function sendReport() {
-    // Show email report modal
-    alert('Email report feature coming soon');
-}
-
 function refreshData() {
-    // Show loading spinner
-    $('body').append('<div class="loading-overlay"><div class="loading-spinner"></div></div>');
-    
-    // Reload the page
     location.reload();
 }
 
 function printReceipt(saleId) {
     window.open(`/sales/${saleId}/print/`, '_blank', 'width=800,height=600');
 }
-
-// Add loading overlay styles
-$('head').append(`
-    <style>
-        .loading-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0,0,0,0.5);
-            z-index: 9999;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .loading-spinner {
-            width: 50px;
-            height: 50px;
-            border: 5px solid #f3f3f3;
-            border-top: 5px solid var(--primary-color);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-    </style>
-`);
 </script>
 {% endblock %}
