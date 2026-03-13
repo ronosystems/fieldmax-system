@@ -684,7 +684,7 @@
                 </div>
                 {% endfor %}
 
-                <!-- Staff Verifications - FIXED -->
+                <!-- Staff Verifications - FIXED with null check -->
                 {% for staff in pending_verifications %}
                 <div class="notification-list-item" data-id="staff-{{ staff.id }}" data-type="staff" onclick="showNotificationDetail('staff', {{ staff.id|safe }})">
                     <div class="list-item-icon warning">
@@ -692,25 +692,26 @@
                     </div>
                     <div class="list-item-content">
                         <div class="list-item-title">
-                            {{ staff.user.get_full_name|default:staff.user.username }}
+                            {% if staff.user %}
+                                {{ staff.user.get_full_name|default:staff.user.username }}
+                            {% else %}
+                                Unknown User
+                            {% endif %}
                         </div>
                         <div class="list-item-desc">
                             Staff verification pending
                         </div>
                         <div class="list-item-meta">
                             <span><i class="far fa-clock"></i> {{ staff.verification_submitted_at|timesince }} ago</span>
+                            {% if staff.user %}
                             <span><i class="fas fa-envelope"></i> {{ staff.user.email }}</span>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
-                {% empty %}
-                <div class="empty-state">
-                    <i class="fas fa-check-circle" style="color: #16a34a;"></i>
-                    <p>No pending verifications</p>
-                </div>
                 {% endfor %}
 
-                <!-- Staff Applications - FIXED -->
+                <!-- Staff Applications - FIXED with null check -->
                 {% for application in pending_applications %}
                 <div class="notification-list-item" data-id="app-{{ application.id }}" data-type="application" onclick="showNotificationDetail('application', {{ application.id|safe }})">
                     <div class="list-item-icon info">
@@ -725,14 +726,9 @@
                         </div>
                         <div class="list-item-meta">
                             <span><i class="far fa-clock"></i> {{ application.application_date|timesince }} ago</span>
-                            <span><i class="fas fa-envelope"></i> {{ application.email }}</span>
+                            <span><i class="fas fa-envelope"></i> {{ application.email|default:"No email" }}</span>
                         </div>
                     </div>
-                </div>
-                {% empty %}
-                <div class="empty-state">
-                    <i class="fas fa-check-circle" style="color: #16a34a;"></i>
-                    <p>No pending applications</p>
                 </div>
                 {% endfor %}
 
@@ -750,14 +746,14 @@
                             Current stock: {{ product.quantity }} units
                         </div>
                         <div class="list-item-meta">
-                            <span><i class="fas fa-tag"></i> {{ product.category.name }}</span>
+                            <span><i class="fas fa-tag"></i> {{ product.category.name|default:"Uncategorized" }}</span>
                             <span><i class="fas fa-dollar-sign"></i> KES {{ product.selling_price|intcomma }}</span>
                         </div>
                     </div>
                 </div>
                 {% endfor %}
 
-                <!-- Recent Activity -->
+                <!-- Recent Activity - FIXED with null check -->
                 {% for activity in recent_activity %}
                 <div class="notification-list-item" data-id="activity-{{ activity.id }}" data-type="activity" onclick="showNotificationDetail('activity', {{ activity.id|safe }})">
                     <div class="list-item-icon {% if activity.entry_type == 'purchase' %}success{% elif activity.entry_type == 'sale' %}critical{% else %}info{% endif %}">
@@ -772,7 +768,13 @@
                         </div>
                         <div class="list-item-meta">
                             <span><i class="far fa-clock"></i> {{ activity.created_at|timesince }} ago</span>
-                            <span><i class="fas fa-user"></i> {{ activity.created_by.get_full_name|default:activity.created_by.username }}</span>
+                            <span><i class="fas fa-user"></i> 
+                                {% if activity.created_by %}
+                                    {{ activity.created_by.get_full_name|default:activity.created_by.username }}
+                                {% else %}
+                                    <span class="text-muted">System</span>
+                                {% endif %}
+                            </span>
                         </div>
                     </div>
                 </div>
