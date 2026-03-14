@@ -820,6 +820,22 @@ def sale_create(request):
                         product.quantity = 0
                     
                     product.save()
+                    
+                    # ============================================
+                    # CREATE STOCK ENTRY FOR AUDIT TRAIL
+                    # ============================================
+                    StockEntry.objects.create(
+                        product=product,
+                        quantity=-item['quantity'],  # Negative for sale
+                        entry_type='sale',
+                        unit_price=item['price'],
+                        total_amount=item['total'],
+                        reference_id=sale.sale_id,
+                        notes=f"Sale #{sale.sale_id} - {product.display_name}",
+                        created_by=request.user
+                    )
+                    # ============================================
+                    
                     items_processed.append({
                         'name': product.display_name,
                         'code': product.product_code,
@@ -851,12 +867,6 @@ def sale_create(request):
                     except Exception as e:
                         logger.error(f"Credit record creation failed: {str(e)}")
                 
-
-
-
-
-
-
                 # ============================================
                 # ADD NOTIFICATION HERE - AFTER SUCCESSFUL SALE
                 # ============================================
@@ -871,11 +881,7 @@ def sale_create(request):
                     logger.error(f"Failed to send admin notification: {str(e)}")
                     # Don't fail the sale if notification fails
                 """
-
-
-
-
-
+                
                 # Return appropriate response
                 if is_ajax:
                     return JsonResponse({
@@ -905,7 +911,6 @@ def sale_create(request):
         'now': timezone.now(),
     }
     return render(request, 'sales/create.html', context)
-
 
 
 
