@@ -725,6 +725,12 @@ class ProductImage(models.Model):
         except Exception:
             return f"ProductImage #{self.id}"
 
+
+
+
+
+
+
 # ====================================
 # INVENTORY STOCK ENTRY MODEL 📦
 # ====================================
@@ -823,10 +829,10 @@ class StockEntry(models.Model):
             raise ValidationError("Quantity cannot be zero")
         
         # Sales cannot exceed available stock
-        if self.entry_type == 'sale' and abs(self.quantity) > (self.product.quantity or 0):
-            raise ValidationError(
-                f"Cannot sell {abs(self.quantity)} units. Only {self.product.quantity} available."
-            )
+        #if self.entry_type == 'sale' and abs(self.quantity) > (self.product.quantity or 0):
+        #    raise ValidationError(
+        #        f"Cannot sell {abs(self.quantity)} units. Only {self.product.quantity} available."
+        #    )
         
         # Single items: purchases and reversals must be quantity 1
         if self.product.category and self.product.category.is_single_item:
@@ -1063,6 +1069,12 @@ def manage_product_stock_entries(sender, instance, created, **kwargs):
     except Exception as e:
         logger.error(f"❌ Error in stock entry management: {str(e)}")
 
+
+
+
+
+
+
 @receiver(pre_save, sender=StockEntry)
 def validate_stock_entry(sender, instance, **kwargs):
     """
@@ -1072,16 +1084,17 @@ def validate_stock_entry(sender, instance, **kwargs):
         if instance.quantity == 0:
             raise ValidationError("Stock entry quantity cannot be zero")
         
-        # For sales, ensure we have enough stock
-        if instance.entry_type == 'sale' and instance.quantity < 0:
-            available_stock = instance.product.quantity or 0
-            if abs(instance.quantity) > available_stock:
-                raise ValidationError(
-                    f"Cannot sell {abs(instance.quantity)} units. "
-                    f"Only {available_stock} available."
-                )
+        # COMMENT OUT THIS ENTIRE BLOCK TOO
+        # # For sales, ensure we have enough stock
+        # if instance.entry_type == 'sale' and instance.quantity < 0:
+        #     available_stock = instance.product.quantity or 0
+        #     if abs(instance.quantity) > available_stock:
+        #         raise ValidationError(
+        #             f"Cannot sell {abs(instance.quantity)} units. "
+        #             f"Only {available_stock} available."
+        #         )
         
-        # For single items, enforce quantity = 1
+        # Keep this part for single items
         if instance.product.category and instance.product.category.is_single_item:
             if instance.entry_type in ['purchase', 'reversal'] and abs(instance.quantity) != 1:
                 raise ValidationError("Single items must have quantity = 1 for purchase/reversal")
@@ -1091,7 +1104,6 @@ def validate_stock_entry(sender, instance, **kwargs):
         pass
     except Exception as e:
         logger.error(f"❌ Stock entry validation error: {str(e)}")
-
 
 
 
