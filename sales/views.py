@@ -771,6 +771,11 @@ def sale_create(request):
                     product = Product.objects.select_for_update().get(
                         product_code=item['product_code']
                     )
+
+                    
+                    # ===== refresh from database =====
+                    product.refresh_from_db()
+
                     
                     # Check stock availability
                     if product.quantity < item['quantity']:
