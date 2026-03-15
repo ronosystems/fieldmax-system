@@ -783,6 +783,9 @@ def sale_create(request):
                         product_code=item['product_code']
                     )
                     
+                    # ===== refresh from database =====
+                    product.refresh_from_db()
+
                     # Check stock availability
                     if product.quantity < item['quantity']:
                         raise ValueError(
@@ -826,7 +829,7 @@ def sale_create(request):
                     # ============================================
                     StockEntry.objects.create(
                         product=product,
-                        quantity=-item['quantity'],  # Negative for sale
+                        quantity=-item['quantity'],
                         entry_type='sale',
                         unit_price=item['price'],
                         total_amount=item['total'],
