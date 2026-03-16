@@ -48,6 +48,7 @@ urlpatterns = [
     path('returns/<int:pk>/reject/', views.return_reject, name='return_reject'),
     path('returns/<int:pk>/process/', views.return_process, name='return_process'),
     path('api/return-search/', views.return_search_api, name='return_search_api'),
+    path('returns/<int:pk>/reverify/', views.return_reverify, name='return_reverify'),
     
     # Stock Movements
     path('stock/', views.stock_movements, name='stock_movements'),

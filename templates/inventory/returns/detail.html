@@ -38,7 +38,7 @@
         <div class="col-md-8">
             <!-- Main Return Details Card -->
             <div class="card mb-4">
-                <div class="card-header {% if return.status == 'submitted' %}bg-info{% elif return.status == 'verified' %}bg-primary{% elif return.status == 'approved' %}bg-success{% elif return.status == 'rejected' %}bg-danger{% else %}bg-secondary{% endif %} text-white d-flex justify-content-between align-items-center">
+                <div class="card-header {% if return.status == 'submitted' %}bg-info{% elif return.status == 'verified' %}bg-primary{% elif return.status == 'approved' %}bg-success{% elif return.status == 'rejected' %}bg-danger{% elif return.status == 'mismatch' %}bg-warning{% else %}bg-secondary{% endif %} text-white d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">
                         <i class="fas fa-undo-alt me-2"></i>
                         Return #{{ return.return_id }}
@@ -61,7 +61,7 @@
                         {% elif return.status == 'processed' %}
                             <span class="badge bg-success p-3 fs-6">🔄 Processed</span>
                         {% elif return.status == 'mismatch' %}
-                            <span class="badge bg-warning text-dark p-3 fs-6">⚠️ Mismatch</span>
+                            <span class="badge bg-warning text-dark p-3 fs-6">⚠️ Mismatch Detected</span>
                         {% endif %}
                     </div>
 
@@ -222,6 +222,17 @@
                                         </div>
                                     </div>
                                     
+                                    <!-- Actual vs Expected SKU (for mismatch) -->
+                                    {% if return.verification_status == 'failed' and return.status == 'mismatch' %}
+                                    <div class="alert alert-warning mt-3">
+                                        <strong><i class="fas fa-exclamation-triangle me-2"></i>Mismatch Details:</strong>
+                                        <p class="mb-0 mt-2">
+                                            Expected SKU: <code>{{ return.sku_value }}</code><br>
+                                            Entered SKU: <code>{{ return.actual_sku|default:'(empty)' }}</code>
+                                        </p>
+                                    </div>
+                                    {% endif %}
+                                    
                                     {% if return.verification_notes %}
                                     <div class="mt-2">
                                         <strong>Notes:</strong>
@@ -309,31 +320,49 @@
                     <h6 class="mb-0"><i class="fas fa-cog me-2"></i>Actions</h6>
                 </div>
                 <div class="card-body">
-                    {% if return.status == 'submitted' and request.user.is_staff %}
+                    <!-- ===== RE-VERIFY BUTTON FOR MISMATCH STATUS ===== -->
+                    {% if return.status == 'mismatch' and request.user.is_staff %}
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Verification Failed</strong>
+                            <p class="small mt-1 mb-2">
+                                SKU Mismatch: Expected <code>{{ return.sku_value }}</code><br>
+                                Got: <code>{{ return.actual_sku|default:'(empty)' }}</code>
+                            </p>
+                        </div>
+                        
+                        <!-- Re-verify Button -->
+                        <a href="{% url 'inventory:return_reverify' return.id %}" class="btn btn-warning w-100 mb-2">
+                            <i class="fas fa-redo-alt me-2"></i>Re-verify Return
+                        </a>
+                        
+                        <!-- Reject Button -->
+                        <a href="{% url 'inventory:return_reject' return.id %}" class="btn btn-danger w-100">
+                            <i class="fas fa-times-circle me-2"></i>Reject Return
+                        </a>
+                        
+                    {% elif return.status == 'submitted' and request.user.is_staff %}
                         <a href="{% url 'inventory:return_verify' return.id %}" class="btn btn-primary w-100 mb-2">
                             <i class="fas fa-clipboard-check me-2"></i>Verify Product
                         </a>
                         <a href="{% url 'inventory:return_reject' return.id %}" class="btn btn-danger w-100">
                             <i class="fas fa-times-circle me-2"></i>Reject Return
                         </a>
-                    {% endif %}
-                    
-                    {% if return.status == 'verified' and request.user.is_staff %}
+                        
+                    {% elif return.status == 'verified' and request.user.is_staff %}
                         <a href="{% url 'inventory:return_approve' return.id %}" class="btn btn-success w-100 mb-2">
                             <i class="fas fa-check-circle me-2"></i>Approve Return
                         </a>
                         <a href="{% url 'inventory:return_reject' return.id %}" class="btn btn-danger w-100">
                             <i class="fas fa-times-circle me-2"></i>Reject Return
                         </a>
-                    {% endif %}
-                    
-                    {% if return.status == 'approved' and request.user.is_staff %}
+                        
+                    {% elif return.status == 'approved' and request.user.is_staff %}
                         <a href="{% url 'inventory:return_process' return.id %}" class="btn btn-warning w-100">
-                            <i class="fas fa-undo-alt me-2"></i>Process Return
+                            <i class="fas fa-undo-alt me-2"></i>Process Return (Restock)
                         </a>
-                    {% endif %}
-                    
-                    {% if not request.user.is_staff %}
+                        
+                    {% elif not request.user.is_staff %}
                         <div class="alert alert-info">
                             <i class="fas fa-info-circle me-2"></i>
                             This return is awaiting manager verification.
@@ -365,11 +394,43 @@
                             <span class="badge bg-danger">Rejected</span>
                         {% elif return.status == 'processed' %}
                             <span class="badge bg-success">Processed</span>
+                        {% elif return.status == 'mismatch' %}
+                            <span class="badge bg-warning text-dark">Mismatch Detected</span>
                         {% endif %}
                     </p>
+                    
+                    <!-- Summary for mismatch -->
+                    {% if return.status == 'mismatch' %}
+                    <hr>
+                    <div class="small">
+                        <p class="mb-1"><strong>Expected SKU:</strong> <code>{{ return.sku_value }}</code></p>
+                        <p class="mb-1"><strong>Entered SKU:</strong> <code>{{ return.actual_sku|default:'(empty)' }}</code></p>
+                        <p class="mb-0 text-muted">Click "Re-verify" to try again with correct SKU.</p>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+<!-- Add this small CSS for better styling -->
+<style>
+    .badge {
+        font-size: 0.9rem;
+        padding: 0.5rem 1rem;
+    }
+    .card-header.bg-warning {
+        color: #212529 !important;
+    }
+    .btn-warning {
+        color: #212529;
+    }
+    code {
+        background: #f1f5f9;
+        padding: 0.2rem 0.4rem;
+        border-radius: 4px;
+        font-size: 0.9rem;
+    }
+</style>
 {% endblock %}

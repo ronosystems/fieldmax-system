@@ -1,0 +1,263 @@
+<!-- templates/inventory/returns/reverify.html -->
+{% extends 'inventory/staff_base.html' %}
+{% load static %}
+
+{% block title %}Re-verify Return #{{ return.return_id }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2><i class="fas fa-redo-alt me-2 text-warning"></i>Re-verify Return</h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'inventory:dashboard' %}">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'inventory:return_list' %}">Returns</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'inventory:return_detail' return.id %}">{{ return.return_id }}</a></li>
+                    <li class="breadcrumb-item active">Re-verify</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0"><i class="fas fa-redo-alt me-2"></i>Correct Verification Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Previous verification failed.</strong> Please correct the information below and submit again.
+                    </div>
+                    
+                    <form method="post" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        
+                        <div class="row">
+                            <!-- Left Column - Previous Values -->
+                            <div class="col-md-6">
+                                <div class="card mb-3 border-danger">
+                                    <div class="card-header bg-danger text-white">
+                                        <h6 class="mb-0"><i class="fas fa-exclamation-triangle me-2"></i>Previous (Incorrect)</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <table class="table table-sm">
+                                            <tr>
+                                                <th>SKU/IMEI Entered:</th>
+                                                <td>
+                                                    <span class="badge bg-danger">{{ return.actual_sku|default:'(empty)' }}</span>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <th>Condition Entered:</th>
+                                                <td>{{ return.get_actual_condition_display|default:'Not set' }}</td>
+                                            </tr>
+                                            <tr>
+                                                <th>Verification Notes:</th>
+                                                <td>{{ return.verification_notes|default:'None' }}</td>
+                                            </tr>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Right Column - Expected Values -->
+                            <div class="col-md-6">
+                                <div class="card mb-3 border-success">
+                                    <div class="card-header bg-success text-white">
+                                        <h6 class="mb-0"><i class="fas fa-check-circle me-2"></i>Expected (System)</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <table class="table table-sm">
+                                            <tr>
+                                                <th>Product:</th>
+                                                <td>{{ return.product_name }}</td>
+                                            </tr>
+                                            <tr>
+                                                <th>Code:</th>
+                                                <td>{{ return.product_code }}</td>
+                                            </tr>
+                                            <tr>
+                                                <th>SKU/IMEI:</th>
+                                                <td><span class="badge bg-success">{{ return.sku_value|default:'N/A' }}</span></td>
+                                            </tr>
+                                            <tr>
+                                                <th>Condition:</th>
+                                                <td>{{ return.get_reported_condition_display }}</td>
+                                            </tr>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Corrected Information Form -->
+                        <div class="card mb-3">
+                            <div class="card-header bg-primary text-white">
+                                <h6 class="mb-0"><i class="fas fa-edit me-2"></i>Corrected Information</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label fw-bold">
+                                            <i class="fas fa-barcode me-1"></i>Actual SKU/IMEI Found:
+                                        </label>
+                                        <input type="text" name="actual_sku" class="form-control form-control-lg" 
+                                               placeholder="Enter correct SKU/IMEI"
+                                               value="{{ return.sku_value }}" required>
+                                        <small class="text-muted">Must match: <strong class="text-primary">{{ return.sku_value }}</strong></small>
+                                    </div>
+                                    
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label fw-bold">
+                                            <i class="fas fa-clipboard-check me-1"></i>Actual Condition:
+                                        </label>
+                                        <select name="actual_condition" class="form-select form-select-lg" required>
+                                            <option value="">Select Condition</option>
+                                            <option value="new" {% if return.reported_condition == 'new' %}selected{% endif %}>Like New</option>
+                                            <option value="good" {% if return.reported_condition == 'good' %}selected{% endif %}>Good</option>
+                                            <option value="fair" {% if return.reported_condition == 'fair' %}selected{% endif %}>Fair</option>
+                                            <option value="damaged" {% if return.reported_condition == 'damaged' %}selected{% endif %}>Damaged</option>
+                                            <option value="different">Different Product</option>
+                                        </select>
+                                        <small class="text-muted">Should match: <strong class="text-primary">{{ return.get_reported_condition_display }}</strong></small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Verification Checklist -->
+                        <div class="card mb-3">
+                            <div class="card-header bg-info text-white">
+                                <h6 class="mb-0"><i class="fas fa-check-circle me-2"></i>Verification Checklist</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="form-check mb-2">
+                                            <input type="checkbox" name="physical_product_seen" class="form-check-input" id="chkSeen" checked>
+                                            <label class="form-check-label" for="chkSeen">
+                                                Physical product inspected
+                                            </label>
+                                        </div>
+                                        
+                                        <div class="form-check mb-2">
+                                            <input type="checkbox" name="serial_number_matches" class="form-check-input" id="chkSerial" checked>
+                                            <label class="form-check-label" for="chkSerial">
+                                                Serial number matches system
+                                            </label>
+                                        </div>
+                                        
+                                        <div class="form-check mb-2">
+                                            <input type="checkbox" name="condition_matches_report" class="form-check-input" id="chkCondition" checked>
+                                            <label class="form-check-label" for="chkCondition">
+                                                Condition matches customer report
+                                            </label>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="col-md-6">
+                                        <div class="form-check mb-2">
+                                            <input type="checkbox" name="accessories_present" class="form-check-input" id="chkAccessories" checked>
+                                            <label class="form-check-label" for="chkAccessories">
+                                                All accessories present
+                                            </label>
+                                        </div>
+                                        
+                                        <div class="form-check mb-2">
+                                            <input type="checkbox" name="box_present" class="form-check-input" id="chkBox" checked>
+                                            <label class="form-check-label" for="chkBox">
+                                                Original box present
+                                            </label>
+                                        </div>
+                                        
+                                        <div class="form-check mb-2">
+                                            <input type="checkbox" name="receipt_present" class="form-check-input" id="chkReceipt" checked>
+                                            <label class="form-check-label" for="chkReceipt">
+                                                Receipt/ETR present
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Verification Notes -->
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Verification Notes:</label>
+                            <textarea name="verification_notes" class="form-control" rows="3" 
+                                      placeholder="Add any notes about the physical inspection..."></textarea>
+                        </div>
+                        
+                        <div class="d-flex justify-content-end gap-2">
+                            <a href="{% url 'inventory:return_detail' return.id %}" class="btn btn-secondary btn-lg">
+                                <i class="fas fa-times me-2"></i>Cancel
+                            </a>
+                            <button type="submit" name="action" value="reverify" class="btn btn-warning btn-lg">
+                                <i class="fas fa-check-circle me-2"></i>Submit Re-verification
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Sidebar -->
+        <div class="col-md-4">
+            <div class="card mb-3">
+                <div class="card-header bg-warning text-dark">
+                    <h6 class="mb-0"><i class="fas fa-info-circle me-2"></i>Return Information</h6>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm">
+                        <tr>
+                            <th>Return ID:</th>
+                            <td>{{ return.return_id }}</td>
+                        </tr>
+                        <tr>
+                            <th>Product:</th>
+                            <td>{{ return.product_name }}</td>
+                        </tr>
+                        <tr>
+                            <th>Code:</th>
+                            <td>{{ return.product_code }}</td>
+                        </tr>
+                        <tr>
+                            <th>SKU/IMEI:</th>
+                            <td><span class="badge bg-primary">{{ return.sku_value }}</span></td>
+                        </tr>
+                        <tr>
+                            <th>Quantity:</th>
+                            <td>{{ return.quantity }}</td>
+                        </tr>
+                        <tr>
+                            <th>Refund Amount:</th>
+                            <td class="fw-bold text-success">KSH {{ return.refund_amount|floatformat:0 }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+            
+            <div class="card border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h6 class="mb-0"><i class="fas fa-exclamation-triangle me-2"></i>Previous Failure</h6>
+                </div>
+                <div class="card-body">
+                    <p><strong>Verified By:</strong> {{ return.verified_by.get_full_name|default:return.verified_by.username }}</p>
+                    <p><strong>Verified At:</strong> {{ return.verified_at|date:"Y-m-d H:i" }}</p>
+                    <p><strong>SKU Entered:</strong> <code>{{ return.actual_sku|default:'(empty)' }}</code></p>
+                    <p><strong>Expected SKU:</strong> <code>{{ return.sku_value }}</code></p>
+                    <hr>
+                    <p class="mb-0 text-muted small">
+                        <i class="fas fa-info-circle me-1"></i>
+                        Make sure to enter the correct SKU/IMEI shown in green.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

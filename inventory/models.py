@@ -1242,7 +1242,8 @@ class ReturnRequest(models.Model):
         ('verified', 'Verified - Awaiting Approval'),
         ('approved', 'Approved - Awaiting Processing'),
         ('rejected', 'Rejected'),
-        ('processed', 'Processed'),
+        ('processed', 'Processed (Restocked)'),
+        ('damaged_loss', 'Damaged - Recorded as Loss'),
         ('mismatch', 'Product Mismatch Detected'),
     ]
     
@@ -1307,6 +1308,21 @@ class ReturnRequest(models.Model):
     
     # Financial
     refund_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    
+    # Loss tracking (for damaged products)
+    loss_reason = models.CharField(
+        max_length=50, 
+        blank=True, 
+        null=True,
+        help_text="Reason for damage/loss"
+    )
+    loss_amount = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2, 
+        null=True, 
+        blank=True,
+        help_text="Actual loss amount (usually buying price)"
+    )
     
     # Tracking
     requested_by = models.ForeignKey(
@@ -1513,36 +1529,60 @@ class ReturnRequest(models.Model):
         self.notes = reason
         self.save()
     
-    def process(self, user):
-        """Process the approved return (restock product)"""
+    def process(self, user, mark_as_damaged=False, loss_reason=None):
+        """Process the approved return (restock product or mark as damaged loss)"""
         if self.status != 'approved':
             raise ValueError("Only approved returns can be processed")
         
         from django.db import transaction
         
         with transaction.atomic():
-            # Update product stock
-            product = self.product
-            if product.category.is_single_item:
-                product.status = 'available'
-                product.quantity = 1
+            # If product is damaged, don't restock - just record as loss
+            if mark_as_damaged or self.actual_condition == 'damaged':
+                # Calculate loss amount (use buying price if available, otherwise refund amount)
+                if self.product and self.product.buying_price:
+                    self.loss_amount = self.product.buying_price * self.quantity
+                else:
+                    self.loss_amount = self.refund_amount
+                
+                self.loss_reason = loss_reason or self.notes
+                self.status = 'damaged_loss'
+                self.processed_by = user
+                self.processed_at = timezone.now()
+                
+                # Log the loss
+                logger.warning(
+                    f"📉 DAMAGED PRODUCT LOSS: Return #{self.return_id}\n"
+                    f"   Product: {self.product_name} ({self.product_code})\n"
+                    f"   Quantity: {self.quantity}\n"
+                    f"   Loss Amount: KES {self.loss_amount}\n"
+                    f"   Reason: {self.loss_reason}"
+                )
+                
             else:
-                product.quantity += self.quantity
-            product.save()
+                # Normal restock for good products
+                product = self.product
+                if product.category.is_single_item:
+                    product.status = 'available'
+                    product.quantity = 1
+                else:
+                    product.quantity += self.quantity
+                product.save()
+                
+                # Create stock entry
+                StockEntry.objects.create(
+                    product=product,
+                    quantity=self.quantity,
+                    entry_type='return',
+                    unit_price=self.refund_amount / self.quantity if self.refund_amount else product.buying_price,
+                    total_amount=self.refund_amount or (product.buying_price * self.quantity),
+                    reference_id=f"RETURN-{self.return_id}",
+                    notes=f"Return from customer - Verified by {self.verified_by.username if self.verified_by else 'Manager'}",
+                    created_by=user
+                )
+                
+                self.status = 'processed'
+                self.processed_by = user
+                self.processed_at = timezone.now()
             
-            # Create stock entry
-            StockEntry.objects.create(
-                product=product,
-                quantity=self.quantity,
-                entry_type='return',
-                unit_price=self.refund_amount / self.quantity if self.refund_amount else product.buying_price,
-                total_amount=self.refund_amount or (product.buying_price * self.quantity),
-                reference_id=f"RETURN-{self.return_id}",
-                notes=f"Return from customer - Verified by {self.verified_by.username if self.verified_by else 'Manager'}",
-                created_by=user
-            )
-            
-            self.status = 'processed'
-            self.processed_by = user
-            self.processed_at = timezone.now()
             self.save()

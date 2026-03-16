@@ -1,0 +1,498 @@
+{% extends 'inventory/staff_base.html' %}
+{% load static %}
+
+{% block title %}Approve Return #{{ return.return_id }} - FieldMax{% endblock %}
+
+{% block extra_css %}
+<style>
+    .approve-container {
+        max-width: 800px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+    }
+
+    .page-header {
+        background: white;
+        border-radius: 16px;
+        padding: 1.5rem 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        border: 1px solid #e9ecef;
+    }
+
+    .page-header h1 {
+        font-size: 1.8rem;
+        font-weight: 600;
+        color: #1e293b;
+        margin: 0 0 0.5rem 0;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .page-header h1 i {
+        color: #2563eb;
+    }
+
+    .page-header .return-id {
+        color: #64748b;
+        font-size: 1rem;
+    }
+
+    .approve-card {
+        background: white;
+        border-radius: 20px;
+        border: 1px solid #e9ecef;
+        overflow: hidden;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    }
+
+    .card-header {
+        padding: 1.5rem;
+        background: linear-gradient(135deg, #2563eb, #1d4ed8);
+        color: white;
+    }
+
+    .card-header h2 {
+        font-size: 1.3rem;
+        font-weight: 600;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .card-body {
+        padding: 2rem;
+    }
+
+    .info-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+
+    .info-item {
+        background: #f8fafc;
+        padding: 1rem;
+        border-radius: 12px;
+        border: 1px solid #e9ecef;
+    }
+
+    .info-label {
+        font-size: 0.8rem;
+        color: #64748b;
+        margin-bottom: 0.25rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .info-value {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #1e293b;
+    }
+
+    .info-value.warning {
+        color: #f59e0b;
+    }
+
+    .info-value.success {
+        color: #16a34a;
+    }
+
+    .info-value.danger {
+        color: #dc2626;
+    }
+
+    .product-details {
+        background: #f8fafc;
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        border: 1px solid #e9ecef;
+    }
+
+    .product-details h3 {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #1e293b;
+        margin: 0 0 1rem 0;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .product-details h3 i {
+        color: #2563eb;
+    }
+
+    .detail-row {
+        display: flex;
+        margin-bottom: 0.75rem;
+        padding-bottom: 0.75rem;
+        border-bottom: 1px dashed #e2e8f0;
+    }
+
+    .detail-row:last-child {
+        border-bottom: none;
+        margin-bottom: 0;
+        padding-bottom: 0;
+    }
+
+    .detail-label {
+        width: 150px;
+        color: #64748b;
+        font-weight: 500;
+    }
+
+    .detail-value {
+        flex: 1;
+        color: #1e293b;
+        font-weight: 500;
+    }
+
+    .detail-value.highlight {
+        color: #2563eb;
+        font-weight: 600;
+    }
+
+    .action-buttons {
+        display: flex;
+        gap: 1rem;
+        margin-top: 2rem;
+    }
+
+    .btn {
+        padding: 0.75rem 1.5rem;
+        border-radius: 10px;
+        font-weight: 500;
+        text-decoration: none;
+        transition: all 0.2s;
+        border: none;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex: 1;
+        justify-content: center;
+    }
+
+    .btn-approve {
+        background: #16a34a;
+        color: white;
+    }
+
+    .btn-approve:hover {
+        background: #15803d;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(22, 163, 74, 0.3);
+    }
+
+    .btn-reject {
+        background: #dc2626;
+        color: white;
+    }
+
+    .btn-reject:hover {
+        background: #b91c1c;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
+    }
+
+    .btn-secondary {
+        background: #64748b;
+        color: white;
+    }
+
+    .btn-secondary:hover {
+        background: #475569;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(100, 116, 139, 0.3);
+    }
+
+    .status-badge {
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 500;
+    }
+
+    .status-verified {
+        background: #dbeafe;
+        color: #2563eb;
+    }
+
+    .status-pending {
+        background: #fed7aa;
+        color: #c2410c;
+    }
+
+    .rejection-reason {
+        margin-top: 1.5rem;
+        padding: 1rem;
+        background: #fef2f2;
+        border: 1px solid #fee2e2;
+        border-radius: 10px;
+    }
+
+    .rejection-reason label {
+        font-weight: 600;
+        color: #b91c1c;
+        margin-bottom: 0.5rem;
+        display: block;
+    }
+
+    .rejection-reason textarea {
+        width: 100%;
+        padding: 0.75rem;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        font-family: inherit;
+        resize: vertical;
+    }
+
+    .rejection-reason textarea:focus {
+        outline: none;
+        border-color: #dc2626;
+        box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
+    }
+
+    @media (max-width: 768px) {
+        .approve-container {
+            margin: 1rem auto;
+        }
+
+        .info-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .action-buttons {
+            flex-direction: column;
+        }
+
+        .detail-row {
+            flex-direction: column;
+        }
+
+        .detail-label {
+            width: 100%;
+            margin-bottom: 0.25rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="approve-container">
+    <!-- Page Header -->
+    <div class="page-header">
+        <h1>
+            <i class="fas fa-check-circle"></i>
+            Approve Return Request
+        </h1>
+        <div class="return-id">Return #{{ return.return_id }}</div>
+    </div>
+
+    <!-- Approve Card -->
+    <div class="approve-card">
+        <div class="card-header">
+            <h2>
+                <i class="fas fa-clipboard-check"></i>
+                Return Verification & Approval
+            </h2>
+        </div>
+
+        <div class="card-body">
+            <!-- Status Summary -->
+            <div class="info-grid">
+                <div class="info-item">
+                    <div class="info-label">Current Status</div>
+                    <div class="info-value">
+                        <span class="status-badge {% if return.verification_status == 'passed' %}status-verified{% else %}status-pending{% endif %}">
+                            {{ return.get_verification_status_display }}
+                        </span>
+                    </div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Request Date</div>
+                    <div class="info-value">{{ return.requested_at|date:"M d, Y H:i" }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Requested By</div>
+                    <div class="info-value">{{ return.requested_by.get_full_name|default:return.requested_by.username }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Refund Amount</div>
+                    <div class="info-value success">KES {{ return.refund_amount|floatformat:2 }}</div>
+                </div>
+            </div>
+
+            <!-- Product Details -->
+            <div class="product-details">
+                <h3>
+                    <i class="fas fa-box"></i>
+                    Product Information
+                </h3>
+                <div class="detail-row">
+                    <div class="detail-label">Product Code</div>
+                    <div class="detail-value highlight">{{ return.product_code }}</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">Product Name</div>
+                    <div class="detail-value">{{ return.product_name }}</div>
+                </div>
+                {% if return.sku_value %}
+                <div class="detail-row">
+                    <div class="detail-label">SKU/IMEI</div>
+                    <div class="detail-value">{{ return.sku_value }}</div>
+                </div>
+                {% endif %}
+                <div class="detail-row">
+                    <div class="detail-label">Quantity</div>
+                    <div class="detail-value">{{ return.quantity }}</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">Reason for Return</div>
+                    <div class="detail-value">{{ return.get_reason_display }}{% if return.reason_text %}: {{ return.reason_text }}{% endif %}</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">Reported Condition</div>
+                    <div class="detail-value">{{ return.get_reported_condition_display }}</div>
+                </div>
+            </div>
+
+            <!-- Verification Checklist -->
+            {% if return.verification_status == 'passed' %}
+            <div class="product-details">
+                <h3>
+                    <i class="fas fa-check-circle" style="color: #16a34a;"></i>
+                    Verification Results
+                </h3>
+                <div class="detail-row">
+                    <div class="detail-label">Verified By</div>
+                    <div class="detail-value">{{ return.verified_by.get_full_name|default:return.verified_by.username }}</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">Verified At</div>
+                    <div class="detail-value">{{ return.verified_at|date:"M d, Y H:i" }}</div>
+                </div>
+                {% if return.verification_notes %}
+                <div class="detail-row">
+                    <div class="detail-label">Notes</div>
+                    <div class="detail-value">{{ return.verification_notes }}</div>
+                </div>
+                {% endif %}
+                <div class="detail-row">
+                    <div class="detail-label">Physical Product Seen</div>
+                    <div class="detail-value"><i class="fas {% if return.physical_product_seen %}fa-check-circle text-success{% else %}fa-times-circle text-danger{% endif %}"></i></div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">Serial Number Matches</div>
+                    <div class="detail-value"><i class="fas {% if return.serial_number_matches %}fa-check-circle text-success{% else %}fa-times-circle text-danger{% endif %}"></i></div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">Condition Matches Report</div>
+                    <div class="detail-value"><i class="fas {% if return.condition_matches_report %}fa-check-circle text-success{% else %}fa-times-circle text-danger{% endif %}"></i></div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Return to Detail Link -->
+            <div style="text-align: center; margin-top: 1.5rem;">
+                <a href="{% url 'inventory:return_detail' return.id %}" class="btn btn-secondary" style="display: inline-flex; width: auto;">
+                    <i class="fas fa-arrow-left"></i>
+                    Back to Return Details
+                </a>
+            </div>
+
+            <!-- Hidden Form for POST (will be triggered by buttons) -->
+            <form method="post" id="approveForm" style="display: none;">
+                {% csrf_token %}
+                <input type="hidden" name="action" id="actionInput" value="">
+                <input type="hidden" name="rejection_reason" id="rejectionReasonInput" value="">
+            </form>
+
+            <!-- Action Buttons -->
+            {% if return.verification_status == 'passed' and return.status == 'verified' %}
+            <div class="action-buttons">
+                <button type="button" class="btn btn-approve" onclick="submitApprove()">
+                    <i class="fas fa-check-circle"></i>
+                    Approve Return
+                </button>
+                <button type="button" class="btn btn-reject" onclick="showRejectForm()">
+                    <i class="fas fa-times-circle"></i>
+                    Reject Return
+                </button>
+            </div>
+
+            <!-- Rejection Reason Form (hidden initially) -->
+            <div id="rejectForm" class="rejection-reason" style="display: none;">
+                <label for="rejection_reason">Reason for Rejection *</label>
+                <textarea name="rejection_reason" id="rejection_reason" rows="3" required></textarea>
+                <div style="display: flex; gap: 1rem; margin-top: 1rem;">
+                    <button type="button" class="btn btn-reject" style="flex: 1;" onclick="submitReject()">
+                        Confirm Rejection
+                    </button>
+                    <button type="button" class="btn btn-secondary" style="flex: 1;" onclick="hideRejectForm()">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+            {% elif return.status == 'approved' %}
+            <div class="action-buttons">
+                <div style="text-align: center; width: 100%; padding: 1rem; background: #dcfce7; color: #16a34a; border-radius: 10px;">
+                    <i class="fas fa-check-circle"></i> This return has already been approved
+                </div>
+            </div>
+            {% elif return.status == 'rejected' %}
+            <div class="action-buttons">
+                <div style="text-align: center; width: 100%; padding: 1rem; background: #fee2e2; color: #dc2626; border-radius: 10px;">
+                    <i class="fas fa-times-circle"></i> This return has been rejected
+                </div>
+            </div>
+            {% else %}
+            <div class="action-buttons">
+                <div style="text-align: center; width: 100%; padding: 1rem; background: #fff3cd; color: #856404; border-radius: 10px;">
+                    <i class="fas fa-info-circle"></i> This return must be verified before approval
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+    function submitApprove() {
+        if (confirm('Are you sure you want to approve this return?')) {
+            document.getElementById('actionInput').value = 'approve';
+            document.getElementById('approveForm').submit();
+        }
+    }
+
+    function showRejectForm() {
+        document.getElementById('rejectForm').style.display = 'block';
+        document.querySelector('.action-buttons').style.display = 'none';
+    }
+
+    function hideRejectForm() {
+        document.getElementById('rejectForm').style.display = 'none';
+        document.querySelector('.action-buttons').style.display = 'flex';
+    }
+
+    function submitReject() {
+        var reason = document.getElementById('rejection_reason').value.trim();
+        if (!reason) {
+            alert('Please provide a reason for rejection.');
+            return;
+        }
+        if (confirm('Are you sure you want to reject this return?')) {
+            document.getElementById('actionInput').value = 'reject';
+            document.getElementById('rejectionReasonInput').value = reason;
+            document.getElementById('approveForm').submit();
+        }
+    }
+</script>
+{% endblock %}

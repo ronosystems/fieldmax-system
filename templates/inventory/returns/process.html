@@ -1,0 +1,123 @@
+<!-- templates/inventory/returns/process.html -->
+{% extends 'inventory/staff_base.html' %}
+{% load static %}
+
+{% block title %}Process Return #{{ return.return_id }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-undo-alt me-2"></i>
+                        Process Return #{{ return.return_id }}
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Product Condition:</strong> {{ return.get_actual_condition_display|default:return.get_reported_condition_display }}
+                    </div>
+                    
+                    <table class="table">
+                        <tr>
+                            <th>Product:</th>
+                            <td>{{ return.product_name }}</td>
+                        </tr>
+                        <tr>
+                            <th>Code:</th>
+                            <td>{{ return.product_code }}</td>
+                        </tr>
+                        <tr>
+                            <th>Quantity:</th>
+                            <td>{{ return.quantity }}</td>
+                        </tr>
+                        <tr>
+                            <th>Refund Amount:</th>
+                            <td class="fw-bold text-success">KSH {{ return.refund_amount|floatformat:0 }}</td>
+                        </tr>
+                    </table>
+                    
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <!-- Question about product condition -->
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Product Condition:</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="product_condition" id="conditionGood" value="good" checked>
+                                <label class="form-check-label" for="conditionGood">
+                                    <i class="fas fa-check-circle text-success me-1"></i>
+                                    Good - Restock to inventory
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="product_condition" id="conditionDamaged" value="damaged">
+                                <label class="form-check-label" for="conditionDamaged">
+                                    <i class="fas fa-exclamation-triangle text-danger me-1"></i>
+                                    Damaged - Record as Loss (do NOT restock)
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <!-- Loss Reason (shown only if damaged) -->
+                        <div class="mb-3" id="lossReasonDiv" style="display: none;">
+                            <label class="form-label fw-bold text-danger">Reason for Damage/Loss:</label>
+                            <select name="loss_reason" class="form-select">
+                                <option value="">Select reason...</option>
+                                <option value="customer_damage">Customer Damaged</option>
+                                <option value="manufacturing_defect">Manufacturing Defect</option>
+                                <option value="shipping_damage">Shipping Damage</option>
+                                <option value="beyond_repair">Beyond Repair</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Loss Value (automatically calculated) -->
+                        <div class="alert alert-warning" id="lossAlert" style="display: none;">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Loss Amount:</strong> 
+                            KSH {{ return.product.buying_price|default:return.refund_amount|floatformat:0 }} 
+                            (cost price)
+                        </div>
+                        
+                        <hr>
+                        
+                        <div class="d-flex gap-2">
+                            <a href="{% url 'inventory:return_detail' return.id %}" class="btn btn-secondary flex-grow-1">
+                                <i class="fas fa-times me-2"></i>Cancel
+                            </a>
+                            <button type="submit" class="btn btn-success flex-grow-1" id="processBtn">
+                                <i class="fas fa-check-circle me-2"></i>Process Return
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Show/hide loss reason based on selection
+    document.querySelectorAll('input[name="product_condition"]').forEach(radio => {
+        radio.addEventListener('change', function() {
+            if (this.value === 'damaged') {
+                document.getElementById('lossReasonDiv').style.display = 'block';
+                document.getElementById('lossAlert').style.display = 'block';
+                document.getElementById('processBtn').classList.remove('btn-success');
+                document.getElementById('processBtn').classList.add('btn-danger');
+                document.getElementById('processBtn').innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>Record as Loss';
+            } else {
+                document.getElementById('lossReasonDiv').style.display = 'none';
+                document.getElementById('lossAlert').style.display = 'none';
+                document.getElementById('processBtn').classList.remove('btn-danger');
+                document.getElementById('processBtn').classList.add('btn-success');
+                document.getElementById('processBtn').innerHTML = '<i class="fas fa-check-circle me-2"></i>Process Return';
+            }
+        });
+    });
+</script>
+{% endblock %}

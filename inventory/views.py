@@ -2619,7 +2619,7 @@ def return_approve(request, pk):
 
 @login_required
 def return_process(request, pk):
-    """Process an approved return (restock product)"""
+    """Process an approved return (restock product or record as loss)"""
     if not request.user.is_staff and not request.user.is_superuser:
         messages.error(request, 'You do not have permission to process returns.')
         return redirect('inventory:return_list')
@@ -2632,8 +2632,26 @@ def return_process(request, pk):
     
     if request.method == 'POST':
         try:
-            return_request.process(request.user)
-            messages.success(request, f'Return #{return_request.return_id} processed successfully. Product restocked.')
+            # Check if product is damaged
+            product_condition = request.POST.get('product_condition', 'good')
+            mark_as_damaged = (product_condition == 'damaged')
+            
+            # Process with damage flag
+            return_request.process(request.user, mark_as_damaged=mark_as_damaged)
+            
+            if mark_as_damaged:
+                loss_reason = request.POST.get('loss_reason', 'Not specified')
+                messages.warning(
+                    request, 
+                    f'Return #{return_request.return_id} recorded as LOSS. '
+                    f'Reason: {loss_reason}. Cost: KES {return_request.product.buying_price if return_request.product else return_request.refund_amount}'
+                )
+            else:
+                messages.success(
+                    request, 
+                    f'Return #{return_request.return_id} processed successfully. Product restocked.'
+                )
+                
         except Exception as e:
             messages.error(request, f'Error processing return: {str(e)}')
         
@@ -2643,8 +2661,6 @@ def return_process(request, pk):
         'return': return_request,
     }
     return render(request, 'inventory/returns/process.html', context)
-
-
 
 
 
@@ -2771,6 +2787,87 @@ def return_verify(request, pk):
         'return': return_request,
     }
     return render(request, 'inventory/returns/verify.html', context)
+
+
+
+
+
+@login_required
+@user_passes_test(lambda u: u.is_staff or u.is_superuser)
+def return_reverify(request, pk):
+    """Reset verification status and allow re-verification with corrected info"""
+    return_request = get_object_or_404(ReturnRequest, pk=pk)
+    
+    if return_request.status != 'mismatch':
+        messages.error(request, 'This return cannot be re-verified.')
+        return redirect('inventory:return_detail', pk=return_request.pk)
+    
+    if request.method == 'POST':
+        # Check if this is the form submission with corrected data
+        if 'action' in request.POST and request.POST['action'] == 'reverify':
+            try:
+                # Collect verification data from form
+                verification_data = {
+                    'physical_product_seen': request.POST.get('physical_product_seen') == 'on',
+                    'serial_number_matches': request.POST.get('serial_number_matches') == 'on',
+                    'condition_matches_report': request.POST.get('condition_matches_report') == 'on',
+                    'accessories_present': request.POST.get('accessories_present') == 'on',
+                    'box_present': request.POST.get('box_present') == 'on',
+                    'receipt_present': request.POST.get('receipt_present') == 'on',
+                    'actual_sku': request.POST.get('actual_sku', '').strip(),
+                    'actual_condition': request.POST.get('actual_condition', ''),
+                    'notes': request.POST.get('verification_notes', ''),
+                }
+                
+                # Handle photo uploads if any
+                if request.FILES.get('product_photo_1'):
+                    return_request.product_photo_1 = request.FILES['product_photo_1']
+                if request.FILES.get('product_photo_2'):
+                    return_request.product_photo_2 = request.FILES['product_photo_2']
+                if request.FILES.get('product_photo_3'):
+                    return_request.product_photo_3 = request.FILES['product_photo_3']
+                if request.FILES.get('damage_photo'):
+                    return_request.damage_photo = request.FILES['damage_photo']
+                
+                # Perform verification
+                matches, issues = return_request.verify_product(request.user, verification_data)
+                
+                if matches:
+                    messages.success(
+                        request, 
+                        f'Product verified successfully. Return #{return_request.return_id} is now awaiting approval.'
+                    )
+                else:
+                    messages.warning(
+                        request, 
+                        f'Product verification failed again. Issues: {", ".join(issues)}'
+                    )
+                
+                return redirect('inventory:return_detail', pk=return_request.pk)
+                
+            except Exception as e:
+                messages.error(request, f'Error during re-verification: {str(e)}')
+                return redirect('inventory:return_reverify', pk=return_request.pk)
+        
+        # This is the initial reset (GET would show form, POST here means they confirmed reset)
+        else:
+            # Reset verification status but keep the form data
+            return_request.verification_status = 'pending'
+            return_request.status = 'submitted'
+            return_request.verified_by = None
+            return_request.verified_at = None
+            return_request.save()
+            
+            messages.info(request, f'Return #{return_request.return_id} is ready for re-verification.')
+            return redirect('inventory:return_verify', pk=return_request.pk)
+    
+    # GET request - show the re-verification form
+    context = {
+        'return': return_request,
+    }
+    return render(request, 'inventory/returns/reverify.html', context)
+
+
 
 
 
