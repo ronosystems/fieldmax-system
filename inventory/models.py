@@ -1262,8 +1262,8 @@ class ReturnRequest(models.Model):
         ('partial', 'Partial Match'),
     ]
     
-    # Return identification
-    return_id = models.CharField(max_length=50, unique=True, default=uuid.uuid4, editable=False)
+    # Return identification - Auto-generated as FSL-R-001, FSL-R-002, etc.
+    return_id = models.CharField(max_length=50, unique=True, editable=False)
     
     # Link to original sale (if exists) - FIXED: Using string reference
     related_sale = models.ForeignKey(
@@ -1406,6 +1406,45 @@ class ReturnRequest(models.Model):
             models.Index(fields=['product_code']),
             models.Index(fields=['-requested_at']),
         ]
+    
+    def save(self, *args, **kwargs):
+        """Override save to auto-generate return_id if not set"""
+        if not self.return_id:
+            self.return_id = self._generate_return_id()
+        super().save(*args, **kwargs)
+    
+    def _generate_return_id(self):
+        """
+        Generate sequential return ID in format: FSL-R-XXX
+        Examples: FSL-R-001, FSL-R-002, FSL-R-003
+        """
+        try:
+            # Get the highest existing return_id that starts with 'FSL-R-'
+            last_return = ReturnRequest.objects.filter(
+                return_id__startswith='FSL-R-'
+            ).order_by('return_id').last()
+            
+            if last_return and last_return.return_id:
+                # Extract the number from last ID (FSL-R-001 -> 1)
+                try:
+                    last_number = int(last_return.return_id.split('-')[-1])
+                    new_number = last_number + 1
+                except (ValueError, IndexError):
+                    # If existing ID is invalid format, start from 1
+                    new_number = 1
+            else:
+                # No existing returns, start from 1
+                new_number = 1
+            
+            # Format with leading zeros (3 digits)
+            return f"FSL-R-{str(new_number).zfill(3)}"
+            
+        except Exception as e:
+            # Fallback using timestamp if something goes wrong
+            logger.error(f"Error generating return_id: {str(e)}")
+            import time
+            timestamp = str(int(time.time()))[-4:]
+            return f"FSL-R-{timestamp}"
     
     def __str__(self):
         return f"Return #{self.return_id} - {self.product_name}"
