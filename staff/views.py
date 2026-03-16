@@ -1194,97 +1194,326 @@ def prepare_dashboard_messages(request, dashboard_name=None):
 #==========================================
 # ADMIN DASHBOARD
 #==========================================
+#==========================================
+# ADMIN DASHBOARD - COMPREHENSIVE STATISTICS
+#==========================================
 @login_required
 @dashboard_for_role('Administrator')
 def admin_dashboard(request):
-    """Admin dashboard with full system overview"""
+    """Admin dashboard with full system overview - includes active sales, returns, and reversals"""
     from django.contrib.auth import get_user_model
-    from inventory.models import Product, Category
-    from sales.models import Sale
+    from inventory.models import Product, Category, StockAlert, ReturnRequest
+    from sales.models import Sale, SaleItem
     from credit.models import CreditTransaction, CreditCustomer, CreditCompany
+    from django.db.models import Sum, Count, Q, F
+    from django.utils import timezone
+    from datetime import timedelta
     
     User = get_user_model()
 
     prepare_dashboard_messages(request, 'Admin')
     
-    # System Overview
+    today = timezone.now().date()
+    week_ago = today - timedelta(days=7)
+    month_ago = today - timedelta(days=30)
+    
+    # ============================================
+    # GET RETURNED SALE IDs (to exclude from active sales)
+    # ============================================
+    returned_sale_ids = ReturnRequest.objects.filter(
+        ~Q(status='rejected')  # Exclude rejected returns
+    ).exclude(
+        Q(sale_id__isnull=True) | Q(sale_id='')
+    ).values_list('sale_id', flat=True).distinct()
+    
+    # ============================================
+    # ACTIVE SALES (exclude reversed AND returned)
+    # ============================================
+    active_sales = Sale.objects.filter(
+        is_reversed=False
+    ).exclude(
+        sale_id__in=returned_sale_ids
+    )
+    
+    # ============================================
+    # SYSTEM OVERVIEW
+    # ============================================
     total_users = User.objects.count()
+    active_users = User.objects.filter(is_active=True).count()
     total_staff = User.objects.filter(is_staff=True).count()
     total_products = Product.objects.count()
     total_categories = Category.objects.count()
     
-    # Today's stats
-    today = timezone.now().date()
-    today_sales = Sale.objects.filter(sale_date__date=today).aggregate(
+    # ============================================
+    # TODAY'S STATS
+    # ============================================
+    today_sales = active_sales.filter(sale_date__date=today).aggregate(
         total=Sum('total_amount')
     )['total'] or 0
-    today_sales_count = Sale.objects.filter(sale_date__date=today).count()
+    today_sales_count = active_sales.filter(sale_date__date=today).count()
+    today_items_sold = SaleItem.objects.filter(
+        sale__in=active_sales.filter(sale_date__date=today)
+    ).aggregate(total=Sum('quantity'))['total'] or 0
     
-    # Overall stats
-    total_sales = Sale.objects.aggregate(total=Sum('total_amount'))['total'] or 0
+    # ============================================
+    # OVERALL SALES STATS
+    # ============================================
+    total_sales_value = active_sales.aggregate(
+        total=Sum('total_amount')
+    )['total'] or 0
+    total_sales_count = active_sales.count()
+    total_items_sold = SaleItem.objects.filter(
+        sale__in=active_sales
+    ).aggregate(total=Sum('quantity'))['total'] or 0
     
-    # Credit stats
+    # Average transaction value
+    avg_transaction_value = total_sales_value / total_sales_count if total_sales_count > 0 else 0
+    
+    # ============================================
+    # REVERSAL STATS
+    # ============================================
+    reversed_sales = Sale.objects.filter(is_reversed=True)
+    reversed_count = reversed_sales.count()
+    reversed_amount = reversed_sales.aggregate(total=Sum('total_amount'))['total'] or 0
+    
+    # ============================================
+    # RETURN STATS
+    # ============================================
+    all_returns = ReturnRequest.objects.all()
+    total_returns = all_returns.count()
+    total_refund_amount = all_returns.aggregate(total=Sum('refund_amount'))['total'] or 0
+    
+    # Returns by status
+    pending_returns = all_returns.filter(status__in=['submitted', 'verified']).count()
+    approved_returns = all_returns.filter(status='approved').count()
+    processed_returns = all_returns.filter(status='processed').count()
+    rejected_returns = all_returns.filter(status='rejected').count()
+    damaged_returns = all_returns.filter(status='damaged_loss').count()
+    
+    # Damaged returns loss value
+    damaged_loss = all_returns.filter(status='damaged_loss').aggregate(
+        total=Sum('loss_amount')
+    )['total'] or 0
+    
+    # ============================================
+    # CREDIT STATS
+    # ============================================
     total_credit = CreditTransaction.objects.aggregate(
         total=Sum('ceiling_price')
     )['total'] or 0
     
     pending_credit = CreditTransaction.objects.filter(payment_status='pending').count()
+    paid_credit = CreditTransaction.objects.filter(payment_status='paid').count()
+    overdue_credit = CreditTransaction.objects.filter(
+        payment_status='pending',
+        transaction_date__date__lte=month_ago
+    ).count()
     
-    # Customer stats
+    # ============================================
+    # CUSTOMER STATS
+    # ============================================
     total_customers = CreditCustomer.objects.count()
+    active_customers = CreditCustomer.objects.filter(is_active=True).count()
+    new_customers_today = CreditCustomer.objects.filter(
+        created_at__date=today
+    ).count()
     
-    # Staff by Position
-    staff_by_position = StaffApplication.objects.filter(
-        status='approved'
-    ).values('position').annotate(
+    # ============================================
+    # INVENTORY STATS
+    # ============================================
+    low_stock_products = Product.objects.filter(
+        Q(category__item_type='bulk') & 
+        Q(quantity__gt=0) & 
+        Q(quantity__lte=F('reorder_level'))
+    ).count()
+    
+    out_of_stock = Product.objects.filter(
+        Q(category__item_type='bulk', quantity=0) |
+        Q(category__item_type='single', status='sold')
+    ).count()
+    
+    # Stock alerts
+    active_alerts = StockAlert.objects.filter(
+        is_active=True,
+        is_dismissed=False
+    ).count()
+    critical_alerts = StockAlert.objects.filter(
+        is_active=True,
+        is_dismissed=False,
+        severity__in=['critical', 'danger']
+    ).count()
+    
+    # ============================================
+    # STAFF BY POSITION - FIXED: Removed is_active filter
+    # ============================================
+    from staff.models import Staff
+    staff_by_position = Staff.objects.values('position').annotate(
         count=Count('id')
     ).order_by('position')
     
-    # Recent Activities
-    recent_sales = Sale.objects.order_by('-sale_date')[:10]
-    recent_credits = CreditTransaction.objects.select_related('customer').order_by('-transaction_date')[:10]
-    recent_users = User.objects.order_by('-date_joined')[:10]
+    # Total staff count from Staff model
+    total_staff_count = Staff.objects.count()
     
-    # Chart data (last 7 days)
+    # ============================================
+    # RECENT ACTIVITIES
+    # ============================================
+    recent_sales = active_sales.select_related('seller').order_by('-sale_date')[:10]
+    recent_returns = ReturnRequest.objects.select_related(
+        'requested_by', 'product'
+    ).order_by('-requested_at')[:10]
+    recent_users = User.objects.order_by('-date_joined')[:10]
+    recent_credits = CreditTransaction.objects.select_related(
+        'customer', 'dealer'
+    ).order_by('-transaction_date')[:10]
+    
+    # ============================================
+    # CHART DATA (last 7 days)
+    # ============================================
     labels = []
     sales_data = []
     credit_data = []
+    return_data = []
     
     for i in range(6, -1, -1):
         date = today - timedelta(days=i)
         labels.append(date.strftime('%d %b'))
         
-        day_sales = Sale.objects.filter(sale_date__date=date).aggregate(
+        # Daily active sales
+        day_sales = active_sales.filter(sale_date__date=date).aggregate(
             total=Sum('total_amount')
         )['total'] or 0
         sales_data.append(float(day_sales))
         
+        # Daily credit transactions
         day_credit = CreditTransaction.objects.filter(
             transaction_date__date=date
         ).aggregate(
             total=Sum('ceiling_price')
         )['total'] or 0
         credit_data.append(float(day_credit))
+        
+        # Daily returns
+        day_returns = ReturnRequest.objects.filter(
+            requested_at__date=date
+        ).aggregate(
+            total=Sum('refund_amount')
+        )['total'] or 0
+        return_data.append(float(day_returns))
     
+    # ============================================
+    # TOP SELLING PRODUCTS
+    # ============================================
+    top_products = SaleItem.objects.filter(
+        sale__in=active_sales
+    ).values('product_name', 'product_code').annotate(
+        total_quantity=Sum('quantity'),
+        total_revenue=Sum('total_price')
+    ).order_by('-total_quantity')[:10]
+    
+    # ============================================
+    # TOP SELLERS
+    # ============================================
+    top_sellers = User.objects.filter(
+        sales_made__in=active_sales
+    ).annotate(
+        sales_count=Count('sales_made'),
+        total_sales=Sum('sales_made__total_amount'),
+        avg_sale=Avg('sales_made__total_amount')
+    ).order_by('-total_sales')[:10]
+    
+    # ============================================
+    # PAYMENT METHOD BREAKDOWN
+    # ============================================
+    payment_methods = []
+    for method in ['Cash', 'M-Pesa', 'Card', 'Points', 'Credit']:
+        method_sales = active_sales.filter(payment_method=method)
+        count = method_sales.count()
+        amount = method_sales.aggregate(total=Sum('total_amount'))['total'] or 0
+        percentage = (amount / total_sales_value * 100) if total_sales_value > 0 else 0
+        
+        payment_methods.append({
+            'name': method,
+            'count': count,
+            'amount': amount,
+            'percentage': percentage
+        })
+    
+    # ============================================
+    # SUMMARY CARD DATA
+    # ============================================
     context = {
+        # System Overview
         'total_users': total_users,
+        'active_users': active_users,
         'total_staff': total_staff,
+        'total_staff_count': total_staff_count,  # Added this
         'total_products': total_products,
         'total_categories': total_categories,
+        
+        # Today's Stats
         'today_sales': today_sales,
         'today_sales_count': today_sales_count,
-        'total_sales': total_sales,
+        'today_items_sold': today_items_sold,
+        
+        # Sales Overview
+        'total_sales_value': total_sales_value,
+        'total_sales_count': total_sales_count,
+        'total_items_sold': total_items_sold,
+        'avg_transaction_value': avg_transaction_value,
+        
+        # Reversal Stats
+        'reversed_count': reversed_count,
+        'reversed_amount': reversed_amount,
+        'reversal_percentage': (reversed_count / (total_sales_count + reversed_count) * 100) if (total_sales_count + reversed_count) > 0 else 0,
+        
+        # Return Stats
+        'total_returns': total_returns,
+        'total_refund_amount': total_refund_amount,
+        'pending_returns': pending_returns,
+        'approved_returns': approved_returns,
+        'processed_returns': processed_returns,
+        'rejected_returns': rejected_returns,
+        'damaged_returns': damaged_returns,
+        'damaged_loss': damaged_loss,
+        
+        # Credit Stats
         'total_credit': total_credit,
         'pending_credit': pending_credit,
+        'paid_credit': paid_credit,
+        'overdue_credit': overdue_credit,
+        
+        # Customer Stats
         'total_customers': total_customers,
+        'active_customers': active_customers,
+        'new_customers_today': new_customers_today,
+        
+        # Inventory Stats
+        'low_stock_products': low_stock_products,
+        'out_of_stock': out_of_stock,
+        'active_alerts': active_alerts,
+        'critical_alerts': critical_alerts,
+        
+        # Staff Stats
         'staff_by_position': staff_by_position,
+        
+        # Recent Activities
         'recent_sales': recent_sales,
-        'recent_credits': recent_credits,
+        'recent_returns': recent_returns,
         'recent_users': recent_users,
+        'recent_credits': recent_credits,
+        
+        # Chart Data
         'chart_labels': labels,
         'sales_data': sales_data,
         'credit_data': credit_data,
+        'return_data': return_data,
+        
+        # Top Performers
+        'top_products': top_products,
+        'top_sellers': top_sellers,
+        'payment_methods': payment_methods,
     }
+    
     return render(request, 'staff/dashboards/admin_dashboard.html', context)
 
 
