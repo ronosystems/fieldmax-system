@@ -126,7 +126,6 @@ def export_statistics(request):
 
 
 
-
 @login_required
 def store_statistics(request):
     """Store statistics dashboard"""
@@ -147,14 +146,16 @@ def store_statistics(request):
     ).aggregate(total=Sum('quantity'))['total'] or 0
     
     # ============================================
-    # RETURNED ITEMS - FIXED CALCULATION
+    # RETURNED ITEMS - COMPREHENSIVE CALCULATIONS
     # ============================================
     from .models import ReturnRequest
     
-    # Get ALL return requests (not just approved)
+    # Get ALL return requests
     all_returns = ReturnRequest.objects.all()
     
-    # Count of returned items (total number of return requests)
+    # ============================================
+    # ALL RETURNS (Total)
+    # ============================================
     returned_items = all_returns.count()
     
     # Calculate total value of returned items (refund amounts)
@@ -170,14 +171,71 @@ def store_statistics(request):
             returned_items_cost += return_req.product.buying_price * (return_req.quantity or 1)
         else:
             # If no product linked, estimate from refund amount (70% of refund as cost)
-            # This is just a fallback
             returned_items_cost += return_req.refund_amount * Decimal('0.7')
+    
+    # ============================================
+    # DAMAGED RETURNS (status = 'damaged_loss')
+    # ============================================
+    damaged_returns = ReturnRequest.objects.filter(status='damaged_loss')
+    damaged_returns_count = damaged_returns.count()
+    
+    # Calculate value of damaged returns (refund amounts)
+    damaged_returns_value = damaged_returns.aggregate(
+        total=Sum('refund_amount')
+    )['total'] or Decimal('0.00')
+    
+    # Calculate cost of damaged returns (using loss_amount field if available, otherwise buying price)
+    damaged_returns_cost = Decimal('0.00')
+    for return_req in damaged_returns.select_related('product'):
+        if return_req.loss_amount:
+            # Use the recorded loss amount
+            damaged_returns_cost += return_req.loss_amount
+        elif return_req.product and return_req.product.buying_price:
+            # Fallback to buying price
+            damaged_returns_cost += return_req.product.buying_price * (return_req.quantity or 1)
+        else:
+            # Last resort - use refund amount (but mark as loss)
+            damaged_returns_cost += return_req.refund_amount
+    
+    # ============================================
+    # PENDING RETURNS (submitted or verified)
+    # ============================================
+    pending_returns = ReturnRequest.objects.filter(status__in=['submitted', 'verified'])
+    pending_returns_count = pending_returns.count()
+    
+    # Breakdown of pending returns
+    pending_verification_count = ReturnRequest.objects.filter(status='submitted').count()
+    pending_approval_count = ReturnRequest.objects.filter(status='verified').count()
+    
+    # ============================================
+    # APPROVED RETURNS (approved but not yet processed)
+    # ============================================
+    approved_returns_count = ReturnRequest.objects.filter(status='approved').count()
+    
+    # ============================================
+    # PROCESSED RETURNS (successfully restocked)
+    # ============================================
+    processed_returns_count = ReturnRequest.objects.filter(status='processed').count()
+    
+    # ============================================
+    # REJECTED RETURNS
+    # ============================================
+    rejected_returns_count = ReturnRequest.objects.filter(status='rejected').count()
     
     # For debugging - print values to console
     print(f"=== RETURN STATISTICS ===")
     print(f"Returned Items Count: {returned_items}")
     print(f"Returned Items Value: {returned_items_value}")
     print(f"Returned Items Cost: {returned_items_cost}")
+    print(f"Damaged Returns Count: {damaged_returns_count}")
+    print(f"Damaged Returns Value: {damaged_returns_value}")
+    print(f"Damaged Returns Cost: {damaged_returns_cost}")
+    print(f"Pending Returns Count: {pending_returns_count}")
+    print(f"Pending Verification: {pending_verification_count}")
+    print(f"Pending Approval: {pending_approval_count}")
+    print(f"Approved Returns: {approved_returns_count}")
+    print(f"Processed Returns: {processed_returns_count}")
+    print(f"Rejected Returns: {rejected_returns_count}")
     print(f"=========================")
     
     # ============================================
@@ -246,7 +304,7 @@ def store_statistics(request):
         'product', 'created_by'
     ).order_by('-created_at')[:5]
     
-    # Recent 5 returns - FIXED: Get ALL returns ordered by date
+    # Recent 5 returns - Get ALL returns ordered by date
     recent_returns = ReturnRequest.objects.select_related(
         'requested_by', 'product'
     ).order_by('-requested_at')[:5]
@@ -312,10 +370,25 @@ def store_statistics(request):
         'available_items_value': available_items_value,
         'available_items_cost': available_items_cost,
         
-        # Returns - FIXED: Using corrected values
+        # Returns - All Returns
         'returned_items': returned_items,
         'returned_items_value': returned_items_value,
         'returned_items_cost': returned_items_cost,
+        
+        # Returns - Damaged
+        'damaged_returns_count': damaged_returns_count,
+        'damaged_returns_value': damaged_returns_value,
+        'damaged_returns_cost': damaged_returns_cost,
+        
+        # Returns - Pending
+        'pending_returns_count': pending_returns_count,
+        'pending_verification_count': pending_verification_count,
+        'pending_approval_count': pending_approval_count,
+        
+        # Returns - Additional Stats
+        'approved_returns_count': approved_returns_count,
+        'processed_returns_count': processed_returns_count,
+        'rejected_returns_count': rejected_returns_count,
         
         # Staff & Suppliers
         'store_managers_count': store_managers_count,
@@ -330,16 +403,13 @@ def store_statistics(request):
         'recent_suppliers': supplier_list,
         
         # Stock Alerts with Pagination
-        'alerts': page_obj,  # This is now a paginated page object
-        'page_obj': page_obj,  # Explicitly pass page_obj
+        'alerts': page_obj,
+        'page_obj': page_obj,
         'page_size': page_size,
         'total_alerts': total_alerts,
     }
     
     return render(request, 'inventory/statistics.html', context)
-
-
-
 
 
 @login_required
