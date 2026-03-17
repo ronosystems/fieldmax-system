@@ -11,14 +11,19 @@ import logging
 import calendar
 from datetime import timedelta, datetime, date
 from django.db.models import F, ExpressionWrapper, DecimalField
-from sales.models import Sale, SaleItem
+from sales.models import Sale, SaleItem, generate_custom_sale_id, Customer, LoyaltySettings, LoyaltyTransaction
 from inventory.models import Product, StockEntry
-from .models import Sale, SaleItem, generate_custom_sale_id
+from .models import Sale, SaleItem, generate_custom_sale_id, Customer, LoyaltySettings, LoyaltyTransaction
 from django.core.paginator import Paginator
 from django.contrib.auth.models import User
 from django.db.models.functions import Coalesce
 
+
+
+
 logger = logging.getLogger(__name__)
+
+
 
 def calculate_profit(sale):
     """Calculate profit for a single sale"""
@@ -854,11 +859,9 @@ def sale_list(request):
 
 
 
-
-
 @login_required
 def sale_create(request):
-    """Create a new sale"""
+    """Create a new sale with loyalty points"""
     if request.method == 'POST':
         # Check if it's an AJAX request
         is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
@@ -868,10 +871,11 @@ def sale_create(request):
             # Handle JSON data from AJAX
             try:
                 data = json.loads(request.body)
-                buyer_phone = data.get('buyer_phone', '')
+                buyer_phone = data.get('buyer_phone', '').strip()
                 payment_method = data.get('payment_method', 'Cash')
                 is_credit = data.get('is_credit', False)
                 amount_paid = Decimal(str(data.get('amount_paid', '0')))
+                points_redeemed = int(data.get('points_redeemed', '0'))
                 
                 # Set other fields to empty
                 buyer_name = ''
@@ -883,9 +887,10 @@ def sale_create(request):
                 return JsonResponse({'success': False, 'error': 'Invalid JSON data'})
         else:
             # Handle traditional form POST
-            buyer_phone = request.POST.get('buyer_phone', '')
+            buyer_phone = request.POST.get('buyer_phone', '').strip()
             payment_method = request.POST.get('payment_method', 'Cash')
             is_credit = request.POST.get('is_credit') == 'on'
+            points_redeemed = int(request.POST.get('points_redeemed', '0'))
             
             buyer_name = ''
             buyer_id_number = ''
@@ -908,11 +913,67 @@ def sale_create(request):
         
         try:
             with transaction.atomic():
-                # Calculate totals
-                subtotal = sum(item['total'] for item in cart)
-                total_amount = subtotal
+                # Calculate original subtotal before any discounts
+                original_subtotal = Decimal('0.00')
+                for item in cart:
+                    original_subtotal += Decimal(str(item.get('total', 0)))
                 
-                # Create the sale
+                # ============================================
+                # LOYALTY POINTS REDEMPTION - ONLY FOR REGISTERED CUSTOMERS
+                # ============================================
+                points_discount = Decimal('0.00')
+                final_amount = original_subtotal
+                customer = None
+                
+                # Check if this is a registered customer
+                is_registered_customer = False
+                if buyer_phone:
+                    try:
+                        customer = Customer.objects.get(phone_number=buyer_phone, is_active=True)
+                        is_registered_customer = True
+                        logger.info(f"✅ Registered customer found: {customer.phone_number} - {customer.full_name}")
+                    except Customer.DoesNotExist:
+                        # Customer not registered - no points, but sale can continue
+                        logger.info(f"⚠️ Unregistered customer: {buyer_phone} - no points awarded")
+                        is_registered_customer = False
+                        customer = None
+                
+                # Only process points for registered customers
+                if is_registered_customer and points_redeemed > 0:
+                    # Check if customer has enough points
+                    if customer.points_balance < points_redeemed:
+                        raise ValueError(
+                            f"Insufficient points. Available: {customer.points_balance}, "
+                            f"Requested: {points_redeemed}"
+                        )
+                    
+                    # Points value (1 point = KSH 1)
+                    points_discount = Decimal(str(points_redeemed))
+                    
+                    # Ensure discount doesn't exceed subtotal
+                    if points_discount > original_subtotal:
+                        points_discount = original_subtotal
+                        points_redeemed = int(original_subtotal)
+                    
+                    # Calculate final amount after points discount
+                    final_amount = original_subtotal - points_discount
+                    
+                    # Adjust amount_paid if it was based on original total
+                    if amount_paid > final_amount:
+                        amount_paid = final_amount
+                    
+                    logger.info(
+                        f"💰 Points redemption: {points_redeemed} points = KSH {points_discount} discount "
+                        f"for registered customer {customer.phone_number}"
+                    )
+                elif points_redeemed > 0 and not is_registered_customer:
+                    # Trying to redeem points without registration - block it
+                    raise ValueError(
+                        f"Cannot redeem points. Customer {buyer_phone} is not registered. "
+                        f"Please register first to use loyalty points."
+                    )
+                
+                # Create the sale with final amount
                 sale = Sale.objects.create(
                     seller=request.user,
                     buyer_name=buyer_name,
@@ -922,9 +983,12 @@ def sale_create(request):
                     nok_phone=nok_phone,
                     payment_method=payment_method,
                     amount_paid=amount_paid,
-                    total_amount=total_amount,
-                    subtotal=subtotal,
-                    is_credit=is_credit
+                    total_amount=final_amount,  # Use amount after points discount
+                    subtotal=original_subtotal,  # Store original subtotal
+                    is_credit=is_credit,
+                    points_redeemed=points_redeemed if is_registered_customer else 0,
+                    points_discount=points_discount if is_registered_customer else Decimal('0.00'),
+                    original_subtotal=original_subtotal
                 )
                 
                 # Process each cart item
@@ -960,8 +1024,8 @@ def sale_create(request):
                         product_name=product.display_name,
                         sku_value=product.sku_value,
                         quantity=item['quantity'],
-                        unit_price=item['price'],
-                        total_price=item['total']
+                        unit_price=Decimal(str(item['price'])),
+                        total_price=Decimal(str(item['total']))
                     )
                     
                     # Update product quantity
@@ -982,8 +1046,8 @@ def sale_create(request):
                         product=product,
                         quantity=-item['quantity'],
                         entry_type='sale',
-                        unit_price=item['price'],
-                        total_amount=item['total'],
+                        unit_price=Decimal(str(item['price'])),
+                        total_amount=Decimal(str(item['total'])),
                         reference_id=sale.sale_id,
                         notes=f"Sale #{sale.sale_id} - {product.display_name}",
                         created_by=request.user
@@ -994,8 +1058,49 @@ def sale_create(request):
                         'name': product.display_name,
                         'code': product.product_code,
                         'quantity': item['quantity'],
-                        'price': item['price']
+                        'price': Decimal(str(item['price']))
                     })
+                
+                # ============================================
+                # LOYALTY POINTS EARNING - ONLY FOR REGISTERED CUSTOMERS
+                # ============================================
+                points_earned = 0
+                
+                if is_registered_customer and customer:
+                    # Process points redemption if any
+                    if points_redeemed > 0:
+                        customer.redeem_points(
+                            points_redeemed,
+                            sale=sale,
+                            description=f"Redeemed for sale #{sale.sale_id}"
+                        )
+                    
+                    # Update customer stats
+                    customer.total_purchases += 1
+                    customer.total_spent += original_subtotal  # Use original amount for stats
+                    customer.last_purchase_date = timezone.now()
+                    customer.save()
+                    
+                    # Update customer tier based on spending
+                    customer.update_tier()
+                    
+                    # Award loyalty points based on amount spent (after points discount)
+                    # Rules: Every 100 KSH = 1 point
+                    points_earned = customer.add_points(
+                        final_amount,  # Pass Decimal directly
+                        sale=sale,
+                        description=f"Purchase #{sale.sale_id}"
+                    )
+                    
+                    logger.info(
+                        f"💰 Registered customer {customer.phone_number}: "
+                        f"Earned {points_earned} points | "
+                        f"Redeemed {points_redeemed} points | "
+                        f"New balance: {customer.points_balance} points"
+                    )
+                else:
+                    # Unregistered customer - no points awarded
+                    logger.info(f"ℹ️ Unregistered customer {buyer_phone or 'No phone'} - no points awarded")
                 
                 # Clear the cart
                 request.session['sales_cart'] = []
@@ -1011,7 +1116,7 @@ def sale_create(request):
                             customer_id_number=buyer_id_number,
                             nok_name=nok_name,
                             nok_phone=nok_phone,
-                            total_amount=total_amount,
+                            total_amount=final_amount,  # Use final amount after points
                             created_by=request.user,
                         )
                         sale.credit_sale_id = credit_sale.id
@@ -1021,32 +1126,61 @@ def sale_create(request):
                     except Exception as e:
                         logger.error(f"Credit record creation failed: {str(e)}")
                 
-                # ============================================
-                # ADD NOTIFICATION HERE - AFTER SUCCESSFUL SALE
-                # ============================================
-                """
-                from utils.notifications import AdminNotifier
-                
-                # Send notification to admin
-                try:
-                    AdminNotifier.notify_sale_completed(sale, len(items_processed))
-                    logger.info(f"Admin notification sent for sale #{sale.sale_id}")
-                except Exception as e:
-                    logger.error(f"Failed to send admin notification: {str(e)}")
-                    # Don't fail the sale if notification fails
-                """
-                
                 # Return appropriate response
                 if is_ajax:
-                    return JsonResponse({
+                    response_data = {
                         'success': True,
                         'sale_id': sale.sale_id,
                         'message': 'Sale completed successfully!'
-                    })
+                    }
+                    
+                    # Include points info only for registered customers
+                    if is_registered_customer and customer:
+                        response_data['points'] = {
+                            'earned': int(points_earned),
+                            'redeemed': points_redeemed,
+                            'balance': customer.points_balance,
+                            'discount': float(points_discount) if points_discount > 0 else 0
+                        }
+                        response_data['message'] = f'Sale completed! Earned {int(points_earned)} points!'
+                    elif buyer_phone and not is_registered_customer:
+                        response_data['warning'] = f'Phone {buyer_phone} is not registered. No points awarded.'
+                    
+                    return JsonResponse(response_data)
                 else:
-                    messages.success(request, f'Sale #{sale.sale_id} completed successfully!')
+                    # Add appropriate messages for non-AJAX
+                    if is_registered_customer and points_earned > 0:
+                        messages.success(
+                            request, 
+                            f'Sale #{sale.sale_id} completed! You earned {int(points_earned)} loyalty points!'
+                        )
+                    elif points_redeemed > 0 and is_registered_customer:
+                        messages.success(
+                            request,
+                            f'Sale #{sale.sale_id} completed! Redeemed {points_redeemed} points for KSH {points_discount} discount!'
+                        )
+                    elif buyer_phone and not is_registered_customer:
+                        messages.warning(
+                            request,
+                            f'Sale completed but NO POINTS awarded. Phone {buyer_phone} is not registered.'
+                        )
+                        messages.info(
+                            request,
+                            f'<a href="/sales/customer/register/?phone={buyer_phone}" class="alert-link">Click here to register</a> and start earning points!'
+                        )
+                    else:
+                        messages.success(request, f'Sale #{sale.sale_id} completed successfully!')
+                    
                     return redirect('sales:sale_detail', sale_id=sale.sale_id)
                 
+        except Customer.DoesNotExist:
+            error_msg = f"Customer with phone {buyer_phone} not found. Please register first."
+            logger.error(f"Error processing sale: {error_msg}")
+            if is_ajax:
+                return JsonResponse({'success': False, 'error': error_msg})
+            messages.error(request, error_msg)
+            return redirect('sales:sale_create')
+            
         except Exception as e:
             logger.error(f"Error processing sale: {str(e)}")
             if is_ajax:
@@ -1056,7 +1190,9 @@ def sale_create(request):
     
     # GET request - show the sale form with cart
     cart = request.session.get('sales_cart', [])
-    subtotal = sum(item.get('total', 0) for item in cart)
+    subtotal = Decimal('0.00')
+    for item in cart:
+        subtotal += Decimal(str(item.get('total', 0)))
     
     context = {
         'cart': cart,
@@ -1725,3 +1861,264 @@ def export_sold_items(request):
         ])
     
     return response
+
+
+
+
+
+
+
+@login_required
+def customer_register(request):
+    """Register a new customer for loyalty points"""
+    if request.method == 'POST':
+        try:
+            # Get form data
+            phone_number = request.POST.get('phone_number', '').strip()
+            full_name = request.POST.get('full_name', '').strip()
+            email = request.POST.get('email', '').strip()
+            id_number = request.POST.get('id_number', '').strip()
+            
+            # Validate required fields
+            if not phone_number:
+                messages.error(request, 'Phone number is required')
+                return redirect('sales:customer_register')
+            
+            if not full_name:
+                messages.error(request, 'Full name is required')
+                return redirect('sales:customer_register')
+            
+            # Check if customer already exists
+            if Customer.objects.filter(phone_number=phone_number).exists():
+                messages.error(request, f'Customer with phone {phone_number} already exists')
+                return redirect('sales:customer_register')
+            
+            # Create new customer
+            customer = Customer.objects.create(
+                phone_number=phone_number,
+                full_name=full_name,
+                email=email,
+                id_number=id_number,
+                points_balance=0,
+                tier='bronze'
+            )
+            
+            # Award welcome points
+            settings = LoyaltySettings.get_settings()
+            if settings.welcome_points > 0:
+                customer.add_points(
+                    settings.welcome_points,
+                    description="Welcome bonus for registration"
+                )
+                welcome_msg = f" and received {settings.welcome_points} welcome points"
+            else:
+                welcome_msg = ""
+            
+            logger.info(f"✅ New customer registered: {customer.phone_number} - {customer.full_name}{welcome_msg}")
+            
+            messages.success(
+                request, 
+                f'Customer {full_name} registered successfully{welcome_msg}!'
+            )
+            
+            # Return JSON for AJAX or redirect for regular form
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'success': True,
+                    'customer': {
+                        'id': customer.id,
+                        'phone': customer.phone_number,
+                        'name': customer.full_name,
+                        'points': customer.points_balance,
+                        'tier': customer.get_tier_display(),
+                    }
+                })
+            
+            return redirect('sales:customer_list')
+            
+        except Exception as e:
+            logger.error(f"Error registering customer: {str(e)}")
+            messages.error(request, f'Error registering customer: {str(e)}')
+            
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'success': False, 'error': str(e)})
+            
+            return redirect('sales:customer_register')
+    
+    # GET request - show registration form
+    context = {
+        'settings': LoyaltySettings.get_settings(),
+    }
+    return render(request, 'sales/customer_register.html', context)
+
+
+
+
+
+@login_required
+def customer_search(request):
+    """AJAX endpoint to search customers by phone or name"""
+    query = request.GET.get('phone', '').strip()
+    
+    if not query or len(query) < 3:
+        return JsonResponse({'customers': []})
+    
+    customers = Customer.objects.filter(
+        Q(phone_number__icontains=query) |
+        Q(full_name__icontains=query)
+    ).filter(is_active=True)[:10]
+    
+    settings = LoyaltySettings.get_settings()
+    
+    data = [{
+        'id': c.id,
+        'phone': c.phone_number,
+        'name': c.full_name or 'Unknown',
+        'points': c.points_balance,
+        'tier': c.get_tier_display(),
+        'tier_class': c.tier,
+        'points_value': float(c.points_balance),  # 1 point = KSH 1
+        'total_spent': float(c.total_spent),
+        'purchases': c.total_purchases,
+    } for c in customers]
+    
+    return JsonResponse({'customers': data})
+
+@login_required
+def customer_detail(request, pk):
+    """Get customer details with transaction history"""
+    customer = get_object_or_404(Customer, pk=pk, is_active=True)
+    
+    # Get recent transactions
+    transactions = LoyaltyTransaction.objects.filter(
+        customer=customer
+    ).select_related('sale').order_by('-created_at')[:20]
+    
+    # Get recent sales
+    recent_sales = Sale.objects.filter(
+        buyer_phone=customer.phone_number
+    ).order_by('-sale_date')[:10]
+    
+    data = {
+        'id': customer.id,
+        'phone': customer.phone_number,
+        'name': customer.full_name,
+        'email': customer.email,
+        'id_number': customer.id_number,
+        'points': customer.points_balance,
+        'points_value': float(customer.points_balance),  # 1 point = KSH 1
+        'tier': customer.get_tier_display(),
+        'tier_class': customer.tier,
+        'total_spent': float(customer.total_spent),
+        'total_purchases': customer.total_purchases,
+        'last_purchase': customer.last_purchase_date.isoformat() if customer.last_purchase_date else None,
+        'created_at': customer.created_at.isoformat(),
+        'transactions': [{
+            'id': t.id,
+            'date': t.created_at.isoformat(),
+            'points': t.points,
+            'type': t.transaction_type,
+            'description': t.description,
+            'sale_id': t.sale.sale_id if t.sale else None,
+        } for t in transactions],
+        'recent_sales': [{
+            'id': s.sale_id,
+            'date': s.sale_date.isoformat(),
+            'amount': float(s.total_amount),
+            'payment_method': s.payment_method,
+        } for s in recent_sales],
+    }
+    
+    # For AJAX requests
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return JsonResponse(data)
+    
+    # For regular browser requests
+    context = {
+        'customer': customer,
+        'transactions': transactions,
+        'recent_sales': recent_sales,
+    }
+    return render(request, 'sales/customer_detail.html', context)
+
+@login_required
+def customer_transactions(request, pk):
+    """Get customer transaction history"""
+    customer = get_object_or_404(Customer, pk=pk, is_active=True)
+    
+    transactions = LoyaltyTransaction.objects.filter(
+        customer=customer
+    ).select_related('sale').order_by('-created_at')
+    
+    # Pagination
+    paginator = Paginator(transactions, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    context = {
+        'customer': customer,
+        'transactions': page_obj,
+    }
+    return render(request, 'sales/customer_transactions.html', context)
+
+
+
+
+
+@login_required
+def customer_list(request):
+    """List all customers with loyalty points"""
+    customers = Customer.objects.all().order_by('-created_at')
+    
+    # Search
+    search = request.GET.get('search', '')
+    if search:
+        customers = customers.filter(
+            Q(phone_number__icontains=search) |
+            Q(full_name__icontains=search) |
+            Q(email__icontains=search)
+        )
+    
+    # Filter by tier
+    tier = request.GET.get('tier', '')
+    if tier:
+        customers = customers.filter(tier=tier)
+    
+    # Sorting
+    sort = request.GET.get('sort', '-points_balance')
+    customers = customers.order_by(sort)
+    
+    # Pagination
+    paginator = Paginator(customers, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    # Statistics
+    total_customers = Customer.objects.count()
+    total_points = Customer.objects.aggregate(total=Sum('points_balance'))['total'] or 0
+    total_spent = Customer.objects.aggregate(total=Sum('total_spent'))['total'] or 0
+    
+    # Tier counts
+    platinum_customers = Customer.objects.filter(tier='platinum').count()
+    gold_customers = Customer.objects.filter(tier='gold').count()
+    
+    # New customers this month
+    month_start = timezone.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    new_customers = Customer.objects.filter(created_at__gte=month_start).count()
+    
+    context = {
+        'customers': page_obj,
+        'total_customers': total_customers,
+        'total_points': total_points,
+        'total_points_value': total_points,  # 1 point = KSH 1
+        'total_spent': total_spent,
+        'avg_spent': total_spent / total_customers if total_customers > 0 else 0,
+        'platinum_customers': platinum_customers,
+        'gold_customers': gold_customers,
+        'new_customers': new_customers,
+        'search': search,
+        'tier': tier,
+        'sort': sort,
+        'tier_choices': Customer.TIER_CHOICES,
+    }
+    return render(request, 'sales/customer_list.html', context)

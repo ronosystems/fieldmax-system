@@ -1,0 +1,471 @@
+{% extends 'sales/staff_base.html' %}
+{% load static %}
+
+{% block title %}Customer Records - FieldMax{% endblock %}
+
+{% block page_icon %}fas fa-id-card{% endblock %}
+{% block page_title %}Customer Loyalty Records{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'sales:sales_dashboard' %}">Dashboard</a></li>
+<li class="breadcrumb-item active">Customer Records</li>
+{% endblock %}
+
+{% block page_actions %}
+<div class="btn-group">
+    <a href="{% url 'sales:customer_register' %}" class="btn btn-success" target="_blank">
+        <i class="fas fa-user-plus me-2"></i>Add New Customer
+    </a>
+    <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
+        <i class="fas fa-download"></i>
+    </button>
+    <ul class="dropdown-menu dropdown-menu-end">
+        <li><a class="dropdown-item" href="#" onclick="exportToCSV()"><i class="fas fa-file-csv me-2 text-success"></i>Export to CSV</a></li>
+        <li><a class="dropdown-item" href="#" onclick="window.print()"><i class="fas fa-print me-2 text-secondary"></i>Print</a></li>
+    </ul>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Stats Cards -->
+<div class="stats-grid mb-4">
+    <div class="stat-card">
+        <div class="stat-icon primary">
+            <i class="fas fa-users"></i>
+        </div>
+        <div class="stat-value">{{ total_customers }}</div>
+        <div class="stat-label">Total Customers</div>
+        <div class="stat-trend">
+            <i class="fas fa-user-plus me-1"></i>{{ new_customers }} this month
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon success">
+            <i class="fas fa-star"></i>
+        </div>
+        <div class="stat-value">{{ total_points|floatformat:0 }}</div>
+        <div class="stat-label">Active Points</div>
+        <div class="stat-trend">
+            <i class="fas fa-arrow-up me-1"></i>Worth KSH {{ total_points_value|floatformat:0 }}
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon warning">
+            <i class="fas fa-trophy"></i>
+        </div>
+        <div class="stat-value">{{ platinum_customers }}</div>
+        <div class="stat-label">Platinum Members</div>
+        <div class="stat-trend down">
+            <i class="fas fa-crown me-1"></i>{{ gold_customers }} Gold
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon danger">
+            <i class="fas fa-shopping-cart"></i>
+        </div>
+        <div class="stat-value">KSH {{ total_spent|floatformat:0 }}</div>
+        <div class="stat-label">Lifetime Value</div>
+        <div class="stat-trend">
+            <i class="fas fa-calendar me-1"></i>Avg: KSH {{ avg_spent|floatformat:0 }}
+        </div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="table-container mb-4">
+    <div class="row g-3">
+        <div class="col-md-4">
+            <div class="input-group">
+                <span class="input-group-text bg-primary text-white">
+                    <i class="fas fa-search"></i>
+                </span>
+                <input type="text" class="form-control" id="searchInput" placeholder="Search by name, phone, email..." value="{{ search }}">
+            </div>
+        </div>
+        <div class="col-md-3">
+            <select class="form-select" id="tierFilter">
+                <option value="">All Tiers</option>
+                {% for value, label in tier_choices %}
+                <option value="{{ value }}" {% if tier == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-3">
+            <select class="form-select" id="sortFilter">
+                <option value="-points_balance">Points (High to Low)</option>
+                <option value="points_balance">Points (Low to High)</option>
+                <option value="-total_spent">Total Spent (High to Low)</option>
+                <option value="total_spent">Total Spent (Low to High)</option>
+                <option value="-last_purchase_date">Recent Purchase</option>
+                <option value="-created_at">Newest First</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <button class="btn btn-primary w-100" onclick="applyFilters()">
+                <i class="fas fa-filter me-2"></i>Apply
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Customers Table -->
+<div class="table-container">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>Customer</th>
+                    <th>Contact</th>
+                    <th>Tier</th>
+                    <th>Points</th>
+                    <th>Points Value</th>
+                    <th>Total Spent</th>
+                    <th>Purchases</th>
+                    <th>Last Purchase</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for customer in customers %}
+                <tr>
+                    <td>
+                        <div class="d-flex align-items-center">
+                            <div class="user-avatar-small me-2" style="width: 40px; height: 40px;">
+                                {{ customer.full_name|default:customer.phone_number|first|upper }}
+                            </div>
+                            <div>
+                                <div class="fw-bold">{{ customer.full_name|default:"Unknown" }}</div>
+                                <small class="text-muted">ID: #{{ customer.id }}</small>
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        <div><i class="fas fa-phone me-1 text-muted"></i>{{ customer.phone_number }}</div>
+                        {% if customer.email %}
+                        <small><i class="fas fa-envelope me-1 text-muted"></i>{{ customer.email }}</small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="tier-badge tier-{{ customer.tier }}">
+                            {{ customer.get_tier_display }}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="fw-bold text-primary">{{ customer.points_balance }}</span>
+                    </td>
+                    <td>
+                        <span class="fw-bold text-success">KSH {{ customer.points_balance }}</span>
+                    </td>
+                    <td>
+                        <span class="fw-bold">KSH {{ customer.total_spent|floatformat:0 }}</span>
+                    </td>
+                    <td>
+                        <span class="badge bg-secondary">{{ customer.total_purchases }}</span>
+                    </td>
+                    <td>
+                        {% if customer.last_purchase_date %}
+                        <small>{{ customer.last_purchase_date|date:"d M Y" }}</small>
+                        <br>
+                        <small class="text-muted">{{ customer.last_purchase_date|timesince }} ago</small>
+                        {% else %}
+                        <span class="text-muted">Never</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">
+                        <div class="btn-group btn-group-sm">
+                            <button type="button" class="btn btn-outline-info" onclick="viewCustomer({{ customer.id }})" title="View Details">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-primary" onclick="showTransactions({{ customer.id }})" title="View Transactions">
+                                <i class="fas fa-history"></i>
+                            </button>
+                            <a href="{% url 'sales:customer_register' %}?id={{ customer.id }}" class="btn btn-outline-success" title="Edit" target="_blank">
+                                <i class="fas fa-edit"></i>
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="9" class="text-center py-5">
+                        <i class="fas fa-users fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">No customers found</p>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    
+    <!-- Pagination -->
+    {% if customers.has_other_pages %}
+    <nav class="mt-4">
+        <ul class="pagination justify-content-center">
+            {% if customers.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?page=1&search={{ search }}&tier={{ tier }}&sort={{ sort }}">First</a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?page={{ customers.previous_page_number }}&search={{ search }}&tier={{ tier }}&sort={{ sort }}">Previous</a>
+            </li>
+            {% endif %}
+            
+            {% for num in customers.paginator.page_range %}
+                {% if customers.number == num %}
+                <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                {% elif num > customers.number|add:'-3' and num < customers.number|add:'3' %}
+                <li class="page-item"><a class="page-link" href="?page={{ num }}&search={{ search }}&tier={{ tier }}&sort={{ sort }}">{{ num }}</a></li>
+                {% endif %}
+            {% endfor %}
+            
+            {% if customers.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ customers.next_page_number }}&search={{ search }}&tier={{ tier }}&sort={{ sort }}">Next</a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?page={{ customers.paginator.num_pages }}&search={{ search }}&tier={{ tier }}&sort={{ sort }}">Last</a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+
+<!-- Customer Detail Modal -->
+<div class="modal fade" id="customerDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-user-circle me-2"></i>
+                    Customer Details
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="customerDetailContent">
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Transactions Modal -->
+<div class="modal fade" id="transactionsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-history me-2"></i>
+                    Points Transactions
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="transactionsContent">
+                <div class="text-center py-4">
+                    <div class="spinner-border text-info" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .user-avatar-small {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: var(--primary-gradient);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: 600;
+        font-size: 1rem;
+    }
+    
+    .tier-badge {
+        padding: 4px 12px;
+        border-radius: 50px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        display: inline-block;
+    }
+    
+    .tier-bronze { background: #cd7f32; color: white; }
+    .tier-silver { background: #c0c0c0; color: #333; }
+    .tier-gold { background: #ffd700; color: #333; }
+    .tier-platinum { background: #e5e4e2; color: #333; }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function applyFilters() {
+    const search = document.getElementById('searchInput').value;
+    const tier = document.getElementById('tierFilter').value;
+    const sort = document.getElementById('sortFilter').value;
+    
+    window.location.href = `?search=${encodeURIComponent(search)}&tier=${tier}&sort=${sort}`;
+}
+
+function viewCustomer(id) {
+    const modal = new bootstrap.Modal(document.getElementById('customerDetailModal'));
+    const content = document.getElementById('customerDetailContent');
+    
+    content.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary"></div></div>';
+    modal.show();
+    
+    fetch(`/sales/customer/${id}/`, {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(response => response.json())
+    .then(customer => {
+        let tierClass = customer.tier_class;
+        let html = `
+            <div class="text-center mb-4">
+                <div class="customer-avatar-lg mx-auto mb-3">
+                    ${customer.name ? customer.name.charAt(0).toUpperCase() : 'C'}
+                </div>
+                <h4 class="mb-1">${customer.name || 'Unknown'}</h4>
+                <p class="text-muted mb-2">${customer.phone}</p>
+                <span class="tier-badge tier-${customer.tier_class} me-2">${customer.tier}</span>
+                ${customer.email ? `<span class="badge bg-info">${customer.email}</span>` : ''}
+            </div>
+            
+            <div class="row g-3 mb-4">
+                <div class="col-6">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <h2 class="mb-0 text-primary">${customer.points}</h2>
+                            <small class="text-muted">Points Balance</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <h2 class="mb-0 text-success">KSH ${customer.points_value}</h2>
+                            <small class="text-muted">Points Value</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row g-3 mb-4">
+                <div class="col-4">
+                    <div class="text-center">
+                        <h5 class="mb-0">${customer.total_purchases}</h5>
+                        <small class="text-muted">Purchases</small>
+                    </div>
+                </div>
+                <div class="col-4">
+                    <div class="text-center">
+                        <h5 class="mb-0">KSH ${customer.total_spent.toLocaleString()}</h5>
+                        <small class="text-muted">Total Spent</small>
+                    </div>
+                </div>
+                <div class="col-4">
+                    <div class="text-center">
+                        <h5 class="mb-0">${customer.last_purchase ? new Date(customer.last_purchase).toLocaleDateString() : 'Never'}</h5>
+                        <small class="text-muted">Last Purchase</small>
+                    </div>
+                </div>
+            </div>
+            
+            <h6 class="mb-3">Recent Transactions</h6>
+            <div style="max-height: 250px; overflow-y: auto;">
+        `;
+        
+        if (customer.transactions && customer.transactions.length > 0) {
+            customer.transactions.slice(0, 10).forEach(t => {
+                let typeClass = t.type === 'earned' ? 'badge-success' : 'badge-warning';
+                let sign = t.type === 'earned' ? '+' : '-';
+                html += `
+                    <div class="d-flex justify-content-between align-items-center p-2 border-bottom">
+                        <div>
+                            <span class="badge ${typeClass} me-2">${t.type}</span>
+                            <small class="text-muted">${new Date(t.date).toLocaleDateString()}</small>
+                        </div>
+                        <span class="fw-bold ${t.type === 'earned' ? 'text-success' : 'text-warning'}">${sign}${Math.abs(t.points)} pts</span>
+                    </div>
+                `;
+            });
+        } else {
+            html += '<p class="text-muted text-center">No transactions yet</p>';
+        }
+        
+        html += `</div>`;
+        
+        content.innerHTML = html;
+    })
+    .catch(error => {
+        content.innerHTML = '<div class="alert alert-danger">Failed to load customer details</div>';
+    });
+}
+
+function showTransactions(id) {
+    const modal = new bootstrap.Modal(document.getElementById('transactionsModal'));
+    const content = document.getElementById('transactionsContent');
+    
+    content.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-info"></div></div>';
+    modal.show();
+    
+    fetch(`/sales/customer/${id}/transactions/`, {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(response => response.json())
+    .then(data => {
+        let html = '<div class="table-responsive"><table class="table table-sm">';
+        html += '<thead><tr><th>Date</th><th>Type</th><th>Points</th><th>Description</th></tr></thead><tbody>';
+        
+        data.transactions.forEach(t => {
+            let typeClass = t.type === 'earned' ? 'text-success' : 'text-warning';
+            let sign = t.type === 'earned' ? '+' : '-';
+            html += `
+                <tr>
+                    <td>${new Date(t.date).toLocaleDateString()}</td>
+                    <td><span class="badge ${t.type === 'earned' ? 'bg-success' : 'bg-warning'}">${t.type}</span></td>
+                    <td class="${typeClass} fw-bold">${sign}${Math.abs(t.points)}</td>
+                    <td>${t.description || ''}</td>
+                </tr>
+            `;
+        });
+        
+        html += '</tbody></table></div>';
+        
+        if (data.has_next) {
+            html += '<div class="text-center mt-3"><button class="btn btn-sm btn-outline-primary">Load More</button></div>';
+        }
+        
+        content.innerHTML = html;
+    })
+    .catch(error => {
+        content.innerHTML = '<div class="alert alert-danger">Failed to load transactions</div>';
+    });
+}
+
+function exportToCSV() {
+    // Get current filters
+    const search = document.getElementById('searchInput').value;
+    const tier = document.getElementById('tierFilter').value;
+    
+    window.location.href = `?export=csv&search=${encodeURIComponent(search)}&tier=${tier}`;
+}
+
+// Enter key in search
+document.getElementById('searchInput').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        applyFilters();
+    }
+});
+</script>
+{% endblock %}

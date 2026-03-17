@@ -904,6 +904,70 @@
                 margin: 10px 0;
             }
         }
+
+        /* Customer Verification Modal Styles */
+        .customer-avatar-lg {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+            font-weight: 600;
+            color: white;
+            margin: 0 auto 20px;
+        }
+        
+        .tier-badge {
+            padding: 5px 15px;
+            border-radius: 50px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: inline-block;
+        }
+        
+        .tier-bronze { background: #cd7f32; color: white; }
+        .tier-silver { background: #c0c0c0; color: #333; }
+        .tier-gold { background: #ffd700; color: #333; }
+        .tier-platinum { background: #e5e4e2; color: #333; }
+        
+        .points-card {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            margin: 20px 0;
+        }
+        
+        .points-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            line-height: 1;
+            margin-bottom: 5px;
+        }
+        
+        .points-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+        
+        .verification-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .verification-buttons .btn {
+            flex: 1;
+            padding: 12px;
+            font-size: 1rem;
+        }
+        
+        .modal-backdrop.show {
+            opacity: 0.7;
+        }
     </style>
 </head>
 <body>
@@ -1102,6 +1166,7 @@
                         
                         <input type="hidden" name="payment_method" id="selectedPaymentMethod" value="Cash">
                         <input type="hidden" name="amount_paid" id="amountPaid" value="0">
+                        <input type="hidden" name="verified_customer_id" id="verifiedCustomerId" value="">
 
                         <!-- Only Phone Number field for loyalty points -->
                         <div class="form-group">
@@ -1110,8 +1175,15 @@
                                 Phone Number <span class="text-muted">(for loyalty points)</span>
                             </label>
                             <input type="text" name="buyer_phone" id="buyerPhone" class="form-control" 
-                                   placeholder="07XX XXX XXX" onkeypress="handlePhoneEnter(event)">
-                            <small class="text-muted">Enter phone number to earn loyalty points</small>
+                                   placeholder="07XX XXX XXX" onkeypress="handlePhoneEnter(event)" autocomplete="off">
+                            <small class="text-muted">Press Enter to verify customer</small>
+                        </div>
+
+                        <!-- Verified Customer Info (hidden until verified) -->
+                        <div id="verifiedCustomerInfo" class="alert alert-success mt-2" style="display: none;">
+                            <i class="fas fa-check-circle me-2"></i>
+                            <strong id="verifiedCustomerName"></strong>
+                            <span class="badge bg-primary ms-2" id="verifiedCustomerPoints">0 pts</span>
                         </div>
 
                         <hr class="my-2">
@@ -1268,240 +1340,122 @@
         </div>
     </div>
 
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Customer Verification Modal -->
+    <div class="modal fade" id="customerVerifyModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-user-check me-2"></i>
+                        Verify Customer
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body text-center" id="customerVerifyContent">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2">Searching for customer...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
-    <script>
-        var csrftoken = '{{ csrf_token }}';
-        $.ajaxSetup({ beforeSend: function(xhr, s) { if (!/^(GET|HEAD|OPTIONS|TRACE)$/.test(s.type)) xhr.setRequestHeader("X-CSRFToken", csrftoken); } });
 
-        let selectedBank = '';
-        let searchTimer;
-        let currentRequest = null;
+    
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+    var csrftoken = '{{ csrf_token }}';
+    $.ajaxSetup({ beforeSend: function(xhr, s) { if (!/^(GET|HEAD|OPTIONS|TRACE)$/.test(s.type)) xhr.setRequestHeader("X-CSRFToken", csrftoken); } });
+
+    let selectedBank = '';
+    let searchTimer;
+    let currentRequest = null;
+    let verifiedCustomer = null;
+    let isVerificationModalActive = false;
+    
+    const mpesaModal = new bootstrap.Modal(document.getElementById('mpesaModal'));
+    const bankModal = new bootstrap.Modal(document.getElementById('bankModal'));
+    const pointsModal = new bootstrap.Modal(document.getElementById('pointsModal'));
+    const cashModal = new bootstrap.Modal(document.getElementById('cashModal'));
+    const productLookupModal = new bootstrap.Modal(document.getElementById('productLookupModal'));
+    const customerVerifyModal = new bootstrap.Modal(document.getElementById('customerVerifyModal'));
+
+    // Auto-enable price editing function
+    function autoEnablePriceEdit() {
+        let customPrice = $('#customPrice').val().trim();
+        if (customPrice !== '') {
+            $('#allowPriceEdit').prop('checked', true);
+        }
+    }
+
+    function updateDateTime() {
+        const now = new Date();
+        document.getElementById('currentDate').innerHTML = now.toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+        document.getElementById('currentTime').innerHTML = now.toLocaleTimeString();
+    }
+    updateDateTime();
+    setInterval(updateDateTime, 1000);
+
+    // Add to Cart - Enter key for manual entry
+    $('#productSearch').keypress(function(e) {
+        if(e.which == 13) {
+            e.preventDefault();
+            addToCart();
+        }
+    });
+
+    // Add to Cart function
+    function addToCart() {
+        let code = $('#productSearch').val().trim();
+        if(!code) { 
+            showError('Enter product code'); 
+            return; 
+        }
+        let price = $('#customPrice').val().trim();
+        let allowEdit = $('#allowPriceEdit').is(':checked');
         
-        const mpesaModal = new bootstrap.Modal(document.getElementById('mpesaModal'));
-        const bankModal = new bootstrap.Modal(document.getElementById('bankModal'));
-        const pointsModal = new bootstrap.Modal(document.getElementById('pointsModal'));
-        const cashModal = new bootstrap.Modal(document.getElementById('cashModal'));
-        const productLookupModal = new bootstrap.Modal(document.getElementById('productLookupModal'));
-
-        // Auto-enable price editing function
-        function autoEnablePriceEdit() {
-            let customPrice = $('#customPrice').val().trim();
-            if (customPrice !== '') {
-                $('#allowPriceEdit').prop('checked', true);
-            }
-        }
-
-        function updateDateTime() {
-            const now = new Date();
-            document.getElementById('currentDate').innerHTML = now.toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
-            document.getElementById('currentTime').innerHTML = now.toLocaleTimeString();
-        }
-        updateDateTime();
-        setInterval(updateDateTime, 1000);
-
-        // Add to Cart - Enter key for manual entry
-        $('#productSearch').keypress(function(e) {
-            if(e.which == 13) {
-                e.preventDefault();
-                addToCart();
-            }
-        });
-
-        // Add to Cart function
-        function addToCart() {
-            let code = $('#productSearch').val().trim();
-            if(!code) { 
-                showError('Enter product code'); 
-                return; 
-            }
-            let price = $('#customPrice').val().trim();
-            let allowEdit = $('#allowPriceEdit').is(':checked');
-            
-            $('#addProductBtn').prop('disabled', true).html('<span class="spinner me-1"></span>Adding...');
-            
-            $.ajax({
-                url: '{% url "sales:add_to_cart" %}',
-                method: 'POST',
-                data: JSON.stringify({
-                    product_code: code, 
-                    quantity: 1,
-                    custom_price: price ? parseFloat(price) : null,
-                    allow_price_edit: allowEdit
-                }),
-                contentType: 'application/json',
-                success: function(r) { 
-                    if(r.success) {
-                        $('#productSearch').val('');
-                        $('#customPrice').val('');
-                        location.reload(); 
-                    } else { 
-                        showError(r.error); 
-                        $('#addProductBtn').prop('disabled', false).html('<i class="fas fa-cart-plus me-1"></i>Add');
-                    }
-                },
-                error: function() {
-                    showError('Error adding product');
+        $('#addProductBtn').prop('disabled', true).html('<span class="spinner me-1"></span>Adding...');
+        
+        $.ajax({
+            url: '{% url "sales:add_to_cart" %}',
+            method: 'POST',
+            data: JSON.stringify({
+                product_code: code, 
+                quantity: 1,
+                custom_price: price ? parseFloat(price) : null,
+                allow_price_edit: allowEdit
+            }),
+            contentType: 'application/json',
+            success: function(r) { 
+                if(r.success) {
+                    $('#productSearch').val('');
+                    $('#customPrice').val('');
+                    location.reload(); 
+                } else { 
+                    showError(r.error); 
                     $('#addProductBtn').prop('disabled', false).html('<i class="fas fa-cart-plus me-1"></i>Add');
                 }
-            });
-        }
-
-        $('#addProductBtn').click(addToCart);
-
-        // Product Lookup Search - FIXED URL
-        $('#productSearchLookup').on('keyup', function() {
-            clearTimeout(searchTimer);
-            let query = $(this).val().trim();
-            
-            // If search is empty, show the initial message
-            if (query.length === 0) {
-                $('#productList').html(`
-                    <div class="text-center py-4 text-muted">
-                        <i class="fas fa-search fa-3x mb-2"></i>
-                        <p>Start typing to search for products</p>
-                        <small class="text-muted">Search by product code, name, brand, model, or IMEI</small>
-                    </div>
-                `);
-                return;
+            },
+            error: function() {
+                showError('Error adding product');
+                $('#addProductBtn').prop('disabled', false).html('<i class="fas fa-cart-plus me-1"></i>Add');
             }
-            
-            // Show loading spinner while searching
-            $('#productList').html(`
-                <div class="text-center py-4">
-                    <div class="loading-spinner"></div>
-                    <p class="mt-2 text-muted">Searching products...</p>
-                </div>
-            `);
-            
-            // Only search if query is at least 2 characters
-            if(query.length < 2) {
-                $('#productList').html(`
-                    <div class="text-center py-4 text-muted">
-                        <i class="fas fa-info-circle fa-3x mb-2"></i>
-                        <p>Type at least 2 characters to search</p>
-                    </div>
-                `);
-                return;
-            }
-            
-            searchTimer = setTimeout(function() {
-                if (currentRequest) {
-                    currentRequest.abort();
-                }
-                
-                currentRequest = $.ajax({
-                    url: '{% url "staff:product_lookup_api" %}', // FIXED: Changed to correct URL
-                    method: 'GET',
-                    data: { q: query },
-                    success: function(response) {
-                        if(response.success && response.products && response.products.length > 0) {
-                            displayProducts(response.products);
-                        } else {
-                            $('#productList').html(`
-                                <div class="text-center py-4 text-muted">
-                                    <i class="fas fa-box-open fa-3x mb-2"></i>
-                                    <p>No products found matching "${query}"</p>
-                                    <small>Try a different search term</small>
-                                </div>
-                            `);
-                        }
-                    },
-                    error: function(xhr, status, error) {
-                        if (status !== 'abort') {
-                            console.error('Search error:', error);
-                            $('#productList').html(`
-                                <div class="text-center py-4 text-muted">
-                                    <i class="fas fa-exclamation-triangle fa-3x mb-2 text-warning"></i>
-                                    <p>Error searching products</p>
-                                    <small>Please try again</small>
-                                </div>
-                            `);
-                        }
-                    },
-                    complete: function() {
-                        currentRequest = null;
-                    }
-                });
-            }, 300);
         });
+    }
 
-        // Updated displayProducts function with hidden best price
-        function displayProducts(products) {
-            let html = '<div class="product-grid">';
-            products.forEach(function(product) {
-                let stockClass = 'stock-high';
-                let stockText = 'In Stock';
-                let isSold = false;
-                
-                if (product.quantity <= 0) {  // FIXED: Changed from stock to quantity
-                    stockClass = 'stock-out';
-                    stockText = 'Out of Stock';
-                    isSold = true;
-                } else if (product.quantity <= 5) {
-                    stockClass = 'stock-low';
-                    stockText = 'Low Stock';
-                }
-                
-                // Check if it's a single item that might be sold
-                if (product.is_single_item && product.quantity === 0) {  // FIXED: Changed from is_single to is_single_item
-                    stockClass = 'stock-sold';
-                    stockText = 'SOLD';
-                    isSold = true;
-                }
-                
-                let itemClass = isSold ? 'product-item sold-item' : 'product-item';
-                let onclickAttr = isSold ? '' : `onclick="selectProduct('${product.product_code}')"`;  // FIXED: Changed from code to product_code
-                
-                html += `
-                    <div class="${itemClass}" ${onclickAttr}>
-                        <div class="product-info">
-                            <h6>${product.display_name || product.name}</h6>  <!-- FIXED: Added fallback for name -->
-                            <small>Code: ${product.product_code}</small>
-                            ${product.sku_value ? `<div class="sku-info">IMEI: ${product.sku_value}</div>` : ''}  <!-- FIXED: Changed from sku to sku_value -->
-                        </div>
-                        <div class="product-details">
-                            <!-- Selling Price Card - Always Visible -->
-                            <div class="price-card selling-price-card">
-                                <div class="price-label">Selling Price</div>
-                                <div class="price-value selling-price">KSH ${product.selling_price ? product.selling_price.toLocaleString() : '0'}</div>  <!-- FIXED: Changed from price to selling_price -->
-                            </div>
-                            
-                            <!-- Best Price Card - Hidden by default, shows on click -->
-                            <div class="price-card best-price-card" onclick="event.stopPropagation(); toggleBestPrice(this)">
-                                <div class="price-label">
-                                    Best Price 
-                                    <i class="fas fa-eye-slash ms-1"></i>
-                                </div>
-                                <div class="price-value best-price hidden-price">
-                                    ${product.best_price ? 
-                                        `<span class="hidden-value">••••••</span>
-                                         <span class="actual-value" style="display: none;">KSH ${product.best_price.toLocaleString()}</span>` : 
-                                        '<span class="text-muted">Not available</span>'}
-                                </div>
-                            </div>
-                            
-                            <span class="stock-badge ${stockClass}">${stockText}: ${product.quantity}</span>  <!-- FIXED: Changed from stock to quantity -->
-                        </div>
-                    </div>
-                `;
-            });
-            html += '</div>';
-            $('#productList').html(html);
-        }
+    $('#addProductBtn').click(addToCart);
 
-        // Toggle best price visibility function
-        function toggleBestPrice(element) {
-            $(element).find('.best-price').toggleClass('revealed');
-            $(element).find('.hidden-value').toggle();
-            $(element).find('.actual-value').toggle();
-            $(element).find('.fa-eye-slash').toggleClass('fa-eye');
-        }
-
-        // Clear search when modal is opened
-        $('#productLookupModal').on('show.bs.modal', function() {
-            $('#productSearchLookup').val('');
+    // Product Lookup Search
+    $('#productSearchLookup').on('keyup', function() {
+        clearTimeout(searchTimer);
+        let query = $(this).val().trim();
+        
+        if (query.length === 0) {
             $('#productList').html(`
                 <div class="text-center py-4 text-muted">
                     <i class="fas fa-search fa-3x mb-2"></i>
@@ -1509,285 +1463,613 @@
                     <small class="text-muted">Search by product code, name, brand, model, or IMEI</small>
                 </div>
             `);
-        });
-
-        function selectProduct(code) {
-            $('#productSearch').val(code);
-            productLookupModal.hide();
-            $('#productSearch').focus();
+            return;
         }
-
-        // Update Quantity
-        $(document).on('change', '.quantity-input', function() {
-            let code = $(this).data('code'), qty = $(this).val();
-            if(qty < 1) qty = 1;
-            $.ajax({
-                url: '{% url "sales:update_cart" %}',
-                method: 'POST',
-                data: JSON.stringify({ product_code: code, quantity: parseInt(qty) }),
-                contentType: 'application/json',
-                success: function(r) { if(r.success) location.reload(); }
-            });
-        });
-
-        // Update Price
-        $(document).on('change', '.price-input', function() {
-            let code = $(this).data('code'), newPrice = $(this).val(), oldPrice = $(this).data('price');
-            if(newPrice == oldPrice) return;
-            $.ajax({
-                url: '{% url "sales:update_cart_price" %}',
-                method: 'POST',
-                data: JSON.stringify({ product_code: code, old_price: oldPrice, price: parseFloat(newPrice) }),
-                contentType: 'application/json',
-                success: function(r) { if(r.success) location.reload(); }
-            });
-        });
-
-        // Remove Item
-        $(document).on('click', '.remove-item', function() {
-            if(!confirm('Remove item from cart?')) return;
-            let code = $(this).data('code'), price = $(this).data('price');
-            $.ajax({
-                url: '{% url "sales:remove_from_cart" %}',
-                method: 'POST',
-                data: JSON.stringify({ product_code: code, price: price }),
-                contentType: 'application/json',
-                success: function(r) { if(r.success) location.reload(); }
-            });
-        });
-
-        // Payment Modals
-        function openPaymentModal(type) {
-            if($('.cart-item').length == 0) { 
-                showError('Cart is empty. Add items first.'); 
-                return; 
-            }
-            $('#selectedPaymentMethod').val(type.charAt(0).toUpperCase() + type.slice(1));
-            if(type == 'mpesa') mpesaModal.show();
-            else if(type == 'bank') bankModal.show();
-            else if(type == 'points') pointsModal.show();
-            else if(type == 'cash') cashModal.show();
+        
+        $('#productList').html(`
+            <div class="text-center py-4">
+                <div class="loading-spinner"></div>
+                <p class="mt-2 text-muted">Searching products...</p>
+            </div>
+        `);
+        
+        if(query.length < 2) {
+            $('#productList').html(`
+                <div class="text-center py-4 text-muted">
+                    <i class="fas fa-info-circle fa-3x mb-2"></i>
+                    <p>Type at least 2 characters to search</p>
+                </div>
+            `);
+            return;
         }
-
-        function selectBank(e, b) { 
-            $('.bank-option').removeClass('selected'); 
-            $(e).addClass('selected'); 
-            selectedBank = b; 
-        }
-
-        function processBank() {
-            if(!selectedBank) { showError('Please select a bank'); return; }
-            alert(`Connected to ${selectedBank} POS machine. Please insert/swipe card.`);
-            bankModal.hide();
-            let total = $('#subtotal').text().replace('KSH', '').trim();
-            $('#amountPaid').val(total);
-            $('#changeDue').text('Change: KSH 0').show();
-            // Focus on phone number field after modal closes
-            setTimeout(function() {
-                $('#buyerPhone').focus();
-            }, 500);
-        }
-
-        function processMpesa() {
-            let phone = $('#mpesaPhone').val().trim();
-            if(!phone || !/^0[17]\d{8}$/.test(phone)) { 
-                showError('Please enter a valid Kenyan phone number (e.g., 0712345678)'); 
-                return; 
-            }
-            alert(`STK Push sent to ${phone}. Please check customer phone to complete payment.`);
-            mpesaModal.hide();
-            $('#amountPaid').val($('#mpesaAmount').val());
-            $('#changeDue').text('Change: KSH 0').show();
-            // Focus on phone number field after modal closes
-            setTimeout(function() {
-                $('#buyerPhone').focus();
-            }, 500);
-        }
-
-        function sendOtp() {
-            let phone = $('#pointsPhone').val().trim();
-            if(!phone) { showError('Enter phone number'); return; }
-            $('#otpContainer').show();
-            $('#sendOtpBtn').hide();
-            $('#verifyOtpBtn').show();
-            alert(`OTP sent to ${phone}`);
-        }
-
-        function verifyOtp() {
-            let otp = ''; 
-            $('.otp-input').each(function() { otp += $(this).val(); });
-            if(otp.length < 6) { showError('Enter complete OTP'); return; }
-            if(otp == '123456') {
-                alert('OTP verified! Points redeemed successfully.');
-                pointsModal.hide();
-                $('#amountPaid').val($('#pointsAmount').val());
-                $('#changeDue').text('Change: KSH 0').show();
-                // Focus on phone number field after modal closes
-                setTimeout(function() {
-                    $('#buyerPhone').focus();
-                }, 500);
-            } else showError('Invalid OTP');
-        }
-
-        function calculateCashChange() {
-            let total = parseFloat($('#cashTotal').val()) || 0;
-            let tendered = parseFloat($('#cashTendered').val()) || 0;
-            $('#cashChange').val(tendered >= total ? 'KSH ' + (tendered - total).toFixed(0) : 'Insufficient amount');
-        }
-
-        // Handle Enter key in cash modal
-        function handleCashEnter(event) {
-            if (event.key === 'Enter') {
-                event.preventDefault();
-                processCash();
-            }
-        }
-
-        function processCash() {
-            let total = parseFloat($('#cashTotal').val()) || 0;
-            let tendered = parseFloat($('#cashTendered').val()) || 0;
-            if(tendered < total) { 
-                showError('Insufficient amount tendered'); 
-                return; 
-            }
-            cashModal.hide();
-            $('#amountPaid').val(tendered);
-            let change = (tendered - total).toFixed(0);
-            $('#changeDue').text('Change: KSH ' + change).show();
-            // Focus on phone number field after modal closes
-            setTimeout(function() {
-                $('#buyerPhone').focus();
-            }, 500);
-        }
-
-        // Handle Enter key in phone number field
-        function handlePhoneEnter(event) {
-            if (event.key === 'Enter') {
-                event.preventDefault();
-                // Trigger form submission
-                $('#saleForm').submit();
-            }
-        }
-
-        function moveToNext(c,i) { 
-            if(c.value.length) {
-                let next = $(c).parent().children()[i+1];
-                if(next) next.focus();
-            }
-        }
-
-        function showError(message) {
-            $('#productError').html('<i class="fas fa-exclamation-circle me-2"></i>' + message).show();
-            setTimeout(() => $('#productError').fadeOut(), 3000);
-        }
-
-        // Handle sale submission
-        $('#saleForm').on('submit', function(e) {
-            e.preventDefault();
-            
-            if ($('.cart-item').length === 0) {
-                showError('Cart is empty');
-                return;
+        
+        searchTimer = setTimeout(function() {
+            if (currentRequest) {
+                currentRequest.abort();
             }
             
-            let paymentMethod = $('#selectedPaymentMethod').val();
-            let amountPaid = parseFloat($('#amountPaid').val()) || 0;
-            let total = parseFloat($('#subtotal').text().replace('KSH', '').trim()) || 0;
-            
-            if (paymentMethod !== 'Credit' && amountPaid < total) {
-                showError('Amount paid must be at least KSH ' + total);
-                return;
-            }
-            
-            $('#completeSaleBtn').prop('disabled', true).html('<span class="spinner me-2"></span>Processing...');
-            
-            // Only include phone number in form data
-            let formData = {
-                buyer_phone: $('input[name="buyer_phone"]').val(),
-                payment_method: paymentMethod,
-                amount_paid: amountPaid,
-                is_credit: $('#isCredit').is(':checked')
-            };
-            
-            $.ajax({
-                url: '{% url "sales:sale_create" %}',
-                method: 'POST',
-                headers: {'X-CSRFToken': csrftoken},
-                data: JSON.stringify(formData),
-                contentType: 'application/json',
+            currentRequest = $.ajax({
+                url: '{% url "staff:product_lookup_api" %}',
+                method: 'GET',
+                data: { q: query },
                 success: function(response) {
-                    if (response.success) {
-                        $('#productSuccess').html('<i class="fas fa-check-circle me-2"></i>Sale completed successfully!').show();
-                        
-                        // Clear only phone number field
-                        $('input[name="buyer_phone"]').val('');
-                        $('#amountPaid').val('0');
-                        $('#selectedPaymentMethod').val('Cash');
-                        $('#changeDue').hide();
-                        
-                        // Reload page to reset cart for new sale
-                        setTimeout(function() {
-                            location.reload();
-                        }, 1500);
+                    if(response.success && response.products && response.products.length > 0) {
+                        displayProducts(response.products);
                     } else {
-                        showError(response.error || 'Error processing sale');
-                        $('#completeSaleBtn').prop('disabled', false).html('<i class="fas fa-check-circle me-1"></i>Complete Sale');
+                        $('#productList').html(`
+                            <div class="text-center py-4 text-muted">
+                                <i class="fas fa-box-open fa-3x mb-2"></i>
+                                <p>No products found matching "${query}"</p>
+                                <small>Try a different search term</small>
+                            </div>
+                        `);
                     }
                 },
-                error: function(xhr) {
-                    let errorMsg = 'Error processing sale';
-                    try {
-                        let response = JSON.parse(xhr.responseText);
-                        errorMsg = response.error || errorMsg;
-                    } catch(e) {}
-                    showError(errorMsg);
-                    $('#completeSaleBtn').prop('disabled', false).html('<i class="fas fa-check-circle me-1"></i>Complete Sale');
+                error: function(xhr, status, error) {
+                    if (status !== 'abort') {
+                        console.error('Search error:', error);
+                        $('#productList').html(`
+                            <div class="text-center py-4 text-muted">
+                                <i class="fas fa-exclamation-triangle fa-3x mb-2 text-warning"></i>
+                                <p>Error searching products</p>
+                                <small>Please try again</small>
+                            </div>
+                        `);
+                    }
+                },
+                complete: function() {
+                    currentRequest = null;
                 }
             });
-        });
+        }, 300);
+    });
 
-        // Check modified prices
-        function checkModifiedPrices() {
-            let prices = new Set(); 
-            $('.cart-item').each(function() { 
-                prices.add($(this).data('price')); 
-            });
-            if(prices.size > 1) $('#priceEditWarning').show();
+    function displayProducts(products) {
+        let html = '<div class="product-grid">';
+        products.forEach(function(product) {
+            let stockClass = 'stock-high';
+            let stockText = 'In Stock';
+            let isSold = false;
+            
+            if (product.quantity <= 0) {
+                stockClass = 'stock-out';
+                stockText = 'Out of Stock';
+                isSold = true;
+            } else if (product.quantity <= 5) {
+                stockClass = 'stock-low';
+                stockText = 'Low Stock';
+            }
+            
+            if (product.is_single_item && product.quantity === 0) {
+                stockClass = 'stock-sold';
+                stockText = 'SOLD';
+                isSold = true;
+            }
+            
+            let itemClass = isSold ? 'product-item sold-item' : 'product-item';
+            let onclickAttr = isSold ? '' : `onclick="selectProduct('${product.product_code}')"`;
+            
+            html += `
+                <div class="${itemClass}" ${onclickAttr}>
+                    <div class="product-info">
+                        <h6>${product.display_name || product.name}</h6>
+                        <small>Code: ${product.product_code}</small>
+                        ${product.sku_value ? `<div class="sku-info">IMEI: ${product.sku_value}</div>` : ''}
+                    </div>
+                    <div class="product-details">
+                        <div class="price-card selling-price-card">
+                            <div class="price-label">Selling Price</div>
+                            <div class="price-value selling-price">KSH ${product.selling_price ? product.selling_price.toLocaleString() : '0'}</div>
+                        </div>
+                        
+                        <div class="price-card best-price-card" onclick="event.stopPropagation(); toggleBestPrice(this)">
+                            <div class="price-label">
+                                Best Price 
+                                <i class="fas fa-eye-slash ms-1"></i>
+                            </div>
+                            <div class="price-value best-price hidden-price">
+                                ${product.best_price ? 
+                                    `<span class="hidden-value">••••••</span>
+                                     <span class="actual-value" style="display: none;">KSH ${product.best_price.toLocaleString()}</span>` : 
+                                    '<span class="text-muted">Not available</span>'}
+                            </div>
+                        </div>
+                        
+                        <span class="stock-badge ${stockClass}">${stockText}: ${product.quantity}</span>
+                    </div>
+                </div>
+            `;
+        });
+        html += '</div>';
+        $('#productList').html(html);
+    }
+
+    function toggleBestPrice(element) {
+        $(element).find('.best-price').toggleClass('revealed');
+        $(element).find('.hidden-value').toggle();
+        $(element).find('.actual-value').toggle();
+        $(element).find('.fa-eye-slash').toggleClass('fa-eye');
+    }
+
+    $('#productLookupModal').on('show.bs.modal', function() {
+        $('#productSearchLookup').val('');
+        $('#productList').html(`
+            <div class="text-center py-4 text-muted">
+                <i class="fas fa-search fa-3x mb-2"></i>
+                <p>Start typing to search for products</p>
+                <small class="text-muted">Search by product code, name, brand, model, or IMEI</small>
+            </div>
+        `);
+    });
+
+    function selectProduct(code) {
+        $('#productSearch').val(code);
+        productLookupModal.hide();
+        $('#productSearch').focus();
+    }
+
+    // Update Quantity
+    $(document).on('change', '.quantity-input', function() {
+        let code = $(this).data('code'), qty = $(this).val();
+        if(qty < 1) qty = 1;
+        $.ajax({
+            url: '{% url "sales:update_cart" %}',
+            method: 'POST',
+            data: JSON.stringify({ product_code: code, quantity: parseInt(qty) }),
+            contentType: 'application/json',
+            success: function(r) { if(r.success) location.reload(); }
+        });
+    });
+
+    // Update Price
+    $(document).on('change', '.price-input', function() {
+        let code = $(this).data('code'), newPrice = $(this).val(), oldPrice = $(this).data('price');
+        if(newPrice == oldPrice) return;
+        $.ajax({
+            url: '{% url "sales:update_cart_price" %}',
+            method: 'POST',
+            data: JSON.stringify({ product_code: code, old_price: oldPrice, price: parseFloat(newPrice) }),
+            contentType: 'application/json',
+            success: function(r) { if(r.success) location.reload(); }
+        });
+    });
+
+    // Remove Item
+    $(document).on('click', '.remove-item', function() {
+        if(!confirm('Remove item from cart?')) return;
+        let code = $(this).data('code'), price = $(this).data('price');
+        $.ajax({
+            url: '{% url "sales:remove_from_cart" %}',
+            method: 'POST',
+            data: JSON.stringify({ product_code: code, price: price }),
+            contentType: 'application/json',
+            success: function(r) { if(r.success) location.reload(); }
+        });
+    });
+
+    // Payment Modals
+    function openPaymentModal(type) {
+        if($('.cart-item').length == 0) { 
+            showError('Cart is empty. Add items first.'); 
+            return; 
         }
-        checkModifiedPrices();
+        $('#selectedPaymentMethod').val(type.charAt(0).toUpperCase() + type.slice(1));
+        if(type == 'mpesa') mpesaModal.show();
+        else if(type == 'bank') bankModal.show();
+        else if(type == 'points') pointsModal.show();
+        else if(type == 'cash') cashModal.show();
+    }
 
-        // Add keyboard navigation for payment cards
-        $(document).on('keydown', '.payment-card', function(e) {
-            if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                $(this).click();
+    function selectBank(e, b) { 
+        $('.bank-option').removeClass('selected'); 
+        $(e).addClass('selected'); 
+        selectedBank = b; 
+    }
+
+    function processBank() {
+        if(!selectedBank) { showError('Please select a bank'); return; }
+        alert(`Connected to ${selectedBank} POS machine. Please insert/swipe card.`);
+        bankModal.hide();
+        let total = $('#subtotal').text().replace('KSH', '').trim();
+        $('#amountPaid').val(total);
+        $('#changeDue').text('Change: KSH 0').show();
+        setTimeout(function() {
+            $('#buyerPhone').focus();
+        }, 500);
+    }
+
+    function processMpesa() {
+        let phone = $('#mpesaPhone').val().trim();
+        if(!phone || !/^0[17]\d{8}$/.test(phone)) { 
+            showError('Please enter a valid Kenyan phone number (e.g., 0712345678)'); 
+            return; 
+        }
+        alert(`STK Push sent to ${phone}. Please check customer phone to complete payment.`);
+        mpesaModal.hide();
+        $('#amountPaid').val($('#mpesaAmount').val());
+        $('#changeDue').text('Change: KSH 0').show();
+        setTimeout(function() {
+            $('#buyerPhone').focus();
+        }, 500);
+    }
+
+    function sendOtp() {
+        let phone = $('#pointsPhone').val().trim();
+        if(!phone) { showError('Enter phone number'); return; }
+        $('#otpContainer').show();
+        $('#sendOtpBtn').hide();
+        $('#verifyOtpBtn').show();
+        alert(`OTP sent to ${phone}`);
+    }
+
+    function verifyOtp() {
+        let otp = ''; 
+        $('.otp-input').each(function() { otp += $(this).val(); });
+        if(otp.length < 6) { showError('Enter complete OTP'); return; }
+        if(otp == '123456') {
+            alert('OTP verified! Points redeemed successfully.');
+            pointsModal.hide();
+            $('#amountPaid').val($('#pointsAmount').val());
+            $('#changeDue').text('Change: KSH 0').show();
+            setTimeout(function() {
+                $('#buyerPhone').focus();
+            }, 500);
+        } else showError('Invalid OTP');
+    }
+
+    function calculateCashChange() {
+        let total = parseFloat($('#cashTotal').val()) || 0;
+        let tendered = parseFloat($('#cashTendered').val()) || 0;
+        $('#cashChange').val(tendered >= total ? 'KSH ' + (tendered - total).toFixed(0) : 'Insufficient amount');
+    }
+
+    function handleCashEnter(event) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            processCash();
+        }
+    }
+
+    function processCash() {
+        let total = parseFloat($('#cashTotal').val()) || 0;
+        let tendered = parseFloat($('#cashTendered').val()) || 0;
+        if(tendered < total) { 
+            showError('Insufficient amount tendered'); 
+            return; 
+        }
+        cashModal.hide();
+        $('#amountPaid').val(tendered);
+        let change = (tendered - total).toFixed(0);
+        $('#changeDue').text('Change: KSH ' + change).show();
+        setTimeout(function() {
+            $('#buyerPhone').focus();
+        }, 500);
+    }
+
+    // Handle Enter key in phone number field - Opens verification modal
+    function handlePhoneEnter(event) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            verifyCustomer();
+        }
+    }
+
+    // ============================================
+    // CUSTOMER VERIFICATION WITH FULL KEYBOARD SUPPORT
+    // ============================================
+
+    // Global keyboard handler for modal navigation
+    $(document).on('keydown', function(e) {
+        // Only handle keys when verification modal is active
+        if (!isVerificationModalActive) return;
+        
+        // Handle Enter key - Submit sale if customer is verified
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            if (verifiedCustomer) {
+                // Customer is verified - submit the sale
+                submitSale();
+            } else {
+                // No verified customer - check if we're in correct state
+                let modalContent = $('#customerVerifyContent').html();
+                if (modalContent.includes('Customer Not Found')) {
+                    // Customer not found - proceed with sale without points
+                    proceedWithSale();
+                }
+            }
+        }
+        
+        // Handle Escape key - Go back to re-enter phone number
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            rejectCustomer();
+        }
+        
+        // Handle Arrow keys for button navigation (if needed)
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+            e.preventDefault();
+            navigateButtons(e.key);
+        }
+    });
+
+    function navigateButtons(direction) {
+        let buttons = $('#customerVerifyContent .btn');
+        if (buttons.length === 0) return;
+        
+        let focused = document.activeElement;
+        let focusedIndex = buttons.index(focused);
+        
+        if (direction === 'ArrowRight') {
+            let nextIndex = (focusedIndex + 1) % buttons.length;
+            buttons.eq(nextIndex).focus();
+        } else if (direction === 'ArrowLeft') {
+            let prevIndex = (focusedIndex - 1 + buttons.length) % buttons.length;
+            buttons.eq(prevIndex).focus();
+        }
+    }
+
+    function verifyCustomer() {
+        let phone = $('#buyerPhone').val().trim();
+        
+        if (!phone) {
+            // No phone entered - proceed with sale as walk-in
+            proceedWithSale();
+            return;
+        }
+        
+        // Set modal as active for keyboard handling
+        isVerificationModalActive = true;
+        
+        // Show verification modal with loading
+        $('#customerVerifyContent').html(`
+            <div class="text-center py-4">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2">Searching for customer ${phone}...</p>
+                <p class="small text-muted mt-3">Press ESC to cancel</p>
+            </div>
+        `);
+        customerVerifyModal.show();
+        
+        // Search for customer
+        $.ajax({
+            url: '{% url "sales:customer_search" %}',
+            method: 'GET',
+            data: { phone: phone },
+            success: function(response) {
+                if (response.customers && response.customers.length > 0) {
+                    // Customer found - show verification card
+                    let customer = response.customers[0];
+                    let tierClass = '';
+                    switch(customer.tier_class) {
+                        case 'bronze': tierClass = 'tier-bronze'; break;
+                        case 'silver': tierClass = 'tier-silver'; break;
+                        case 'gold': tierClass = 'tier-gold'; break;
+                        case 'platinum': tierClass = 'tier-platinum'; break;
+                    }
+                    
+                    // Store customer as verified
+                    verifiedCustomer = { id: customer.id, name: customer.name, points: customer.points };
+                    
+                    $('#customerVerifyContent').html(`
+                        <div class="py-3">
+                            <div class="customer-avatar-lg">
+                                ${customer.name ? customer.name.charAt(0).toUpperCase() : 'C'}
+                            </div>
+                            <h4 class="mb-1">${customer.name}</h4>
+                            <p class="text-muted mb-3">${customer.phone}</p>
+                            
+                            <div class="mt-4 text-center">
+                                <p class="small text-muted">
+                                    <kbd>ESC</kbd> to re-enter number
+                                </p>
+                            </div>
+                        </div>
+                    `);
+                    
+                    // Auto-focus the modal for keyboard input
+                    $('#customerVerifyModal').focus();
+                    
+                } else {
+                    // Customer not found - show option to proceed without points
+                    verifiedCustomer = null;
+                    $('#customerVerifyContent').html(`
+                        <div class="py-4">
+                            <i class="fas fa-exclamation-circle fa-4x text-warning mb-3"></i>
+                            <h4>Customer Not Found</h4>
+                            <p class="text-muted mb-2">No registered customer with phone ${phone}</p>
+                            
+                            <div class="mt-4">
+                                <p class="small text-muted">
+                                    <kbd>ESC</kbd> to re-enter number
+                                </p>
+                            </div>
+                        </div>
+                    `);
+                }
+            },
+            error: function() {
+                verifiedCustomer = null;
+                $('#customerVerifyContent').html(`
+                    <div class="py-4">
+                        <i class="fas fa-exclamation-triangle fa-4x text-danger mb-3"></i>
+                        <h4>Error</h4>
+                        <p class="text-muted mb-4">Failed to verify customer. Please try again.</p>
+                        <p class="small text-muted">
+                            <kbd>ESC</kbd> to go back
+                        </p>
+                    </div>
+                `);
             }
         });
+    }
 
-        // Add keyboard navigation for bank options
-        $(document).on('keydown', '.bank-option', function(e) {
-            if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                $(this).click();
+    function confirmCustomer(id, name, points) {
+        verifiedCustomer = { id, name, points };
+        $('#verifiedCustomerId').val(id);
+        $('#verifiedCustomerName').text(name);
+        $('#verifiedCustomerPoints').text(points + ' pts');
+        $('#verifiedCustomerInfo').show();
+        isVerificationModalActive = false;
+        customerVerifyModal.hide();
+        
+        // Submit sale automatically after confirmation
+        submitSale();
+    }
+
+    function rejectCustomer() {
+        $('#buyerPhone').val('').focus();
+        verifiedCustomer = null;
+        $('#verifiedCustomerId').val('');
+        $('#verifiedCustomerInfo').hide();
+        isVerificationModalActive = false;
+        customerVerifyModal.hide();
+    }
+
+    function proceedWithSale() {
+        verifiedCustomer = null;
+        $('#verifiedCustomerId').val('');
+        $('#verifiedCustomerInfo').hide();
+        isVerificationModalActive = false;
+        customerVerifyModal.hide();
+        
+        // Submit sale without points
+        submitSale();
+    }
+
+    function submitSale() {
+        // Trigger the sale form submission
+        $('#completeSaleBtn').click();
+    }
+
+    function moveToNext(c,i) { 
+        if(c.value.length) {
+            let next = $(c).parent().children()[i+1];
+            if(next) next.focus();
+        }
+    }
+
+    function showError(message) {
+        $('#productError').html('<i class="fas fa-exclamation-circle me-2"></i>' + message).show();
+        setTimeout(() => $('#productError').fadeOut(), 3000);
+    }
+
+    // Handle modal hidden event to reset keyboard flags
+    $('#customerVerifyModal').on('hidden.bs.modal', function() {
+        isVerificationModalActive = false;
+    });
+
+    // Handle sale submission
+    $('#saleForm').on('submit', function(e) {
+        e.preventDefault();
+        
+        if ($('.cart-item').length === 0) {
+            showError('Cart is empty');
+            return;
+        }
+        
+        let paymentMethod = $('#selectedPaymentMethod').val();
+        let amountPaid = parseFloat($('#amountPaid').val()) || 0;
+        let total = parseFloat($('#subtotal').text().replace('KSH', '').trim()) || 0;
+        
+        if (paymentMethod !== 'Credit' && amountPaid < total) {
+            showError('Amount paid must be at least KSH ' + total);
+            return;
+        }
+        
+        $('#completeSaleBtn').prop('disabled', true).html('<span class="spinner me-2"></span>Processing...');
+        
+        let formData = {
+            buyer_phone: $('input[name="buyer_phone"]').val(),
+            payment_method: paymentMethod,
+            amount_paid: amountPaid,
+            is_credit: $('#isCredit').is(':checked'),
+            verified_customer_id: verifiedCustomer ? verifiedCustomer.id : null
+        };
+        
+        $.ajax({
+            url: '{% url "sales:sale_create" %}',
+            method: 'POST',
+            headers: {'X-CSRFToken': csrftoken},
+            data: JSON.stringify(formData),
+            contentType: 'application/json',
+            success: function(response) {
+                if (response.success) {
+                    let message = 'Sale completed successfully!';
+                    if (response.points) {
+                        message = `Sale completed! Earned ${response.points.earned} points!`;
+                    }
+                    $('#productSuccess').html('<i class="fas fa-check-circle me-2"></i>' + message).show();
+                    
+                    $('input[name="buyer_phone"]').val('');
+                    $('#verifiedCustomerInfo').hide();
+                    verifiedCustomer = null;
+                    $('#amountPaid').val('0');
+                    $('#selectedPaymentMethod').val('Cash');
+                    $('#changeDue').hide();
+                    
+                    setTimeout(function() {
+                        location.reload();
+                    }, 1500);
+                } else {
+                    showError(response.error || 'Error processing sale');
+                    $('#completeSaleBtn').prop('disabled', false).html('<i class="fas fa-check-circle me-1"></i>Complete Sale');
+                }
+            },
+            error: function(xhr) {
+                let errorMsg = 'Error processing sale';
+                try {
+                    let response = JSON.parse(xhr.responseText);
+                    errorMsg = response.error || errorMsg;
+                } catch(e) {}
+                showError(errorMsg);
+                $('#completeSaleBtn').prop('disabled', false).html('<i class="fas fa-check-circle me-1"></i>Complete Sale');
             }
         });
+    });
 
-        // Focus management
-        $('#cashModal').on('shown.bs.modal', function() {
-            $('#cashTendered').focus();
+    // Check modified prices
+    function checkModifiedPrices() {
+        let prices = new Set(); 
+        $('.cart-item').each(function() { 
+            prices.add($(this).data('price')); 
         });
+        if(prices.size > 1) $('#priceEditWarning').show();
+    }
+    checkModifiedPrices();
 
-        $('#mpesaModal').on('shown.bs.modal', function() {
-            $('#mpesaPhone').focus();
-        });
+    // Add keyboard navigation for payment cards
+    $(document).on('keydown', '.payment-card', function(e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            $(this).click();
+        }
+    });
 
-        $('#pointsModal').on('shown.bs.modal', function() {
-            $('#pointsPhone').focus();
-        });
+    $(document).on('keydown', '.bank-option', function(e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            $(this).click();
+        }
+    });
 
-        $('#bankModal').on('shown.bs.modal', function() {
-            $('.bank-option').first().focus();
-        });
-    </script>
+    // Focus management
+    $('#cashModal').on('shown.bs.modal', function() {
+        $('#cashTendered').focus();
+    });
+
+    $('#mpesaModal').on('shown.bs.modal', function() {
+        $('#mpesaPhone').focus();
+    });
+
+    $('#pointsModal').on('shown.bs.modal', function() {
+        $('#pointsPhone').focus();
+    });
+
+    $('#bankModal').on('shown.bs.modal', function() {
+        $('.bank-option').first().focus();
+    });
+</script>
 </body>
 </html>

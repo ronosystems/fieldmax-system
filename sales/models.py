@@ -1,10 +1,9 @@
-from django.db import models
 
-# Create your models here.
 # ==============================
 # SALE IMPORTS
 # ==============================
-
+from django.core.validators import MinValueValidator, MaxValueValidator
+from django.db import models
 from decimal import Decimal
 import uuid
 import logging
@@ -14,6 +13,9 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 from inventory.models import Product, StockEntry
 import re
+import logging
+import math
+
 
     
 
@@ -202,6 +204,22 @@ class Sale(models.Model):
         related_name="reversed_sales",
     )
     reversal_reason = models.TextField(blank=True, null=True)
+
+    # Points related fields
+    points_redeemed = models.IntegerField(default=0, help_text="Points redeemed in this sale")
+    points_discount = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        default=Decimal('0.00'),
+        help_text="Discount amount from points redemption"
+    )
+    original_subtotal = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2, 
+        default=Decimal('0.00'),
+        help_text="Original subtotal before points discount"
+    )
+
 
     class Meta:
         db_table = 'sales'
@@ -818,3 +836,426 @@ class FiscalReceipt(models.Model):
 
     def __str__(self) -> str:
         return f"Receipt {self.receipt_number} for Sale #{self.sale.sale_id}"
+    
+
+
+
+
+# ====================================
+# CUSTOMER MODEL - LOYALTY PROGRAM
+# ====================================
+
+class Customer(models.Model):
+    """Customer model for loyalty program - ONLY registered customers can earn/redeem points"""
+    
+    TIER_CHOICES = [
+        ('bronze', 'Bronze'),
+        ('silver', 'Silver'),
+        ('gold', 'Gold'),
+        ('platinum', 'Platinum'),
+    ]
+    
+    # Basic Info - All required for registration
+    phone_number = models.CharField(
+        max_length=20, 
+        unique=True, 
+        db_index=True,
+        help_text="Unique phone number used for customer identification"
+    )
+    full_name = models.CharField(
+        max_length=200, 
+        blank=False, 
+        null=False,
+        default="Unknown Customer",
+        help_text="Customer's full name"
+    )
+    email = models.EmailField(
+        blank=True, 
+        null=True,
+        help_text="Optional email address"
+    )
+    id_number = models.CharField(
+        max_length=50, 
+        blank=True, 
+        null=True,
+        help_text="National ID or passport number"
+    )
+    
+    # Loyalty Points - Only relevant for registered customers
+    points_balance = models.IntegerField(
+        default=0,
+        help_text="Current loyalty points balance (1 point = KSH 1)"
+    )
+    total_points_earned = models.IntegerField(
+        default=0,
+        help_text="Total points earned all time"
+    )
+    total_points_redeemed = models.IntegerField(
+        default=0,
+        help_text="Total points redeemed"
+    )
+    
+    # Customer tier - Automatically updated based on spending
+    tier = models.CharField(
+        max_length=20, 
+        choices=TIER_CHOICES, 
+        default='bronze'
+    )
+    
+    # Statistics - Track customer value
+    total_purchases = models.PositiveIntegerField(
+        default=0,
+        help_text="Number of purchases made"
+    )
+    total_spent = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2, 
+        default=0,
+        help_text="Total amount spent in KSH"
+    )
+    last_purchase_date = models.DateTimeField(
+        null=True, 
+        blank=True,
+        help_text="Date of most recent purchase"
+    )
+    
+    # Metadata
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text="Registration date"
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        help_text="Last updated"
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether customer is active"
+    )
+    
+    # Registration source
+    registered_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='registered_customers',
+        help_text="Staff member who registered this customer"
+    )
+    registration_note = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Additional notes about registration"
+    )
+    
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['phone_number']),
+            models.Index(fields=['tier']),
+            models.Index(fields=['-total_spent']),
+            models.Index(fields=['-created_at']),
+        ]
+        verbose_name = "Customer"
+        verbose_name_plural = "Customers"
+    
+    def __str__(self):
+        return f"{self.full_name or 'Unknown'} ({self.phone_number}) - {self.points_balance} pts"
+    
+    def save(self, *args, **kwargs):
+        """Ensure customer has required fields"""
+        if not self.full_name:
+            self.full_name = f"Customer {self.phone_number}"
+        super().save(*args, **kwargs)
+    
+    def update_tier(self):
+        """Auto-update customer tier based on total spent"""
+        old_tier = self.tier
+        
+        if self.total_spent >= 100000:  # KSH 100,000+
+            self.tier = 'platinum'
+        elif self.total_spent >= 50000:   # KSH 50,000+
+            self.tier = 'gold'
+        elif self.total_spent >= 10000:   # KSH 10,000+
+            self.tier = 'silver'
+        else:
+            self.tier = 'bronze'
+        
+        if old_tier != self.tier:
+            logger.info(f"📈 Customer {self.phone_number} upgraded from {old_tier} to {self.tier}")
+            self.save(update_fields=['tier'])
+    
+    def calculate_points_to_earn(self, amount):
+        """
+        Calculate points to earn based on amount spent
+        Rules:
+        - Every 100 KSH = 1 point
+        - Maximum 100 points per transaction
+        """
+        if amount < 100:
+            return 0
+        
+        # Points = floor(amount / 100)
+        points = math.floor(amount / 100)
+        
+        # Cap at reasonable maximum (100 points per transaction)
+        points = min(points, 100)
+        
+        return points
+    
+    def add_points(self, amount_spent, sale=None, description=""):
+        """
+        Add points to customer balance based on amount spent
+        ONLY registered customers can earn points
+        """
+        # Safety check - ensure this is a registered customer
+        if not self.pk or not self.phone_number:
+            logger.warning("⛔ Attempted to add points to unregistered customer - BLOCKED")
+            return 0
+        
+        points_to_add = self.calculate_points_to_earn(amount_spent)
+        
+        if points_to_add > 0:
+            self.points_balance += points_to_add
+            self.total_points_earned += points_to_add
+            self.save(update_fields=['points_balance', 'total_points_earned'])
+            
+            # Create transaction record
+            LoyaltyTransaction.objects.create(
+                customer=self,
+                sale=sale,
+                points=points_to_add,
+                transaction_type='earned',
+                description=description or f"Earned from KSH {amount_spent:,.0f} purchase"
+            )
+            
+            logger.info(f"✅ Registered customer {self.phone_number} earned {points_to_add} points from KSH {amount_spent:,.0f}")
+            return points_to_add
+        
+        return 0
+    
+    def redeem_points(self, points_to_redeem, sale=None, description=""):
+        """
+        Redeem points from customer balance (1 point = KSH 1)
+        Customer can redeem any number of points they want (partial redemption)
+        ONLY registered customers can redeem points
+        """
+        # Safety check - ensure this is a registered customer
+        if not self.pk or not self.phone_number:
+            logger.warning("⛔ Attempted to redeem points for unregistered customer - BLOCKED")
+            raise ValueError("Cannot redeem points: Customer is not registered")
+        
+        if points_to_redeem <= 0:
+            raise ValueError("Points to redeem must be greater than 0")
+        
+        if self.points_balance < points_to_redeem:
+            raise ValueError(
+                f"Insufficient points. Available: {self.points_balance}, "
+                f"Requested: {points_to_redeem}"
+            )
+        
+        # Calculate cash value (1 point = KSH 1)
+        cash_value = points_to_redeem
+        
+        # Deduct points
+        self.points_balance -= points_to_redeem
+        self.total_points_redeemed += points_to_redeem
+        self.save(update_fields=['points_balance', 'total_points_redeemed'])
+        
+        # Create transaction record
+        LoyaltyTransaction.objects.create(
+            customer=self,
+            sale=sale,
+            points=-points_to_redeem,
+            transaction_type='redeemed',
+            description=description or f"Redeemed {points_to_redeem} points (KSH {cash_value})"
+        )
+        
+        logger.info(
+            f"💰 Registered customer {self.phone_number} redeemed {points_to_redeem} points "
+            f"(KSH {cash_value}). Remaining: {self.points_balance} points"
+        )
+        
+        return cash_value
+    
+    def get_points_value(self):
+        """Get cash value of current points balance (1 point = KSH 1)"""
+        return self.points_balance
+    
+    def can_redeem(self, points_to_redeem, sale_total):
+        """
+        Check if customer can redeem specified points
+        Returns: (bool, str, max_allowed)
+        """
+        if not self.pk or not self.phone_number:
+            return False, "Customer is not registered", 0
+        
+        if points_to_redeem <= 0:
+            return False, "Points to redeem must be greater than 0", 0
+        
+        if self.points_balance < points_to_redeem:
+            return False, f"Insufficient points. Available: {self.points_balance}", self.points_balance
+        
+        # Points can't exceed sale total (1 point = KSH 1)
+        if points_to_redeem > sale_total:
+            max_points = int(sale_total)
+            return False, f"Points cannot exceed sale amount. Max: {max_points}", max_points
+        
+        return True, "Can redeem", points_to_redeem
+    
+    @property
+    def is_registered(self):
+        """Check if customer is properly registered"""
+        return bool(self.pk and self.phone_number and self.full_name)
+    
+    @property
+    def points_value_ksh(self):
+        """Get cash value of points"""
+        return self.points_balance
+    
+    @property
+    def tier_display(self):
+        """Get tier with emoji"""
+        emojis = {
+            'bronze': '🥉 Bronze',
+            'silver': '🥈 Silver',
+            'gold': '🥇 Gold',
+            'platinum': '💎 Platinum'
+        }
+        return emojis.get(self.tier, self.tier)
+
+
+class LoyaltyTransaction(models.Model):
+    """Track all loyalty point movements"""
+    
+    TRANSACTION_TYPES = [
+        ('earned', 'Points Earned'),
+        ('redeemed', 'Points Redeemed'),
+        ('expired', 'Points Expired'),
+        ('adjusted', 'Manual Adjustment'),
+    ]
+    
+    customer = models.ForeignKey(
+        Customer, 
+        on_delete=models.CASCADE,
+        related_name='loyalty_transactions'
+    )
+    sale = models.ForeignKey(
+        'sales.Sale', 
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='loyalty_transactions'
+    )
+    points = models.IntegerField(
+        help_text="Positive for earned, negative for redeemed"
+    )
+    transaction_type = models.CharField(
+        max_length=20, 
+        choices=TRANSACTION_TYPES
+    )
+    description = models.CharField(
+        max_length=255, 
+        blank=True
+    )
+    
+    # Metadata
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True
+    )
+    
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['customer', '-created_at']),
+            models.Index(fields=['sale']),
+            models.Index(fields=['transaction_type']),
+        ]
+        verbose_name = "Loyalty Transaction"
+        verbose_name_plural = "Loyalty Transactions"
+    
+    def __str__(self):
+        sign = "+" if self.points > 0 else ""
+        return f"{self.customer} - {sign}{self.points} ({self.transaction_type})"
+    
+    @property
+    def points_abs(self):
+        return abs(self.points)
+    
+    @property
+    def is_earned(self):
+        return self.transaction_type == 'earned'
+    
+    @property
+    def is_redeemed(self):
+        return self.transaction_type == 'redeemed'
+
+
+class LoyaltySettings(models.Model):
+    """Global loyalty program settings"""
+    
+    # Points earning settings
+    min_purchase_for_points = models.PositiveIntegerField(
+        default=100,
+        help_text="Minimum purchase amount to earn points"
+    )
+    points_per_unit = models.PositiveIntegerField(
+        default=100,
+        help_text="KSH spent per point (e.g., 100 = 1 point per 100 KSH)"
+    )
+    max_points_per_transaction = models.PositiveIntegerField(
+        default=100,
+        help_text="Maximum points that can be earned in a single transaction"
+    )
+    
+    # Points redemption settings
+    min_redeem_points = models.PositiveIntegerField(
+        default=1,
+        help_text="Minimum points required to redeem"
+    )
+    max_redeem_percentage = models.PositiveIntegerField(
+        default=100,
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        help_text="Maximum percentage of sale that can be paid with points (100% = full payment)"
+    )
+    
+    # Points expiration
+    points_expiry_days = models.PositiveIntegerField(
+        default=365,
+        help_text="Number of days before points expire"
+    )
+    
+    # Welcome bonus
+    welcome_points = models.PositiveIntegerField(
+        default=10,
+        help_text="Points awarded to new customers on registration"
+    )
+    
+    # Registration requirements
+    require_id_for_registration = models.BooleanField(
+        default=False,
+        help_text="Require ID number for customer registration"
+    )
+    require_email_for_registration = models.BooleanField(
+        default=False,
+        help_text="Require email for customer registration"
+    )
+    
+    class Meta:
+        verbose_name = "Loyalty Settings"
+        verbose_name_plural = "Loyalty Settings"
+    
+    def __str__(self):
+        return f"Loyalty Program Settings (1 point per {self.points_per_unit} KSH)"
+    
+    @classmethod
+    def get_settings(cls):
+        """Get or create default settings"""
+        settings, created = cls.objects.get_or_create(pk=1)
+        return settings

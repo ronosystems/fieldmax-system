@@ -796,6 +796,113 @@
             color: white;
         }
         
+        /* Customer Record Button Styles */
+        .customer-record-btn {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: linear-gradient(135deg, #16318a, #09428d);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 10px;
+            margin: 10px 15px;
+            text-decoration: none;
+            transition: all 0.3s;
+            border-color: #000000;
+            width: calc(100% - 30px);
+            font-weight: 600;
+        }
+        
+        .customer-record-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgb(0, 0, 0);
+            color: white;
+        }
+        
+        .customer-record-btn i {
+            font-size: 1.2rem;
+        }
+        
+        .customer-record-btn .badge {
+            margin-left: auto;
+            background: rgb(255, 255, 255);
+            color: rgb(46, 0, 252);
+            padding: 3px 8px;
+            border-radius: 50px;
+            font-size: 0.7rem;
+        }
+        
+        /* Customer Modal Styles */
+        .customer-avatar-lg {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: var(--primary-gradient);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            font-weight: 600;
+            color: white;
+            margin: 0 auto 15px;
+        }
+        
+        .tier-badge {
+            padding: 5px 15px;
+            border-radius: 50px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: inline-block;
+        }
+        
+        .tier-bronze { background: #cd7f32; color: white; }
+        .tier-silver { background: #c0c0c0; color: #333; }
+        .tier-gold { background: #ffd700; color: #333; }
+        .tier-platinum { background: #e5e4e2; color: #333; }
+        
+        .points-card {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .points-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            line-height: 1;
+            margin-bottom: 5px;
+        }
+        
+        .points-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+        
+        .transaction-item {
+            padding: 10px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .transaction-item:last-child {
+            border-bottom: none;
+        }
+        
+        .transaction-amount {
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+        
+        .transaction-type {
+            padding: 2px 8px;
+            border-radius: 50px;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+        
+        .type-earned { background: #d4edda; color: #00ff3c; }
+        .type-redeemed { background: #fff3cd; color: #ffbf00; }
         /* Forms */
         .form-container {
             background: var(--card-bg);
@@ -1192,6 +1299,7 @@
             <small>Sales Management</small>
         </div>
         
+        
         <div class="sidebar-menu">
             <!-- Main Menu -->
             <div class="menu-section">
@@ -1208,6 +1316,10 @@
                     <i class="fas fa-list"></i>
                     <span class="menu-text">Sales History</span>
                 </a>
+                <a href="{% url 'sales:sold_items_list' %}" class="menu-item {% if 'sold-items' in request.path %}active{% endif %}">
+                     <i class="fas fa-tag"></i>
+                     <span class="menu-text">Sold Items</span>
+                </a>
             </div>
             
             <!-- ORDER MANAGEMENT SECTION -->
@@ -1223,11 +1335,6 @@
                     {% endif %}
                 </a>
                 
-                <!-- Create Order -->
-                <a href="{% url 'website:order-create' %}" class="menu-item {% if 'order-create' in request.path %}active{% endif %}">
-                    <i class="fas fa-plus-circle"></i>
-                    <span class="menu-text">Create Order</span>
-                </a>
                 
                 <!-- Pending Orders -->
                 <a href="{% url 'website:pending-orders' %}" class="menu-item {% if 'pending' in request.path %}active{% endif %}">
@@ -1265,13 +1372,39 @@
             <!-- CUSTOMER MANAGEMENT SECTION -->
             <div class="menu-section">
                 <div class="menu-section-title">CUSTOMERS</div>
+
+                <!-- CUSTOMER RECORD BUTTON - Prominently placed at the top of sidebar -->
+                <a href="#" class="customer-record-btn" data-bs-toggle="modal" data-bs-target="#customerSearchModal">
+                    <i class="fas fa-user-circle"></i>
+                    <span>Customer Search</span>
+                    <span class="badge">LOYALTY</span>
+                </a>
+
+                <!-- Customer Records (with loyalty points) -->
+                <a href="{% url 'sales:customer_list' %}" class="menu-item {% if 'customer-list' in request.path %}active{% endif %}">
+                    <i class="fas fa-id-card"></i>
+                    <span class="menu-text">customers loyalty points</span>
+                    <span class="badge-menu">
+                       <i class="fas fa-star text-warning"></i>
+                    </span>
+                </a>
+
+                <!-- Register New Customer -->
+                <a href="{% url 'sales:customer_register' %}" 
+                   class="menu-item {% if 'customer_register' in request.path %}active{% endif %}"
+                   target="_self">
+                    <i class="fas fa-user-plus"></i>
+                    <span class="menu-text">Register loyalty Customers</span>
+                    <span class="badge-menu text-success">+{{ settings.welcome_points }} pts</span>
+                </a>
+
                 <a href="{% url 'website:customer-list' %}" class="menu-item {% if 'customer-list' in request.path %}active{% endif %}">
                     <i class="fas fa-users"></i>
-                    <span class="menu-text">All Customers</span>
+                    <span class="menu-text">website Customers List</span>
                 </a>
                 <a href="{% url 'website:customer-create' %}" class="menu-item {% if 'customer-create' in request.path %}active{% endif %}">
                     <i class="fas fa-user-plus"></i>
-                    <span class="menu-text">Add Customer</span>
+                    <span class="menu-text">Website Customer Register </span>
                 </a>
             </div>
             
@@ -1297,8 +1430,13 @@
                     <i class="fas fa-credit-card"></i>
                     <span class="menu-text">Checkout</span>
                 </a>
+                <!-- Create Order -->
+                <a href="{% url 'website:order-create' %}" class="menu-item {% if 'order-create' in request.path %}active{% endif %}">
+                    <i class="fas fa-plus-circle"></i>
+                    <span class="menu-text">Create Order</span>
+                </a>
             </div>
-            
+           
             <!-- Reports -->
             <div class="menu-section">
                 <div class="menu-section-title">REPORTS</div>
@@ -1309,10 +1447,6 @@
                 <a href="{% url 'website:sales-report' %}" class="menu-item">
                     <i class="fas fa-chart-pie"></i>
                     <span class="menu-text">Sales Analysis</span>
-                </a>
-                <a href="{% url 'sales:sold_items_list' %}" class="menu-item {% if 'sold-items' in request.path %}active{% endif %}">
-                     <i class="fas fa-tag"></i>
-                     <span class="menu-text">Sold Items</span>
                 </a>
                 <a href="{% url 'website:performance-report' %}" class="menu-item">
                     <i class="fas fa-chart-bar"></i>
@@ -1393,6 +1527,59 @@
     </a>
     {% endif %}
     
+    <!-- ============================================ -->
+    <!-- CUSTOMER SEARCH MODAL -->
+    <!-- ============================================ -->
+    <div class="modal fade" id="customerSearchModal" tabindex="-1" aria-labelledby="customerSearchModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header" style="background: linear-gradient(135deg, #667eea, #764ba2); color: white;">
+                    <h5 class="modal-title" id="customerSearchModalLabel">
+                        <i class="fas fa-user-circle me-2"></i>Customer Records
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Search Form -->
+                    <div class="row mb-4">
+                        <div class="col-md-8">
+                            <div class="input-group">
+                                <span class="input-group-text bg-primary text-white">
+                                    <i class="fas fa-search"></i>
+                                </span>
+                                <input type="text" class="form-control form-control-lg" id="customerSearchInput" 
+                                       placeholder="Search by phone number or name..." autocomplete="off">
+                                <button class="btn btn-primary" type="button" id="searchCustomerBtn">
+                                    <i class="fas fa-search me-2"></i>Search
+                                </button>
+                            </div>
+                            <small class="text-muted">Enter at least 3 characters to search</small>
+                        </div>
+                    </div>
+                    
+                    <!-- Search Results Loading -->
+                    <div id="customerSearchLoading" style="display: none;" class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2">Searching customers...</p>
+                    </div>
+                    
+                    <!-- Search Results -->
+                    <div id="customerSearchResults"></div>
+                    
+                    <!-- Customer Detail View (hidden initially) -->
+                    <div id="customerDetailView" style="display: none;"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-2"></i>Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Scripts -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
@@ -1507,6 +1694,246 @@
             var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
                 return new bootstrap.Tooltip(tooltipTriggerEl)
             });
+            
+            // ============================================
+            // CUSTOMER SEARCH FUNCTIONALITY
+            // ============================================
+            
+            // Search customers on button click
+            $('#searchCustomerBtn').click(function() {
+                searchCustomers();
+            });
+            
+            // Search customers on Enter key
+            $('#customerSearchInput').keypress(function(e) {
+                if (e.which == 13) {
+                    e.preventDefault();
+                    searchCustomers();
+                }
+            });
+            
+            // Clear search when modal is closed
+            $('#customerSearchModal').on('hidden.bs.modal', function() {
+                $('#customerSearchInput').val('');
+                $('#customerSearchResults').empty().hide();
+                $('#customerDetailView').empty().hide();
+                $('#customerSearchLoading').hide();
+            });
+            
+            function searchCustomers() {
+                let query = $('#customerSearchInput').val().trim();
+                
+                if (query.length < 3) {
+                    alert('Please enter at least 3 characters to search');
+                    return;
+                }
+                
+                // Show loading
+                $('#customerSearchResults').empty().hide();
+                $('#customerDetailView').empty().hide();
+                $('#customerSearchLoading').show();
+                
+                // Make AJAX call to search customers
+                $.ajax({
+                    url: '{% url "sales:customer_search" %}',
+                    method: 'GET',
+                    data: { phone: query },
+                    success: function(response) {
+                        $('#customerSearchLoading').hide();
+                        
+                        if (response.customers && response.customers.length > 0) {
+                            displayCustomerResults(response.customers);
+                        } else {
+                            $('#customerSearchResults').html(`
+                                <div class="alert alert-warning text-center py-4">
+                                    <i class="fas fa-exclamation-triangle fa-3x mb-3"></i>
+                                    <h5>No customers found</h5>
+                                    <p>No customers matching "${query}"</p>
+                                    <a href="{% url 'website:customer-create' %}" class="btn btn-success mt-2" target="_blank">
+                                        <i class="fas fa-user-plus me-2"></i>Add New Customer
+                                    </a>
+                                </div>
+                            `).show();
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        $('#customerSearchLoading').hide();
+                        console.error('Search error:', error);
+                        $('#customerSearchResults').html(`
+                            <div class="alert alert-danger text-center py-4">
+                                <i class="fas fa-exclamation-circle fa-3x mb-3"></i>
+                                <h5>Search Failed</h5>
+                                <p>An error occurred while searching. Please try again.</p>
+                            </div>
+                        `).show();
+                    }
+                });
+            }
+            
+            function displayCustomerResults(customers) {
+                let html = `
+                    <h6 class="mb-3">Found ${customers.length} customer(s)</h6>
+                    <div class="list-group">
+                `;
+                
+                customers.forEach(customer => {
+                    let tierClass = '';
+                    switch(customer.tier_class) {
+                        case 'bronze': tierClass = 'tier-bronze'; break;
+                        case 'silver': tierClass = 'tier-silver'; break;
+                        case 'gold': tierClass = 'tier-gold'; break;
+                        case 'platinum': tierClass = 'tier-platinum'; break;
+                    }
+                    
+                    html += `
+                        <a href="#" class="list-group-item list-group-item-action" onclick="showCustomerDetail(${customer.id}); return false;">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h6 class="mb-1">${customer.name || 'Unknown'}</h6>
+                                    <small class="text-muted">
+                                        <i class="fas fa-phone me-1"></i>${customer.phone}
+                                    </small>
+                                </div>
+                                <div class="text-end">
+                                    <span class="badge ${tierClass} me-2">${customer.tier}</span>
+                                    <span class="badge bg-primary">${customer.points} pts</span>
+                                    <br>
+                                    <small class="text-muted">KSH ${customer.points_value.toFixed(0)} value</small>
+                                </div>
+                            </div>
+                            <div class="mt-2">
+                                <small class="text-muted">
+                                    <i class="fas fa-shopping-cart me-1"></i>${customer.purchases} purchases |
+                                    <i class="fas fa-money-bill me-1"></i>KSH ${customer.total_spent.toLocaleString()}
+                                </small>
+                            </div>
+                        </a>
+                    `;
+                });
+                
+                html += `</div>`;
+                
+                $('#customerSearchResults').html(html).show();
+            }
+            
+            // Make showCustomerDetail function globally accessible
+            window.showCustomerDetail = function(customerId) {
+                $('#customerSearchResults').hide();
+                $('#customerSearchLoading').show();
+                
+                $.ajax({
+                    url: `{% url 'sales:customer_detail' 0 %}`.replace('0', customerId),
+                    method: 'GET',
+                    success: function(customer) {
+                        $('#customerSearchLoading').hide();
+                        displayCustomerDetail(customer);
+                    },
+                    error: function() {
+                        $('#customerSearchLoading').hide();
+                        $('#customerSearchResults').html(`
+                            <div class="alert alert-danger">
+                                Failed to load customer details
+                            </div>
+                        `).show();
+                    }
+                });
+            };
+            
+            function displayCustomerDetail(customer) {
+                let tierClass = '';
+                switch(customer.tier.toLowerCase()) {
+                    case 'bronze': tierClass = 'tier-bronze'; break;
+                    case 'silver': tierClass = 'tier-silver'; break;
+                    case 'gold': tierClass = 'tier-gold'; break;
+                    case 'platinum': tierClass = 'tier-platinum'; break;
+                }
+                
+                let transactionsHtml = '';
+                if (customer.transactions && customer.transactions.length > 0) {
+                    customer.transactions.forEach(t => {
+                        let typeClass = t.type === 'earned' ? 'type-earned' : 'type-redeemed';
+                        let sign = t.type === 'earned' ? '+' : '-';
+                        transactionsHtml += `
+                            <div class="transaction-item">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <span class="transaction-type ${typeClass} me-2">${t.type}</span>
+                                        <small class="text-muted">${new Date(t.date).toLocaleDateString()}</small>
+                                    </div>
+                                    <span class="transaction-amount">${sign}${Math.abs(t.points)} pts</span>
+                                </div>
+                                <small class="text-muted">${t.description || ''}</small>
+                            </div>
+                        `;
+                    });
+                } else {
+                    transactionsHtml = '<p class="text-muted text-center py-3">No transactions found</p>';
+                }
+                
+                let html = `
+                    <div class="text-center mb-4">
+                        <button class="btn btn-outline-secondary mb-3" onclick="backToCustomerList()">
+                            <i class="fas fa-arrow-left me-2"></i>Back to Results
+                        </button>
+                    </div>
+                    
+                    <div class="customer-avatar-lg">
+                        ${customer.name ? customer.name.charAt(0).toUpperCase() : 'C'}
+                    </div>
+                    
+                    <h4 class="text-center mb-1">${customer.name || 'Unknown'}</h4>
+                    <p class="text-center text-muted mb-3">${customer.phone}</p>
+                    
+                    <div class="text-center mb-3">
+                        <span class="tier-badge ${tierClass} me-2">${customer.tier}</span>
+                        <span class="badge bg-info">${customer.email || 'No email'}</span>
+                    </div>
+                    
+                    <div class="points-card">
+                        <div class="points-value">${customer.points}</div>
+                        <div class="points-label">Loyalty Points</div>
+                        <div class="mt-2 small opacity-75">Worth KSH ${customer.points_value.toFixed(0)}</div>
+                    </div>
+                    
+                    <div class="row g-3 mb-4">
+                        <div class="col-6">
+                            <div class="card">
+                                <div class="card-body text-center">
+                                    <h3 class="mb-0">${customer.total_purchases}</h3>
+                                    <small class="text-muted">Purchases</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="card">
+                                <div class="card-body text-center">
+                                    <h3 class="mb-0">KSH ${customer.total_spent.toLocaleString()}</h3>
+                                    <small class="text-muted">Total Spent</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <h6 class="mb-3">Recent Transactions</h6>
+                    <div style="max-height: 300px; overflow-y: auto;">
+                        ${transactionsHtml}
+                    </div>
+                    
+                    <div class="mt-4">
+                        <a href="{% url 'website:customer-create' %}" class="btn btn-success w-100 mb-2" target="_blank">
+                            <i class="fas fa-edit me-2"></i>Edit Customer
+                        </a>
+                    </div>
+                `;
+                
+                $('#customerDetailView').html(html).show();
+            }
+            
+            // Make backToCustomerList function globally accessible
+            window.backToCustomerList = function() {
+                $('#customerDetailView').empty().hide();
+                $('#customerSearchResults').show();
+            };
         });
 
         // Function to get pending orders count

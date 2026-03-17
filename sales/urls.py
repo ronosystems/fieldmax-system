@@ -12,9 +12,16 @@ urlpatterns = [
     path('sales/', views.sale_list, name='sale_list'),
     path('create/', views.sale_create, name='sale_create'),
     
-    # ===== SOLD ITEMS - PUT THESE BEFORE THE CATCH-ALL =====
+    # ===== SOLD ITEMS =====
     path('sold-items/', views.sold_items_list, name='sold_items_list'),
     path('sold-items/export/', views.export_sold_items, name='export_sold_items'),
+    
+    # ===== CUSTOMER LOYALTY URLS - MUST COME BEFORE CATCH-ALL =====
+    path('customer/register/', views.customer_register, name='customer_register'),
+    path('customers/', views.customer_list, name='customer_list'),
+    path('customer/search/', views.customer_search, name='customer_search'),
+    path('customer/<int:pk>/', views.customer_detail, name='customer_detail'),
+    path('customer/<int:pk>/transactions/', views.customer_transactions, name='customer_transactions'),
     
     # ===== API endpoints for cart management (AJAX) =====
     path('api/get-cart/', views.get_cart, name='get_cart'),
