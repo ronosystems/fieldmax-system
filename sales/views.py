@@ -1234,17 +1234,58 @@ def sale_detail(request, sale_id):
 
 @login_required
 def sale_receipt(request, sale_id):
-    """View/print sale receipt"""
+    """View/print sale receipt with loyalty points"""
     sale = get_object_or_404(Sale.objects.prefetch_related('items__product'), sale_id=sale_id)
     
     # Calculate change
     change = sale.amount_paid - sale.total_amount if sale.amount_paid else 0
     
+    # ============================================
+    # GET CUSTOMER DATA FOR LOYALTY POINTS
+    # ============================================
+    customer = None
+    previous_points = 0
+    points_earned_today = 0
+    
+    if sale.buyer_phone:
+        try:
+            # Find customer by phone number
+            customer = Customer.objects.get(phone_number=sale.buyer_phone, is_active=True)
+            
+            # Get points earned in this sale from LoyaltyTransaction
+            earned_trans = LoyaltyTransaction.objects.filter(
+                customer=customer,
+                sale=sale,
+                transaction_type='earned'
+            ).first()
+            
+            if earned_trans:
+                points_earned_today = earned_trans.points
+            else:
+                # If no transaction record, calculate from amount (1 point per 100 KSH)
+                points_earned_today = int(sale.total_amount / 100)
+            
+            # Calculate previous points (current balance - points earned today)
+            previous_points = customer.points_balance - points_earned_today
+            if previous_points < 0:
+                previous_points = 0
+                
+            logger.info(f"✅ Receipt customer: {customer.full_name}, Previous: {previous_points}, Earned today: {points_earned_today}")
+            
+        except Customer.DoesNotExist:
+            logger.info(f"ℹ️ No customer found with phone {sale.buyer_phone}")
+        except Exception as e:
+            logger.error(f"Error getting customer for receipt: {str(e)}")
+    
     context = {
         'sale': sale,
         'items': sale.items.all(),
-        'change': change,  # Add this
+        'change': change,
+        'customer': customer,
+        'previous_points': previous_points,
+        'points_earned_today': points_earned_today,
     }
+    
     return render(request, 'sales/receipt.html', context)
 
 
