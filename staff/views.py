@@ -1190,10 +1190,6 @@ def prepare_dashboard_messages(request, dashboard_name=None):
 
 
 
-
-#==========================================
-# ADMIN DASHBOARD
-#==========================================
 #==========================================
 # ADMIN DASHBOARD - COMPREHENSIVE STATISTICS
 #==========================================
@@ -4146,3 +4142,12 @@ def diagnostic_email(request):
         'test_id': test_id,
         'sendgrid_key_exists': bool(settings.SENDGRID_API_KEY),
     })
+
+
+
+
+
+@login_required
+def powered_by_page(request):
+    """Page showing information about FieldMax"""
+    return render(request, 'staff/powered_by.html')

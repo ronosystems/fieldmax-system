@@ -71,4 +71,5 @@ urlpatterns = [
     # PRODUCT LOOKUP 
     # ============================================    
     path('api/product-lookup/', views.product_lookup_api, name='product_lookup_api'), 
+    path('powered-by/', views.powered_by_page, name='powered_by'),
 ]
