@@ -100,13 +100,11 @@
                                        id="quantity" 
                                        name="quantity" 
                                        min="1" 
-                                       value="{% if alert.current_stock == 0 %}{{ alert.threshold }}{% else %}10{% endif %}"
-                                       data-current="{{ alert.current_stock }}"
-                                       data-threshold="{{ alert.threshold }}"
+                                       value="1"
                                        required>
                             </div>
                             <div class="form-text" id="quantityHelp">
-                                Recommended: Add at least {% if alert.current_stock == 0 %}{{ alert.threshold }}{% else %}10{% endif %} units
+                                Enter any quantity from 1 upward. Recommended: Add enough to exceed threshold ({{ alert.threshold }}).
                             </div>
                         </div>
                         
@@ -247,29 +245,19 @@ document.addEventListener('DOMContentLoaded', function() {
     var currentStock = parseInt(quantityInput.getAttribute('data-current') || '0', 10);
     var threshold = parseInt(quantityInput.getAttribute('data-threshold') || '5', 10);
     
-    // Set minimum quantity
-    var minQuantity = Math.max(1, threshold - currentStock + 1);
-    quantityInput.setAttribute('min', minQuantity);
+    // REMOVED minimum quantity restriction - now min is always 1
+    quantityInput.setAttribute('min', '1');
     
-    // Calculate recommended quantity
-    var recommended = Math.max(threshold - currentStock + 5, 10);
-    
-    // Update help text
-    if (quantityHelp) {
-        quantityHelp.textContent = 'Recommended: Add at least ' + recommended + ' units to maintain stock (minimum: ' + minQuantity + ')';
-    }
-    
-    // Add input validation
+    // Add input validation (only check if it's a valid number and >= 1)
     quantityInput.addEventListener('input', function() {
         var val = parseInt(this.value, 10);
-        var min = parseInt(this.min, 10);
         
         if (isNaN(val)) {
             this.setCustomValidity('Please enter a valid number');
             this.classList.remove('is-valid');
             this.classList.add('is-invalid');
-        } else if (val < min) {
-            this.setCustomValidity('Quantity must be at least ' + min);
+        } else if (val < 1) {
+            this.setCustomValidity('Quantity must be at least 1');
             this.classList.remove('is-valid');
             this.classList.add('is-invalid');
         } else {
