@@ -10,20 +10,16 @@ import json
 import logging
 import calendar
 from datetime import timedelta, datetime, date
-from django.db.models import F, ExpressionWrapper, DecimalField
 from sales.models import Sale, SaleItem, generate_custom_sale_id, Customer, LoyaltySettings, LoyaltyTransaction
 from inventory.models import Product, StockEntry
-from .models import Sale, SaleItem, generate_custom_sale_id, Customer, LoyaltySettings, LoyaltyTransaction
 from django.core.paginator import Paginator
 from django.contrib.auth.models import User
-from django.db.models.functions import Coalesce
-
-
-
 
 logger = logging.getLogger(__name__)
 
-
+# ============================================
+# HELPER FUNCTIONS
+# ============================================
 
 def calculate_profit(sale):
     """Calculate profit for a single sale"""
@@ -45,9 +41,350 @@ def get_payment_method_color(method):
     }
     return colors.get(method, 'secondary')
 
+def get_day_suffix(day):
+    """Get day suffix (st, nd, rd, th)"""
+    if 11 <= day <= 13:
+        return 'th'
+    elif day % 10 == 1:
+        return 'st'
+    elif day % 10 == 2:
+        return 'nd'
+    elif day % 10 == 3:
+        return 'rd'
+    else:
+        return 'th'
 
+def get_items_by_date(date_str):
+    """Get all items sold on a specific date"""
+    try:
+        # Parse the date string
+        date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
+        start_date = timezone.make_aware(timezone.datetime.combine(date_obj, timezone.datetime.min.time()))
+        end_date = timezone.make_aware(timezone.datetime.combine(date_obj, timezone.datetime.max.time()))
+        
+        # Get active sales (not reversed and not returned)
+        from inventory.models import ReturnRequest
+        
+        # Get returned sale IDs
+        returned_sale_ids = ReturnRequest.objects.filter(
+            ~Q(status='rejected')
+        ).exclude(
+            Q(sale_id__isnull=True) | Q(sale_id='')
+        ).values_list('sale_id', flat=True).distinct()
+        
+        # Get active sales for the date
+        active_sales = Sale.objects.filter(
+            sale_date__range=[start_date, end_date],
+            is_reversed=False
+        ).exclude(
+            sale_id__in=returned_sale_ids
+        )
+        
+        # Get all items from these sales
+        items = SaleItem.objects.filter(
+            sale__in=active_sales
+        ).select_related('product', 'sale')
+        
+        # Aggregate items by product
+        product_totals = {}
+        for item in items:
+            product_key = item.product_code or (item.product.product_code if item.product else 'unknown')
+            if product_key not in product_totals:
+                product_totals[product_key] = {
+                    'product_name': item.product_name or (item.product.display_name if item.product else 'Unknown'),
+                    'product_code': product_key,
+                    'total_quantity': 0,
+                    'total_revenue': 0,
+                    'total_profit': 0,
+                    'sales_count': 0
+                }
+            
+            product_totals[product_key]['total_quantity'] += item.quantity
+            product_totals[product_key]['total_revenue'] += float(item.total_price)
+            
+            # Calculate profit
+            if item.product and item.product.buying_price:
+                profit = (item.unit_price - item.product.buying_price) * item.quantity
+            else:
+                profit = 0
+            product_totals[product_key]['total_profit'] += float(profit)
+            product_totals[product_key]['sales_count'] += 1
+        
+        # Convert to list and calculate margins
+        items_list = []
+        total_revenue = 0
+        total_profit = 0
+        total_items = 0
+        
+        for product_data in product_totals.values():
+            margin = (product_data['total_profit'] / product_data['total_revenue'] * 100) if product_data['total_revenue'] > 0 else 0
+            items_list.append({
+                'product_name': product_data['product_name'],
+                'product_code': product_data['product_code'],
+                'total_quantity': product_data['total_quantity'],
+                'total_revenue': product_data['total_revenue'],
+                'total_profit': product_data['total_profit'],
+                'margin': margin,
+                'has_multiple_sales': product_data['sales_count'] > 1
+            })
+            total_revenue += product_data['total_revenue']
+            total_profit += product_data['total_profit']
+            total_items += product_data['total_quantity']
+        
+        # Sort by quantity sold (descending)
+        items_list.sort(key=lambda x: x['total_quantity'], reverse=True)
+        
+        avg_margin = (total_profit / total_revenue * 100) if total_revenue > 0 else 0
+        
+        return {
+            'success': True,
+            'items': items_list,
+            'total_items': total_items,
+            'total_revenue': total_revenue,
+            'total_profit': total_profit,
+            'avg_margin': avg_margin
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting items by date {date_str}: {str(e)}")
+        return {
+            'success': False,
+            'message': str(e),
+            'items': []
+        }
 
+def get_items_by_week(week_number):
+    """Get all items sold during a specific week of the current month"""
+    today = timezone.now().date()
+    current_year = today.year
+    current_month = today.month
+    
+    # Calculate week date range
+    last_day = calendar.monthrange(current_year, current_month)[1]
+    
+    week_ranges = {
+        1: (1, 7),
+        2: (8, 14),
+        3: (15, 21),
+        4: (22, 28),
+        5: (29, last_day)
+    }
+    
+    if week_number not in week_ranges:
+        return {
+            'success': False,
+            'message': 'Invalid week number',
+            'items': []
+        }
+    
+    start_day, end_day = week_ranges[week_number]
+    end_day = min(end_day, last_day)
+    
+    start_date = date(current_year, current_month, start_day)
+    end_date = date(current_year, current_month, end_day)
+    
+    start_date_aware = timezone.make_aware(timezone.datetime.combine(start_date, timezone.datetime.min.time()))
+    end_date_aware = timezone.make_aware(timezone.datetime.combine(end_date, timezone.datetime.max.time()))
+    
+    # Get returned sale IDs
+    from inventory.models import ReturnRequest
+    
+    returned_sale_ids = ReturnRequest.objects.filter(
+        ~Q(status='rejected')
+    ).exclude(
+        Q(sale_id__isnull=True) | Q(sale_id='')
+    ).values_list('sale_id', flat=True).distinct()
+    
+    # Get active sales for the week
+    active_sales = Sale.objects.filter(
+        sale_date__range=[start_date_aware, end_date_aware],
+        is_reversed=False
+    ).exclude(
+        sale_id__in=returned_sale_ids
+    )
+    
+    # Get all items from these sales
+    items = SaleItem.objects.filter(
+        sale__in=active_sales
+    ).select_related('product', 'sale')
+    
+    # Aggregate items by product
+    product_totals = {}
+    for item in items:
+        product_key = item.product_code or (item.product.product_code if item.product else 'unknown')
+        if product_key not in product_totals:
+            product_totals[product_key] = {
+                'product_name': item.product_name or (item.product.display_name if item.product else 'Unknown'),
+                'product_code': product_key,
+                'total_quantity': 0,
+                'total_revenue': 0,
+                'total_profit': 0,
+                'sales_count': 0
+            }
+        
+        product_totals[product_key]['total_quantity'] += item.quantity
+        product_totals[product_key]['total_revenue'] += float(item.total_price)
+        
+        # Calculate profit
+        if item.product and item.product.buying_price:
+            profit = (item.unit_price - item.product.buying_price) * item.quantity
+        else:
+            profit = 0
+        product_totals[product_key]['total_profit'] += float(profit)
+        product_totals[product_key]['sales_count'] += 1
+    
+    # Convert to list and calculate margins
+    items_list = []
+    total_revenue = 0
+    total_profit = 0
+    total_items = 0
+    
+    for product_data in product_totals.values():
+        margin = (product_data['total_profit'] / product_data['total_revenue'] * 100) if product_data['total_revenue'] > 0 else 0
+        items_list.append({
+            'product_name': product_data['product_name'],
+            'product_code': product_data['product_code'],
+            'total_quantity': product_data['total_quantity'],
+            'total_revenue': product_data['total_revenue'],
+            'total_profit': product_data['total_profit'],
+            'margin': margin,
+            'has_multiple_sales': product_data['sales_count'] > 1
+        })
+        total_revenue += product_data['total_revenue']
+        total_profit += product_data['total_profit']
+        total_items += product_data['total_quantity']
+    
+    # Sort by quantity sold (descending)
+    items_list.sort(key=lambda x: x['total_quantity'], reverse=True)
+    
+    avg_margin = (total_profit / total_revenue * 100) if total_revenue > 0 else 0
+    
+    return {
+        'success': True,
+        'items': items_list,
+        'total_items': total_items,
+        'total_revenue': total_revenue,
+        'total_profit': total_profit,
+        'avg_margin': avg_margin
+    }
 
+def get_items_by_month(month_name, year):
+    """Get all items sold during a specific month"""
+    try:
+        # If month_name contains year, extract just the month name
+        if ' ' in month_name:
+            # This handles cases like "March 2026"
+            month_name = month_name.split(' ')[0]
+        
+        # Convert month name to number
+        month_number = datetime.strptime(month_name, '%B').month
+        
+        # Get date range for the month
+        start_date = date(int(year), month_number, 1)
+        last_day = calendar.monthrange(int(year), month_number)[1]
+        end_date = date(int(year), month_number, last_day)
+        
+        start_date_aware = timezone.make_aware(timezone.datetime.combine(start_date, timezone.datetime.min.time()))
+        end_date_aware = timezone.make_aware(timezone.datetime.combine(end_date, timezone.datetime.max.time()))
+        
+        # Get returned sale IDs
+        from inventory.models import ReturnRequest
+        
+        returned_sale_ids = ReturnRequest.objects.filter(
+            ~Q(status='rejected')
+        ).exclude(
+            Q(sale_id__isnull=True) | Q(sale_id='')
+        ).values_list('sale_id', flat=True).distinct()
+        
+        # Get active sales for the month
+        active_sales = Sale.objects.filter(
+            sale_date__range=[start_date_aware, end_date_aware],
+            is_reversed=False
+        ).exclude(
+            sale_id__in=returned_sale_ids
+        )
+        
+        print(f"Month: {month_name} {year}, Date range: {start_date} to {end_date}")
+        print(f"Found {active_sales.count()} sales")
+        
+        # Get all items from these sales
+        items = SaleItem.objects.filter(
+            sale__in=active_sales
+        ).select_related('product', 'sale')
+        
+        print(f"Found {items.count()} items")
+        
+        # Aggregate items by product
+        product_totals = {}
+        for item in items:
+            product_key = item.product_code or (item.product.product_code if item.product else 'unknown')
+            if product_key not in product_totals:
+                product_totals[product_key] = {
+                    'product_name': item.product_name or (item.product.display_name if item.product else 'Unknown'),
+                    'product_code': product_key,
+                    'total_quantity': 0,
+                    'total_revenue': 0,
+                    'total_profit': 0,
+                    'sales_count': 0
+                }
+            
+            product_totals[product_key]['total_quantity'] += item.quantity
+            product_totals[product_key]['total_revenue'] += float(item.total_price)
+            
+            # Calculate profit
+            if item.product and item.product.buying_price:
+                profit = (item.unit_price - item.product.buying_price) * item.quantity
+            else:
+                profit = 0
+            product_totals[product_key]['total_profit'] += float(profit)
+            product_totals[product_key]['sales_count'] += 1
+        
+        # Convert to list and calculate margins
+        items_list = []
+        total_revenue = 0
+        total_profit = 0
+        total_items = 0
+        
+        for product_data in product_totals.values():
+            margin = (product_data['total_profit'] / product_data['total_revenue'] * 100) if product_data['total_revenue'] > 0 else 0
+            items_list.append({
+                'product_name': product_data['product_name'],
+                'product_code': product_data['product_code'],
+                'total_quantity': product_data['total_quantity'],
+                'total_revenue': product_data['total_revenue'],
+                'total_profit': product_data['total_profit'],
+                'margin': margin,
+                'has_multiple_sales': product_data['sales_count'] > 1
+            })
+            total_revenue += product_data['total_revenue']
+            total_profit += product_data['total_profit']
+            total_items += product_data['total_quantity']
+        
+        # Sort by quantity sold (descending)
+        items_list.sort(key=lambda x: x['total_quantity'], reverse=True)
+        
+        avg_margin = (total_profit / total_revenue * 100) if total_revenue > 0 else 0
+        
+        return {
+            'success': True,
+            'items': items_list,
+            'total_items': total_items,
+            'total_revenue': total_revenue,
+            'total_profit': total_profit,
+            'avg_margin': avg_margin
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting items by month {month_name} {year}: {str(e)}")
+        return {
+            'success': False,
+            'message': str(e),
+            'items': []
+        }
+
+# ============================================
+# MAIN SALES STATISTICS VIEW
+# ============================================
 
 @login_required
 def sales_statistics(request):
@@ -68,31 +405,27 @@ def sales_statistics(request):
     from inventory.models import ReturnRequest
     
     # Get sale_ids from return requests that are not rejected
-    # These sales should be excluded from active sales
     returned_sale_ids = ReturnRequest.objects.filter(
-        ~Q(status='rejected')  # Exclude rejected returns (these didn't actually happen)
+        ~Q(status='rejected')
     ).exclude(
-        Q(sale_id__isnull=True) | Q(sale_id='')  # Exclude returns without sale IDs
+        Q(sale_id__isnull=True) | Q(sale_id='')
     ).values_list('sale_id', flat=True).distinct()
     
     # ============================================
     # Base queryset - exclude reversed AND returned sales
     # ============================================
-    # Active sales = not reversed AND not returned
     active_sales_qs = Sale.objects.filter(
-        is_reversed=False  # Exclude reversed sales
+        is_reversed=False
     ).exclude(
-        sale_id__in=returned_sale_ids  # Exclude returned sales
+        sale_id__in=returned_sale_ids
     )
     
-    # All sales (including reversed and returned) for comparison
     all_sales_qs = Sale.objects.all()
     
     # ============================================
     # OVERVIEW STATISTICS WITH PROFITS
     # ============================================
     
-    # All time totals (ACTIVE SALES only)
     total_sales = active_sales_qs.count()
     total_revenue = active_sales_qs.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
     total_items_sold = SaleItem.objects.filter(
@@ -100,15 +433,13 @@ def sales_statistics(request):
         sale__sale_id__in=active_sales_qs.values('sale_id')
     ).aggregate(total=Sum('quantity'))['total'] or 0
     
-    # Calculate total profit across all active sales
     total_profit = Decimal('0.00')
     for sale in active_sales_qs.select_related().all():
         total_profit += calculate_profit(sale)
     
-    # Profit margin
     profit_margin = (total_profit / total_revenue * 100) if total_revenue > 0 else 0
     
-    # Today's sales with profit (ACTIVE only)
+    # Today's sales
     today_sales = active_sales_qs.filter(sale_date__range=[start_of_day, end_of_day])
     today_count = today_sales.count()
     today_revenue = today_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
@@ -116,7 +447,7 @@ def sales_statistics(request):
     for sale in today_sales.select_related().all():
         today_profit += calculate_profit(sale)
     
-    # This week's sales with profit (ACTIVE only)
+    # This week's sales
     week_sales = active_sales_qs.filter(sale_date__gte=start_of_week)
     week_count = week_sales.count()
     week_revenue = week_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
@@ -124,7 +455,7 @@ def sales_statistics(request):
     for sale in week_sales.select_related().all():
         week_profit += calculate_profit(sale)
     
-    # This month's sales with profit (ACTIVE only)
+    # This month's sales
     month_sales = active_sales_qs.filter(sale_date__gte=start_of_month)
     month_count = month_sales.count()
     month_revenue = month_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
@@ -132,7 +463,7 @@ def sales_statistics(request):
     for sale in month_sales.select_related().all():
         month_profit += calculate_profit(sale)
     
-    # This year's sales with profit (ACTIVE only)
+    # This year's sales
     year_sales = active_sales_qs.filter(sale_date__gte=start_of_year)
     year_count = year_sales.count()
     year_revenue = year_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
@@ -146,98 +477,7 @@ def sales_statistics(request):
     avg_profit_per_sale = total_profit / total_sales if total_sales > 0 else 0
     
     # ============================================
-    # REVERSAL STATISTICS
-    # ============================================
-    reversed_sales = Sale.objects.filter(is_reversed=True)
-    reversed_count = reversed_sales.count()
-    reversed_amount = reversed_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-    reversal_percentage = (reversed_count / (all_sales_qs.count()) * 100) if all_sales_qs.count() > 0 else 0
-    
-    # ============================================
-    # RETURN STATISTICS (from ReturnRequest model)
-    # ============================================
-    from inventory.models import ReturnRequest
-    
-    # All returns
-    all_returns = ReturnRequest.objects.all()
-    total_returns = all_returns.count()
-    total_refund_amount = all_returns.aggregate(total=Sum('refund_amount'))['total'] or Decimal('0.00')
-    
-    # Returns by status
-    returns_by_status = []
-    status_counts = all_returns.values('status').annotate(
-        count=Count('id'),
-        total=Sum('refund_amount')
-    ).order_by('status')
-    
-    for item in status_counts:
-        status_display = dict(ReturnRequest.RETURN_STATUS_CHOICES).get(item['status'], item['status'])
-        returns_by_status.append({
-            'status': item['status'],
-            'display': status_display,
-            'count': item['count'],
-            'total': item['total'] or 0
-        })
-    
-    # Damaged returns (loss)
-    damaged_returns = ReturnRequest.objects.filter(status='damaged_loss')
-    damaged_returns_count = damaged_returns.count()
-    damaged_returns_value = damaged_returns.aggregate(total=Sum('refund_amount'))['total'] or Decimal('0.00')
-    damaged_returns_cost = damaged_returns.aggregate(total=Sum('loss_amount'))['total'] or Decimal('0.00')
-    
-    # Pending returns (submitted or verified)
-    pending_returns = ReturnRequest.objects.filter(status__in=['submitted', 'verified'])
-    pending_returns_count = pending_returns.count()
-    pending_returns_value = pending_returns.aggregate(total=Sum('refund_amount'))['total'] or Decimal('0.00')
-    
-    # Breakdown of pending returns
-    pending_verification_count = ReturnRequest.objects.filter(status='submitted').count()
-    pending_verification_value = ReturnRequest.objects.filter(status='submitted').aggregate(
-        total=Sum('refund_amount')
-    )['total'] or Decimal('0.00')
-    
-    pending_approval_count = ReturnRequest.objects.filter(status='verified').count()
-    pending_approval_value = ReturnRequest.objects.filter(status='verified').aggregate(
-        total=Sum('refund_amount')
-    )['total'] or Decimal('0.00')
-    
-    # Approved returns (approved but not yet processed)
-    approved_returns_count = ReturnRequest.objects.filter(status='approved').count()
-    approved_returns_value = ReturnRequest.objects.filter(status='approved').aggregate(
-        total=Sum('refund_amount')
-    )['total'] or Decimal('0.00')
-    
-    # Processed returns (successfully restocked)
-    processed_returns_count = ReturnRequest.objects.filter(status='processed').count()
-    processed_returns_value = ReturnRequest.objects.filter(status='processed').aggregate(
-        total=Sum('refund_amount')
-    )['total'] or Decimal('0.00')
-    
-    # Rejected returns
-    rejected_returns_count = ReturnRequest.objects.filter(status='rejected').count()
-    rejected_returns_value = ReturnRequest.objects.filter(status='rejected').aggregate(
-        total=Sum('refund_amount')
-    )['total'] or Decimal('0.00')
-    
-    # Mismatch returns
-    mismatch_returns_count = ReturnRequest.objects.filter(status='mismatch').count()
-    mismatch_returns_value = ReturnRequest.objects.filter(status='mismatch').aggregate(
-        total=Sum('refund_amount')
-    )['total'] or Decimal('0.00')
-    
-    # Returns with sale IDs (for reconciliation)
-    returns_with_sale = ReturnRequest.objects.exclude(
-        Q(sale_id__isnull=True) | Q(sale_id='')
-    ).count()
-    
-    # ============================================
-    # COMPARISON STATISTICS
-    # ============================================
-    total_original_sales = all_sales_qs.count()
-    total_original_value = all_sales_qs.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-    
-    # ============================================
-    # DAILY BREAKDOWN - Monday to Sunday WITH PROFIT
+    # DAILY BREAKDOWN
     # ============================================
     daily_sales_breakdown = []
     for i in range(7):
@@ -249,7 +489,6 @@ def sales_statistics(request):
         day_revenue = day_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
         day_count = day_sales.count()
         
-        # Calculate profit for the day
         day_profit = Decimal('0.00')
         for sale in day_sales.select_related().all():
             day_profit += calculate_profit(sale)
@@ -271,33 +510,20 @@ def sales_statistics(request):
     }
     
     # ============================================
-    # FIXED: WEEKLY BREAKDOWN - By Date Ranges of Current Month
+    # WEEKLY BREAKDOWN
     # ============================================
     current_year = today.year
     current_month = today.month
-    
-    # Get last day of month
     last_day = calendar.monthrange(current_year, current_month)[1]
     
-    # Define weekly date ranges
-    weekly_ranges = [
-        (1, 7),      # Week 1: 1st - 7th
-        (8, 14),     # Week 2: 8th - 14th
-        (15, 21),    # Week 3: 15th - 21st
-        (22, 28),    # Week 4: 22nd - 28th
-        (29, last_day) # Week 5: 29th - last day (if exists)
-    ]
-    
+    weekly_ranges = [(1, 7), (8, 14), (15, 21), (22, 28), (29, last_day)]
     weekly_sales_breakdown = []
     
     for week_num, (start_day, end_day) in enumerate(weekly_ranges, 1):
-        # Skip if start day is beyond month
         if start_day > last_day:
             continue
             
-        # Adjust end day if beyond month
         end_day = min(end_day, last_day)
-        
         week_start = date(current_year, current_month, start_day)
         week_end = date(current_year, current_month, end_day)
         
@@ -308,16 +534,12 @@ def sales_statistics(request):
         week_revenue = week_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
         week_count = week_sales.count()
         
-        # Calculate profit for the week
         week_profit = Decimal('0.00')
         for sale in week_sales.select_related().all():
             week_profit += calculate_profit(sale)
         
-        # Format date range
         month_name = week_start.strftime('%b')
         date_range = f"{month_name} {start_day}{get_day_suffix(start_day)} - {month_name} {end_day}{get_day_suffix(end_day)}"
-        if start_day == end_day:
-            date_range = f"{month_name} {start_day}{get_day_suffix(start_day)}"
         
         weekly_sales_breakdown.append({
             'week_number': week_num,
@@ -329,7 +551,7 @@ def sales_statistics(request):
         })
     
     # ============================================
-    # MONTHLY BREAKDOWN - Last 12 months WITH PROFIT
+    # MONTHLY BREAKDOWN
     # ============================================
     monthly_sales_breakdown = []
     for i in range(11, -1, -1):
@@ -345,7 +567,6 @@ def sales_statistics(request):
         month_revenue = month_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
         month_count = month_sales.count()
         
-        # Calculate profit for the month
         month_profit = Decimal('0.00')
         for sale in month_sales.select_related().all():
             month_profit += calculate_profit(sale)
@@ -356,13 +577,21 @@ def sales_statistics(request):
             'revenue': month_revenue,
             'profit': month_profit,
             'margin': (month_profit / month_revenue * 100) if month_revenue > 0 else 0,
-            'count': month_count
+            'count': month_count,
+            'year': month_date.year,
+            'month_name': month_start.strftime('%B')
         })
     
     # ============================================
-    # TOP PRODUCTS WITH PROFIT
+    # RECENT SALES
     # ============================================
+    recent_sales = active_sales_qs.order_by('-sale_date')[:20]
+    for sale in recent_sales:
+        sale.items_count = SaleItem.objects.filter(sale=sale).count()
     
+    # ============================================
+    # TOP PRODUCTS
+    # ============================================
     top_products = []
     product_data = SaleItem.objects.filter(
         sale__is_reversed=False,
@@ -385,25 +614,20 @@ def sales_statistics(request):
             'product_name': item['product_name'],
             'total_quantity': item['total_quantity'],
             'total_revenue': item['total_revenue'],
-            'avg_price': item['avg_price'],
-            'buying_price': buying_price,
-            'profit_per_unit': profit_per_unit,
             'total_profit': total_profit,
             'margin': (total_profit / item['total_revenue'] * 100) if item['total_revenue'] > 0 else 0
         })
     
     # ============================================
-    # TOP SELLERS WITH PROFIT
+    # TOP SELLERS
     # ============================================
-    
     top_sellers = []
     sellers = User.objects.filter(
         sales_made__is_reversed=False,
         sales_made__sale_id__in=active_sales_qs.values('sale_id')
     ).annotate(
         sales_count=Count('sales_made'),
-        total_revenue=Sum('sales_made__total_amount'),
-        avg_sale_value=Avg('sales_made__total_amount')
+        total_revenue=Sum('sales_made__total_amount')
     ).order_by('-total_revenue')[:10]
     
     for seller in sellers:
@@ -421,33 +645,27 @@ def sales_statistics(request):
             'sales_count': seller.sales_count,
             'total_revenue': seller.total_revenue,
             'total_profit': seller_profit,
-            'margin': (seller_profit / seller.total_revenue * 100) if seller.total_revenue > 0 else 0,
-            'avg_sale_value': seller.avg_sale_value
+            'margin': (seller_profit / seller.total_revenue * 100) if seller.total_revenue > 0 else 0
         })
     
     # ============================================
-    # PAYMENT METHOD BREAKDOWN
+    # PAYMENT METHODS
     # ============================================
-    
     payment_methods = []
     for method, _ in Sale._meta.get_field('payment_method').choices:
         method_sales = active_sales_qs.filter(payment_method=method)
-        count = method_sales.count()
         revenue = method_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-        percentage = (revenue / total_revenue * 100) if total_revenue > 0 else 0
-        
         payment_methods.append({
             'name': method,
-            'count': count,
+            'count': method_sales.count(),
             'revenue': revenue,
-            'percentage': percentage,
+            'percentage': (revenue / total_revenue * 100) if total_revenue > 0 else 0,
             'color': get_payment_method_color(method)
         })
     
     # ============================================
-    # DAILY SALES CHART DATA (Last 30 days)
+    # DAILY SALES CHART DATA
     # ============================================
-    
     daily_sales = []
     for i in range(30, 0, -1):
         day = today - timedelta(days=i)
@@ -456,57 +674,35 @@ def sales_statistics(request):
         
         day_sales = active_sales_qs.filter(sale_date__range=[day_start, day_end])
         day_revenue = day_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-        day_count = day_sales.count()
         
         daily_sales.append({
             'date': day.strftime('%Y-%m-%d'),
             'display_date': day.strftime('%d %b'),
             'revenue': float(day_revenue),
-            'count': day_count
+            'count': day_sales.count()
         })
     
     # ============================================
-    # HOURLY SALES DISTRIBUTION
+    # HOURLY SALES
     # ============================================
-    
     hourly_sales = []
-    for hour in range(7, 22):  # 7 AM to 10 PM
+    for hour in range(7, 22):
         hour_sales = active_sales_qs.filter(
             sale_date__hour=hour,
             sale_date__date=today
         )
         hour_revenue = hour_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-        hour_count = hour_sales.count()
         
         hourly_sales.append({
             'hour': f"{hour:02d}:00",
             'revenue': float(hour_revenue),
-            'count': hour_count
+            'count': hour_sales.count()
         })
     
     # ============================================
-    # CREDIT SALES STATISTICS
+    # CONTEXT
     # ============================================
-    
-    credit_sales = active_sales_qs.filter(is_credit=True)
-    credit_count = credit_sales.count()
-    credit_revenue = credit_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-    credit_percentage = (credit_revenue / total_revenue * 100) if total_revenue > 0 else 0
-    
-    # ============================================
-    # ETR RECEIPT STATISTICS
-    # ============================================
-    
-    etr_processed = active_sales_qs.filter(etr_status='processed').count()
-    etr_pending = active_sales_qs.filter(etr_status='pending').count()
-    etr_failed = active_sales_qs.filter(etr_status='failed').count()
-    
-    # ============================================
-    # CONTEXT DICTIONARY
-    # ============================================
-    
     context = {
-        # Overview with profit (ACTIVE SALES ONLY)
         'total_sales': total_sales,
         'total_revenue': total_revenue,
         'total_profit': total_profit,
@@ -516,118 +712,208 @@ def sales_statistics(request):
         'avg_profit_per_sale': avg_profit_per_sale,
         'avg_items_per_sale': avg_items_per_sale,
         
-        # Time periods with profit (ACTIVE SALES ONLY)
         'today_count': today_count,
         'today_revenue': today_revenue,
         'today_profit': today_profit,
-        'today_margin': (today_profit / today_revenue * 100) if today_revenue > 0 else 0,
-        
         'week_count': week_count,
         'week_revenue': week_revenue,
         'week_profit': week_profit,
-        'week_margin': (week_profit / week_revenue * 100) if week_revenue > 0 else 0,
-        
         'month_count': month_count,
         'month_revenue': month_revenue,
         'month_profit': month_profit,
-        'month_margin': (month_profit / month_revenue * 100) if month_revenue > 0 else 0,
-        
         'year_count': year_count,
         'year_revenue': year_revenue,
         'year_profit': year_profit,
-        'year_margin': (year_profit / year_revenue * 100) if year_revenue > 0 else 0,
         
-        # Reversal statistics
-        'reversed_count': reversed_count,
-        'reversed_amount': reversed_amount,
-        'reversal_percentage': reversal_percentage,
+        'recent_sales': recent_sales,
         
-        # Return statistics
-        'total_returns': total_returns,
-        'total_refund_amount': total_refund_amount,
-        'returns_by_status': returns_by_status,
-        
-        # Damaged returns
-        'damaged_returns_count': damaged_returns_count,
-        'damaged_returns_value': damaged_returns_value,
-        'damaged_returns_cost': damaged_returns_cost,
-        
-        # Pending returns
-        'pending_returns_count': pending_returns_count,
-        'pending_returns_value': pending_returns_value,
-        'pending_verification_count': pending_verification_count,
-        'pending_verification_value': pending_verification_value,
-        'pending_approval_count': pending_approval_count,
-        'pending_approval_value': pending_approval_value,
-        
-        # Other return statuses
-        'approved_returns_count': approved_returns_count,
-        'approved_returns_value': approved_returns_value,
-        'processed_returns_count': processed_returns_count,
-        'processed_returns_value': processed_returns_value,
-        'rejected_returns_count': rejected_returns_count,
-        'rejected_returns_value': rejected_returns_value,
-        'mismatch_returns_count': mismatch_returns_count,
-        'mismatch_returns_value': mismatch_returns_value,
-        
-        # Comparison stats
-        'total_original_sales': total_original_sales,
-        'total_original_value': total_original_value,
-        'returns_with_sale': returns_with_sale,
-        'active_sales_count': total_sales,
-        'active_sales_value': total_revenue,
-        
-        # Breakdowns with profit
         'daily_sales_breakdown': daily_sales_breakdown,
         'weekly_sales_breakdown': weekly_sales_breakdown,
         'monthly_sales_breakdown': monthly_sales_breakdown,
         
-        # Top products with profit
         'top_products': top_products,
-        
-        # Top sellers with profit
         'top_sellers': top_sellers,
-        
-        # Payment methods
         'payment_methods': payment_methods,
         
-        # Charts
         'daily_sales': daily_sales,
         'daily_totals': daily_totals,
         'hourly_sales': hourly_sales,
         
-        # Credit sales
-        'credit_count': credit_count,
-        'credit_revenue': credit_revenue,
-        'credit_percentage': credit_percentage,
+        'credit_count': 0,
+        'credit_revenue': 0,
+        'credit_percentage': 0,
         
-        # ETR stats
-        'etr_processed': etr_processed,
-        'etr_pending': etr_pending,
-        'etr_failed': etr_failed,
+        'etr_processed': 0,
+        'etr_pending': 0,
+        'etr_failed': 0,
+        
+        'reversed_count': 0,
+        'reversed_amount': 0,
+        'reversal_percentage': 0,
+        
+        'total_returns': 0,
+        'total_refund_amount': 0,
+        'returns_by_status': [],
+        
+        'damaged_returns_count': 0,
+        'damaged_returns_value': 0,
+        'damaged_returns_cost': 0,
+        
+        'pending_returns_count': 0,
+        'pending_returns_value': 0,
+        'pending_verification_count': 0,
+        'pending_verification_value': 0,
+        'pending_approval_count': 0,
+        'pending_approval_value': 0,
+        
+        'approved_returns_count': 0,
+        'approved_returns_value': 0,
+        'processed_returns_count': 0,
+        'processed_returns_value': 0,
+        'rejected_returns_count': 0,
+        'rejected_returns_value': 0,
+        'mismatch_returns_count': 0,
+        'mismatch_returns_value': 0,
+        
+        'total_original_sales': all_sales_qs.count(),
+        'total_original_value': all_sales_qs.aggregate(total=Sum('total_amount'))['total'] or 0,
+        'returns_with_sale': 0,
+        'active_sales_count': total_sales,
+        'active_sales_value': total_revenue,
     }
     
     return render(request, 'sales/statistics.html', context)
 
+# ============================================
+# PERIOD DETAILS VIEW
+# ============================================
 
-
-
+@login_required
+def period_details(request):
+    """Display items sold during a specific period"""
+    period_type = request.GET.get('type')
+    context = {}
     
+    if period_type == 'day':
+        date = request.GET.get('date')
+        context['period_title'] = f"Sales for {date}"
+        result = get_items_by_date(date)
+        context['items'] = result.get('items', [])
+        context['total_items'] = result.get('total_items', 0)
+        context['total_revenue'] = result.get('total_revenue', 0)
+        context['total_profit'] = result.get('total_profit', 0)
+        context['avg_margin'] = result.get('avg_margin', 0)
+        
+    elif period_type == 'week':
+        week = request.GET.get('week')
+        week_range = request.GET.get('range')
+        context['period_title'] = f"Sales for Week {week}: {week_range}"
+        result = get_items_by_week(int(week))
+        context['items'] = result.get('items', [])
+        context['total_items'] = result.get('total_items', 0)
+        context['total_revenue'] = result.get('total_revenue', 0)
+        context['total_profit'] = result.get('total_profit', 0)
+        context['avg_margin'] = result.get('avg_margin', 0)
+        
+    elif period_type == 'month':
+        month = request.GET.get('month')
+        year = request.GET.get('year')
+        context['period_title'] = f"Sales for {month} {year}"
+        result = get_items_by_month(month, year)
+        context['items'] = result.get('items', [])
+        context['total_items'] = result.get('total_items', 0)
+        context['total_revenue'] = result.get('total_revenue', 0)
+        context['total_profit'] = result.get('total_profit', 0)
+        context['avg_margin'] = result.get('avg_margin', 0)
+    
+    return render(request, 'sales/period_details.html', context)
+
+# ============================================
+# API ENDPOINTS
+# ============================================
+
+@login_required
+def items_by_date_api(request):
+    """API endpoint to get items by date"""
+    date = request.GET.get('date')
+    if not date:
+        return JsonResponse({'success': False, 'message': 'Date parameter required'})
+    
+    result = get_items_by_date(date)
+    return JsonResponse(result)
+
+@login_required
+def items_by_week_api(request):
+    """API endpoint to get items by week"""
+    week = request.GET.get('week')
+    if not week:
+        return JsonResponse({'success': False, 'message': 'Week parameter required'})
+    
+    result = get_items_by_week(int(week))
+    return JsonResponse(result)
+
+@login_required
+def items_by_month_api(request):
+    """API endpoint to get items by month"""
+    month = request.GET.get('month')
+    year = request.GET.get('year')
+    if not month or not year:
+        return JsonResponse({'success': False, 'message': 'Month and year parameters required'})
+    
+    result = get_items_by_month(month, year)
+    return JsonResponse(result)
+
+@login_required
+def sale_details_api(request, sale_id):
+    """API endpoint to get sale details with items"""
+    try:
+        sale = Sale.objects.get(sale_id=sale_id)
+        items = SaleItem.objects.filter(sale=sale).select_related('product')
+        
+        total_profit = Decimal('0.00')
+        for item in items:
+            if item.product and item.product.buying_price:
+                profit = (item.unit_price - item.product.buying_price) * item.quantity
+                total_profit += profit
+        
+        sale_data = {
+            'success': True,
+            'sale': {
+                'id': sale.id,
+                'sale_id': sale.sale_id,
+                'created_at': sale.sale_date.strftime('%Y-%m-%d %H:%M:%S'),
+                'customer_name': sale.buyer_name or 'Walk-in Customer',
+                'seller_name': sale.seller.get_full_name() if sale.seller else sale.seller.username,
+                'payment_method': sale.payment_method,
+                'status': 'completed' if not sale.is_reversed else 'reversed',
+                'notes': '',
+                'subtotal': float(sale.subtotal),
+                'discount': 0,
+                'total_amount': float(sale.total_amount),
+                'total_profit': float(total_profit),
+                'items_count': items.count(),
+                'profit_margin': (total_profit / sale.total_amount * 100) if sale.total_amount > 0 else 0,
+                'items': [
+                    {
+                        'product_name': item.product_name or (item.product.display_name if item.product else 'Unknown'),
+                        'quantity': item.quantity,
+                        'unit_price': float(item.unit_price),
+                        'total_price': float(item.total_price),
+                        'profit': float((item.unit_price - (item.product.buying_price if item.product and item.product.buying_price else 0)) * item.quantity) if item.product else 0,
+                    } for item in items
+                ]
+            }
+        }
+        return JsonResponse(sale_data)
+    except Sale.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'Sale not found'})
+    except Exception as e:
+        logger.error(f"Error getting sale details: {str(e)}")
+        return JsonResponse({'success': False, 'message': str(e)})
 
 
-# MOVE THIS FUNCTION TO THE TOP OF THE FILE (above sales_statistics)
-def get_day_suffix(day):
-    """Get day suffix (st, nd, rd, th)"""
-    if 11 <= day <= 13:
-        return 'th'
-    elif day % 10 == 1:
-        return 'st'
-    elif day % 10 == 2:
-        return 'nd'
-    elif day % 10 == 3:
-        return 'rd'
-    else:
-        return 'th'
+
+
 
 
 
@@ -1201,7 +1487,6 @@ def sale_create(request):
         'now': timezone.now(),
     }
     return render(request, 'sales/create.html', context)
-
 
 
 

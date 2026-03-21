@@ -23,6 +23,9 @@ urlpatterns = [
     path('customer/<int:pk>/', views.customer_detail, name='customer_detail'),
     path('customer/<int:pk>/transactions/', views.customer_transactions, name='customer_transactions'),
     
+    # ===== PERIOD DETAILS - MUST COME BEFORE CATCH-ALL PATTERNS =====
+    path('period-details/', views.period_details, name='period_details'),
+    
     # ===== API endpoints for cart management (AJAX) =====
     path('api/get-cart/', views.get_cart, name='get_cart'),
     path('api/get-product/<str:product_code>/', views.get_product_details, name='get_product_details'),
@@ -32,6 +35,12 @@ urlpatterns = [
     path('api/remove-from-cart/', views.remove_from_cart, name='remove_from_cart'),
     path('api/clear-cart/', views.clear_cart, name='clear_cart'),
     path('api/search-products/', views.search_products, name='search_products'),
+    
+    # ===== API endpoints for period details =====
+    path('api/items-by-date/', views.items_by_date_api, name='items_by_date_api'),
+    path('api/items-by-week/', views.items_by_week_api, name='items_by_week_api'),
+    path('api/items-by-month/', views.items_by_month_api, name='items_by_month_api'),
+    path('api/sale-details/<int:sale_id>/', views.sale_details_api, name='sale_details_api'),
     
     # ===== CATCH-ALL PATTERNS - MUST BE LAST =====
     path('<str:sale_id>/', views.sale_detail, name='sale_detail'),

@@ -113,7 +113,6 @@
 
         <!-- ============================================ -->
         <!-- DAILY BREAKDOWN - Monday to Sunday WITH PROFIT AND TOTALS FOOTER -->
-        <!-- FIX: Footer now uses daily_totals (sum of Mon-Sun rows) instead of week_* variables -->
         <!-- ============================================ -->
         <div class="row mb-4">
             <div class="col-12">
@@ -140,7 +139,7 @@
                                 </thead>
                                 <tbody>
                                     {% for day in daily_sales_breakdown %}
-                                    <tr>
+                                    <tr class="breakdown-row" data-type="day" data-date="{{ day.date }}" style="cursor: pointer;" onclick="window.location.href='/sales/period-details/?type=day&date={{ day.date }}'">
                                         <td><strong>{{ day.day }}</strong></td>
                                         <td>{{ day.date }}</td>
                                         <td class="text-end">{{ day.count|intcomma }}</td>
@@ -172,8 +171,6 @@
                                     </tr>
                                     {% endfor %}
                                 </tbody>
-
-                                <!-- FIXED FOOTER: Uses daily_totals which is the true sum of Mon-Sun breakdown rows -->
                                 <tfoot class="table-light" style="border-top: 2px solid #4e73df; background-color: #f8f9fc;">
                                     <tr>
                                         <th colspan="2" class="text-end text-uppercase" style="font-size: 0.9rem;">WEEKLY TOTALS (MON-SUN):</th>
@@ -208,7 +205,6 @@
 
         <!-- ============================================ -->
         <!-- WEEKLY BREAKDOWN - Week 1,2,3,4 WITH PROFIT -->
-        <!-- FIX: Footer now includes Transactions count column -->
         <!-- ============================================ -->
         <div class="row mb-4">
             <div class="col-12">
@@ -235,7 +231,7 @@
                                 </thead>
                                 <tbody>
                                     {% for week in weekly_sales_breakdown %}
-                                    <tr>
+                                    <tr class="breakdown-row" data-type="week" data-week="{{ week.week_number }}" style="cursor: pointer;" onclick="window.location.href='/sales/period-details/?type=week&week={{ week.week_number }}&range={{ week.week_range|urlencode }}'">
                                         <td>
                                             <span class="badge bg-primary rounded-pill px-3 py-2">Week {{ week.week_number }}</span>
                                         </td>
@@ -270,8 +266,6 @@
                                     </tr>
                                     {% endfor %}
                                 </tbody>
-
-                                <!-- FIXED FOOTER: Now includes Transactions count (month_count) -->
                                 <tfoot class="table-light" style="border-top: 2px solid #1cc88a; background-color: #f8f9fc;">
                                     <tr>
                                         <th colspan="2" class="text-end text-uppercase" style="font-size: 0.9rem;">Month Total:</th>
@@ -301,7 +295,6 @@
 
         <!-- ============================================ -->
         <!-- MONTHLY BREAKDOWN - Last 12 Months WITH PROFIT -->
-        <!-- FIX: Footer now includes Transactions count column (year_count) -->
         <!-- ============================================ -->
         <div class="row mb-4">
             <div class="col-12">
@@ -327,7 +320,7 @@
                                 </thead>
                                 <tbody>
                                     {% for month in monthly_sales_breakdown %}
-                                    <tr>
+                                    <tr class="breakdown-row" data-type="month" data-month="{{ month.month_name }}" data-year="{{ month.year }}" style="cursor: pointer;" onclick="window.location.href='/sales/period-details/?type=month&month={{ month.month_name }}&year={{ month.year }}'">
                                         <td><strong>{{ month.month }}</strong></td>
                                         <td class="text-end">{{ month.count|intcomma }}</td>
                                         <td class="text-end text-primary fw-bold">KES {{ month.revenue|floatformat:2|intcomma }}</td>
@@ -361,8 +354,6 @@
                                     </tr>
                                     {% endfor %}
                                 </tbody>
-
-                                <!-- FIXED FOOTER: Now includes Transactions count (year_count) -->
                                 <tfoot class="table-light" style="border-top: 2px solid #36b9cc; background-color: #f8f9fc;">
                                     <tr>
                                         <th class="text-end text-uppercase" style="font-size: 0.9rem;">Year Total (Last 12 Months):</th>
@@ -740,9 +731,9 @@ document.addEventListener('DOMContentLoaded', function() {
         padding-right: 5px;
     }
     .scrollable-content::-webkit-scrollbar { width: 6px; }
-    .scrollable-content::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
-    .scrollable-content::-webkit-scrollbar-thumb { background: #888; border-radius: 10px; }
-    .scrollable-content::-webkit-scrollbar-thumb:hover { background: #555; }
+    .scrollable-content::-webkit-scrollbar-track { background: #ff0000; border-radius: 10px; }
+    .scrollable-content::-webkit-scrollbar-thumb { background: #0026ff; border-radius: 10px; }
+    .scrollable-content::-webkit-scrollbar-thumb:hover { background: #0004ff; }
     .border-left-primary  { border-left: 4px solid #4e73df !important; }
     .border-left-success  { border-left: 4px solid #1cc88a !important; }
     .border-left-info     { border-left: 4px solid #36b9cc !important; }
@@ -754,7 +745,7 @@ document.addEventListener('DOMContentLoaded', function() {
     .card {
         transition: transform 0.2s;
         border: none;
-        box-shadow: 0 0.15rem 1.75rem 0 rgba(58,59,69,0.15) !important;
+        box-shadow: 0 0.15rem 1.75rem 0 rgb(0, 0, 0) !important;
     }
     .card:hover { transform: translateY(-2px); }
     .text-gray-300   { color: #dddfeb !important; }
@@ -765,5 +756,12 @@ document.addEventListener('DOMContentLoaded', function() {
     .badge           { font-size: 0.75rem; padding: 0.35rem 0.65rem; }
     tfoot            { background-color: #f8f9fc; }
     tfoot th         { font-size: 1rem; padding: 12px 8px; }
+    
+    /* Row hover effect for breakdown tables */
+    .breakdown-row:hover {
+        background-color: #f8f9fa;
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
 </style>
 {% endblock %}
