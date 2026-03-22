@@ -93,6 +93,8 @@ def get_items_by_date(date_str):
                 product_totals[product_key] = {
                     'product_name': item.product_name or (item.product.display_name if item.product else 'Unknown'),
                     'product_code': product_key,
+                    'sku_value': item.sku_value or (item.product.sku_value if item.product else ''),
+                    'barcode': item.product.barcode if item.product and item.product.barcode else '',
                     'total_quantity': 0,
                     'total_revenue': 0,
                     'total_profit': 0,
@@ -121,6 +123,8 @@ def get_items_by_date(date_str):
             items_list.append({
                 'product_name': product_data['product_name'],
                 'product_code': product_data['product_code'],
+                'sku_value': product_data['sku_value'],
+                'barcode': product_data['barcode'],
                 'total_quantity': product_data['total_quantity'],
                 'total_revenue': product_data['total_revenue'],
                 'total_profit': product_data['total_profit'],
@@ -216,6 +220,8 @@ def get_items_by_week(week_number):
             product_totals[product_key] = {
                 'product_name': item.product_name or (item.product.display_name if item.product else 'Unknown'),
                 'product_code': product_key,
+                'sku_value': item.sku_value or (item.product.sku_value if item.product else ''),
+                'barcode': item.product.barcode if item.product and item.product.barcode else '',
                 'total_quantity': 0,
                 'total_revenue': 0,
                 'total_profit': 0,
@@ -244,6 +250,8 @@ def get_items_by_week(week_number):
         items_list.append({
             'product_name': product_data['product_name'],
             'product_code': product_data['product_code'],
+            'sku_value': product_data['sku_value'],
+            'barcode': product_data['barcode'],
             'total_quantity': product_data['total_quantity'],
             'total_revenue': product_data['total_revenue'],
             'total_profit': product_data['total_profit'],
@@ -322,6 +330,8 @@ def get_items_by_month(month_name, year):
                 product_totals[product_key] = {
                     'product_name': item.product_name or (item.product.display_name if item.product else 'Unknown'),
                     'product_code': product_key,
+                    'sku_value': item.sku_value or (item.product.sku_value if item.product else ''),
+                    'barcode': item.product.barcode if item.product and item.product.barcode else '',
                     'total_quantity': 0,
                     'total_revenue': 0,
                     'total_profit': 0,
@@ -350,6 +360,8 @@ def get_items_by_month(month_name, year):
             items_list.append({
                 'product_name': product_data['product_name'],
                 'product_code': product_data['product_code'],
+                'sku_value': product_data['sku_value'],
+                'barcode': product_data['barcode'],
                 'total_quantity': product_data['total_quantity'],
                 'total_revenue': product_data['total_revenue'],
                 'total_profit': product_data['total_profit'],
