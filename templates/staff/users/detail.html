@@ -3,384 +3,442 @@
 
 {% block title %}User Details - {{ user.username }}{% endblock %}
 
+{% block extra_css %}
+<style>
+    .status-card {
+        border-left: 4px solid;
+        transition: all 0.3s ease;
+        margin-bottom: 1rem;
+    }
+    
+    .status-card.warning {
+        border-left-color: #ffc107;
+        background-color: #fff9e6;
+    }
+    
+    .status-card.danger {
+        border-left-color: #dc3545;
+        background-color: #fff5f5;
+    }
+    
+    .status-card.info {
+        border-left-color: #17a2b8;
+        background-color: #e6f7ff;
+    }
+    
+    .status-card.success {
+        border-left-color: #28a745;
+        background-color: #e8f5e9;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container-fluid">
-    <!-- Page Header -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h2>
-                <i class="fas fa-user-circle me-2"></i>
-                User Details: {{ user.username }}
-            </h2>
-            <nav aria-label="breadcrumb">
-                <ol class="breadcrumb">
-                    <li class="breadcrumb-item"><a href="{% url 'staff:staff_dashboard' %}">Dashboard</a></li>
-                    <li class="breadcrumb-item"><a href="{% url 'staff:user_list' %}">Users</a></li>
-                    <li class="breadcrumb-item active">{{ user.username }}</li>
-                </ol>
-            </nav>
-        </div>
-        <div class="btn-group">
-            <a href="{% url 'staff:user_list' %}" class="btn btn-secondary">
-                <i class="fas fa-arrow-left me-2"></i>Back to Users
-            </a>
-            <a href="{% url 'admin:auth_user_change' user.id %}" class="btn btn-primary" target="_blank">
-                <i class="fas fa-edit me-2"></i>Edit in Admin
-            </a>
-        </div>
-    </div>
+<div class="mb-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'staff:staff_dashboard' %}">Dashboard</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'staff:user_list' %}">Users</a></li>
+            <li class="breadcrumb-item active">{{ user.username }}</li>
+        </ol>
+    </nav>
+</div>
 
-    <!-- User Profile Card -->
-    <div class="row">
-        <div class="col-md-4">
-            <div class="card mb-4">
-                <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0">
-                        <i class="fas fa-id-card me-2"></i>Profile Information
-                    </h5>
-                </div>
-                <div class="card-body text-center">
-                    <!-- Profile Avatar -->
-                    <div class="mb-3">
-                        {% if user.profile_picture %}
-                            <img src="{{ user.profile_picture.url }}" alt="{{ user.username }}" 
-                                 class="rounded-circle img-fluid" style="width: 150px; height: 150px; object-fit: cover;">
-                        {% else %}
-                            <div class="mx-auto bg-secondary rounded-circle d-flex align-items-center justify-content-center" 
-                                 style="width: 150px; height: 150px; font-size: 4rem; color: white;">
-                                {{ user.first_name|first|default:user.username|first|upper }}
-                            </div>
-                        {% endif %}
-                    </div>
-                    
-                    <h4>{{ user.get_full_name|default:user.username }}</h4>
-                    <p class="text-muted">
-                        <i class="fas fa-envelope me-2"></i>{{ user.email|default:"No email" }}
-                    </p>
-                    
-                    <hr>
-                    
-                    <!-- Status Badges -->
-                    <div class="mb-3">
-                        {% if user.is_superuser %}
-                            <span class="badge bg-danger me-1">Super Admin</span>
-                        {% endif %}
-                        {% if user.is_staff %}
-                            <span class="badge bg-primary me-1">Staff</span>
-                        {% endif %}
-                        {% if user.is_active %}
-                            <span class="badge bg-success me-1">Active</span>
-                        {% else %}
-                            <span class="badge bg-danger me-1">Inactive</span>
-                        {% endif %}
-                    </div>
-                    
-                    <!-- Account Dates -->
-                    <div class="text-start small">
-                        <p class="mb-1">
-                            <i class="fas fa-calendar-plus me-2 text-success"></i>
-                            <strong>Joined:</strong> {{ user.date_joined|date:"F d, Y" }}
-                        </p>
-                        <p class="mb-1">
-                            <i class="fas fa-clock me-2 text-info"></i>
-                            <strong>Last Login:</strong> {{ user.last_login|date:"F d, Y H:i"|default:"Never" }}
-                        </p>
-                    </div>
-                </div>
+<div class="row">
+    <!-- Left Column -->
+    <div class="col-md-4">
+        <!-- Profile Card -->
+        <div class="card mb-4">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="fas fa-user-circle me-2"></i>Profile Information</h5>
             </div>
-
-            <!-- Contact Information -->
-            <div class="card mb-4">
-                <div class="card-header bg-info text-white">
-                    <h5 class="mb-0">
-                        <i class="fas fa-address-book me-2"></i>Contact Information
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <table class="table table-sm">
-                        <tr>
-                            <th style="width: 40%;"><i class="fas fa-envelope me-2"></i>Email:</th>
-                            <td>
-                                <a href="mailto:{{ user.email }}">{{ user.email|default:"Not provided" }}</a>
-                            </td>
-                        </tr>
-                        <tr>
-                            <th><i class="fas fa-phone me-2"></i>Phone:</th>
-                            <td>{{ user.profile.phone_number|default:"Not provided" }}</td>
-                        </tr>
-                        <tr>
-                            <th><i class="fas fa-map-marker-alt me-2"></i>Address:</th>
-                            <td>{{ user.profile.address|default:"Not provided" }}</td>
-                        </tr>
-                        {% if user.profile.city %}
-                        <tr>
-                            <th><i class="fas fa-city me-2"></i>City:</th>
-                            <td>{{ user.profile.city }}</td>
-                        </tr>
-                        {% endif %}
-                        {% if user.profile.country %}
-                        <tr>
-                            <th><i class="fas fa-globe me-2"></i>Country:</th>
-                            <td>{{ user.profile.country }}</td>
-                        </tr>
-                        {% endif %}
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-8">
-            <!-- Staff Application Information (if any) -->
-            {% if user.staff_applications.exists %}
-            <div class="card mb-4">
-                <div class="card-header bg-warning">
-                    <h5 class="mb-0">
-                        <i class="fas fa-file-alt me-2"></i>Staff Application
-                    </h5>
-                </div>
-                <div class="card-body">
-                    {% with application=user.staff_applications.first %}
-                    <div class="row">
-                        <div class="col-md-6">
-                            <p><strong>Application ID:</strong> #{{ application.id }}</p>
-                            <p><strong>Position:</strong> {{ application.get_position_display }}</p>
-                            <p><strong>Applied On:</strong> {{ application.application_date|date:"M d, Y" }}</p>
-                            <p><strong>Status:</strong> 
-                                <span class="badge bg-success">Approved</span>
-                            </p>
-                        </div>
-                        <div class="col-md-6">
-                            <p><strong>ID Number:</strong> {{ application.id_number }}</p>
-                            <p><strong>Phone:</strong> {{ application.phone }}</p>
-                            <p><strong>Experience:</strong> {{ application.experience|truncatewords:20 }}</p>
-                        </div>
-                    </div>
-                    <div class="mt-3">
-                        <a href="{% url 'staff:application_detail' application.id %}" class="btn btn-sm btn-info">
-                            <i class="fas fa-eye me-2"></i>View Full Application
-                        </a>
-                    </div>
-                    {% endwith %}
-                </div>
-            </div>
-            {% endif %}
-
-            <!-- Groups & Permissions -->
-            <div class="card mb-4">
-                <div class="card-header bg-success text-white">
-                    <h5 class="mb-0">
-                        <i class="fas fa-users-cog me-2"></i>Groups & Permissions
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <h6 class="fw-bold mb-3">
-                                <i class="fas fa-users me-2"></i>Groups
-                            </h6>
-                            {% if user.groups.all %}
-                                <div class="list-group">
-                                    {% for group in user.groups.all %}
-                                    <div class="list-group-item d-flex justify-content-between align-items-center">
-                                        <div>
-                                            <i class="fas fa-layer-group me-2 text-primary"></i>
-                                            {{ group.name }}
-                                        </div>
-                                        <span class="badge bg-primary rounded-pill">
-                                            {{ group.user_set.count }} members
-                                        </span>
-                                    </div>
-                                    {% endfor %}
-                                </div>
-                            {% else %}
-                                <p class="text-muted fst-italic">No groups assigned</p>
-                            {% endif %}
-                        </div>
-                        
-                        <div class="col-md-6">
-                            <h6 class="fw-bold mb-3">
-                                <i class="fas fa-key me-2"></i>Individual Permissions
-                            </h6>
-                            {% if user.user_permissions.all %}
-                                <div class="list-group" style="max-height: 300px; overflow-y: auto;">
-                                    {% for perm in user.user_permissions.all %}
-                                    <div class="list-group-item">
-                                        <i class="fas fa-check-circle text-success me-2"></i>
-                                        <small>{{ perm.name }}</small>
-                                    </div>
-                                    {% endfor %}
-                                </div>
-                            {% else %}
-                                <p class="text-muted fst-italic">No individual permissions</p>
-                            {% endif %}
-                        </div>
+            <div class="card-body text-center">
+                <div class="mb-3">
+                    <div class="rounded-circle bg-secondary d-flex align-items-center justify-content-center mx-auto" 
+                         style="width: 120px; height: 120px; font-size: 3rem; color: white;">
+                        {{ user.first_name|first|default:user.username|first|upper }}
                     </div>
                 </div>
-            </div>
-
-            <!-- Activity Log -->
-            <div class="card mb-4">
-                <div class="card-header bg-secondary text-white">
-                    <h5 class="mb-0">
-                        <i class="fas fa-history me-2"></i>Recent Activity
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <ul class="list-group">
-                        <li class="list-group-item d-flex justify-content-between align-items-center">
-                            <div>
-                                <i class="fas fa-check-circle text-success me-2"></i>
-                                Account Created
-                            </div>
-                            <small class="text-muted">{{ user.date_joined|date:"M d, Y H:i" }}</small>
-                        </li>
-                        {% if user.last_login %}
-                        <li class="list-group-item d-flex justify-content-between align-items-center">
-                            <div>
-                                <i class="fas fa-sign-in-alt text-info me-2"></i>
-                                Last Login
-                            </div>
-                            <small class="text-muted">{{ user.last_login|date:"M d, Y H:i" }}</small>
-                        </li>
-                        {% endif %}
-                        <!-- Add more activity logs as needed -->
-                    </ul>
-                </div>
-            </div>
-
-            <!-- Danger Zone (for admins only) -->
-            {% if request.user.is_superuser and user != request.user %}
-            <div class="card border-danger mb-4">
-                <div class="card-header bg-danger text-white">
-                    <h5 class="mb-0">
-                        <i class="fas fa-exclamation-triangle me-2"></i>Danger Zone
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <h6 class="fw-bold text-danger">Delete User Account</h6>
-                            <p class="text-muted small mb-0">Once deleted, all data associated with this user will be permanently removed.</p>
-                        </div>
-                        <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#deleteUserModal">
-                            <i class="fas fa-trash me-2"></i>Delete User
-                        </button>
-                    </div>
+                
+                <h4 class="mb-1">{{ user.get_full_name|default:user.username }}</h4>
+                <p class="text-muted mb-3">
+                    <i class="fas fa-envelope me-1"></i> {{ user.email|default:"No email" }}
+                </p>
+                
+                <hr>
+                
+                <div class="mb-3">
+                    {% if user.is_superuser %}
+                        <span class="badge bg-danger me-1">Super Admin</span>
+                    {% endif %}
+                    {% if user.is_staff %}
+                        <span class="badge bg-primary me-1">Staff</span>
+                    {% endif %}
                     
-                    {% if user.is_active %}
-                    <hr>
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <h6 class="fw-bold text-warning">Deactivate Account</h6>
-                            <p class="text-muted small mb-0">User will lose access until account is reactivated.</p>
-                        </div>
-                        <button type="button" class="btn btn-warning" onclick="confirmDeactivate('{{ user.id }}', '{{ user.username }}')">
-                            <i class="fas fa-ban me-2"></i>Deactivate
-                        </button>
-                    </div>
+                    <!-- Enhanced Status Badge -->
+                    {% if not user.is_active %}
+                        <span class="badge bg-danger">Deactivated</span>
+                    {% elif user.status.is_locked %}
+                        <span class="badge bg-info">Locked</span>
+                    {% elif user.status.is_suspended %}
+                        <span class="badge bg-warning">Suspended</span>
                     {% else %}
-                    <hr>
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <h6 class="fw-bold text-success">Activate Account</h6>
-                            <p class="text-muted small mb-0">Restore access to this user account.</p>
+                        <span class="badge bg-success">Active</span>
+                    {% endif %}
+                    
+                    <a href="{% url 'staff:user_edit' user.id %}" class="btn btn-sm btn-outline-primary ms-2">
+                        <i class="fas fa-edit"></i> Edit
+                    </a>
+                </div>
+                
+                <table class="table table-sm">
+                     <tr>
+                        <th>Joined:</th>
+                        <td>{{ user.date_joined|date:"F d, Y" }}</td>
+                    </tr>
+                    <tr>
+                        <th>Last Login:</th>
+                        <td>{{ user.last_login|date:"F d, Y H:i"|default:"Never" }}</td>
+                    </tr>
+                    {% if user.status %}
+                    <tr>
+                        <th>Failed Attempts:</th>
+                        <td>
+                            {{ user.status.failed_login_attempts }}/5
+                            {% if user.status.failed_login_attempts >= 3 %}
+                                <i class="fas fa-exclamation-triangle text-warning ms-1" title="Multiple failed attempts"></i>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endif %}
+                </table>
+            </div>
+        </div>
+        
+        <!-- Account Status Card -->
+        {% if user.status %}
+        <div class="card mb-4">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="fas fa-shield-alt me-2"></i>Account Status</h5>
+            </div>
+            <div class="card-body">
+                {% if not user.is_active %}
+                    <div class="status-card danger p-3">
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-ban fa-2x text-danger me-3"></i>
+                            <div>
+                                <h6 class="mb-0 text-danger">Account Deactivated</h6>
+                                <small class="text-muted">
+                                    Deactivated: {{ user.status.deactivated_at|date:"F d, Y H:i"|default:"N/A" }}
+                                    {% if user.status.deactivated_reason %}
+                                        <br>Reason: {{ user.status.deactivated_reason }}
+                                    {% endif %}
+                                </small>
+                            </div>
                         </div>
-                        <button type="button" class="btn btn-success" onclick="confirmActivate('{{ user.id }}', '{{ user.username }}')">
-                            <i class="fas fa-check-circle me-2"></i>Activate
-                        </button>
+                    </div>
+                {% endif %}
+                
+                {% if user.status.is_locked %}
+                    <div class="status-card info p-3">
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-lock fa-2x text-info me-3"></i>
+                            <div>
+                                <h6 class="mb-0 text-info">Account Locked</h6>
+                                <small class="text-muted">
+                                    Locked: {{ user.status.locked_at|date:"F d, Y H:i" }}
+                                    {% if user.status.lock_reason %}
+                                        <br>Reason: {{ user.status.get_lock_reason_display }}
+                                    {% endif %}
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                {% endif %}
+                
+                {% if user.status.is_suspended %}
+                    <div class="status-card warning p-3">
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-pause-circle fa-2x text-warning me-3"></i>
+                            <div>
+                                <h6 class="mb-0 text-warning">Account Suspended</h6>
+                                <small class="text-muted">
+                                    Until: {{ user.status.suspended_until|date:"F d, Y" }}
+                                    {% if user.status.suspension_reason %}
+                                        <br>Reason: {{ user.status.suspension_reason }}
+                                    {% endif %}
+                                    {% if user.status.suspended_by %}
+                                        <br>Suspended by: {{ user.status.suspended_by.get_full_name|default:user.status.suspended_by.username }}
+                                    {% endif %}
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                {% endif %}
+                
+                {% if user.is_active and not user.status.is_locked and not user.status.is_suspended %}
+                    <div class="status-card success p-3">
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-check-circle fa-2x text-success me-3"></i>
+                            <div>
+                                <h6 class="mb-0 text-success">Account Active</h6>
+                                <small class="text-muted">No restrictions applied</small>
+                            </div>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Groups & Roles Card -->
+        <div class="card mb-4">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="fas fa-users-cog me-2"></i>Groups & Roles</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tr>
+                        <th>Groups:</th>
+                        <td>
+                            {% if user.groups.all %}
+                                {% for group in user.groups.all %}
+                                    <span class="badge bg-primary me-1">{{ group.name }}</span>
+                                {% endfor %}
+                            {% else %}
+                                <span class="text-muted">No groups assigned</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Danger Zone Card (for admins only) -->
+        {% if request.user.is_superuser and user != request.user %}
+        <div class="card border-danger">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0"><i class="fas fa-exclamation-triangle me-2"></i>Account Management</h5>
+            </div>
+            <div class="card-body">
+                <!-- Lock/Unlock Actions -->
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                        {% if user.status.is_locked %}
+                            <h6 class="fw-bold text-info mb-0">Account Locked</h6>
+                            <small class="text-muted">Temporarily locked</small>
+                        {% else %}
+                            <h6 class="fw-bold text-warning mb-0">Lock Account</h6>
+                            <small class="text-muted">Temporarily restrict access</small>
+                        {% endif %}
+                    </div>
+                    {% if user.status.is_locked %}
+                    <a href="{% url 'staff:user_unlock_confirm' user.id %}" class="btn btn-info btn-sm">
+                        <i class="fas fa-unlock-alt me-1"></i> Unlock
+                    </a>
+                    {% else %}
+                    <a href="{% url 'staff:user_lock_confirm' user.id %}" class="btn btn-warning btn-sm">
+                        <i class="fas fa-lock me-1"></i> Lock
+                    </a>
+                    {% endif %}
+                </div>
+                
+                <hr>
+                
+                <!-- Suspend/Unsuspend Actions -->
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                        {% if user.status.is_suspended %}
+                            <h6 class="fw-bold text-warning mb-0">Account Suspended</h6>
+                            <small class="text-muted">Disciplinary suspension</small>
+                        {% else %}
+                            <h6 class="fw-bold text-warning mb-0">Suspend Account</h6>
+                            <small class="text-muted">Temporary suspension</small>
+                        {% endif %}
+                    </div>
+                    {% if user.status.is_suspended %}
+                    <a href="{% url 'staff:user_unsuspend_confirm' user.id %}" class="btn btn-success btn-sm">
+                        <i class="fas fa-play me-1"></i> Unsuspend
+                    </a>
+                    {% else %}
+                    <a href="{% url 'staff:user_suspend_confirm' user.id %}" class="btn btn-warning btn-sm">
+                        <i class="fas fa-pause-circle me-1"></i> Suspend
+                    </a>
+                    {% endif %}
+                </div>
+                
+                <hr>
+                
+                <!-- Deactivate/Activate Actions -->
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                        {% if user.is_active %}
+                        <h6 class="fw-bold text-danger mb-0">Deactivate Account</h6>
+                        <small class="text-muted">Permanent deactivation</small>
+                        {% else %}
+                        <h6 class="fw-bold text-success mb-0">Activate Account</h6>
+                        <small class="text-muted">Restore access</small>
+                        {% endif %}
+                    </div>
+                    {% if user.is_active %}
+                    <a href="{% url 'staff:user_deactivate_confirm' user.id %}" class="btn btn-danger btn-sm">
+                        <i class="fas fa-ban me-1"></i> Deactivate
+                    </a>
+                    {% else %}
+                    <a href="{% url 'staff:user_activate_confirm' user.id %}" class="btn btn-success btn-sm">
+                        <i class="fas fa-check-circle me-1"></i> Activate
+                    </a>
+                    {% endif %}
+                </div>
+                
+                <hr>
+                
+                <!-- Delete Action -->
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="fw-bold text-danger mb-0">Delete User Account</h6>
+                        <small class="text-muted">Permanently remove this user</small>
+                    </div>
+                    <a href="{% url 'staff:user_delete_confirm' user.id %}" class="btn btn-danger btn-sm">
+                        <i class="fas fa-trash me-1"></i> Delete
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    
+    <!-- Right Column -->
+    <div class="col-md-8">
+        <!-- Staff Application Information -->
+        {% with application=user.staff_applications.first %}
+        {% if application %}
+        <div class="card mb-4">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="fas fa-file-alt me-2"></i>Staff Application Details</h5>
+            </div>
+            <div class="card-body">
+                <table class="table">
+                    <tr>
+                        <th style="width: 150px;">Application ID:</th>
+                        <td>#{{ application.id }}</td>
+                    </tr>
+                    <tr>
+                        <th>Applied On:</th>
+                        <td>{{ application.application_date|date:"M d, Y" }}</td>
+                    </tr>
+                    <tr>
+                        <th>ID Number:</th>
+                        <td><span class="badge bg-secondary">{{ application.id_number }}</span></td>
+                    </tr>
+                    <tr>
+                        <th>Phone:</th>
+                        <td>{{ application.phone }}</td>
+                    </tr>
+                    <tr>
+                        <th>Experience:</th>
+                        <td>{{ application.experience|truncatewords:15|default:"-" }}</td>
+                    </tr>
+                </table>
+                <div class="mt-2">
+                    <a href="{% url 'staff:application_detail' application.id %}" class="btn btn-info btn-sm">
+                        <i class="fas fa-eye me-1"></i> View Full Application
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        {% endwith %}
+
+        <!-- Staff Profile & Verification Documents -->
+        {% if user.staff_profile %}
+        <div class="card mb-4">
+            <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-id-card me-2"></i>Verified Documents</h5>
+                {% if user.staff_profile.is_identity_verified %}
+                <span class="badge bg-success">Verified</span>
+                {% else %}
+                <span class="badge bg-warning">Pending</span>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                {% with staff=user.staff_profile %}
+                <table class="table">
+                    <tr>
+                        <th style="width: 150px;">Staff ID:</th>
+                        <td><span class="badge bg-secondary">{{ staff.staff_id }}</span></td>
+                    </tr>
+                    {% if staff.verified_at %}
+                    <tr>
+                        <th>Verified On:</th>
+                        <td>{{ staff.verified_at|date:"F d, Y H:i" }}</td>
+                    </tr>
+                    <tr>
+                        <th>Verified By:</th>
+                        <td>{{ staff.verified_by.get_full_name|default:staff.verified_by.username }}</td>
+                    </tr>
+                    {% endif %}
+                </table>
+
+                <!-- Verification Documents -->
+                <h6 class="fw-bold mt-3 mb-3"><i class="fas fa-file-upload me-2"></i>Verification Documents</h6>
+                
+                {% if staff.id_front or staff.id_back or staff.passport_photo or staff.live_photo %}
+                <div class="row">
+                    {% if staff.id_front %}
+                    <div class="col-md-4 text-center mb-3">
+                        <label class="fw-bold d-block mb-2">ID Card (Front)</label>
+                        <img src="{{ staff.id_front.url }}" class="document-preview img-fluid rounded border" style="max-height: 120px;">
+                        <div class="mt-1"><span class="badge bg-success">Verified</span></div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if staff.id_back %}
+                    <div class="col-md-4 text-center mb-3">
+                        <label class="fw-bold d-block mb-2">ID Card (Back)</label>
+                        <img src="{{ staff.id_back.url }}" class="document-preview img-fluid rounded border" style="max-height: 120px;">
+                        <div class="mt-1"><span class="badge bg-success">Verified</span></div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if staff.passport_photo %}
+                    <div class="col-md-4 text-center mb-3">
+                        <label class="fw-bold d-block mb-2">Passport Photo</label>
+                        <img src="{{ staff.passport_photo.url }}" class="document-preview img-fluid rounded border" style="max-height: 120px;">
+                        <div class="mt-1"><span class="badge bg-success">Verified</span></div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if staff.live_photo %}
+                    <div class="col-md-4 text-center mb-3">
+                        <label class="fw-bold d-block mb-2">Live Photo</label>
+                        <img src="{{ staff.live_photo.url }}" class="document-preview img-fluid rounded border" style="max-height: 120px;">
+                        <div class="mt-1"><span class="badge bg-success">Live</span></div>
                     </div>
                     {% endif %}
                 </div>
-            </div>
-            {% endif %}
-        </div>
-    </div>
-</div>
-
-<!-- Delete User Modal -->
-{% if request.user.is_superuser and user != request.user %}
-<div class="modal fade" id="deleteUserModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header bg-danger text-white">
-                <h5 class="modal-title">
-                    <i class="fas fa-exclamation-triangle me-2"></i>
-                    Confirm User Deletion
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <p>Are you sure you want to delete user <strong>{{ user.username }}</strong>?</p>
-                <div class="alert alert-warning">
-                    <i class="fas fa-exclamation-circle me-2"></i>
-                    <strong>Warning:</strong> This action cannot be undone. This will permanently delete:
-                    <ul class="mb-0 mt-2">
-                        <li>The user account</li>
-                        <li>All associated data</li>
-                        <li>Any linked applications</li>
-                    </ul>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="fas fa-file-image fa-3x text-muted mb-3"></i>
+                    <p class="text-muted mb-0">No verification documents uploaded</p>
                 </div>
-                <p class="text-muted small mb-0">
-                    <i class="fas fa-info-circle me-2"></i>
-                    User: {{ user.get_full_name|default:user.username }} ({{ user.email }})
-                </p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <form method="post" action="{% url 'admin:auth_user_delete' user.id %}" style="display: inline;" target="_blank">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-danger">
-                        <i class="fas fa-trash me-2"></i>Permanently Delete
-                    </button>
-                </form>
+                {% endif %}
+                {% endwith %}
             </div>
         </div>
+        {% endif %}
     </div>
 </div>
-
-<!-- Hidden forms for activation/deactivation -->
-<form id="deactivate-form-{{ user.id }}" method="post" action="{% url 'admin:auth_user_changelist' %}" style="display: none;">
-    {% csrf_token %}
-    <input type="hidden" name="action" value="deactivate">
-    <input type="hidden" name="_selected_action" value="{{ user.id }}">
-</form>
-
-<form id="activate-form-{{ user.id }}" method="post" action="{% url 'admin:auth_user_changelist' %}" style="display: none;">
-    {% csrf_token %}
-    <input type="hidden" name="action" value="activate">
-    <input type="hidden" name="_selected_action" value="{{ user.id }}">
-</form>
-{% endif %}
 {% endblock %}
 
 {% block extra_js %}
 <script>
-function confirmDeactivate(userId, username) {
-    if (confirm(`Are you sure you want to deactivate user "${username}"?\n\nThey will lose access to the system until reactivated.`)) {
-        document.getElementById(`deactivate-form-${userId}`).submit();
-    }
-}
-
-function confirmActivate(userId, username) {
-    if (confirm(`Are you sure you want to activate user "${username}"?\n\nThey will regain access to the system.`)) {
-        document.getElementById(`activate-form-${userId}`).submit();
-    }
-}
-
-$(document).ready(function() {
     // Initialize tooltips
-    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[title]'));
-    tooltipTriggerList.map(function(tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
-    });
-    
-    // Copy to clipboard functionality
-    $('.copy-btn').click(function() {
-        var text = $(this).data('copy');
-        navigator.clipboard.writeText(text).then(function() {
-            alert('Copied to clipboard: ' + text);
+    document.addEventListener('DOMContentLoaded', function() {
+        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[title]'));
+        tooltipTriggerList.map(function(tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
         });
     });
-});
 </script>
 {% endblock %}

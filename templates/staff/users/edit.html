@@ -1,0 +1,354 @@
+{% extends 'staff/base.html' %}
+{% load static %}
+
+{% block title %}Edit User - {{ user.username }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-container {
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+    
+    .form-section {
+        background: white;
+        border-radius: 16px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        border: 1px solid #e9ecef;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    
+    .form-section h3 {
+        font-size: 1.2rem;
+        font-weight: 600;
+        color: #1e293b;
+        margin-bottom: 1.5rem;
+        padding-bottom: 0.75rem;
+        border-bottom: 2px solid #e9ecef;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .form-section h3 i {
+        color: #2563eb;
+    }
+    
+    .form-label {
+        font-weight: 500;
+        color: #1e293b;
+        margin-bottom: 0.5rem;
+    }
+    
+    .form-control, .form-select {
+        border-radius: 10px;
+        border: 1px solid #e2e8f0;
+        padding: 0.6rem 1rem;
+        transition: all 0.2s;
+    }
+    
+    .form-control:focus, .form-select:focus {
+        border-color: #2563eb;
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+    
+    .form-check-input:checked {
+        background-color: #2563eb;
+        border-color: #2563eb;
+    }
+    
+    .group-checkbox {
+        padding: 0.75rem;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        margin-bottom: 0.5rem;
+        transition: all 0.2s;
+        cursor: pointer;
+    }
+    
+    .group-checkbox:hover {
+        background: #f8fafc;
+        border-color: #2563eb;
+    }
+    
+    .group-checkbox input {
+        margin-right: 0.75rem;
+    }
+    
+    .group-checkbox label {
+        cursor: pointer;
+        margin: 0;
+        font-weight: 500;
+    }
+    
+    .group-checkbox small {
+        display: block;
+        margin-left: 1.8rem;
+        color: #64748b;
+        font-size: 0.75rem;
+    }
+    
+    .btn-save {
+        background: #2563eb;
+        color: white;
+        padding: 0.75rem 2rem;
+        border-radius: 10px;
+        font-weight: 500;
+        transition: all 0.2s;
+    }
+    
+    .btn-save:hover {
+        background: #1d4ed8;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+    }
+    
+    .btn-cancel {
+        background: #64748b;
+        color: white;
+        padding: 0.75rem 2rem;
+        border-radius: 10px;
+        font-weight: 500;
+    }
+    
+    .btn-cancel:hover {
+        background: #475569;
+    }
+    
+    .status-badge {
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        margin-left: 0.5rem;
+    }
+    
+    .status-active {
+        background: #dcfce7;
+        color: #16a34a;
+    }
+    
+    .status-inactive {
+        background: #fee2e2;
+        color: #dc2626;
+    }
+    
+    .alert-warning {
+        background: #fffbeb;
+        border-color: #fde047;
+        color: #854d0e;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid form-container">
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2>
+                <i class="fas fa-edit me-2"></i>
+                Edit User: {{ user.username }}
+            </h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'staff:staff_dashboard' %}">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'staff:user_list' %}">Users</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'staff:user_detail' user.id %}">{{ user.username }}</a></li>
+                    <li class="breadcrumb-item active">Edit</li>
+                </ol>
+            </nav>
+        </div>
+        <div>
+            <a href="{% url 'staff:user_detail' user.id %}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left me-2"></i>Cancel
+            </a>
+        </div>
+    </div>
+
+    <form method="post">
+        {% csrf_token %}
+        
+        <!-- Basic Information -->
+        <div class="form-section">
+            <h3>
+                <i class="fas fa-user-circle"></i>
+                Basic Information
+            </h3>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Username *</label>
+                    <input type="text" name="username" class="form-control" value="{{ user.username }}" required>
+                    <small class="text-muted">Required. 150 characters or fewer. Letters, digits and @/./+/-/_ only.</small>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Email *</label>
+                    <input type="email" name="email" class="form-control" value="{{ user.email }}" required>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">First Name</label>
+                    <input type="text" name="first_name" class="form-control" value="{{ user.first_name }}">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Last Name</label>
+                    <input type="text" name="last_name" class="form-control" value="{{ user.last_name }}">
+                </div>
+            </div>
+        </div>
+        
+        <!-- Contact Information -->
+        <div class="form-section">
+            <h3>
+                <i class="fas fa-address-card"></i>
+                Contact Information
+            </h3>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Phone Number</label>
+                    <input type="tel" name="phone_number" class="form-control" value="{{ profile.phone_number|default:'' }}">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Address</label>
+                    <input type="text" name="address" class="form-control" value="{{ profile.address|default:'' }}">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">City</label>
+                    <input type="text" name="city" class="form-control" value="{{ profile.city|default:'' }}">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Country</label>
+                    <input type="text" name="country" class="form-control" value="{{ profile.country|default:'' }}">
+                </div>
+            </div>
+        </div>
+        
+        <!-- Account Status -->
+        <div class="form-section">
+            <h3>
+                <i class="fas fa-toggle-on"></i>
+                Account Status
+            </h3>
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <div class="form-check form-switch">
+                        <input type="checkbox" name="is_active" class="form-check-input" id="isActive" {% if user.is_active %}checked{% endif %}>
+                        <label class="form-check-label" for="isActive">
+                            Active Account
+                            {% if user.is_active %}
+                            <span class="status-badge status-active">Active</span>
+                            {% else %}
+                            <span class="status-badge status-inactive">Inactive</span>
+                            {% endif %}
+                        </label>
+                    </div>
+                    <small class="text-muted">Inactive users cannot log in to the system.</small>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <div class="form-check form-switch">
+                        <input type="checkbox" name="is_staff" class="form-check-input" id="isStaff" {% if user.is_staff %}checked{% endif %}>
+                        <label class="form-check-label" for="isStaff">Staff Status</label>
+                    </div>
+                    <small class="text-muted">Staff users can access the admin panel.</small>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <div class="form-check form-switch">
+                        <input type="checkbox" name="is_superuser" class="form-check-input" id="isSuperuser" {% if user.is_superuser %}checked{% endif %}>
+                        <label class="form-check-label" for="isSuperuser">Superuser Status</label>
+                    </div>
+                    <small class="text-muted">Superusers have all permissions without explicitly assigning them.</small>
+                </div>
+            </div>
+            
+            {% if user.is_superuser %}
+            <div class="alert alert-warning mt-3">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                <strong>Warning:</strong> This user is a superuser. Removing superuser status may affect their permissions.
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Groups/Roles -->
+        <div class="form-section">
+            <h3>
+                <i class="fas fa-users"></i>
+                Roles & Groups
+            </h3>
+            <div class="row">
+                {% for group in groups %}
+                <div class="col-md-6">
+                    <div class="group-checkbox" onclick="toggleGroup(this, {{ group.id }})">
+                        <input type="checkbox" name="groups" id="group_{{ group.id }}" value="{{ group.id }}" 
+                               {% if group.id in selected_groups %}checked{% endif %}>
+                        <label for="group_{{ group.id }}">{{ group.name }}</label>
+                        <small>{{ group.permissions.count }} permissions | {{ group.user_set.count }} members</small>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="col-12">
+                    <p class="text-muted">No groups available. Create groups in the admin panel.</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        
+        <!-- Form Actions -->
+        <div class="d-flex justify-content-end gap-3 mt-4">
+            <a href="{% url 'staff:user_detail' user.id %}" class="btn btn-cancel">
+                <i class="fas fa-times me-2"></i>Cancel
+            </a>
+            <button type="submit" class="btn btn-save">
+                <i class="fas fa-save me-2"></i>Save Changes
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleGroup(element, groupId) {
+    const checkbox = document.getElementById(`group_${groupId}`);
+    checkbox.checked = !checkbox.checked;
+}
+
+// Form validation
+document.querySelector('form').addEventListener('submit', function(e) {
+    const username = document.querySelector('input[name="username"]').value.trim();
+    const email = document.querySelector('input[name="email"]').value.trim();
+    
+    if (!username) {
+        e.preventDefault();
+        alert('Username is required');
+        return false;
+    }
+    
+    if (!email) {
+        e.preventDefault();
+        alert('Email is required');
+        return false;
+    }
+    
+    // Email validation
+    const emailRegex = /^[^\s@]+@([^\s@]+\.)+[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+        e.preventDefault();
+        alert('Please enter a valid email address');
+        return false;
+    }
+    
+    return true;
+});
+
+// Warn about superuser removal
+document.getElementById('isSuperuser').addEventListener('change', function(e) {
+    if (!this.checked && {{ user.is_superuser|lower }}) {
+        if (!confirm('WARNING: You are about to remove superuser status from this user. They will lose all permissions. Are you sure?')) {
+            e.preventDefault();
+            this.checked = true;
+        }
+    }
+});
+</script>
+{% endblock %}

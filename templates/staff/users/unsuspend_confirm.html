@@ -1,0 +1,166 @@
+{% extends 'staff/base.html' %}
+{% load static %}
+
+{% block title %}Unsuspend User - {{ user.username }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .unsuspend-container {
+        max-width: 600px;
+        margin: 2rem auto;
+    }
+    
+    .unsuspend-card {
+        border: none;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        border-radius: 16px;
+        overflow: hidden;
+    }
+    
+    .unsuspend-header {
+        background: linear-gradient(135deg, #10b981, #059669);
+        color: white;
+        padding: 1.5rem;
+        text-align: center;
+    }
+    
+    .unsuspend-header i {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+    }
+    
+    .unsuspend-body {
+        padding: 2rem;
+    }
+    
+    .user-info {
+        background: #f8fafc;
+        border-radius: 12px;
+        padding: 1rem;
+        margin: 1rem 0;
+    }
+    
+    .suspension-details {
+        background: #fff3e0;
+        border-left: 4px solid #f59e0b;
+        padding: 1rem;
+        margin: 1rem 0;
+        border-radius: 8px;
+    }
+    
+    .info-box {
+        background: #e6f7e6;
+        border-left: 4px solid #10b981;
+        padding: 1rem;
+        margin: 1rem 0;
+        border-radius: 8px;
+    }
+    
+    .btn-group-custom {
+        display: flex;
+        gap: 1rem;
+        margin-top: 1.5rem;
+    }
+    
+    .btn-cancel {
+        background: #64748b;
+        color: white;
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        text-decoration: none;
+        text-align: center;
+        flex: 1;
+        transition: all 0.2s;
+    }
+    
+    .btn-cancel:hover {
+        background: #475569;
+        color: white;
+    }
+    
+    .btn-unsuspend {
+        background: #10b981;
+        color: white;
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        text-decoration: none;
+        text-align: center;
+        flex: 1;
+        transition: all 0.2s;
+        border: none;
+        cursor: pointer;
+    }
+    
+    .btn-unsuspend:hover {
+        background: #059669;
+        transform: translateY(-2px);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="unsuspend-container">
+    <div class="unsuspend-card">
+        <div class="unsuspend-header">
+            <i class="fas fa-play"></i>
+            <h2 class="mb-0">Unsuspend User Account</h2>
+            <p class="mb-0 opacity-75">Restore access to the user</p>
+        </div>
+        
+        <div class="unsuspend-body">
+            <div class="user-info">
+                <h5 class="mb-2">
+                    <i class="fas fa-user me-2"></i>
+                    User Information
+                </h5>
+                <p class="mb-1"><strong>Username:</strong> {{ user.username }}</p>
+                <p class="mb-1"><strong>Full Name:</strong> {{ user.get_full_name|default:"Not provided" }}</p>
+                <p class="mb-0"><strong>Email:</strong> {{ user.email|default:"No email" }}</p>
+            </div>
+            
+            {% if user.status %}
+            <div class="suspension-details">
+                <i class="fas fa-info-circle text-warning me-2"></i>
+                <strong>Suspension Details:</strong>
+                <ul class="mt-2 mb-0">
+                    <li><strong>Suspended On:</strong> {{ user.status.suspended_at|date:"F d, Y H:i" }}</li>
+                    <li><strong>Suspension Until:</strong> {{ user.status.suspended_until|date:"F d, Y" }}</li>
+                    <li><strong>Reason:</strong> {{ user.status.suspension_reason|default:"Not specified" }}</li>
+                    {% if user.status.suspended_by %}
+                    <li><strong>Suspended By:</strong> {{ user.status.suspended_by.get_full_name|default:user.status.suspended_by.username }}</li>
+                    {% endif %}
+                </ul>
+            </div>
+            {% endif %}
+            
+            <div class="info-box">
+                <i class="fas fa-info-circle text-success me-2"></i>
+                <strong>What happens when unsuspending?</strong>
+                <ul class="mt-2 mb-0">
+                    <li>User will be able to log in again</li>
+                    <li>All user data and permissions remain intact</li>
+                    <li>User can access the system immediately</li>
+                    <li>Suspension history will be preserved</li>
+                </ul>
+            </div>
+            
+            <div class="alert alert-success">
+                <i class="fas fa-check-circle me-2"></i>
+                <strong>Note:</strong> After unsuspending, the user will regain full access to their account with all previous permissions.
+            </div>
+            
+            <form method="post" action="{% url 'staff:user_unsuspend_process' user.id %}">
+                {% csrf_token %}
+                <div class="btn-group-custom">
+                    <a href="{% url 'staff:user_detail' user.id %}" class="btn-cancel">
+                        <i class="fas fa-times me-2"></i>Cancel
+                    </a>
+                    <button type="submit" class="btn-unsuspend">
+                        <i class="fas fa-play me-2"></i>Unsuspend User
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

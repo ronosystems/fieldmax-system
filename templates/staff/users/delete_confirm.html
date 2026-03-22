@@ -1,0 +1,153 @@
+{% extends 'staff/base.html' %}
+{% load static %}
+
+{% block title %}Delete User - {{ user.username }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .delete-container {
+        max-width: 600px;
+        margin: 2rem auto;
+    }
+    
+    .delete-card {
+        border: none;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        border-radius: 16px;
+        overflow: hidden;
+    }
+    
+    .delete-header {
+        background: linear-gradient(135deg, #dc2626, #b91c1c);
+        color: white;
+        padding: 1.5rem;
+        text-align: center;
+    }
+    
+    .delete-header i {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+    }
+    
+    .delete-body {
+        padding: 2rem;
+    }
+    
+    .user-info {
+        background: #f8fafc;
+        border-radius: 12px;
+        padding: 1rem;
+        margin: 1rem 0;
+    }
+    
+    .warning-list {
+        background: #fffbeb;
+        border-left: 4px solid #f59e0b;
+        padding: 1rem;
+        margin: 1rem 0;
+        border-radius: 8px;
+    }
+    
+    .warning-list ul {
+        margin-bottom: 0;
+        padding-left: 1.5rem;
+    }
+    
+    .warning-list li {
+        margin: 0.5rem 0;
+    }
+    
+    .btn-group-custom {
+        display: flex;
+        gap: 1rem;
+        margin-top: 1.5rem;
+    }
+    
+    .btn-cancel {
+        background: #64748b;
+        color: white;
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        text-decoration: none;
+        text-align: center;
+        flex: 1;
+        transition: all 0.2s;
+    }
+    
+    .btn-cancel:hover {
+        background: #475569;
+        color: white;
+    }
+    
+    .btn-delete {
+        background: #dc2626;
+        color: white;
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        text-decoration: none;
+        text-align: center;
+        flex: 1;
+        transition: all 0.2s;
+        border: none;
+        cursor: pointer;
+    }
+    
+    .btn-delete:hover {
+        background: #b91c1c;
+        transform: translateY(-2px);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="delete-container">
+    <div class="delete-card">
+        <div class="delete-header">
+            <i class="fas fa-exclamation-triangle"></i>
+            <h2 class="mb-0">Delete User Account</h2>
+            <p class="mb-0 opacity-75">This action cannot be undone</p>
+        </div>
+        
+        <div class="delete-body">
+            <div class="user-info">
+                <h5 class="mb-2">
+                    <i class="fas fa-user me-2"></i>
+                    User Information
+                </h5>
+                <p class="mb-1"><strong>Username:</strong> {{ user.username }}</p>
+                <p class="mb-1"><strong>Full Name:</strong> {{ user.get_full_name|default:"Not provided" }}</p>
+                <p class="mb-0"><strong>Email:</strong> {{ user.email|default:"No email" }}</p>
+            </div>
+            
+            <div class="warning-list">
+                <i class="fas fa-exclamation-circle text-warning me-2"></i>
+                <strong>Warning:</strong> This will permanently delete:
+                <ul class="mt-2">
+                    <li>The user account and login credentials</li>
+                    <li>All associated staff profile data</li>
+                    <li>All linked applications and documents</li>
+                    <li>All user permissions and group assignments</li>
+                    <li>Any related activity logs</li>
+                </ul>
+            </div>
+            
+            <div class="alert alert-danger">
+                <i class="fas fa-skull me-2"></i>
+                <strong>Data Loss Warning:</strong> Once deleted, this data cannot be recovered.
+            </div>
+            
+            <form method="post" action="{% url 'staff:user_delete' user.id %}">
+                {% csrf_token %}
+                <div class="btn-group-custom">
+                    <a href="{% url 'staff:user_detail' user.id %}" class="btn-cancel">
+                        <i class="fas fa-times me-2"></i>Cancel
+                    </a>
+                    <button type="submit" class="btn-delete">
+                        <i class="fas fa-trash me-2"></i>Permanently Delete
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

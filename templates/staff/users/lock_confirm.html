@@ -1,0 +1,162 @@
+{% extends 'staff/base.html' %}
+{% load static %}
+
+{% block title %}Lock User - {{ user.username }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .lock-container {
+        max-width: 600px;
+        margin: 2rem auto;
+    }
+    
+    .lock-card {
+        border: none;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        border-radius: 16px;
+        overflow: hidden;
+    }
+    
+    .lock-header {
+        background: linear-gradient(135deg, #f59e0b, #d97706);
+        color: white;
+        padding: 1.5rem;
+        text-align: center;
+    }
+    
+    .lock-header i {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+    }
+    
+    .lock-body {
+        padding: 2rem;
+    }
+    
+    .user-info {
+        background: #f8fafc;
+        border-radius: 12px;
+        padding: 1rem;
+        margin: 1rem 0;
+    }
+    
+    .info-box {
+        background: #fff3e0;
+        border-left: 4px solid #f59e0b;
+        padding: 1rem;
+        margin: 1rem 0;
+        border-radius: 8px;
+    }
+    
+    .btn-group-custom {
+        display: flex;
+        gap: 1rem;
+        margin-top: 1.5rem;
+    }
+    
+    .btn-cancel {
+        background: #64748b;
+        color: white;
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        text-decoration: none;
+        text-align: center;
+        flex: 1;
+        transition: all 0.2s;
+    }
+    
+    .btn-cancel:hover {
+        background: #475569;
+        color: white;
+    }
+    
+    .btn-lock {
+        background: #f59e0b;
+        color: white;
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        text-decoration: none;
+        text-align: center;
+        flex: 1;
+        transition: all 0.2s;
+        border: none;
+        cursor: pointer;
+    }
+    
+    .btn-lock:hover {
+        background: #d97706;
+        transform: translateY(-2px);
+    }
+    
+    .reason-select {
+        width: 100%;
+        padding: 0.5rem;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        margin-top: 0.5rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="lock-container">
+    <div class="lock-card">
+        <div class="lock-header">
+            <i class="fas fa-lock"></i>
+            <h2 class="mb-0">Lock User Account</h2>
+            <p class="mb-0 opacity-75">The user will be temporarily restricted</p>
+        </div>
+        
+        <div class="lock-body">
+            <div class="user-info">
+                <h5 class="mb-2">
+                    <i class="fas fa-user me-2"></i>
+                    User Information
+                </h5>
+                <p class="mb-1"><strong>Username:</strong> {{ user.username }}</p>
+                <p class="mb-1"><strong>Full Name:</strong> {{ user.get_full_name|default:"Not provided" }}</p>
+                <p class="mb-0"><strong>Email:</strong> {{ user.email|default:"No email" }}</p>
+            </div>
+            
+            <div class="info-box">
+                <i class="fas fa-info-circle text-warning me-2"></i>
+                <strong>What happens when locking?</strong>
+                <ul class="mt-2 mb-0">
+                    <li>User will be unable to log in</li>
+                    <li>All user data remains intact</li>
+                    <li>User can be unlocked at any time</li>
+                    <li>Groups and permissions are preserved</li>
+                    <li>Failed login attempts counter will be reset</li>
+                </ul>
+            </div>
+            
+            <div class="alert alert-warning">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                <strong>Note:</strong> Locked users cannot access the system until an admin unlocks them.
+            </div>
+            
+            <form method="post" action="{% url 'staff:user_lock_process' user.id %}">
+                {% csrf_token %}
+                
+                <div class="mb-3">
+                    <label class="form-label"><strong>Reason for Locking</strong></label>
+                    <select name="reason" class="form-select" required>
+                        <option value="">Select a reason...</option>
+                        <option value="admin">Admin Lock</option>
+                        <option value="suspicious">Suspicious Activity</option>
+                    </select>
+                </div>
+                
+                <div class="btn-group-custom">
+                    <a href="{% url 'staff:user_detail' user.id %}" class="btn-cancel">
+                        <i class="fas fa-times me-2"></i>Cancel
+                    </a>
+                    <button type="submit" class="btn-lock">
+                        <i class="fas fa-lock me-2"></i>Lock User
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

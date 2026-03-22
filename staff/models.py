@@ -119,6 +119,7 @@ class Staff(models.Model):
     """Staff member profile linked to User account"""
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='staff_profile')
     staff_id = models.CharField(max_length=20, unique=True)
+    id_number = models.CharField(max_length=50, unique=True, blank=True, null=True) 
     position = models.CharField(max_length=50, choices=StaffApplication.POSITION_CHOICES)
     department = models.CharField(max_length=100, blank=True)
     
@@ -270,3 +271,76 @@ def create_staff_profile_for_staff_users(sender, instance, created, **kwargs):
                 user=instance,
                 position='staff',  # Default position, will be updated later
             )
+
+
+
+
+
+
+class UserStatus(models.Model):
+    """Extended user status management (One-to-One with Django User)"""
+    user = models.OneToOneField(
+        User,  # This is the Django User model
+        on_delete=models.CASCADE,
+        related_name='status'
+    )
+    
+    # Lock fields
+    is_locked = models.BooleanField(default=False)
+    locked_at = models.DateTimeField(null=True, blank=True)
+    lock_reason = models.CharField(max_length=50, choices=[
+        ('failed_login', 'Multiple Failed Logins'),
+        ('suspicious', 'Suspicious Activity'),
+        ('admin', 'Admin Lock'),
+    ], blank=True)
+    failed_login_attempts = models.IntegerField(default=0)
+    last_failed_login = models.DateTimeField(null=True, blank=True)
+    
+    # Suspension fields
+    is_suspended = models.BooleanField(default=False)
+    suspended_at = models.DateTimeField(null=True, blank=True)
+    suspended_until = models.DateTimeField(null=True, blank=True)
+    suspension_reason = models.TextField(blank=True)
+    suspended_by = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='suspended_users'
+    )
+    
+    # Deactivation tracking
+    deactivated_at = models.DateTimeField(null=True, blank=True)
+    deactivated_reason = models.TextField(blank=True)
+    deactivated_by = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='deactivated_users'
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = 'User Status'
+        verbose_name_plural = 'User Statuses'
+        indexes = [
+            models.Index(fields=['is_locked', 'is_suspended']),
+            models.Index(fields=['user', 'is_locked']),
+        ]
+    
+    def __str__(self):
+        return f"{self.user.username} - {'Locked' if self.is_locked else 'Unlocked'} / {'Suspended' if self.is_suspended else 'Active'}"
+    
+    @property
+    def can_login(self):
+        """Check if user can login"""
+        if not self.user.is_active:
+            return False, 'deactivated', 'Your account has been deactivated.'
+        if self.is_locked:
+            return False, 'locked', 'Your account is temporarily locked.'
+        if self.is_suspended:
+            return False, 'suspended', f'Your account is suspended until {self.suspended_until}.'
+        return True, None, None

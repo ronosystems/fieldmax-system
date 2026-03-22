@@ -126,3 +126,103 @@ class StaffAdmin(admin.ModelAdmin):
     list_filter = ['is_identity_verified', 'position']
     search_fields = ['staff_id', 'user__username', 'user__email']
     readonly_fields = ['created_at', 'updated_at']
+
+
+
+
+    # staff/admin.py
+from django.contrib import admin
+from django.contrib.auth.admin import UserAdmin
+from django.contrib.auth.models import User
+from django.utils.safestring import mark_safe
+from django.contrib import messages
+from .models import UserStatus
+from .utils.user_status import UserStatusManager
+
+class UserStatusInline(admin.StackedInline):
+    model = UserStatus
+    can_delete = False
+    verbose_name_plural = 'Account Status'
+    fk_name = 'user'  # Specify which ForeignKey to use
+    fields = ('is_locked', 'lock_reason', 'locked_at', 
+              'is_suspended', 'suspended_until', 'suspension_reason',
+              'failed_login_attempts', 'last_failed_login')
+    readonly_fields = ('locked_at', 'suspended_at', 'deactivated_at', 'created_at', 'updated_at')
+
+class CustomUserAdmin(UserAdmin):
+    inlines = [UserStatusInline]
+    list_display = ('username', 'email', 'first_name', 'last_name', 'status_badge', 'is_staff', 'is_active')
+    list_filter = ('is_active', 'is_staff', 'is_superuser')
+    
+    def status_badge(self, obj):
+        """Display user status with colored badge"""
+        try:
+            # Check if user has status
+            if hasattr(obj, 'status'):
+                if not obj.is_active:
+                    return mark_safe('<span class="badge bg-danger">Deactivated</span>')
+                if obj.status.is_locked:
+                    return mark_safe('<span class="badge bg-info">Locked</span>')
+                if obj.status.is_suspended:
+                    return mark_safe('<span class="badge bg-warning">Suspended</span>')
+            return mark_safe('<span class="badge bg-success">Active</span>')
+        except:
+            return mark_safe('<span class="badge bg-secondary">Unknown</span>')
+    status_badge.short_description = 'Status'
+    
+    actions = ['lock_users', 'unlock_users', 'suspend_users', 'unsuspend_users', 'deactivate_users', 'activate_users']
+    
+    def lock_users(self, request, queryset):
+        count = 0
+        for user in queryset:
+            UserStatusManager.lock_user(user, 'admin', request)
+            count += 1
+        self.message_user(request, f'{count} user(s) locked.', messages.SUCCESS)
+    lock_users.short_description = "Lock selected users"
+    
+    def unlock_users(self, request, queryset):
+        count = 0
+        for user in queryset:
+            UserStatusManager.unlock_user(user, request)
+            count += 1
+        self.message_user(request, f'{count} user(s) unlocked.', messages.SUCCESS)
+    unlock_users.short_description = "Unlock selected users"
+    
+    def suspend_users(self, request, queryset):
+        count = 0
+        for user in queryset:
+            UserStatusManager.suspend_user(user, 'Admin suspension', request.user, 30, request)
+            count += 1
+        self.message_user(request, f'{count} user(s) suspended for 30 days.', messages.SUCCESS)
+    suspend_users.short_description = "Suspend selected users (30 days)"
+    
+    def unsuspend_users(self, request, queryset):
+        count = 0
+        for user in queryset:
+            UserStatusManager.unsuspend_user(user, request)
+            count += 1
+        self.message_user(request, f'{count} user(s) unsuspended.', messages.SUCCESS)
+    unsuspend_users.short_description = "Unsuspend selected users"
+    
+    def deactivate_users(self, request, queryset):
+        count = 0
+        for user in queryset:
+            UserStatusManager.deactivate_user(user, 'Admin deactivation', request.user, request)
+            count += 1
+        self.message_user(request, f'{count} user(s) deactivated.', messages.SUCCESS)
+    deactivate_users.short_description = "Deactivate selected users"
+    
+    def activate_users(self, request, queryset):
+        count = 0
+        for user in queryset:
+            UserStatusManager.activate_user(user, request)
+            count += 1
+        self.message_user(request, f'{count} user(s) activated.', messages.SUCCESS)
+    activate_users.short_description = "Activate selected users"
+
+# Unregister default User admin and register custom one
+try:
+    admin.site.unregister(User)
+except admin.sites.NotRegistered:
+    pass
+admin.site.register(User, CustomUserAdmin)

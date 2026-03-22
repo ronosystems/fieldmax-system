@@ -1,0 +1,143 @@
+{% extends 'staff/base.html' %}
+{% load static %}
+
+{% block title %}Deactivate User - {{ user.username }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .deactivate-container {
+        max-width: 600px;
+        margin: 2rem auto;
+    }
+    
+    .deactivate-card {
+        border: none;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        border-radius: 16px;
+        overflow: hidden;
+    }
+    
+    .deactivate-header {
+        background: linear-gradient(135deg, #f59e0b, #d97706);
+        color: white;
+        padding: 1.5rem;
+        text-align: center;
+    }
+    
+    .deactivate-header i {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+    }
+    
+    .deactivate-body {
+        padding: 2rem;
+    }
+    
+    .user-info {
+        background: #f8fafc;
+        border-radius: 12px;
+        padding: 1rem;
+        margin: 1rem 0;
+    }
+    
+    .info-box {
+        background: #fff3e0;
+        border-left: 4px solid #f59e0b;
+        padding: 1rem;
+        margin: 1rem 0;
+        border-radius: 8px;
+    }
+    
+    .btn-group-custom {
+        display: flex;
+        gap: 1rem;
+        margin-top: 1.5rem;
+    }
+    
+    .btn-cancel {
+        background: #64748b;
+        color: white;
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        text-decoration: none;
+        text-align: center;
+        flex: 1;
+        transition: all 0.2s;
+    }
+    
+    .btn-cancel:hover {
+        background: #475569;
+        color: white;
+    }
+    
+    .btn-deactivate {
+        background: #f59e0b;
+        color: white;
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        text-decoration: none;
+        text-align: center;
+        flex: 1;
+        transition: all 0.2s;
+        border: none;
+        cursor: pointer;
+    }
+    
+    .btn-deactivate:hover {
+        background: #d97706;
+        transform: translateY(-2px);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="deactivate-container">
+    <div class="deactivate-card">
+        <div class="deactivate-header">
+            <i class="fas fa-ban"></i>
+            <h2 class="mb-0">Deactivate User Account</h2>
+            <p class="mb-0 opacity-75">The user will lose access temporarily</p>
+        </div>
+        
+        <div class="deactivate-body">
+            <div class="user-info">
+                <h5 class="mb-2">
+                    <i class="fas fa-user me-2"></i>
+                    User Information
+                </h5>
+                <p class="mb-1"><strong>Username:</strong> {{ user.username }}</p>
+                <p class="mb-1"><strong>Full Name:</strong> {{ user.get_full_name|default:"Not provided" }}</p>
+                <p class="mb-0"><strong>Email:</strong> {{ user.email|default:"No email" }}</p>
+            </div>
+            
+            <div class="info-box">
+                <i class="fas fa-info-circle text-warning me-2"></i>
+                <strong>What happens when deactivating?</strong>
+                <ul class="mt-2 mb-0">
+                    <li>User will be unable to log in</li>
+                    <li>All user data remains intact</li>
+                    <li>User can be reactivated at any time</li>
+                    <li>Groups and permissions are preserved</li>
+                </ul>
+            </div>
+            
+            <div class="alert alert-warning">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                <strong>Note:</strong> Deactivated users cannot access the system but their data is preserved.
+            </div>
+            
+            <form method="post" action="{% url 'staff:user_deactivate' user.id %}">
+                {% csrf_token %}
+                <div class="btn-group-custom">
+                    <a href="{% url 'staff:user_detail' user.id %}" class="btn-cancel">
+                        <i class="fas fa-times me-2"></i>Cancel
+                    </a>
+                    <button type="submit" class="btn-deactivate">
+                        <i class="fas fa-ban me-2"></i>Deactivate User
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

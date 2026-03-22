@@ -42,6 +42,14 @@ import re
 import string
 from functools import wraps
 from django.contrib import messages
+from django.contrib.auth import get_user_model
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.shortcuts import render, get_object_or_404, redirect
+from django.contrib.auth.decorators import login_required, user_passes_test
+from .models import UserProfile
+
+
 
 
 logger = logging.getLogger(__name__)
@@ -3121,6 +3129,13 @@ def staff_stats_dashboard(request):
     return render(request, 'staff/dashboard.html', context)
 
 
+
+
+
+
+
+
+
 # ====================================
 # PUBLIC APPLICATION FORM
 # ====================================
@@ -3162,35 +3177,209 @@ def application_form(request):
                     'positions': StaffApplication.POSITION_CHOICES
                 })
             
-            # Check if ID number already exists
-            if StaffApplication.objects.filter(id_number=id_number).exists():
-                existing_app = StaffApplication.objects.filter(id_number=id_number).first()
-                error_msg = f'An application with ID number {id_number} already exists. Please contact support if this is your ID.'
+            # ============================================
+            # CHECK 1: EMAIL ALREADY EXISTS IN USER TABLE (ALREADY APPROVED STAFF)
+            # ============================================
+            if User.objects.filter(email=email).exists():
+                existing_user = User.objects.get(email=email)
+                error_msg = f'❌ An account with email {email} already exists in the system.\n'
+                error_msg += f'This email is registered to: {existing_user.get_full_name() or existing_user.username}\n'
+                error_msg += 'Please use a different email address or contact the administrator if this is an error.'
                 
                 if is_ajax:
                     return JsonResponse({
                         'success': False, 
                         'error': error_msg,
-                        'existing': True,
-                        'existing_name': existing_app.full_name() if existing_app else None
+                        'existing_user': True,
+                        'existing_name': existing_user.get_full_name() or existing_user.username,
+                        'error_type': 'user_exists'
                     })
                 messages.error(request, error_msg)
                 return render(request, 'staff/apply.html', {
                     'positions': StaffApplication.POSITION_CHOICES
                 })
             
-            # Check if email already exists
-            if StaffApplication.objects.filter(email=email).exists():
-                error_msg = f'An application with email {email} already exists. Please use a different email or contact support.'
+            # ============================================
+            # CHECK 2: PHONE NUMBER ALREADY EXISTS IN USER TABLE
+            # ============================================
+            # Clean phone number (remove non-digits)
+            import re
+            clean_phone = re.sub(r'\D', '', phone)
+            
+            if User.objects.filter(username=clean_phone).exists():
+                existing_user = User.objects.get(username=clean_phone)
+                error_msg = f'❌ Phone number {phone} is already registered in the system.\n'
+                error_msg += f'Registered to: {existing_user.get_full_name() or existing_user.username}\n'
+                error_msg += 'Please use a different phone number or contact the administrator.'
                 
                 if is_ajax:
-                    return JsonResponse({'success': False, 'error': error_msg})
+                    return JsonResponse({
+                        'success': False, 
+                        'error': error_msg,
+                        'error_type': 'phone_exists'
+                    })
                 messages.error(request, error_msg)
                 return render(request, 'staff/apply.html', {
                     'positions': StaffApplication.POSITION_CHOICES
                 })
             
-            # Handle file uploads
+            # ============================================
+            # CHECK 3: ID NUMBER ALREADY EXISTS IN USER TABLE (via Staff profile)
+            # ============================================
+            if Staff.objects.filter(id_number=id_number).exists():
+                existing_staff = Staff.objects.get(id_number=id_number)
+                error_msg = f'❌ ID Number {id_number} is already registered in the system.\n'
+                error_msg += f'Registered to: {existing_staff.user.get_full_name() or existing_staff.user.username}\n'
+                error_msg += 'Please use your correct ID number or contact the administrator.'
+                
+                if is_ajax:
+                    return JsonResponse({
+                        'success': False, 
+                        'error': error_msg,
+                        'error_type': 'id_exists'
+                    })
+                messages.error(request, error_msg)
+                return render(request, 'staff/apply.html', {
+                    'positions': StaffApplication.POSITION_CHOICES
+                })
+            
+            # ============================================
+            # CHECK 4: EMAIL ALREADY EXISTS IN PENDING/UNDER_REVIEW APPLICATIONS
+            # ============================================
+            pending_app = StaffApplication.objects.filter(
+                email=email, 
+                status__in=['pending', 'under_review']
+            ).first()
+            
+            if pending_app:
+                error_msg = f'❌ An application with email {email} is already pending review.\n'
+                error_msg += f'Submitted on: {pending_app.application_date.strftime("%Y-%m-%d")}\n'
+                error_msg += 'Please wait for review or contact the administrator.'
+                
+                if is_ajax:
+                    return JsonResponse({
+                        'success': False, 
+                        'error': error_msg,
+                        'pending': True,
+                        'submission_date': pending_app.application_date.strftime("%Y-%m-%d"),
+                        'error_type': 'pending_application'
+                    })
+                messages.error(request, error_msg)
+                return render(request, 'staff/apply.html', {
+                    'positions': StaffApplication.POSITION_CHOICES
+                })
+            
+            # ============================================
+            # CHECK 5: EMAIL ALREADY EXISTS IN REJECTED APPLICATIONS
+            # ============================================
+            rejected_app = StaffApplication.objects.filter(
+                email=email, 
+                status='rejected'
+            ).first()
+            
+            if rejected_app:
+                error_msg = f'❌ An application with email {email} was previously rejected.\n'
+                error_msg += f'Rejection date: {rejected_app.review_date.strftime("%Y-%m-%d") if rejected_app.review_date else "Unknown"}\n'
+                if rejected_app.review_notes:
+                    error_msg += f'Reason: {rejected_app.review_notes}\n'
+                error_msg += 'If you believe this is an error, please contact the administrator.'
+                
+                if is_ajax:
+                    return JsonResponse({
+                        'success': False, 
+                        'error': error_msg,
+                        'rejected': True,
+                        'rejection_date': rejected_app.review_date.strftime("%Y-%m-%d") if rejected_app.review_date else None,
+                        'rejection_reason': rejected_app.review_notes,
+                        'error_type': 'rejected_application'
+                    })
+                messages.error(request, error_msg)
+                return render(request, 'staff/apply.html', {
+                    'positions': StaffApplication.POSITION_CHOICES
+                })
+            
+            # ============================================
+            # CHECK 6: ID NUMBER ALREADY EXISTS IN APPLICATIONS
+            # ============================================
+            existing_id_app = StaffApplication.objects.filter(id_number=id_number).first()
+            if existing_id_app:
+                status_msg = {
+                    'pending': 'pending review',
+                    'under_review': 'under review',
+                    'approved': 'already approved',
+                    'rejected': 'previously rejected'
+                }.get(existing_id_app.status, 'exists')
+                
+                error_msg = f'❌ An application with ID number {id_number} already exists.\n'
+                error_msg += f'Status: {status_msg}\n'
+                error_msg += f'Submitted on: {existing_id_app.application_date.strftime("%Y-%m-%d")}\n'
+                error_msg += 'Please contact the administrator for assistance.'
+                
+                if is_ajax:
+                    return JsonResponse({
+                        'success': False, 
+                        'error': error_msg,
+                        'existing': True,
+                        'existing_name': existing_id_app.full_name(),
+                        'status': existing_id_app.status,
+                        'error_type': 'id_in_application'
+                    })
+                messages.error(request, error_msg)
+                return render(request, 'staff/apply.html', {
+                    'positions': StaffApplication.POSITION_CHOICES
+                })
+            
+            # ============================================
+            # CHECK 7: PHONE NUMBER ALREADY EXISTS IN PENDING APPLICATIONS
+            # ============================================
+            pending_phone = StaffApplication.objects.filter(
+                phone=phone, 
+                status__in=['pending', 'under_review']
+            ).first()
+            
+            if pending_phone:
+                error_msg = f'❌ Phone number {phone} already has a pending application.\n'
+                error_msg += f'Submitted on: {pending_phone.application_date.strftime("%Y-%m-%d")}\n'
+                error_msg += 'Please wait for review or contact the administrator.'
+                
+                if is_ajax:
+                    return JsonResponse({
+                        'success': False, 
+                        'error': error_msg,
+                        'error_type': 'phone_pending'
+                    })
+                messages.error(request, error_msg)
+                return render(request, 'staff/apply.html', {
+                    'positions': StaffApplication.POSITION_CHOICES
+                })
+            
+            # ============================================
+            # CHECK 8: PHONE NUMBER ALREADY EXISTS IN REJECTED APPLICATIONS
+            # ============================================
+            rejected_phone = StaffApplication.objects.filter(
+                phone=phone, 
+                status='rejected'
+            ).first()
+            
+            if rejected_phone:
+                error_msg = f'❌ Phone number {phone} was used in a previously rejected application.\n'
+                error_msg += f'Rejection date: {rejected_phone.review_date.strftime("%Y-%m-%d") if rejected_phone.review_date else "Unknown"}\n'
+                error_msg += 'Please contact the administrator if you believe this is an error.'
+                
+                if is_ajax:
+                    return JsonResponse({
+                        'success': False, 
+                        'error': error_msg,
+                        'error_type': 'phone_rejected'
+                    })
+                messages.error(request, error_msg)
+                return render(request, 'staff/apply.html', {
+                    'positions': StaffApplication.POSITION_CHOICES
+                })
+            
+            # ============================================
+            # HANDLE FILE UPLOADS
+            # ============================================
             passport_photo = request.FILES.get('passport_photo')
             id_front = request.FILES.get('id_front')
             id_back = request.FILES.get('id_back')
@@ -3230,16 +3419,8 @@ def application_form(request):
             
             logger.info(f"New staff application created: {application.full_name()} (ID: {application.id})")
             
-
-
-
-
-
-
-
-
             # ============================================
-            # SEND ADMIN NOTIFICATION
+            # SEND ADMIN NOTIFICATION (commented out)
             # ============================================
             """
             try:
@@ -3252,17 +3433,7 @@ def application_form(request):
                 logger.error(f"Failed to send admin notification: {str(e)}")
                 # Don't fail the application if notification fails
             """
-
-
-
-
-
-
-
-
-
-
-
+            
             # Return response based on request type
             if is_ajax:
                 return JsonResponse({
@@ -3296,10 +3467,6 @@ def application_form(request):
         'positions': StaffApplication.POSITION_CHOICES,
     }
     return render(request, 'staff/apply.html', context)
-
-
-
-
 
 
 
@@ -3444,11 +3611,6 @@ def application_delete(request, pk):
 
 
 
-
-# ====================================
-# APPROVE VIEW
-# ====================================
-
 @login_required
 def application_approve(request, pk):
     """Approve an application and create user account with proper group"""
@@ -3516,29 +3678,77 @@ def application_approve(request, pk):
             
             logger.info(f"User profile created for {user.username} - First login tracking enabled")
             
+            # ============================================
+            # CREATE/UPDATE STAFF PROFILE WITH AUTO-VERIFICATION
+            # ============================================
+            from staff.models import Staff
+            
+            # USE APPLICANT'S ID NUMBER AS STAFF ID
+            staff_id = application.id_number
+            
+            # Remove any spaces or special characters
+            staff_id = staff_id.strip().replace(' ', '')
+            
+            # Check if staff_id already exists, if so add suffix
+            original_staff_id = staff_id
+            counter = 1
+            while Staff.objects.filter(staff_id=staff_id).exists():
+                staff_id = f"{original_staff_id}_{counter}"
+                counter += 1
+            
+            # Get position value
+            position = application.position
+            
+            # Check if staff profile already exists (created by signal)
+            try:
+                staff_profile = Staff.objects.get(user=user)
+                # If exists, update it with auto-verification
+                staff_profile.staff_id = staff_id
+                staff_profile.position = position
+                staff_profile.is_identity_verified = True
+                staff_profile.verified_at = timezone.now()
+                staff_profile.verified_by = request.user
+                staff_profile.verification_notes = f"Auto-verified during application approval. Original notes: {notes}"
+                staff_profile.passport_photo = application.passport_photo
+                staff_profile.id_front = application.id_front
+                staff_profile.id_back = application.id_back
+                staff_profile.save()
+                
+                logger.info(f"Existing staff profile updated for {user.username} with staff ID: {staff_id}")
+                
+            except Staff.DoesNotExist:
+                # Create new staff profile
+                staff_profile = Staff.objects.create(
+                    user=user,
+                    staff_id=staff_id,
+                    id_number=application.id_number, 
+                    position=position,
+                    is_identity_verified=True,  # AUTO-VERIFY!
+                    verified_at=timezone.now(),
+                    verified_by=request.user,
+                    verification_notes=f"Auto-verified during application approval. Original notes: {notes}",
+                    # Copy documents from application to staff profile
+                    passport_photo=application.passport_photo,
+                    id_front=application.id_front,
+                    id_back=application.id_back,
+                )
+                
+                logger.info(f"New staff profile created for {user.username} with staff ID: {staff_id}")
+            
+            # ============================================
+            # ASSIGN TO GROUP
+            # ============================================
+            group_name = None
+            
             # Assign to selected group
             if group_id:
                 try:
                     group = Group.objects.get(id=group_id)
                     user.groups.add(group)
-                    
-                    # Also add to department group based on the selected role
-                    department_map = {
-                        'Sales Agent': 'Sales Department',
-                        'Sales Manager': 'Sales Department',
-                        'Cashier': 'Sales Department',
-                        'Store Manager': 'Inventory Department',
-                        'Credit Officer': 'Credit Department',
-                        'Customer Service': 'Credit Department',
-                    }
-                    
-                    # Add to department group if exists
-                    if group.name in department_map:
-                        dept_group, _ = Group.objects.get_or_create(name=department_map[group.name])
-                        user.groups.add(dept_group)
+                    group_name = group.name
                         
                 except Group.DoesNotExist:
-                    pass
+                    logger.warning(f"Group with id {group_id} does not exist")
             
             # Update application status
             application.status = 'approved'
@@ -3548,41 +3758,20 @@ def application_approve(request, pk):
             application.created_user = user
             application.save()
             
-            # Send email to applicant (commented out as per your request)
-            # send_login_credentials(application, user, password)
-            
-            # ============================================
-            # SEND ADMIN NOTIFICATION (commented out)
-            # ============================================
-            """
-            try:
-                from utils.notifications import AdminNotifier
-                # Notify admin about approval
-                AdminNotifier.notify_application_processed(
-                    application=application,
-                    action='approved',
-                    processed_by=request.user
-                )
-                logger.info(f"Admin notification sent for approved application #{application.id}")
-            except ImportError:
-                logger.warning("AdminNotifier not available - skipping notification")
-            except Exception as e:
-                logger.error(f"Failed to send admin notification: {str(e)}")
-                # Don't fail the approval if notification fails
-            """
-            
             messages.success(
                 request, 
                 f'✅ Application for {application.full_name()} has been approved.<br>'
-                f'👤 User account created with group: <strong>{group.name if group_id else "No group"}</strong><br>'
+                f'👤 User account created with group: <strong>{group_name if group_name else "No group"}</strong><br>'
                 f'📧 Username: <strong>{username}</strong> (Phone number)<br>'
                 f'🔑 Password: <strong>{password}</strong> (ID number)<br>'
+                f'🆔 Staff ID: <strong>{staff_id}</strong> (Using ID number from application)<br>'
+                f'✅ Staff profile auto-verified! User can login and access dashboard immediately.<br>'
                 f'⚠️ <span class="text-warning">User will be required to change password on first login.</span>'
             )
             return redirect('staff:application_detail', pk=application.pk)
             
         except Exception as e:
-            logger.error(f"Error approving application: {str(e)}")
+            logger.error(f"Error approving application: {str(e)}", exc_info=True)
             messages.error(request, f'Error approving application: {str(e)}')
             return redirect('staff:application_detail', pk=application.pk)
     
@@ -3592,67 +3781,9 @@ def application_approve(request, pk):
     context = {
         'application': application,
         'groups': groups,
-        'first_login_note': True,  # Add note to template about first login
+        'first_login_note': True,
     }
     return render(request, 'staff/approve.html', context)
-
-
-
-
-
-
-
-#def send_login_credentials(application, user, password):
-    """Send login credentials to approved staff"""
-    try:
-        subject = f'🎉 Welcome to FieldMax - Your Staff Account has been Created'
-        
-        context = {
-            'name': application.full_name(),
-            'username': user.username,
-            'email': application.email,
-            'password': password,
-            'is_staff': user.is_staff,
-            'groups': ', '.join([group.name for group in user.groups.all()]),
-        }
-        
-        html_message = render_to_string('staff/email/welcome_email.html', context)
-        plain_message = f"""
-        Dear {application.full_name()},
-        
-        🎉 Congratulations! Your staff application has been approved.
-        
-        Your staff account has been created with the following credentials:
-        ─────────────────────────────────
-        Username: {user.username}
-        Email: {application.email}
-        Password: {password}
-        Staff Access: {'Enabled' if user.is_staff else 'Standard'}
-        Role: {', '.join([group.name for group in user.groups.all()]) or 'No specific role'}
-        ─────────────────────────────────
-        
-        ⚠️ IMPORTANT: Please change your password after first login for security.
-        
-        Welcome to the team!
-        
-        Regards,
-        FieldMax HR Team
-        """
-        
-        send_mail(
-            subject,
-            plain_message,
-            settings.DEFAULT_FROM_EMAIL,
-            [application.email],
-            html_message=html_message,
-            fail_silently=False,
-        )
-        
-        logger.info(f"Welcome email sent to {application.email} with username: {user.username}")
-        
-    except Exception as e:
-        logger.error(f"Failed to send welcome email to {application.email}: {str(e)}")
-
 
 
 
@@ -4142,6 +4273,549 @@ def diagnostic_email(request):
         'test_id': test_id,
         'sendgrid_key_exists': bool(settings.SENDGRID_API_KEY),
     })
+
+
+
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser)
+def user_edit(request, pk):
+    """Edit user details"""
+    user_to_edit = get_object_or_404(User, pk=pk)
+    
+    # Get or create user profile
+    try:
+        profile = user_to_edit.profile
+    except:
+        profile = UserProfile.objects.create(user=user_to_edit)
+    
+    if request.method == 'POST':
+        try:
+            # Update basic user fields
+            user_to_edit.first_name = request.POST.get('first_name', '').strip()
+            user_to_edit.last_name = request.POST.get('last_name', '').strip()
+            user_to_edit.email = request.POST.get('email', '').strip()
+            
+            # Update username if provided and changed
+            new_username = request.POST.get('username', '').strip()
+            if new_username and new_username != user_to_edit.username:
+                # Check if username already exists
+                if User.objects.filter(username=new_username).exclude(id=user_to_edit.id).exists():
+                    messages.error(request, f'Username "{new_username}" is already taken.')
+                    return render(request, 'staff/users/edit.html', {
+                        'user': user_to_edit,
+                        'profile': profile,
+                        'groups': Group.objects.all().order_by('name'),
+                        'selected_groups': user_to_edit.groups.values_list('id', flat=True)
+                    })
+                user_to_edit.username = new_username
+            
+            # Update user type
+            is_staff = request.POST.get('is_staff') == 'on'
+            is_superuser = request.POST.get('is_superuser') == 'on'
+            
+            # Prevent removing superuser status from last superuser
+            if user_to_edit.is_superuser and not is_superuser:
+                superuser_count = User.objects.filter(is_superuser=True).count()
+                if superuser_count <= 1:
+                    messages.error(request, 'Cannot remove superuser status from the last superuser.')
+                    return render(request, 'staff/users/edit.html', {
+                        'user': user_to_edit,
+                        'profile': profile,
+                        'groups': Group.objects.all().order_by('name'),
+                        'selected_groups': user_to_edit.groups.values_list('id', flat=True)
+                    })
+            
+            user_to_edit.is_staff = is_staff
+            user_to_edit.is_superuser = is_superuser
+            user_to_edit.is_active = request.POST.get('is_active') == 'on'
+            
+            # Update profile fields
+            profile.phone_number = request.POST.get('phone_number', '').strip()
+            profile.address = request.POST.get('address', '').strip()
+            profile.city = request.POST.get('city', '').strip()
+            profile.country = request.POST.get('country', '').strip()
+            
+            # Save user and profile
+            user_to_edit.save()
+            profile.save()
+            
+            # Update groups
+            selected_groups = request.POST.getlist('groups')
+            user_to_edit.groups.clear()
+            for group_id in selected_groups:
+                try:
+                    group = Group.objects.get(id=group_id)
+                    user_to_edit.groups.add(group)
+                except Group.DoesNotExist:
+                    pass
+            
+            logger.info(f"User {user_to_edit.username} edited by {request.user.username}")
+            messages.success(request, f'User {user_to_edit.username} has been updated successfully.')
+            
+            return redirect('staff:user_detail', pk=user_to_edit.id)
+            
+        except Exception as e:
+            logger.error(f"Error editing user {user_to_edit.username}: {str(e)}")
+            messages.error(request, f'Error updating user: {str(e)}')
+            return render(request, 'staff/users/edit.html', {
+                'user': user_to_edit,
+                'profile': profile,
+                'groups': Group.objects.all().order_by('name'),
+                'selected_groups': user_to_edit.groups.values_list('id', flat=True)
+            })
+    
+    # GET request - show edit form
+    context = {
+        'user': user_to_edit,
+        'profile': profile,
+        'groups': Group.objects.all().order_by('name'),
+        'selected_groups': user_to_edit.groups.values_list('id', flat=True),
+        'title': f'Edit User: {user_to_edit.username}'
+    }
+    return render(request, 'staff/users/edit.html', context)
+
+
+
+
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser)
+def user_deactivate(request, pk):
+    """Deactivate a user account"""
+    user_to_deactivate = get_object_or_404(User, pk=pk)
+    
+    # Prevent deactivating yourself
+    if user_to_deactivate == request.user:
+        messages.error(request, "You cannot deactivate your own account.")
+        return redirect('staff:user_detail', pk=pk)
+    
+    # Check if already inactive
+    if not user_to_deactivate.is_active:
+        messages.warning(request, f"User {user_to_deactivate.username} is already inactive.")
+        return redirect('staff:user_detail', pk=pk)
+    
+    # Deactivate the user
+    user_to_deactivate.is_active = False
+    user_to_deactivate.save()
+    
+    logger.info(f"User {user_to_deactivate.username} deactivated by {request.user.username}")
+    messages.success(request, f"User {user_to_deactivate.username} has been deactivated successfully.")
+    
+    return redirect('staff:user_detail', pk=pk)
+
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser)
+def user_activate(request, pk):
+    """Activate a user account"""
+    user_to_activate = get_object_or_404(User, pk=pk)
+    
+    # Prevent activating yourself (though you should already be active)
+    if user_to_activate == request.user:
+        messages.error(request, "You are already active.")
+        return redirect('staff:user_detail', pk=pk)
+    
+    # Check if already active
+    if user_to_activate.is_active:
+        messages.warning(request, f"User {user_to_activate.username} is already active.")
+        return redirect('staff:user_detail', pk=pk)
+    
+    # Activate the user
+    user_to_activate.is_active = True
+    user_to_activate.save()
+    
+    logger.info(f"User {user_to_activate.username} activated by {request.user.username}")
+    messages.success(request, f"User {user_to_activate.username} has been activated successfully.")
+    
+    return redirect('staff:user_detail', pk=pk)
+
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser)
+def user_delete(request, pk):
+    """Delete a user account permanently"""
+    user_to_delete = get_object_or_404(User, pk=pk)
+    
+    # Prevent deleting yourself
+    if user_to_delete == request.user:
+        messages.error(request, "You cannot delete your own account.")
+        return redirect('staff:user_list')
+    
+    # Store username for message
+    username = user_to_delete.username
+    full_name = user_to_delete.get_full_name() or username
+    
+    try:
+        # Delete related staff profile first (if exists)
+        if hasattr(user_to_delete, 'staff_profile'):
+            user_to_delete.staff_profile.delete()
+        
+        # Delete related user profile (if exists)
+        if hasattr(user_to_delete, 'profile'):
+            user_to_delete.profile.delete()
+        
+        # Delete the user
+        user_to_delete.delete()
+        
+        logger.info(f"User {username} deleted by {request.user.username}")
+        messages.success(request, f"User {full_name} has been deleted successfully.")
+        
+    except Exception as e:
+        logger.error(f"Error deleting user {username}: {str(e)}")
+        messages.error(request, f"Error deleting user: {str(e)}")
+    
+    return redirect('staff:user_list')
+
+
+# Optional: AJAX endpoints for smoother UX
+@login_required
+@user_passes_test(lambda u: u.is_superuser)
+@csrf_exempt
+def user_toggle_status(request, pk):
+    """Toggle user active status via AJAX"""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    
+    try:
+        user_to_toggle = get_object_or_404(User, pk=pk)
+        
+        # Prevent toggling yourself
+        if user_to_toggle == request.user:
+            return JsonResponse({'error': 'Cannot toggle your own status'}, status=400)
+        
+        # Toggle status
+        user_to_toggle.is_active = not user_to_toggle.is_active
+        user_to_toggle.save()
+        
+        status = 'activated' if user_to_toggle.is_active else 'deactivated'
+        logger.info(f"User {user_to_toggle.username} {status} by {request.user.username}")
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'User {user_to_toggle.username} has been {status}',
+            'is_active': user_to_toggle.is_active,
+            'status': status
+        })
+        
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser)
+@csrf_exempt
+def user_delete_ajax(request, pk):
+    """Delete user via AJAX"""
+    if request.method != 'DELETE':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    
+    try:
+        user_to_delete = get_object_or_404(User, pk=pk)
+        
+        # Prevent deleting yourself
+        if user_to_delete == request.user:
+            return JsonResponse({'error': 'Cannot delete your own account'}, status=400)
+        
+        username = user_to_delete.username
+        
+        # Delete related profiles
+        if hasattr(user_to_delete, 'staff_profile'):
+            user_to_delete.staff_profile.delete()
+        if hasattr(user_to_delete, 'profile'):
+            user_to_delete.profile.delete()
+        
+        # Delete the user
+        user_to_delete.delete()
+        
+        logger.info(f"User {username} deleted by {request.user.username}")
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'User {username} has been deleted successfully'
+        })
+        
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser)
+def user_delete_confirm(request, pk):
+    """Show delete confirmation page"""
+    user_to_delete = get_object_or_404(User, pk=pk)
+    
+    # Prevent deleting yourself
+    if user_to_delete == request.user:
+        messages.error(request, "You cannot delete your own account.")
+        return redirect('staff:user_list')
+    
+    context = {
+        'user': user_to_delete,
+    }
+    return render(request, 'staff/users/delete_confirm.html', context)
+
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser)
+def user_deactivate_confirm(request, pk):
+    """Show deactivate confirmation page"""
+    user_to_deactivate = get_object_or_404(User, pk=pk)
+    
+    # Prevent deactivating yourself
+    if user_to_deactivate == request.user:
+        messages.error(request, "You cannot deactivate your own account.")
+        return redirect('staff:user_detail', pk=pk)
+    
+    # Check if already inactive
+    if not user_to_deactivate.is_active:
+        messages.warning(request, f"User {user_to_deactivate.username} is already inactive.")
+        return redirect('staff:user_detail', pk=pk)
+    
+    context = {
+        'user': user_to_deactivate,
+    }
+    return render(request, 'staff/users/deactivate_confirm.html', context)
+
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser)
+def user_activate_confirm(request, pk):
+    """Show activate confirmation page"""
+    user_to_activate = get_object_or_404(User, pk=pk)
+    
+    # Check if already active
+    if user_to_activate.is_active:
+        messages.warning(request, f"User {user_to_activate.username} is already active.")
+        return redirect('staff:user_detail', pk=pk)
+    
+    context = {
+        'user': user_to_activate,
+    }
+    return render(request, 'staff/users/activate_confirm.html', context)
+
+
+
+from .utils.user_status import UserStatusManager
+
+
+def is_superuser(user):
+    """Check if user is superuser"""
+    return user.is_superuser
+
+# ============================================
+# Lock User Views
+# ============================================
+
+@login_required
+@user_passes_test(is_superuser)
+def user_lock_confirm(request, pk):  # Changed from user_id to pk
+    """Confirm lock user page"""
+    target_user = get_object_or_404(User, id=pk)
+    
+    # Prevent locking self
+    if target_user == request.user:
+        messages.error(request, "You cannot lock your own account.")
+        return redirect('staff:user_detail', pk=pk)  # Changed to pk
+    
+    # Check if already locked
+    if hasattr(target_user, 'status') and target_user.status.is_locked:
+        messages.warning(request, f"User {target_user.username} is already locked.")
+        return redirect('staff:user_detail', pk=pk)  # Changed to pk
+    
+    context = {
+        'user': target_user,  # Changed to 'user' to match template
+        'target_user': target_user,
+        'action': 'lock',
+        'action_title': 'Lock User Account',
+        'action_icon': 'fas fa-lock',
+        'action_color': 'warning',
+        'warning_message': 'The user will not be able to login until unlocked by an admin.',
+        'reason_required': True,
+        'reason_options': [
+            ('admin', 'Admin Lock'),
+            ('suspicious', 'Suspicious Activity'),
+        ]
+    }
+    
+    return render(request, 'staff/users/lock_confirm.html', context)  # Changed template name
+
+
+@login_required
+@user_passes_test(is_superuser)
+def user_lock_process(request, pk):  # Changed from user_id to pk
+    """Process lock user action"""
+    if request.method != 'POST':
+        return redirect('staff:user_list')
+    
+    target_user = get_object_or_404(User, id=pk)
+    
+    # Prevent locking self
+    if target_user == request.user:
+        messages.error(request, "You cannot lock your own account.")
+        return redirect('staff:user_detail', pk=pk)  # Changed to pk
+    
+    reason = request.POST.get('reason', 'admin')
+    
+    # Lock the user
+    UserStatusManager.lock_user(target_user, reason, request)
+    
+    messages.success(request, f"User {target_user.username} has been locked successfully.")
+    return redirect('staff:user_detail', pk=pk)  # Changed to pk
+
+
+@login_required
+@user_passes_test(is_superuser)
+def user_unlock_confirm(request, pk):  # Changed from user_id to pk
+    """Confirm unlock user page"""
+    target_user = get_object_or_404(User, id=pk)
+    
+    # Check if not locked
+    if not hasattr(target_user, 'status') or not target_user.status.is_locked:
+        messages.warning(request, f"User {target_user.username} is not locked.")
+        return redirect('staff:user_detail', pk=pk)  # Changed to pk
+    
+    context = {
+        'user': target_user,  # Changed to 'user' to match template
+        'target_user': target_user,
+        'action': 'unlock',
+        'action_title': 'Unlock User Account',
+        'action_icon': 'fas fa-unlock-alt',
+        'action_color': 'success',
+        'warning_message': 'The user will be able to login again after unlocking.',
+        'reason_required': False,
+    }
+    
+    return render(request, 'staff/users/unlock_confirm.html', context)  # Changed template name
+
+
+@login_required
+@user_passes_test(is_superuser)
+def user_unlock_process(request, pk):  # Changed from user_id to pk
+    """Process unlock user action"""
+    if request.method != 'POST':
+        return redirect('staff:user_list')
+    
+    target_user = get_object_or_404(User, id=pk)
+    
+    # Unlock the user
+    UserStatusManager.unlock_user(target_user, request)
+    
+    messages.success(request, f"User {target_user.username} has been unlocked successfully.")
+    return redirect('staff:user_detail', pk=pk)  # Changed to pk
+
+
+# ============================================
+# Suspend User Views
+# ============================================
+
+@login_required
+@user_passes_test(is_superuser)
+def user_suspend_confirm(request, pk):  # Changed from user_id to pk
+    """Confirm suspend user page"""
+    target_user = get_object_or_404(User, id=pk)
+    
+    # Prevent suspending self
+    if target_user == request.user:
+        messages.error(request, "You cannot suspend your own account.")
+        return redirect('staff:user_detail', pk=pk)  # Changed to pk
+    
+    # Check if already suspended
+    if hasattr(target_user, 'status') and target_user.status.is_suspended:
+        messages.warning(request, f"User {target_user.username} is already suspended.")
+        return redirect('staff:user_detail', pk=pk)  # Changed to pk
+    
+    context = {
+        'user': target_user,  # Changed to 'user' to match template
+        'target_user': target_user,
+        'action': 'suspend',
+        'action_title': 'Suspend User Account',
+        'action_icon': 'fas fa-pause-circle',
+        'action_color': 'warning',
+        'warning_message': 'The user will not be able to login until the suspension period ends.',
+        'reason_required': True,
+        'show_duration': True,
+        'duration_options': [
+            (7, '7 days'),
+            (14, '14 days'),
+            (30, '30 days'),
+            (60, '60 days'),
+            (90, '90 days'),
+        ]
+    }
+    
+    return render(request, 'staff/users/suspend_confirm.html', context)
+
+
+@login_required
+@user_passes_test(is_superuser)
+def user_suspend_process(request, pk):  # Changed from user_id to pk
+    """Process suspend user action"""
+    if request.method != 'POST':
+        return redirect('staff:user_list')
+    
+    target_user = get_object_or_404(User, id=pk)
+    
+    # Prevent suspending self
+    if target_user == request.user:
+        messages.error(request, "You cannot suspend your own account.")
+        return redirect('staff:user_detail', pk=pk)  # Changed to pk
+    
+    reason = request.POST.get('reason', '').strip()
+    days = int(request.POST.get('days', 30))
+    
+    if not reason:
+        messages.error(request, "Please provide a reason for suspension.")
+        return redirect('staff:user_suspend_confirm', pk=pk)  # Changed to pk
+    
+    # Suspend the user
+    UserStatusManager.suspend_user(target_user, reason, request.user, days, request)
+    
+    messages.success(request, f"User {target_user.username} has been suspended for {days} days.")
+    return redirect('staff:user_detail', pk=pk)  # Changed to pk
+
+
+@login_required
+@user_passes_test(is_superuser)
+def user_unsuspend_confirm(request, pk):  # Changed from user_id to pk
+    """Confirm unsuspend user page"""
+    target_user = get_object_or_404(User, id=pk)
+    
+    # Check if not suspended
+    if not hasattr(target_user, 'status') or not target_user.status.is_suspended:
+        messages.warning(request, f"User {target_user.username} is not suspended.")
+        return redirect('staff:user_detail', pk=pk)  # Changed to pk
+    
+    context = {
+        'user': target_user,  # Changed to 'user' to match template
+        'target_user': target_user,
+        'action': 'unsuspend',
+        'action_title': 'Unsuspend User Account',
+        'action_icon': 'fas fa-play',
+        'action_color': 'success',
+        'warning_message': 'The user will be able to login again after unsuspending.',
+        'reason_required': False,
+    }
+    
+    return render(request, 'staff/users/unsuspend_confirm.html', context)
+
+
+@login_required
+@user_passes_test(is_superuser)
+def user_unsuspend_process(request, pk):  # Changed from user_id to pk
+    """Process unsuspend user action"""
+    if request.method != 'POST':
+        return redirect('staff:user_list')
+    
+    target_user = get_object_or_404(User, id=pk)
+    
+    # Unsuspend the user
+    UserStatusManager.unsuspend_user(target_user, request)
+    
+    messages.success(request, f"User {target_user.username} has been unsuspended successfully.")
+    return redirect('staff:user_detail', pk=pk)  # Changed to pk
+
 
 
 

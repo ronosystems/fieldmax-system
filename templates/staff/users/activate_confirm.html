@@ -1,0 +1,143 @@
+{% extends 'staff/base.html' %}
+{% load static %}
+
+{% block title %}Activate User - {{ user.username }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .activate-container {
+        max-width: 600px;
+        margin: 2rem auto;
+    }
+    
+    .activate-card {
+        border: none;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        border-radius: 16px;
+        overflow: hidden;
+    }
+    
+    .activate-header {
+        background: linear-gradient(135deg, #16a34a, #15803d);
+        color: white;
+        padding: 1.5rem;
+        text-align: center;
+    }
+    
+    .activate-header i {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+    }
+    
+    .activate-body {
+        padding: 2rem;
+    }
+    
+    .user-info {
+        background: #f8fafc;
+        border-radius: 12px;
+        padding: 1rem;
+        margin: 1rem 0;
+    }
+    
+    .info-box {
+        background: #e0f2fe;
+        border-left: 4px solid #16a34a;
+        padding: 1rem;
+        margin: 1rem 0;
+        border-radius: 8px;
+    }
+    
+    .btn-group-custom {
+        display: flex;
+        gap: 1rem;
+        margin-top: 1.5rem;
+    }
+    
+    .btn-cancel {
+        background: #64748b;
+        color: white;
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        text-decoration: none;
+        text-align: center;
+        flex: 1;
+        transition: all 0.2s;
+    }
+    
+    .btn-cancel:hover {
+        background: #475569;
+        color: white;
+    }
+    
+    .btn-activate {
+        background: #16a34a;
+        color: white;
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        text-decoration: none;
+        text-align: center;
+        flex: 1;
+        transition: all 0.2s;
+        border: none;
+        cursor: pointer;
+    }
+    
+    .btn-activate:hover {
+        background: #15803d;
+        transform: translateY(-2px);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="activate-container">
+    <div class="activate-card">
+        <div class="activate-header">
+            <i class="fas fa-check-circle"></i>
+            <h2 class="mb-0">Activate User Account</h2>
+            <p class="mb-0 opacity-75">Restore access to the system</p>
+        </div>
+        
+        <div class="activate-body">
+            <div class="user-info">
+                <h5 class="mb-2">
+                    <i class="fas fa-user me-2"></i>
+                    User Information
+                </h5>
+                <p class="mb-1"><strong>Username:</strong> {{ user.username }}</p>
+                <p class="mb-1"><strong>Full Name:</strong> {{ user.get_full_name|default:"Not provided" }}</p>
+                <p class="mb-0"><strong>Email:</strong> {{ user.email|default:"No email" }}</p>
+            </div>
+            
+            <div class="info-box">
+                <i class="fas fa-info-circle text-success me-2"></i>
+                <strong>What happens when activating?</strong>
+                <ul class="mt-2 mb-0">
+                    <li>User will be able to log in again</li>
+                    <li>All previous data and permissions restored</li>
+                    <li>User will have same access as before</li>
+                    <li>No data loss occurs</li>
+                </ul>
+            </div>
+            
+            <div class="alert alert-success">
+                <i class="fas fa-thumbs-up me-2"></i>
+                <strong>Ready to restore access?</strong> The user will be able to log in immediately after activation.
+            </div>
+            
+            <form method="post" action="{% url 'staff:user_activate' user.id %}">
+                {% csrf_token %}
+                <div class="btn-group-custom">
+                    <a href="{% url 'staff:user_detail' user.id %}" class="btn-cancel">
+                        <i class="fas fa-times me-2"></i>Cancel
+                    </a>
+                    <button type="submit" class="btn-activate">
+                        <i class="fas fa-check-circle me-2"></i>Activate User
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -5,62 +5,28 @@
 
 {% block content %}
 <div class="container-fluid py-4">
-    <!-- Header Section with White Background -->
+    <!-- Header Section -->
     <div class="page-title-section">
         <div class="d-flex justify-content-between align-items-center">
             <div>
-                <h2 class="mb-1">
-                    <i class="fas fa-file-alt text-primary me-2"></i>
+                <h2 class="btn btn-primary">
                     Staff Applications
                 </h2>
-                <p class="text-muted mb-0">Manage and review staff job applications</p>
             </div>
-            <a href="{% url 'staff:apply' %}" class="btn btn-primary" target="_blank">
-                <i class="fas fa-plus me-2"></i>New Application
+            <a href="#" class="btn btn-primary">
+                Application Check
             </a>
         </div>
     </div>
 
-    <!-- Statistics Cards -->
-    <div class="row mb-4">
-        <div class="col-md-3 mb-3">
-            <div class="stat-card">
-                <div class="stat-value">{{ applications.paginator.count|default:0 }}</div>
-                <div class="stat-label">Total Applications</div>
-                <i class="fas fa-file-alt stat-icon text-primary"></i>
-            </div>
-        </div>
-        <div class="col-md-3 mb-3">
-            <div class="stat-card">
-                <div class="stat-value">{{ pending_count|default:0 }}</div>
-                <div class="stat-label">Pending Review</div>
-                <i class="fas fa-clock stat-icon text-warning"></i>
-            </div>
-        </div>
-        <div class="col-md-3 mb-3">
-            <div class="stat-card">
-                <div class="stat-value">{{ approved_count|default:0 }}</div>
-                <div class="stat-label">Approved</div>
-                <i class="fas fa-check-circle stat-icon text-success"></i>
-            </div>
-        </div>
-        <div class="col-md-3 mb-3">
-            <div class="stat-card">
-                <div class="stat-value">{{ rejected_count|default:0 }}</div>
-                <div class="stat-label">Rejected</div>
-                <i class="fas fa-times-circle stat-icon text-danger"></i>
-            </div>
-        </div>
-    </div>
-
-    <!-- Filters Card -->
+    <!-- Filters Section -->
     <div class="card mb-4">
         <div class="card-header">
             <i class="fas fa-filter me-2"></i>
             Filter Applications
         </div>
         <div class="card-body">
-            <form method="get" class="row g-3">
+            <form method="get" class="row g-3" id="filterForm">
                 <div class="col-md-3">
                     <label class="form-label">Status</label>
                     <select name="status" class="form-select">
@@ -85,7 +51,8 @@
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">Search</label>
-                    <input type="text" name="search" class="form-control" value="{{ request.GET.search }}" 
+                    <input type="text" name="search" class="form-control" 
+                           value="{{ request.GET.search }}" 
                            placeholder="Name, Email, ID Number...">
                 </div>
                 <div class="col-md-2 d-flex align-items-end">
@@ -100,7 +67,7 @@
         </div>
     </div>
 
-    <!-- Applications Table Card -->
+    <!-- Applications List Section -->
     <div class="card">
         <div class="card-header">
             <i class="fas fa-list me-2"></i>
@@ -119,7 +86,7 @@
                             <th>Phone</th>
                             <th>Applied On</th>
                             <th>Status</th>
-                            <th>Actions</th>
+                            <th class="text-center">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -134,7 +101,9 @@
                             </td>
                             <td>{{ app.email }}</td>
                             <td>{{ app.phone }}</td>
-                            <td>{{ app.application_date|date:"Y-m-d" }}</td>
+                            <td data-order="{{ app.application_date|date:'Y-m-d' }}">
+                                {{ app.application_date|date:"Y-m-d" }}
+                            </td>
                             <td>
                                 {% if app.status == 'pending' %}
                                     <span class="badge-pending">
@@ -154,35 +123,40 @@
                                     </span>
                                 {% endif %}
                             </td>
-                            <td>
-                                <div class="action-buttons">
-                                    <a href="{% url 'staff:application_detail' app.id %}" class="btn-action btn-view" title="View Details">
+                            <td class="text-center">
+                                <div class="btn-group" role="group" aria-label="Application actions">
+                                    <a href="{% url 'staff:application_detail' app.id %}" 
+                                       class="btn btn-sm btn-outline-primary" 
+                                       title="View Details">
                                         <i class="fas fa-eye"></i>
                                     </a>
-                                    <a href="{% url 'staff:view_documents' app.id %}" class="btn-action btn-docs" title="View Documents">
+                                    <a href="{% url 'staff:view_documents' app.id %}" 
+                                       class="btn btn-sm btn-outline-info" 
+                                       title="View Documents">
                                         <i class="fas fa-file-pdf"></i>
                                     </a>
                                     
-                                    <!-- Status-specific action buttons -->
                                     {% if app.status == 'pending' or app.status == 'under_review' %}
-                                        <a href="{% url 'staff:application_approve' app.id %}" class="btn-action btn-approve" title="Approve">
+                                        <a href="{% url 'staff:application_approve' app.id %}" 
+                                           class="btn btn-sm btn-outline-success" 
+                                           title="Approve">
                                             <i class="fas fa-check"></i>
                                         </a>
-                                        <a href="{% url 'staff:application_reject' app.id %}" class="btn-action btn-reject" title="Reject">
+                                        <a href="{% url 'staff:application_reject' app.id %}" 
+                                           class="btn btn-sm btn-outline-danger" 
+                                           title="Reject">
                                             <i class="fas fa-times"></i>
                                         </a>
                                     {% elif app.status == 'approved' %}
-                                        <!-- Revert button for approved applications -->
                                         <button type="button" 
-                                                class="btn-action btn-revert" 
+                                                class="btn btn-sm btn-outline-warning" 
                                                 title="Revert to Pending"
                                                 onclick="showRevertModal('{{ app.id }}', '{{ app.full_name|escapejs }}')">
                                             <i class="fas fa-undo"></i>
                                         </button>
                                     {% elif app.status == 'rejected' %}
-                                        <!-- Reopen button for rejected applications -->
                                         <button type="button" 
-                                                class="btn-action btn-reopen" 
+                                                class="btn btn-sm btn-outline-secondary" 
                                                 title="Reopen Application"
                                                 onclick="showReopenModal('{{ app.id }}', '{{ app.full_name|escapejs }}')">
                                             <i class="fas fa-redo"></i>
@@ -190,12 +164,16 @@
                                     {% endif %}
                                 </div>
                                 
-                                <!-- Hidden forms for revert/reopen actions -->
-                                <form id="revert-form-{{ app.id }}" method="post" action="{% url 'staff:application_revert_to_pending' app.id %}" style="display: none;">
+                                <!-- Hidden forms for actions -->
+                                <form id="revert-form-{{ app.id }}" method="post" 
+                                      action="{% url 'staff:application_revert_to_pending' app.id %}" 
+                                      style="display: none;">
                                     {% csrf_token %}
                                 </form>
                                 
-                                <form id="reopen-form-{{ app.id }}" method="post" action="{% url 'staff:application_revert_to_pending' app.id %}" style="display: none;">
+                                <form id="reopen-form-{{ app.id }}" method="post" 
+                                      action="{% url 'staff:application_revert_to_pending' app.id %}" 
+                                      style="display: none;">
                                     {% csrf_token %}
                                 </form>
                             </td>
@@ -272,7 +250,8 @@
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <p>Are you sure you want to revert <strong id="revertApplicantName"></strong>'s application from <span class="badge-approved">APPROVED</span> back to <span class="badge-pending">PENDING</span>?</p>
+                <p>Are you sure you want to revert <strong id="revertApplicantName"></strong>'s application from 
+                   <span class="badge-approved">APPROVED</span> back to <span class="badge-pending">PENDING</span>?</p>
                 
                 <div class="alert alert-warning mt-3">
                     <i class="fas fa-exclamation-triangle me-2"></i>
@@ -308,7 +287,8 @@
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <p>Are you sure you want to reopen <strong id="reopenApplicantName"></strong>'s application from <span class="badge-rejected">REJECTED</span> to <span class="badge-pending">PENDING</span>?</p>
+                <p>Are you sure you want to reopen <strong id="reopenApplicantName"></strong>'s application from 
+                   <span class="badge-rejected">REJECTED</span> to <span class="badge-pending">PENDING</span>?</p>
                 
                 <div class="alert alert-info mt-3">
                     <i class="fas fa-info-circle me-2"></i>
@@ -335,631 +315,100 @@
 
 {% block extra_css %}
 <style>
-    /* Title Background White */
-    .page-title-section {
-        background: white;
-        padding: 25px 30px;
-        border-radius: 15px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.03);
-        margin-bottom: 25px;
-        border: 1px solid #eef2f6;
+    /* Button group spacing */
+    .btn-group {
+        gap: 0.25rem;
     }
     
-    .page-title-section h2 {
-        color: #2c3e50;
-        font-weight: 600;
-        font-size: 1.8rem;
-        margin: 0;
+    .btn-group .btn {
+        border-radius: 0.375rem !important;
+        margin: 0 2px;
     }
     
-    .page-title-section .text-muted {
-        color: #6c757d !important;
-        font-size: 0.95rem;
+    /* Ensure buttons have consistent size */
+    .btn-group .btn-sm {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.875rem;
+        line-height: 1.5;
     }
     
-    /* Consistent Stat Cards */
-    .stat-card {
-        background: white;
-        border-radius: 15px;
-        padding: 25px;
-        position: relative;
-        overflow: hidden;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.03);
-        transition: transform 0.3s ease, box-shadow 0.3s ease;
-        border: 1px solid #eef2f6;
-    }
-    
-    .stat-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 10px 25px rgba(0,0,0,0.05);
-        border-color: #4e73df20;
-    }
-    
-    .stat-card .stat-value {
-        font-size: 2.5rem;
-        font-weight: 700;
-        margin-bottom: 5px;
-        color: #2c3e50;
-        line-height: 1.2;
-    }
-    
-    .stat-card .stat-label {
-        color: #6c757d;
-        font-size: 0.9rem;
-        font-weight: 500;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    
-    .stat-card .stat-icon {
-        position: absolute;
-        top: 20px;
-        right: 20px;
-        font-size: 3.5rem;
-        opacity: 5;
-        transition: opacity 0.3s ease;
-    }
-    
-    .stat-card:hover .stat-icon {
-        opacity: 0.15;
-    }
-    
-    /* Card styling */
-    .card {
-        border: none;
-        border-radius: 15px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.03);
-        background: white;
-        margin-bottom: 25px;
-        border: 1px solid #eef2f6;
-        overflow: hidden;
-    }
-    
-    .card-header {
-        background: white;
-        border-bottom: 1px solid #eef2f6;
-        padding: 18px 25px;
-        font-weight: 600;
-        color: #2c3e50;
-        font-size: 1.1rem;
-    }
-    
-    .card-header i {
-        color: #4e73df;
-    }
-    
-    .card-header .badge {
-        font-size: 0.8rem;
-        padding: 5px 10px;
-        border-radius: 20px;
-    }
-    
-    .card-body {
-        padding: 25px;
-    }
-    
-    .card-footer {
-        background: white;
-        border-top: 1px solid #eef2f6;
-        padding: 15px 25px;
-    }
-    
-    /* Form controls */
-    .form-control, .form-select {
-        border: 1px solid #eef2f6;
-        border-radius: 10px;
-        padding: 12px 15px;
-        background: white;
-        font-size: 0.95rem;
-        transition: all 0.2s ease;
-    }
-    
-    .form-control:focus, .form-select:focus {
-        border-color: #4e73df;
-        box-shadow: 0 0 0 3px rgba(78,115,223,0.1);
-        outline: none;
-    }
-    
-    .form-label {
-        font-weight: 500;
-        color: #2c3e50;
-        margin-bottom: 8px;
-        font-size: 0.9rem;
-    }
-    
-    /* Button styling */
-    .btn-primary {
-        background: linear-gradient(135deg, #4e73df 0%, #224abe 100%);
-        border: none;
-        border-radius: 10px;
-        padding: 10px 20px;
-        font-weight: 500;
-        font-size: 0.95rem;
-        transition: all 0.2s ease;
-        color: white;
-    }
-    
-    .btn-primary:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 5px 15px rgba(78,115,223,0.3);
-        color: white;
-    }
-    
-    .btn-outline-secondary {
-        border: 1px solid #eef2f6;
-        color: #6c757d;
-        border-radius: 10px;
-        padding: 10px 20px;
-        font-weight: 500;
-        transition: all 0.2s ease;
-        background: white;
-    }
-    
-    .btn-outline-secondary:hover {
-        background: #eef2f6;
-        color: #2c3e50;
-        transform: translateY(-2px);
-    }
-    
-    /* Action buttons */
-    .action-buttons {
-        display: flex;
-        gap: 5px;
-    }
-    
-    .btn-action {
-        width: 32px;
-        height: 32px;
-        border-radius: 8px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        transition: all 0.2s ease;
-        border: none;
-        cursor: pointer;
-        text-decoration: none;
-    }
-    
-    .btn-view {
-        background: #e7f0ff;
-        color: #4e73df;
-    }
-    
-    .btn-view:hover {
-        background: #4e73df;
-        color: white;
-        transform: translateY(-2px);
-    }
-    
-    .btn-docs {
-        background: #e3f2fd;
-        color: #0d6efd;
-    }
-    
-    .btn-docs:hover {
-        background: #0d6efd;
-        color: white;
-        transform: translateY(-2px);
-    }
-    
-    .btn-approve {
-        background: #e3f9e9;
-        color: #1cc88a;
-    }
-    
-    .btn-approve:hover {
-        background: #1cc88a;
-        color: white;
-        transform: translateY(-2px);
-    }
-    
-    .btn-reject {
-        background: #fee7e7;
-        color: #e74a3b;
-    }
-    
-    .btn-reject:hover {
-        background: #e74a3b;
-        color: white;
-        transform: translateY(-2px);
-    }
-    
-    .btn-revert {
-        background: #fff3e0;
-        color: #f6c23e;
-    }
-    
-    .btn-revert:hover {
-        background: #f6c23e;
-        color: white;
-        transform: translateY(-2px);
-    }
-    
-    .btn-reopen {
-        background: #e0f2fe;
-        color: #36b9cc;
-    }
-    
-    .btn-reopen:hover {
-        background: #36b9cc;
-        color: white;
-        transform: translateY(-2px);
-    }
-    
-    /* Table styling */
-    .table {
-        margin-bottom: 0;
-    }
-    
-    .table thead th {
-        background: #f8fafd;
-        color: #2c3e50;
-        font-weight: 600;
-        font-size: 0.85rem;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        border-bottom: 2px solid #eef2f6;
-        padding: 15px 20px;
-        white-space: nowrap;
-    }
-    
-    .table tbody td {
-        padding: 15px 20px;
-        vertical-align: middle;
-        color: #2c3e50;
-        border-bottom: 1px solid #eef2f6;
-        font-size: 0.95rem;
-    }
-    
-    .table tbody tr:last-child td {
-        border-bottom: none;
-    }
-    
-    .table tbody tr:hover {
-        background: #f8fafd;
-    }
-    
-    /* Badge styling */
-    .badge-approved {
-        background: linear-gradient(135deg, #1cc88a 0%, #13855c 100%);
-        color: white;
-        padding: 6px 12px;
-        border-radius: 30px;
-        font-weight: 500;
-        font-size: 0.8rem;
-        display: inline-flex;
-        align-items: center;
-        gap: 5px;
-        white-space: nowrap;
-    }
-    
-    .badge-pending {
-        background: linear-gradient(135deg, #f6c23e 0%, #dda20a 100%);
-        color: white;
-        padding: 6px 12px;
-        border-radius: 30px;
-        font-weight: 500;
-        font-size: 0.8rem;
-        display: inline-flex;
-        align-items: center;
-        gap: 5px;
-        white-space: nowrap;
-    }
-    
-    .badge-rejected {
-        background: linear-gradient(135deg, #e74a3b 0%, #be2617 100%);
-        color: white;
-        padding: 6px 12px;
-        border-radius: 30px;
-        font-weight: 500;
-        font-size: 0.8rem;
-        display: inline-flex;
-        align-items: center;
-        gap: 5px;
-        white-space: nowrap;
-    }
-    
-    .badge-info {
-        background: linear-gradient(135deg, #36b9cc 0%, #258391 100%);
-        color: white;
-        padding: 6px 12px;
-        border-radius: 30px;
-        font-weight: 500;
-        font-size: 0.8rem;
-        display: inline-flex;
-        align-items: center;
-        gap: 5px;
-        white-space: nowrap;
-    }
-    
-    .badge-secondary-subtle {
-        background: #eef2f6;
-        color: #2c3e50;
-        padding: 5px 10px;
-        border-radius: 20px;
-        font-weight: 500;
-        font-size: 0.8rem;
-    }
-    
-    /* Role badges */
-    .role-badge {
-        padding: 5px 12px;
-        border-radius: 20px;
-        font-size: 0.85rem;
-        font-weight: 500;
-        background: #f0f2f5;
-        color: #2c3e50;
-        display: inline-block;
-        white-space: nowrap;
-    }
-    
-    .role-sales_manager {
-        background: linear-gradient(135deg, #4e73df 0%, #224abe 100%);
-        color: white;
-    }
-    
-    .role-sales_agent {
-        background: linear-gradient(135deg, #1cc88a 0%, #13855c 100%);
-        color: white;
-    }
-    
-    .role-cashier {
-        background: linear-gradient(135deg, #36b9cc 0%, #258391 100%);
-        color: white;
-    }
-    
-    .role-store_manager {
-        background: linear-gradient(135deg, #f6c23e 0%, #dda20a 100%);
-        color: white;
-    }
-    
-    .role-credit_manager {
-        background: linear-gradient(135deg, #e74a3b 0%, #be2617 100%);
-        color: white;
-    }
-    
-    .role-credit_officer {
-        background: linear-gradient(135deg, #5a5c69 0%, #3d3e48 100%);
-        color: white;
-    }
-    
-    /* Empty state */
-    .empty-state {
-        padding: 40px 20px;
-        text-align: center;
-    }
-    
-    .empty-state i {
-        color: #4e73df;
-        opacity: 0.3;
-        margin-bottom: 15px;
-    }
-    
-    .empty-state h5 {
-        color: #2c3e50;
-        font-weight: 600;
-        margin-bottom: 5px;
-    }
-    
-    .empty-state p {
-        color: #6c757d;
-        font-size: 0.95rem;
-    }
-    
-    /* Pagination */
-    .pagination {
-        gap: 5px;
-    }
-    
-    .page-link {
-        border: 1px solid #eef2f6;
-        border-radius: 8px !important;
-        color: #4e73df;
-        padding: 8px 15px;
-        font-size: 0.9rem;
-        transition: all 0.2s ease;
-        background: white;
-    }
-    
-    .page-link:hover {
-        background: #4e73df;
-        color: white;
-        border-color: #4e73df;
+    /* Optional: Add hover effect for better visual feedback */
+    .btn-group .btn:hover {
         transform: translateY(-1px);
-    }
-    
-    .page-item.active .page-link {
-        background: #4e73df;
-        border-color: #4e73df;
-        color: white;
-    }
-    
-    /* Modal styling */
-    .modal-content {
-        border: none;
-        border-radius: 15px;
-        overflow: hidden;
-    }
-    
-    .modal-header {
-        padding: 15px 20px;
-        border: none;
-    }
-    
-    .modal-header.bg-warning {
-        background: linear-gradient(135deg, #f6c23e 0%, #dda20a 100%) !important;
-    }
-    
-    .modal-header.bg-info {
-        background: linear-gradient(135deg, #36b9cc 0%, #258391 100%) !important;
-    }
-    
-    .modal-body {
-        padding: 25px;
-    }
-    
-    .modal-footer {
-        padding: 15px 25px;
-        border-top: 1px solid #eef2f6;
-    }
-    
-    .alert {
-        border-radius: 10px;
-        border: none;
-        padding: 15px;
-    }
-    
-    .alert-warning {
-        background: #fff3e0;
-        color: #856404;
-    }
-    
-    .alert-info {
-        background: #e3f2fd;
-        color: #0c5460;
-    }
-    
-    /* Responsive */
-    @media (max-width: 768px) {
-        .page-title-section {
-            padding: 20px;
-        }
-        
-        .page-title-section h2 {
-            font-size: 1.5rem;
-        }
-        
-        .stat-card .stat-value {
-            font-size: 2rem;
-        }
-        
-        .card-header {
-            padding: 15px 20px;
-        }
-        
-        .card-body {
-            padding: 20px;
-        }
-        
-        .table thead th,
-        .table tbody td {
-            padding: 12px 15px;
-            font-size: 0.9rem;
-        }
-        
-        .action-buttons {
-            flex-wrap: wrap;
-        }
-    }
-    
-    @media (max-width: 576px) {
-        .stat-card {
-            padding: 20px;
-        }
-        
-        .stat-card .stat-value {
-            font-size: 1.75rem;
-        }
-        
-        .btn-action {
-            width: 28px;
-            height: 28px;
-        }
+        transition: transform 0.2s ease;
     }
 </style>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-let currentApplicationId = null;
-let currentApplicantName = null;
-
-// Show revert modal for approved applications
-function showRevertModal(applicationId, applicantName) {
-    currentApplicationId = applicationId;
-    currentApplicantName = applicantName;
-    document.getElementById('revertApplicantName').textContent = applicantName;
+    // State management
+    let currentApplicationId = null;
+    let currentApplicantName = null;
     
-    // Use Bootstrap 5 modal
-    const revertModal = new bootstrap.Modal(document.getElementById('revertConfirmModal'));
-    revertModal.show();
-}
-
-// Show reopen modal for rejected applications
-function showReopenModal(applicationId, applicantName) {
-    currentApplicationId = applicationId;
-    currentApplicantName = applicantName;
-    document.getElementById('reopenApplicantName').textContent = applicantName;
-    
-    // Use Bootstrap 5 modal
-    const reopenModal = new bootstrap.Modal(document.getElementById('reopenConfirmModal'));
-    reopenModal.show();
-}
-
-// Initialize everything when document is ready
-document.addEventListener('DOMContentLoaded', function() {
-    // Revert button click handler
-    const confirmRevertBtn = document.getElementById('confirmRevertBtn');
-    if (confirmRevertBtn) {
-        confirmRevertBtn.addEventListener('click', function() {
-            if (currentApplicationId) {
-                const form = document.getElementById(`revert-form-${currentApplicationId}`);
-                if (form) {
-                    form.submit();
-                }
-            }
-        });
+    // Modal handlers
+    function showRevertModal(applicationId, applicantName) {
+        currentApplicationId = applicationId;
+        currentApplicantName = applicantName;
+        document.getElementById('revertApplicantName').textContent = applicantName;
+        
+        const revertModal = new bootstrap.Modal(document.getElementById('revertConfirmModal'));
+        revertModal.show();
     }
     
-    // Reopen button click handler
-    const confirmReopenBtn = document.getElementById('confirmReopenBtn');
-    if (confirmReopenBtn) {
-        confirmReopenBtn.addEventListener('click', function() {
-            if (currentApplicationId) {
-                const form = document.getElementById(`reopen-form-${currentApplicationId}`);
-                if (form) {
-                    form.submit();
-                }
-            }
-        });
+    function showReopenModal(applicationId, applicantName) {
+        currentApplicationId = applicationId;
+        currentApplicantName = applicantName;
+        document.getElementById('reopenApplicantName').textContent = applicantName;
+        
+        const reopenModal = new bootstrap.Modal(document.getElementById('reopenConfirmModal'));
+        reopenModal.show();
     }
     
-    // Initialize DataTable
-    if (document.getElementById('applicationsTable')) {
-        // Check if DataTable is already initialized
-        if (!$.fn.DataTable.isDataTable('#applicationsTable')) {
-            $('#applicationsTable').DataTable({
-                "paging": false,  // Disable DataTable pagination since we have custom pagination
-                "ordering": true,
-                "info": false,
-                "searching": false,  // Disable search since we have custom filter
-                "language": {
-                    "emptyTable": "No applications available"
+    // Initialize application
+    document.addEventListener('DOMContentLoaded', function() {
+        // Revert button handler
+        const confirmRevertBtn = document.getElementById('confirmRevertBtn');
+        if (confirmRevertBtn) {
+            confirmRevertBtn.addEventListener('click', function() {
+                if (currentApplicationId) {
+                    const form = document.getElementById(`revert-form-${currentApplicationId}`);
+                    if (form) form.submit();
                 }
             });
         }
-    }
-    
-    // Initialize tooltips
-    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[title]'));
-    tooltipTriggerList.map(function(tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
+        
+        // Reopen button handler
+        const confirmReopenBtn = document.getElementById('confirmReopenBtn');
+        if (confirmReopenBtn) {
+            confirmReopenBtn.addEventListener('click', function() {
+                if (currentApplicationId) {
+                    const form = document.getElementById(`reopen-form-${currentApplicationId}`);
+                    if (form) form.submit();
+                }
+            });
+        }
+        
+        // Initialize tooltips
+        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[title]'));
+        tooltipTriggerList.map(function(tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+        
+        // Clean up modal state
+        const revertModal = document.getElementById('revertConfirmModal');
+        if (revertModal) {
+            revertModal.addEventListener('hidden.bs.modal', function() {
+                currentApplicationId = null;
+            });
+        }
+        
+        const reopenModal = document.getElementById('reopenConfirmModal');
+        if (reopenModal) {
+            reopenModal.addEventListener('hidden.bs.modal', function() {
+                currentApplicationId = null;
+            });
+        }
     });
-    
-    // Clear modals when hidden
-    const revertModal = document.getElementById('revertConfirmModal');
-    if (revertModal) {
-        revertModal.addEventListener('hidden.bs.modal', function() {
-            currentApplicationId = null;
-        });
-    }
-    
-    const reopenModal = document.getElementById('reopenConfirmModal');
-    if (reopenModal) {
-        reopenModal.addEventListener('hidden.bs.modal', function() {
-            currentApplicationId = null;
-        });
-    }
-});
 </script>
 {% endblock %}

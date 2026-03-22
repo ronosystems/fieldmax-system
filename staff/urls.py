@@ -1,8 +1,7 @@
+# staff/urls.py
 from django.urls import path
 from . import views
-from .views import (
-    diagnostic_email,
-)
+from .views import diagnostic_email
 
 app_name = 'staff'
 
@@ -18,7 +17,7 @@ urlpatterns = [
     path('password-change/', views.password_change, name='password_change'),
     
     # ============================================
-    # ITP VERIFICATION URLS - ADD THESE LINES
+    # ITP VERIFICATION URLS
     # ============================================
     path('verify/<int:staff_id>/', views.verify_identity, name='verify_identity'),
     path('resend-verification/', views.resend_verification, name='resend_verification'),
@@ -42,11 +41,36 @@ urlpatterns = [
     path('cleaner-dashboard/', views.cleaner_dashboard, name='cleaner_dashboard'),
     
     # ============================================
-    # USER MANAGEMENT
+    # USER MANAGEMENT - All using <int:pk> consistently
     # ============================================
     path('users/', views.user_list, name='user_list'),
     path('users/<int:pk>/', views.user_detail, name='user_detail'),
+    path('users/<int:pk>/edit/', views.user_edit, name='user_edit'),
     path('diagnostic-email/', diagnostic_email, name='diagnostic_email'),
+    
+    # Deactivate/Activate URLs (using pk)
+    path('users/<int:pk>/deactivate/', views.user_deactivate, name='user_deactivate'),
+    path('users/<int:pk>/activate/', views.user_activate, name='user_activate'),
+    path('users/<int:pk>/delete/', views.user_delete, name='user_delete'),
+    path('users/<int:pk>/toggle-status/', views.user_toggle_status, name='user_toggle_status'),
+    path('users/<int:pk>/delete-ajax/', views.user_delete_ajax, name='user_delete_ajax'),
+    
+    # Lock/Unlock URLs (using pk)
+    path('users/<int:pk>/lock/', views.user_lock_confirm, name='user_lock_confirm'),
+    path('users/<int:pk>/lock/process/', views.user_lock_process, name='user_lock_process'),
+    path('users/<int:pk>/unlock/', views.user_unlock_confirm, name='user_unlock_confirm'),
+    path('users/<int:pk>/unlock/process/', views.user_unlock_process, name='user_unlock_process'),
+    
+    # Suspend/Unsuspend URLs (using pk)
+    path('users/<int:pk>/suspend/', views.user_suspend_confirm, name='user_suspend_confirm'),
+    path('users/<int:pk>/suspend/process/', views.user_suspend_process, name='user_suspend_process'),
+    path('users/<int:pk>/unsuspend/', views.user_unsuspend_confirm, name='user_unsuspend_confirm'),
+    path('users/<int:pk>/unsuspend/process/', views.user_unsuspend_process, name='user_unsuspend_process'),
+    
+    # Confirmation pages (using pk)
+    path('users/<int:pk>/delete/confirm/', views.user_delete_confirm, name='user_delete_confirm'),
+    path('users/<int:pk>/deactivate/confirm/', views.user_deactivate_confirm, name='user_deactivate_confirm'),
+    path('users/<int:pk>/activate/confirm/', views.user_activate_confirm, name='user_activate_confirm'),
     
     # ============================================
     # APPLICATION MANAGEMENT
