@@ -71,6 +71,7 @@ INSTALLED_APPS = [
     
     # Third-party apps
     'whitenoise.runserver_nostatic',
+    'cloudinary_storage', 
     'cloudinary',
     
     # Fieldmax apps
@@ -209,6 +210,27 @@ cloudinary.config(
 )
 
 
+# In development, you might want to use local storage
+if DEBUG:
+    DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
+else:
+    DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+
+
+# Optional: Cloudinary settings for better performance
+CLOUDINARY_STORAGE = {
+    'CLOUD_NAME': config('CLOUDINARY_CLOUD_NAME'),
+    'API_KEY': config('CLOUDINARY_API_KEY'),
+    'API_SECRET': config('CLOUDINARY_API_SECRET'),
+    'SECURE': True,
+    'STATIC_IMAGES_EXTENSIONS': ['jpg', 'jpeg', 'png', 'gif', 'webp'],
+    'STATIC_IMAGES_FOLDER': 'static_images/',
+    'MEDIA_TAG': 'media',
+    'INVALID_VIDEO_EXTENSIONS': [],
+    'STATICFILES_MANIFEST_NAME': 'staticfilesmanifest',
+}   
+
+
 
 
 # Email settings - SMTP with SendGrid
@@ -230,6 +252,23 @@ if DEBUG:
     # Uncomment this line to use console email backend for development
     # EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
     pass
+
+
+
+# File Upload Settings
+FILE_UPLOAD_MAX_MEMORY_SIZE = 5242880  # 5 MB
+DATA_UPLOAD_MAX_MEMORY_SIZE = 5242880  # 5 MB
+FILE_UPLOAD_PERMISSIONS = 0o644
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 1000
+
+# Default primary key field type
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Create logs directory if it doesn't exist
+LOGS_DIR = os.path.join(BASE_DIR, 'logs')
+if not os.path.exists(LOGS_DIR):
+    os.makedirs(LOGS_DIR)
+
 
 # Logging Configuration
 LOGGING = {
@@ -270,48 +309,6 @@ LOGGING = {
         },
         'django.request': {
             'handlers': ['file'],
-            'level': 'ERROR',
-            'propagate': False,
-        },
-    },
-}
-
-# File Upload Settings
-FILE_UPLOAD_MAX_MEMORY_SIZE = 5242880  # 5 MB
-DATA_UPLOAD_MAX_MEMORY_SIZE = 5242880  # 5 MB
-FILE_UPLOAD_PERMISSIONS = 0o644
-DATA_UPLOAD_MAX_NUMBER_FIELDS = 1000
-
-# Default primary key field type
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
-# Create logs directory if it doesn't exist
-LOGS_DIR = os.path.join(BASE_DIR, 'logs')
-if not os.path.exists(LOGS_DIR):
-    os.makedirs(LOGS_DIR)
-
-
-# Add at the bottom of settings.py
-LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'handlers': {
-        'console': {
-            'class': 'logging.StreamHandler',
-        },
-    },
-    'root': {
-        'handlers': ['console'],
-        'level': 'ERROR',
-    },
-    'loggers': {
-        'django': {
-            'handlers': ['console'],
-            'level': 'ERROR',
-            'propagate': False,
-        },
-        'django.request': {
-            'handlers': ['console'],
             'level': 'ERROR',
             'propagate': False,
         },
