@@ -1,8 +1,10 @@
+# main urls.py
 from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib.auth import views as auth_views
+from staff.forms import CustomAuthenticationForm  # Import the custom form
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -14,8 +16,11 @@ urlpatterns = [
     path('credit/', include('credit.urls')),
     path('profiles/', include('profiles.urls')),
     
-    # Authentication URLs
-    path('login/', auth_views.LoginView.as_view(template_name='registration/login.html'), name='login'),
+    # Authentication URLs - Use custom form
+    path('login/', auth_views.LoginView.as_view(
+        template_name='registration/login.html',
+        authentication_form=CustomAuthenticationForm
+    ), name='login'),
     path('logout/', auth_views.LogoutView.as_view(), name='logout'),
 ]
 
