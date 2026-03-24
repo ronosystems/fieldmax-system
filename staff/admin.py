@@ -1,19 +1,21 @@
-from django.contrib import admin
+# staff/admin.py
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import StaffApplication
+from django.utils.safestring import mark_safe
+from django.contrib import messages
 from django.utils import timezone
 from django.contrib.auth import get_user_model
-from django.utils.translation import gettext_lazy as _
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from django.contrib.auth.models import Group
-
+from django.contrib.auth.models import User
+from .models import StaffApplication, Staff, OTPVerification, UserProfile, UserStatus
+from .utils.user_status import UserStatusManager
 
 User = get_user_model()
 
 
-
-
+# ============================================
+# Staff Application Admin
+# ============================================
 @admin.register(StaffApplication)
 class StaffApplicationAdmin(admin.ModelAdmin):
     list_display = ['full_name', 'email', 'phone', 'position', 'status_badge', 'application_date']
@@ -40,6 +42,10 @@ class StaffApplicationAdmin(admin.ModelAdmin):
         }),
     )
     
+    def full_name(self, obj):
+        return obj.full_name()
+    full_name.short_description = 'Full Name'
+    
     def status_badge(self, obj):
         colors = {
             'pending': 'warning',
@@ -56,34 +62,37 @@ class StaffApplicationAdmin(admin.ModelAdmin):
     status_badge.short_description = 'Status'
     
     def document_preview(self, obj):
-        html = '<div style="display: flex; gap: 10px;">'
+        """Display document previews in admin"""
+        html_parts = []
         
         if obj.passport_photo:
-            html += f'''
-            <div style="text-align: center;">
-                <img src="{obj.passport_photo.url}" style="max-height: 100px; max-width: 100px;">
-                <br>Passport
+            html_parts.append(f'''
+            <div style="text-align: center; display: inline-block; margin: 5px;">
+                <img src="{obj.passport_photo.url}" style="max-height: 100px; max-width: 100px; border: 1px solid #ddd; border-radius: 4px;">
+                <br><small>Passport</small>
             </div>
-            '''
+            ''')
         
         if obj.id_front:
-            html += f'''
-            <div style="text-align: center;">
-                <img src="{obj.id_front.url}" style="max-height: 100px; max-width: 100px;">
-                <br>ID Front
+            html_parts.append(f'''
+            <div style="text-align: center; display: inline-block; margin: 5px;">
+                <img src="{obj.id_front.url}" style="max-height: 100px; max-width: 100px; border: 1px solid #ddd; border-radius: 4px;">
+                <br><small>ID Front</small>
             </div>
-            '''
+            ''')
         
         if obj.id_back:
-            html += f'''
-            <div style="text-align: center;">
-                <img src="{obj.id_back.url}" style="max-height: 100px; max-width: 100px;">
-                <br>ID Back
+            html_parts.append(f'''
+            <div style="text-align: center; display: inline-block; margin: 5px;">
+                <img src="{obj.id_back.url}" style="max-height: 100px; max-width: 100px; border: 1px solid #ddd; border-radius: 4px;">
+                <br><small>ID Back</small>
             </div>
-            '''
+            ''')
         
-        html += '</div>'
-        return format_html(html)
+        if not html_parts:
+            return "No documents uploaded"
+        
+        return mark_safe('<div style="display: flex; flex-wrap: wrap; gap: 10px;">' + ''.join(html_parts) + '</div>')
     document_preview.short_description = 'Document Preview'
     
     actions = ['approve_applications', 'reject_applications', 'mark_under_review']
@@ -116,40 +125,82 @@ class StaffApplicationAdmin(admin.ModelAdmin):
     mark_under_review.short_description = "Mark as under review"
 
 
-# staff/admin.py
-from django.contrib import admin
-from .models import StaffApplication, Staff, OTPVerification, UserProfile
-
+# ============================================
+# Staff Admin
+# ============================================
 @admin.register(Staff)
 class StaffAdmin(admin.ModelAdmin):
     list_display = ['staff_id', 'user', 'position', 'is_identity_verified', 'created_at']
     list_filter = ['is_identity_verified', 'position']
     search_fields = ['staff_id', 'user__username', 'user__email']
     readonly_fields = ['created_at', 'updated_at']
+    
+    fieldsets = (
+        ('Staff Information', {
+            'fields': ('user', 'staff_id', 'id_number', 'position', 'department')
+        }),
+        ('Verification', {
+            'fields': ('is_identity_verified', 'verification_code', 'verification_sent_at', 
+                      'verification_submitted_at', 'verified_at', 'verified_by', 'verification_notes')
+        }),
+        ('Documents', {
+            'fields': ('id_front', 'id_back', 'passport_photo', 'live_photo')
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
 
 
+# ============================================
+# OTP Verification Admin
+# ============================================
+@admin.register(OTPVerification)
+class OTPVerificationAdmin(admin.ModelAdmin):
+    list_display = ['user', 'otp_code', 'created_at', 'expires_at', 'is_used', 'purpose']
+    list_filter = ['is_used', 'purpose', 'created_at']
+    search_fields = ['user__username', 'otp_code']
+    readonly_fields = ['created_at']
 
 
-    # staff/admin.py
-from django.contrib import admin
-from django.contrib.auth.admin import UserAdmin
-from django.contrib.auth.models import User
-from django.utils.safestring import mark_safe
-from django.contrib import messages
-from .models import UserStatus
-from .utils.user_status import UserStatusManager
+# ============================================
+# User Profile Admin
+# ============================================
+@admin.register(UserProfile)
+class UserProfileAdmin(admin.ModelAdmin):
+    list_display = ['user', 'password_changed', 'first_login', 'last_password_change']
+    list_filter = ['password_changed', 'first_login']
+    search_fields = ['user__username', 'user__email']
+    readonly_fields = ['last_password_change']
 
+
+# ============================================
+# User Status Admin (Inline already used)
+# ============================================
+@admin.register(UserStatus)
+class UserStatusAdmin(admin.ModelAdmin):
+    list_display = ['user', 'is_locked', 'is_suspended', 'failed_login_attempts', 'updated_at']
+    list_filter = ['is_locked', 'is_suspended']
+    search_fields = ['user__username', 'user__email']
+    readonly_fields = ['created_at', 'updated_at']
+
+
+# ============================================
+# Custom User Admin with Status Inline
+# ============================================
 class UserStatusInline(admin.StackedInline):
     model = UserStatus
     can_delete = False
     verbose_name_plural = 'Account Status'
-    fk_name = 'user'  # Specify which ForeignKey to use
+    fk_name = 'user'
     fields = ('is_locked', 'lock_reason', 'locked_at', 
               'is_suspended', 'suspended_until', 'suspension_reason',
               'failed_login_attempts', 'last_failed_login')
     readonly_fields = ('locked_at', 'suspended_at', 'deactivated_at', 'created_at', 'updated_at')
 
-class CustomUserAdmin(UserAdmin):
+
+class CustomUserAdmin(BaseUserAdmin):
     inlines = [UserStatusInline]
     list_display = ('username', 'email', 'first_name', 'last_name', 'status_badge', 'is_staff', 'is_active')
     list_filter = ('is_active', 'is_staff', 'is_superuser')
@@ -157,7 +208,6 @@ class CustomUserAdmin(UserAdmin):
     def status_badge(self, obj):
         """Display user status with colored badge"""
         try:
-            # Check if user has status
             if hasattr(obj, 'status'):
                 if not obj.is_active:
                     return mark_safe('<span class="badge bg-danger">Deactivated</span>')
@@ -219,6 +269,7 @@ class CustomUserAdmin(UserAdmin):
             count += 1
         self.message_user(request, f'{count} user(s) activated.', messages.SUCCESS)
     activate_users.short_description = "Activate selected users"
+
 
 # Unregister default User admin and register custom one
 try:
