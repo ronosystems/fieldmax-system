@@ -61,10 +61,10 @@ class StaffApplication(models.Model):
     position = models.CharField(max_length=50, choices=POSITION_CHOICES)
     experience = models.TextField(blank=True)
     
-    # Document Uploads
-    passport_photo = models.ImageField(upload_to=passport_upload_path)
-    id_front = models.ImageField(upload_to=id_front_upload_path)
-    id_back = models.ImageField(upload_to=id_back_upload_path)
+    # Document Uploads - ADDED max_length=500
+    passport_photo = models.ImageField(upload_to=passport_upload_path, max_length=500)
+    id_front = models.ImageField(upload_to=id_front_upload_path, max_length=500)
+    id_back = models.ImageField(upload_to=id_back_upload_path, max_length=500)
     
     # Status Tracking
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
@@ -136,11 +136,11 @@ class Staff(models.Model):
     is_identity_verified = models.BooleanField(default=False)
     verification_notes = models.TextField(blank=True)
     
-    # Document uploads for verification
-    id_front = models.ImageField(upload_to='verification/ids/', blank=True, null=True)
-    id_back = models.ImageField(upload_to='verification/ids/', blank=True, null=True)
-    passport_photo = models.ImageField(upload_to='verification/photos/', blank=True, null=True)
-    live_photo = models.ImageField(upload_to='verification/live/', blank=True, null=True)
+    # Document uploads for verification - ADDED max_length=500
+    id_front = models.ImageField(upload_to='verification/ids/', blank=True, null=True, max_length=500)
+    id_back = models.ImageField(upload_to='verification/ids/', blank=True, null=True, max_length=500)
+    passport_photo = models.ImageField(upload_to='verification/photos/', blank=True, null=True, max_length=500)
+    live_photo = models.ImageField(upload_to='verification/live/', blank=True, null=True, max_length=500)
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -245,6 +245,77 @@ class UserProfile(models.Model):
         return f"{self.user.username}'s profile"
 
 # ============================================
+# User Status Model
+# ============================================
+class UserStatus(models.Model):
+    """Extended user status management (One-to-One with Django User)"""
+    user = models.OneToOneField(
+        User,  # This is the Django User model
+        on_delete=models.CASCADE,
+        related_name='status'
+    )
+    
+    # Lock fields
+    is_locked = models.BooleanField(default=False)
+    locked_at = models.DateTimeField(null=True, blank=True)
+    lock_reason = models.CharField(max_length=50, choices=[
+        ('failed_login', 'Multiple Failed Logins'),
+        ('suspicious', 'Suspicious Activity'),
+        ('admin', 'Admin Lock'),
+    ], blank=True)
+    failed_login_attempts = models.IntegerField(default=0)
+    last_failed_login = models.DateTimeField(null=True, blank=True)
+    
+    # Suspension fields
+    is_suspended = models.BooleanField(default=False)
+    suspended_at = models.DateTimeField(null=True, blank=True)
+    suspended_until = models.DateTimeField(null=True, blank=True)
+    suspension_reason = models.TextField(blank=True)
+    suspended_by = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='suspended_users'
+    )
+    
+    # Deactivation tracking
+    deactivated_at = models.DateTimeField(null=True, blank=True)
+    deactivated_reason = models.TextField(blank=True)
+    deactivated_by = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='deactivated_users'
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = 'User Status'
+        verbose_name_plural = 'User Statuses'
+        indexes = [
+            models.Index(fields=['is_locked', 'is_suspended']),
+            models.Index(fields=['user', 'is_locked']),
+        ]
+    
+    def __str__(self):
+        return f"{self.user.username} - {'Locked' if self.is_locked else 'Unlocked'} / {'Suspended' if self.is_suspended else 'Active'}"
+    
+    @property
+    def can_login(self):
+        """Check if user can login"""
+        if not self.user.is_active:
+            return False, 'deactivated', 'Your account has been deactivated.'
+        if self.is_locked:
+            return False, 'locked', 'Your account is temporarily locked.'
+        if self.is_suspended:
+            return False, 'suspended', f'Your account is suspended until {self.suspended_until}.'
+        return True, None, None
+
+# ============================================
 # Signals
 # ============================================
 @receiver(post_save, sender=User)
@@ -269,7 +340,7 @@ def create_staff_profile_for_staff_users(sender, instance, created, **kwargs):
         if not hasattr(instance, 'staff_profile'):
             Staff.objects.create(
                 user=instance,
-                position='staff',  # Default position, will be updated later
+                position='staff', 
             )
 
 
