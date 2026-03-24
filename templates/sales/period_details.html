@@ -30,10 +30,23 @@
         <div class="col-12">
             <div class="card shadow">
                 <div class="card-header bg-white py-3">
-                    <h5 class="mb-0 text-primary">
-                        <i class="fas fa-boxes me-2"></i>
-                        Items Sold Summary
-                    </h5>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0 text-primary">
+                            <i class="fas fa-boxes me-2"></i>
+                            Items Sold Summary
+                        </h5>
+                        <!-- Entries Dropdown -->
+                        <div class="d-flex align-items-center">
+                            <label class="me-2 text-muted" style="font-size: 0.9rem;">Show entries:</label>
+                            <select id="entriesSelect" class="form-select form-select-sm" style="width: auto;">
+                                <option value="10">10 rows</option>
+                                <option value="20" selected>20 rows</option>
+                                <option value="50">50 rows</option>
+                                <option value="100">100 rows</option>
+                                <option value="all">All rows</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
                 <div class="card-body">
                     <!-- Summary Cards -->
@@ -74,9 +87,9 @@
 
                     <!-- Items Table -->
                     <div class="table-responsive">
-                        <table class="table table-hover table-bordered">
+                        <table class="table table-hover table-bordered" id="itemsTable">
                             <thead class="table-light">
-                                 <tr>
+                                <tr>
                                     <th>Product Name</th>
                                     <th>SKU / Barcode</th>
                                     <th>Product Code</th>
@@ -85,11 +98,11 @@
                                     <th class="text-end">Total Profit</th>
                                     <th class="text-end">Margin</th>
                                     <th class="text-center">Status</th>
-                                 </tr>
+                                </tr>
                             </thead>
                             <tbody>
                                 {% for item in items %}
-                                 <tr>
+                                <tr>
                                     <td>
                                         <strong>{{ item.product_name }}</strong>
                                         {% if item.has_multiple_sales %}
@@ -123,14 +136,14 @@
                                             <span class="badge bg-secondary">Single Transaction</span>
                                         {% endif %}
                                     </td>
-                                 </tr>
+                                </tr>
                                 {% empty %}
-                                 <tr>
+                                <tr>
                                     <td colspan="8" class="text-center py-4">
                                         <i class="fas fa-info-circle me-2 text-muted"></i>
                                         No items sold during this period
                                     </td>
-                                 </tr>
+                                </tr>
                                 {% endfor %}
                             </tbody>
                             <tfoot class="table-light">
@@ -141,7 +154,7 @@
                                     <th class="text-end fw-bold text-success">KES {{ total_profit|floatformat:2|intcomma }}</th>
                                     <th class="text-end fw-bold">{{ avg_margin|floatformat:1 }}%</th>
                                     <th></th>
-                                 </tr>
+                                </tr>
                             </tfoot>
                         </table>
                     </div>
@@ -170,7 +183,71 @@
     .badge {
         border: 1px solid #ddd;
     }
+    #entriesSelect {
+        display: none !important;
+    }
 </style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const entriesSelect = document.getElementById('entriesSelect');
+    const table = document.getElementById('itemsTable');
+    const tbody = table.querySelector('tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    
+    // Filter out empty rows (no data message)
+    const dataRows = rows.filter(row => {
+        return !row.querySelector('td[colspan="8"]');
+    });
+    
+    // Store original order
+    const originalRows = [...dataRows];
+    
+    function showRows(limit) {
+        // Clear the tbody but keep empty state message if needed
+        while (tbody.firstChild) {
+            tbody.removeChild(tbody.firstChild);
+        }
+        
+        if (originalRows.length === 0) {
+            // Show empty state if no data
+            const emptyRow = document.createElement('tr');
+            emptyRow.innerHTML = `
+                <td colspan="8" class="text-center py-4">
+                    <i class="fas fa-info-circle me-2 text-muted"></i>
+                    No items sold during this period
+                </td>
+            `;
+            tbody.appendChild(emptyRow);
+            return;
+        }
+        
+        let rowsToShow = originalRows;
+        
+        if (limit !== 'all') {
+            rowsToShow = originalRows.slice(0, parseInt(limit));
+        }
+        
+        // Append the rows to show
+        rowsToShow.forEach(row => {
+            tbody.appendChild(row.cloneNode(true));
+        });
+        
+        // Re-attach any event listeners if needed (none in current implementation)
+    }
+    
+    // Event listener for dropdown change
+    entriesSelect.addEventListener('change', function(e) {
+        const value = e.target.value;
+        showRows(value);
+    });
+    
+    // Initialize with default selected value (20 rows)
+    const initialValue = entriesSelect.value;
+    showRows(initialValue);
+});
+</script>
+
 {% endblock %}
 
 {% block extra_css %}
