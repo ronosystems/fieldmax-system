@@ -272,7 +272,9 @@ if not os.path.exists(LOGS_DIR):
     os.makedirs(LOGS_DIR)
 
 
-# Logging Configuration
+# ============================================
+# ENHANCED LOGGING FOR DEBUGGING
+# ============================================
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -285,11 +287,21 @@ LOGGING = {
             'format': '{levelname} {message}',
             'style': '{',
         },
+        'detailed': {
+            'format': '[{asctime}] {levelname} [{name}:{lineno}] {message}',
+            'style': '{',
+        },
     },
     'handlers': {
         'console': {
             'class': 'logging.StreamHandler',
-            'formatter': 'verbose' if DEBUG else 'simple',
+            'stream': sys.stdout,
+            'formatter': 'detailed',
+        },
+        'console_stderr': {
+            'class': 'logging.StreamHandler',
+            'stream': sys.stderr,
+            'formatter': 'detailed',
         },
         'file': {
             'class': 'logging.handlers.RotatingFileHandler',
@@ -298,21 +310,67 @@ LOGGING = {
             'backupCount': 5,
             'formatter': 'verbose',
         },
+        'admin_file': {
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': os.path.join(BASE_DIR, 'logs', 'admin.log'),
+            'maxBytes': 1024 * 1024 * 5,
+            'backupCount': 3,
+            'formatter': 'detailed',
+        },
     },
     'root': {
-        'handlers': ['console'] if DEBUG else ['console', 'file'],
+        'handlers': ['console', 'file'],
         'level': 'DEBUG' if DEBUG else 'INFO',
     },
     'loggers': {
         'django': {
-            'handlers': ['console'] if DEBUG else ['console', 'file'],
+            'handlers': ['console', 'file'],
             'level': 'DEBUG' if DEBUG else 'INFO',
             'propagate': False,
         },
         'django.request': {
+            'handlers': ['console_stderr', 'file'],
+            'level': 'DEBUG' if DEBUG else 'ERROR',
+            'propagate': False,
+        },
+        'django.db.backends': {
             'handlers': ['file'],
-            'level': 'ERROR',
+            'level': 'DEBUG' if DEBUG else 'WARNING',
+            'propagate': False,
+        },
+        'staff': {
+            'handlers': ['console', 'file', 'admin_file'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'staff.admin': {
+            'handlers': ['console', 'admin_file'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'staff.views': {
+            'handlers': ['console', 'file'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'staff.utils': {
+            'handlers': ['console', 'file'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'cloudinary': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
             'propagate': False,
         },
     },
 }
+
+# Print startup information to console (for Render logs)
+print(f"=== FieldMax Startup ===")
+print(f"DEBUG: {DEBUG}")
+print(f"DEFAULT_FILE_STORAGE: {DEFAULT_FILE_STORAGE}")
+print(f"Cloudinary configured: {bool(cloudinary.config().cloud_name)}")
+print(f"MEDIA_URL: {MEDIA_URL}")
+print(f"MEDIA_ROOT: {MEDIA_ROOT}")
+print(f"========================")
