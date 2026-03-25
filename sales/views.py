@@ -1306,10 +1306,17 @@ def sale_create(request):
                             f"Available: {product.quantity}, Requested: {item['quantity']}"
                         )
                     
-                    # CRITICAL FIX: For single items, validate they haven't been sold already
+                    # ============================================
+                    # FIXED: For single items, validate they haven't been sold in an ACTIVE sale
+                    # ============================================
                     if product.category and product.category.is_single_item:
-                        # Double-check if this single item was already sold in another transaction
-                        if SaleItem.objects.filter(sku_value=product.sku_value).exists():
+                        # Check if this single item was already sold in another ACTIVE transaction (not reversed)
+                        active_sale_exists = SaleItem.objects.filter(
+                            sku_value=product.sku_value,
+                            sale__is_reversed=False  # Only check non-reversed sales
+                        ).exists()
+                        
+                        if active_sale_exists:
                             raise ValueError(
                                 f"This {product.display_name} (SKU: {product.sku_value}) has already been sold in another transaction!"
                             )
@@ -1329,7 +1336,7 @@ def sale_create(request):
                     # Update product quantity
                     product.quantity -= item['quantity']
                     
-                    # CRITICAL FIX: For single items, mark as sold and set status
+                    # For single items, mark as sold and set status
                     if product.category and product.category.is_single_item:
                         product.status = 'sold'
                         # Ensure quantity is 0 for sold single items
@@ -1589,6 +1596,8 @@ def sale_receipt(request, sale_id):
 
 
 
+
+
 @login_required
 def sale_reverse(request, sale_id):
     """Reverse a sale"""
@@ -1603,50 +1612,23 @@ def sale_reverse(request, sale_id):
         
         try:
             with transaction.atomic():
-                # Reverse the sale
-                result = sale.reverse_sale(reversed_by=request.user)
+                # Reverse the sale - PASS THE REASON!
+                result = sale.reverse_sale(reversed_by=request.user, reason=reason)
                 
-
-
-
-
-
-
-
-
-                # ============================================
-                # ADD NOTIFICATION FOR SALE REVERSAL 
-                # ============================================
-                """
-                try:
-                    from utils.notifications import AdminNotifier
-                    AdminNotifier.notify_sale_reversed(sale, request.user, reason)
-                    logger.info(f"Admin notification sent for reversed sale #{sale.sale_id}")
-                except ImportError:
-                    logger.warning("AdminNotifier not available - skipping notification")
-                except Exception as e:
-                    logger.error(f"Failed to send reversal notification: {str(e)}")
-                """
-
-
-
-
-
-
-
-
-
                 messages.success(request, result)
                 return redirect('sales:sale_detail', sale_id=sale_id)
                 
         except Exception as e:
+            logger.error(f"Error reversing sale: {str(e)}")
             messages.error(request, f'Error reversing sale: {str(e)}')
             return redirect('sales:sale_detail', sale_id=sale_id)
     
     context = {
         'sale': sale,
+        'items': sale.items.all(),
     }
     return render(request, 'sales/reverse.html', context)
+
 
 
 
@@ -1745,14 +1727,31 @@ def add_to_cart(request):
                     'error': f'Product with code "{product_code}" not found'
                 })
             
-            # CRITICAL FIX: Check if single item is already sold
+            # ============================================
+            # FIXED: Check if single item is already sold in an ACTIVE sale
+            # ============================================
             if product.category and product.category.is_single_item:
-                # Check if already sold
-                if product.status == 'sold' or product.quantity <= 0:
+                # Check if already sold in an active sale (not reversed)
+                from sales.models import SaleItem
+                active_sale_exists = SaleItem.objects.filter(
+                    product=product,
+                    sale__is_reversed=False  # Only check non-reversed sales
+                ).exists()
+                
+                if active_sale_exists:
                     return JsonResponse({
                         'success': False,
                         'error': f'This item ({product.display_name}) has already been sold and cannot be added to cart'
                     })
+                
+                # Check if already in cart
+                cart = request.session.get('sales_cart', [])
+                for item in cart:
+                    if item.get('product_code') == product_code:
+                        return JsonResponse({
+                            'success': False,
+                            'error': 'This item is already in the cart'
+                        })
                 
                 # Check if quantity is more than 1 for single items
                 if quantity != 1:
@@ -1762,7 +1761,7 @@ def add_to_cart(request):
                     })
             
             # Check stock for bulk items
-            if product.quantity < quantity:
+            if not product.category.is_single_item and product.quantity < quantity:
                 return JsonResponse({
                     'success': False,
                     'error': f'Insufficient stock. Available: {product.quantity}'
@@ -1779,15 +1778,6 @@ def add_to_cart(request):
             
             # Get or create cart in session
             cart = request.session.get('sales_cart', [])
-            
-            # For single items, check if already in cart
-            if product.category and product.category.is_single_item:
-                for item in cart:
-                    if item.get('product_code') == product_code:
-                        return JsonResponse({
-                            'success': False,
-                            'error': 'This item is already in the cart'
-                        })
             
             # Check if product with SAME PRICE already exists in cart (for bulk items)
             found = False
@@ -1844,14 +1834,13 @@ def add_to_cart(request):
             })
             
         except Exception as e:
+            logger.error(f"Error adding to cart: {str(e)}")
             return JsonResponse({
                 'success': False,
                 'error': str(e)
             })
     
     return JsonResponse({'success': False, 'error': 'Invalid request method'})
-
-
 
 
 

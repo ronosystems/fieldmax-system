@@ -1,6 +1,5 @@
-
 # ==============================
-# SALE IMPORTS
+# SALE MODELS
 # ==============================
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db import models
@@ -16,12 +15,7 @@ import re
 import logging
 import math
 
-
-    
-
 logger = logging.getLogger(__name__)
-
-
 
 
 # ============================================
@@ -45,18 +39,8 @@ class SaleCounter(models.Model):
         return f"Year {self.year}: {self.counter} sales"
 
 
-
-
-
-
-
-
-
-
-
-
 # ============================================
-# UPDATED SALE ID GENERATOR
+# SALE ID GENERATOR
 # ============================================
 
 def generate_custom_sale_id() -> str:
@@ -94,28 +78,33 @@ def generate_custom_sale_id() -> str:
         return sale_id
 
 
-
-
-
-
-
-
-
 # ==================================
 # SALE MODEL
 # ==================================
 
 class Sale(models.Model):
     """
-    ✅ FIXED: Represents ONE TRANSACTION (not one item)
+    Represents ONE TRANSACTION (not one item)
     - Each sale can have multiple items (stored in SaleItem)
     - One receipt number per sale
     - One row in sales table per transaction
     """
 
-    batch_id = models.CharField(max_length=50, blank=True, null=True)  # Add this
-    payment_method = models.CharField(max_length=50, default='Cash')    # Add this
-    amount_paid = models.DecimalField(max_digits=10, decimal_places=2, default=0)  # Add this
+    PAYMENT_METHODS = [
+        ('Cash', 'Cash'),
+        ('M-Pesa', 'M-Pesa'),
+        ('Card', 'Card'),
+        ('Points', 'Points'),
+        ('Credit', 'Credit'),
+    ]
+    
+    ETR_STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('processed', 'Processed'),
+        ('failed', 'Failed')
+    ]
+    
+    batch_id = models.CharField(max_length=50, blank=True, null=True)
     sale_id = models.CharField(max_length=40, primary_key=True, editable=False)
     
     # Transaction details
@@ -140,6 +129,14 @@ class Sale(models.Model):
     subtotal = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     tax_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
     total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    amount_paid = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
+    
+    # Payment details
+    payment_method = models.CharField(
+        max_length=20,
+        choices=PAYMENT_METHODS,
+        default='Cash'
+    )
     
     # Receipt numbers (ONE per sale, not per item)
     etr_receipt_number = models.CharField(
@@ -166,47 +163,29 @@ class Sale(models.Model):
     # ETR processing
     etr_status = models.CharField(
         max_length=20,
-        choices=[
-            ('pending', 'Pending'),
-            ('processed', 'Processed'),
-            ('failed', 'Failed')
-        ],
+        choices=ETR_STATUS_CHOICES,
         default='pending'
     )
-    
-    # Credit sale tracking
-    is_credit = models.BooleanField(default=False, help_text="Whether this sale is on credit")
-    credit_sale_id = models.CharField(max_length=50, blank=True, null=True, help_text="Reference to credit app sale ID")
-
-    payment_method = models.CharField(
-        max_length=20,
-        choices=[
-            ('Cash', 'Cash'),
-            ('M-Pesa', 'M-Pesa'),
-            ('Card', 'Card'),
-            ('Points', 'Points'),
-            ('Credit', 'Credit'),
-        ],
-        default='Cash'
-    )
-
     etr_processed_at = models.DateTimeField(blank=True, null=True)
     etr_error_message = models.TextField(blank=True, null=True)
     
-    # Reversal tracking
-    is_reversed = models.BooleanField(default=False)
-    reversed_at = models.DateTimeField(blank=True, null=True)
-    reversed_by = models.ForeignKey(
-        User,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="reversed_sales",
+    # Credit sale tracking
+    is_credit = models.BooleanField(
+        default=False, 
+        help_text="Whether this sale is on credit"
     )
-    reversal_reason = models.TextField(blank=True, null=True)
-
+    credit_sale_id = models.CharField(
+        max_length=50, 
+        blank=True, 
+        null=True, 
+        help_text="Reference to credit app sale ID"
+    )
+    
     # Points related fields
-    points_redeemed = models.IntegerField(default=0, help_text="Points redeemed in this sale")
+    points_redeemed = models.IntegerField(
+        default=0, 
+        help_text="Points redeemed in this sale"
+    )
     points_discount = models.DecimalField(
         max_digits=10, 
         decimal_places=2, 
@@ -219,7 +198,18 @@ class Sale(models.Model):
         default=Decimal('0.00'),
         help_text="Original subtotal before points discount"
     )
-
+    
+    # Reversal tracking
+    is_reversed = models.BooleanField(default=False)
+    reversed_at = models.DateTimeField(blank=True, null=True)
+    reversed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reversed_sales",
+    )
+    reversal_reason = models.TextField(blank=True, null=True)
 
     class Meta:
         db_table = 'sales'
@@ -245,15 +235,14 @@ class Sale(models.Model):
                 if match:
                     next_number = int(match.group()) + 1
                 else:
-                    next_number = 500  # Start from 500 if no numeric found
+                    next_number = 500
             else:
-                next_number = 500  # First sale starts from 500
+                next_number = 500
             
-            # Ensure we start from 500 minimum
             if next_number < 500:
                 next_number = 500
             
-            self.sale_id = f"SALE-{next_number:04d}"  # Format as SALE-0500
+            self.sale_id = f"SALE-{next_number:04d}"
         
         super().save(*args, **kwargs)
 
@@ -305,9 +294,10 @@ class Sale(models.Model):
                 f"Counter: {next_counter} | Items: {self.items.count()}"
             )
 
-  
-
-    def reverse_sale(self, reversed_by=None):
+    # ============================================
+    # FIXED REVERSE SALE METHOD
+    # ============================================
+    def reverse_sale(self, reversed_by=None, reason=''):
         """
         Reverse this sale:
         - Restock products (single and bulk)
@@ -316,31 +306,91 @@ class Sale(models.Model):
         """
         if self.is_reversed:
             return f"Sale {self.sale_id} already reversed"
+        
+        try:
+            with transaction.atomic():
+                reversed_items = []
+                
+                for item in self.items.all():
+                    product = item.product
+                    
+                    # Store old values for logging
+                    old_quantity = product.quantity
+                    old_status = product.status
+                    
+                    logger.info(f"Reversing item: {product.product_code}, Status: {old_status}, Quantity: {old_quantity}")
+                    
+                    # ============================================
+                    # CRITICAL FIX: Properly restore product
+                    # ============================================
+                    if product.category.is_single_item:
+                        # Single item: Restore to available with quantity 1
+                        product.status = 'available'
+                        product.quantity = 1
+                        # Reset any sold-related flags
+                        if hasattr(product, 'is_sold'):
+                            product.is_sold = False
+                        logger.info(f"Single item {product.product_code}: Status changed to 'available', Quantity set to 1")
+                    else:
+                        # Bulk item: Add quantity back
+                        product.quantity += item.quantity
+                        # If quantity > 0 and status was 'outofstock', set to available
+                        if product.quantity > 0 and product.status in ['outofstock', 'sold']:
+                            product.status = 'available'
+                        logger.info(f"Bulk item {product.product_code}: Quantity restored to {product.quantity}")
+                    
+                    # Save the product
+                    product.save()
+                    
+                    # Create stock entry for the reversal
+                    stock_entry = StockEntry.objects.create(
+                        product=product,
+                        quantity=item.quantity,
+                        entry_type='reversal',
+                        unit_price=item.unit_price,
+                        total_amount=item.total_price,
+                        reference_id=f"REVERSE-{self.sale_id}",
+                        created_by=reversed_by,
+                        notes=f"Reversal of sale {self.sale_id}. Reason: {reason}" if reason else f"Reversal of sale {self.sale_id}"
+                    )
+                    
+                    reversed_items.append({
+                        'product': product.product_code,
+                        'name': product.display_name,
+                        'quantity': item.quantity,
+                        'old_status': old_status,
+                        'new_status': product.status,
+                        'old_quantity': old_quantity,
+                        'new_quantity': product.quantity
+                    })
+                    
+                    logger.info(f"Stock entry created: {stock_entry.id} for product {product.product_code}")
+                
+                # Mark sale as reversed
+                self.is_reversed = True
+                self.reversed_at = timezone.now()
+                self.reversed_by = reversed_by
+                self.reversal_reason = reason
+                self.save()
+                
+                # Log summary
+                logger.info(
+                    f"SALE REVERSED: #{self.sale_id} | "
+                    f"Items: {len(reversed_items)} | "
+                    f"Reason: {reason or 'Not specified'} | "
+                    f"By: {reversed_by.username if reversed_by else 'System'}"
+                )
+                
+                return f"Sale #{self.sale_id} reversed successfully. {len(reversed_items)} items restored to inventory."
+                
+        except Exception as e:
+            logger.error(f"Error reversing sale {self.sale_id}: {str(e)}")
+            raise
 
-        for item in self.items.all():
-            product = item.product
-            if product.category.is_single_item:
-                product.status = 'available'
-            else:
-                product.quantity += item.quantity
-            product.save()
-
-            StockEntry.objects.create(
-                product=product,
-                quantity=item.quantity,
-                unit_price=product.buying_price,
-                reference_id=f"REVERSE-{self.sale_id}",
-                notes=f"Reversal of sale {self.sale_id}",
-            )
-
-        self.is_reversed = True
-        self.reversed_at = timezone.now()
-        self.reversed_by = reversed_by
-        self.save()
-
-        return f"Sale {self.sale_id} reversed successfully!"
-
-
+    # ============================================
+    # PROPERTIES
+    # ============================================
+    
     @property
     def can_be_reversed(self) -> bool:
         return not self.is_reversed
@@ -373,16 +423,13 @@ class Sale(models.Model):
         return Decimal('0.00')
 
 
-
-
-
-#======================================
+# ==================================
 # SALE ITEM MODEL
-#======================================
+# ==================================
 
 class SaleItem(models.Model):
     """
-    ✅ FIXED: Individual items within a sale
+    Individual items within a sale
     - Links to parent Sale record
     - Stores product details at time of sale
     - Properly handles single items vs bulk items
@@ -438,6 +485,49 @@ class SaleItem(models.Model):
         # Update parent sale totals
         self.sale.recalculate_totals()
 
+    # ============================================
+    # FIXED CAN_BE_SOLD METHOD
+    # ============================================
+    def can_be_sold(self) -> tuple:
+        """
+        Check if this item can be sold
+        Returns: (bool, str) - (can_sell, reason_if_not)
+        """
+        try:
+            product = self.product
+            
+            # Refresh product from database to get latest status
+            product.refresh_from_db()
+            
+            if product.category.is_single_item:
+                # Check if already sold
+                if product.status == 'sold':
+                    return False, f"Item {product.display_name} has already been sold"
+                if product.quantity <= 0:
+                    return False, f"Item {product.display_name} is out of stock"
+                if self.quantity != 1:
+                    return False, "Single items must be sold one at a time"
+                
+                # Check if this product appears in any active sale (not reversed)
+                from sales.models import SaleItem
+                active_sales = SaleItem.objects.filter(
+                    product=product,
+                    sale__is_reversed=False
+                ).exclude(sale=self.sale if self.sale_id else None)
+                
+                if active_sales.exists():
+                    return False, f"Item {product.display_name} has already been sold in another transaction"
+            else:
+                # Bulk items check
+                if product.quantity < self.quantity:
+                    return False, f"Insufficient stock. Available: {product.quantity}, Requested: {self.quantity}"
+            
+            return True, "Available for sale"
+            
+        except Exception as e:
+            logger.error(f"Error checking availability: {str(e)}")
+            return False, f"Error checking availability: {str(e)}"
+
     def process_sale(self):
         """
         Process this item's sale (deduct stock)
@@ -482,7 +572,6 @@ class SaleItem(models.Model):
             else:
                 # Bulk item: reduce quantity
                 product.quantity -= self.quantity
-                # Status will auto-update via _update_status() in product.save()
                 log_type = "BULK ITEM"
             
             # Save product (will trigger _update_status for bulk items)
@@ -518,30 +607,6 @@ class SaleItem(models.Model):
             
             return True
 
-    def can_be_sold(self) -> tuple:
-        """
-        Check if this item can be sold
-        Returns: (bool, str) - (can_sell, reason_if_not)
-        """
-        try:
-            product = self.product
-            
-            if product.category.is_single_item:
-                if product.status == 'sold':
-                    return False, "Item has already been sold"
-                if product.quantity <= 0:
-                    return False, "Item is out of stock"
-                if self.quantity != 1:
-                    return False, "Single items must be sold one at a time"
-            else:
-                if product.quantity < self.quantity:
-                    return False, f"Insufficient stock. Available: {product.quantity}"
-            
-            return True, "Available for sale"
-            
-        except Exception as e:
-            return False, f"Error checking availability: {str(e)}"
-
     @property
     def item_type(self) -> str:
         """Return item type (Single/Bulk)"""
@@ -563,13 +628,9 @@ class SaleItem(models.Model):
         return 0.0
 
 
-
-
-
-
-#======================================
+# ==================================
 # SALE REVERSAL MODEL
-#======================================
+# ==================================
 
 class SaleReversal(models.Model):
     """
@@ -620,9 +681,6 @@ class SaleReversal(models.Model):
             self.reversal_reference = f"REV-{self.sale.sale_id}-{timezone.now().strftime('%Y%m%d%H%M%S')}"
         super().save(*args, **kwargs)
 
-    # ========================================
-    # MAIN REVERSAL METHOD (FIXED & COMPLETE)
-    # ========================================
     def process_reversal(self):
         """
         Reverse all items in the sale
@@ -671,7 +729,7 @@ class SaleReversal(models.Model):
                     product.quantity += item.quantity
                     reversal_type = "BULK ITEM"
                 
-                # Save product (will trigger _update_status for bulk items)
+                # Save product
                 product.save()
                 
                 # -------------------------
@@ -679,7 +737,7 @@ class SaleReversal(models.Model):
                 # -------------------------
                 stock_entry = StockEntry.objects.create(
                     product=product,
-                    quantity=item.quantity,  # Positive for stock IN
+                    quantity=item.quantity,
                     entry_type='reversal',
                     unit_price=item.unit_price,
                     total_amount=item.total_price,
@@ -698,7 +756,6 @@ class SaleReversal(models.Model):
                     'type': reversal_type
                 })
                 
-                # Detailed logging
                 logger.info(
                     f"[REVERSAL ITEM] "
                     f"Sale: {self.sale.sale_id} | "
@@ -741,10 +798,6 @@ class SaleReversal(models.Model):
 
             return True
 
-    # ========================================
-    # VALIDATION METHODS
-    # ========================================
-    
     def can_reverse(self) -> tuple:
         """
         Check if the sale can be reversed
@@ -756,40 +809,12 @@ class SaleReversal(models.Model):
         if self.sale.items.count() == 0:
             return False, f"Sale #{self.sale.sale_id} has no items to reverse"
         
-        # Check each item
         for item in self.sale.items.all():
             if item.product is None:
                 return False, f"Item {item.product_name} has no associated product"
         
         return True, "Sale can be reversed"
 
-    def get_reversal_summary(self) -> dict:
-        """
-        Get summary of what will be reversed
-        """
-        summary = {
-            'sale_id': self.sale.sale_id,
-            'date': self.sale.sale_date,
-            'total_items': self.sale.items.count(),
-            'total_amount': self.sale.total_amount,
-            'items': []
-        }
-        
-        for item in self.sale.items.all():
-            summary['items'].append({
-                'product_name': item.product_name,
-                'product_code': item.product_code,
-                'quantity': item.quantity,
-                'amount': item.total_price,
-                'type': 'Single' if item.product and item.product.category.is_single_item else 'Bulk'
-            })
-        
-        return summary
-
-    # ========================================
-    # PROPERTIES
-    # ========================================
-    
     @property
     def is_successful(self) -> bool:
         """Check if reversal was processed"""
@@ -806,18 +831,10 @@ class SaleReversal(models.Model):
         from django.utils.timesince import timesince
         return timesince(self.reversed_at)
 
-    class Meta:
-        verbose_name = "Sale Reversal"
-        verbose_name_plural = "Sale Reversals"
-        ordering = ['-reversed_at']
 
-
-
-
-
-#=======================================
-#FISCAL RECEIPT MODEL
-#=======================================
+# ==================================
+# FISCAL RECEIPT MODEL
+# ==================================
 
 class FiscalReceipt(models.Model):
     """Fiscal receipt for entire sale"""
@@ -836,9 +853,6 @@ class FiscalReceipt(models.Model):
 
     def __str__(self) -> str:
         return f"Receipt {self.receipt_number} for Sale #{self.sale.sale_id}"
-    
-
-
 
 
 # ====================================
@@ -972,45 +986,32 @@ class Customer(models.Model):
         """Auto-update customer tier based on total spent"""
         old_tier = self.tier
         
-        if self.total_spent >= 100000:  # KSH 100,000+
+        if self.total_spent >= 100000:
             self.tier = 'platinum'
-        elif self.total_spent >= 50000:   # KSH 50,000+
+        elif self.total_spent >= 50000:
             self.tier = 'gold'
-        elif self.total_spent >= 10000:   # KSH 10,000+
+        elif self.total_spent >= 10000:
             self.tier = 'silver'
         else:
             self.tier = 'bronze'
         
         if old_tier != self.tier:
-            logger.info(f"📈 Customer {self.phone_number} upgraded from {old_tier} to {self.tier}")
+            logger.info(f"Customer {self.phone_number} upgraded from {old_tier} to {self.tier}")
             self.save(update_fields=['tier'])
     
     def calculate_points_to_earn(self, amount):
-        """
-        Calculate points to earn based on amount spent
-        Rules:
-        - Every 100 KSH = 1 point
-        - Maximum 100 points per transaction
-        """
+        """Calculate points to earn based on amount spent"""
         if amount < 100:
             return 0
         
-        # Points = floor(amount / 100)
         points = math.floor(amount / 100)
-        
-        # Cap at reasonable maximum (100 points per transaction)
         points = min(points, 100)
-        
         return points
     
     def add_points(self, amount_spent, sale=None, description=""):
-        """
-        Add points to customer balance based on amount spent
-        ONLY registered customers can earn points
-        """
-        # Safety check - ensure this is a registered customer
+        """Add points to customer balance based on amount spent"""
         if not self.pk or not self.phone_number:
-            logger.warning("⛔ Attempted to add points to unregistered customer - BLOCKED")
+            logger.warning("Attempted to add points to unregistered customer - BLOCKED")
             return 0
         
         points_to_add = self.calculate_points_to_earn(amount_spent)
@@ -1020,7 +1021,6 @@ class Customer(models.Model):
             self.total_points_earned += points_to_add
             self.save(update_fields=['points_balance', 'total_points_earned'])
             
-            # Create transaction record
             LoyaltyTransaction.objects.create(
                 customer=self,
                 sale=sale,
@@ -1029,20 +1029,15 @@ class Customer(models.Model):
                 description=description or f"Earned from KSH {amount_spent:,.0f} purchase"
             )
             
-            logger.info(f"✅ Registered customer {self.phone_number} earned {points_to_add} points from KSH {amount_spent:,.0f}")
+            logger.info(f"Customer {self.phone_number} earned {points_to_add} points")
             return points_to_add
         
         return 0
     
     def redeem_points(self, points_to_redeem, sale=None, description=""):
-        """
-        Redeem points from customer balance (1 point = KSH 1)
-        Customer can redeem any number of points they want (partial redemption)
-        ONLY registered customers can redeem points
-        """
-        # Safety check - ensure this is a registered customer
+        """Redeem points from customer balance (1 point = KSH 1)"""
         if not self.pk or not self.phone_number:
-            logger.warning("⛔ Attempted to redeem points for unregistered customer - BLOCKED")
+            logger.warning("Attempted to redeem points for unregistered customer - BLOCKED")
             raise ValueError("Cannot redeem points: Customer is not registered")
         
         if points_to_redeem <= 0:
@@ -1054,15 +1049,12 @@ class Customer(models.Model):
                 f"Requested: {points_to_redeem}"
             )
         
-        # Calculate cash value (1 point = KSH 1)
         cash_value = points_to_redeem
         
-        # Deduct points
         self.points_balance -= points_to_redeem
         self.total_points_redeemed += points_to_redeem
         self.save(update_fields=['points_balance', 'total_points_redeemed'])
         
-        # Create transaction record
         LoyaltyTransaction.objects.create(
             customer=self,
             sale=sale,
@@ -1072,21 +1064,14 @@ class Customer(models.Model):
         )
         
         logger.info(
-            f"💰 Registered customer {self.phone_number} redeemed {points_to_redeem} points "
+            f"Customer {self.phone_number} redeemed {points_to_redeem} points "
             f"(KSH {cash_value}). Remaining: {self.points_balance} points"
         )
         
         return cash_value
     
-    def get_points_value(self):
-        """Get cash value of current points balance (1 point = KSH 1)"""
-        return self.points_balance
-    
     def can_redeem(self, points_to_redeem, sale_total):
-        """
-        Check if customer can redeem specified points
-        Returns: (bool, str, max_allowed)
-        """
+        """Check if customer can redeem specified points"""
         if not self.pk or not self.phone_number:
             return False, "Customer is not registered", 0
         
@@ -1096,7 +1081,6 @@ class Customer(models.Model):
         if self.points_balance < points_to_redeem:
             return False, f"Insufficient points. Available: {self.points_balance}", self.points_balance
         
-        # Points can't exceed sale total (1 point = KSH 1)
         if points_to_redeem > sale_total:
             max_points = int(sale_total)
             return False, f"Points cannot exceed sale amount. Max: {max_points}", max_points
@@ -1200,7 +1184,6 @@ class LoyaltyTransaction(models.Model):
 class LoyaltySettings(models.Model):
     """Global loyalty program settings"""
     
-    # Points earning settings
     min_purchase_for_points = models.PositiveIntegerField(
         default=100,
         help_text="Minimum purchase amount to earn points"
@@ -1213,8 +1196,6 @@ class LoyaltySettings(models.Model):
         default=100,
         help_text="Maximum points that can be earned in a single transaction"
     )
-    
-    # Points redemption settings
     min_redeem_points = models.PositiveIntegerField(
         default=1,
         help_text="Minimum points required to redeem"
@@ -1224,20 +1205,14 @@ class LoyaltySettings(models.Model):
         validators=[MinValueValidator(0), MaxValueValidator(100)],
         help_text="Maximum percentage of sale that can be paid with points (100% = full payment)"
     )
-    
-    # Points expiration
     points_expiry_days = models.PositiveIntegerField(
         default=365,
         help_text="Number of days before points expire"
     )
-    
-    # Welcome bonus
     welcome_points = models.PositiveIntegerField(
         default=10,
         help_text="Points awarded to new customers on registration"
     )
-    
-    # Registration requirements
     require_id_for_registration = models.BooleanField(
         default=False,
         help_text="Require ID number for customer registration"
