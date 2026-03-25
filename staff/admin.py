@@ -62,32 +62,44 @@ class StaffApplicationAdmin(admin.ModelAdmin):
     status_badge.short_description = 'Status'
     
     def document_preview(self, obj):
-        """Display document previews in admin"""
+        """Display document previews in admin with safe error handling"""
         html_parts = []
         
-        if obj.passport_photo:
-            html_parts.append(f'''
-            <div style="text-align: center; display: inline-block; margin: 5px;">
-                <img src="{obj.passport_photo.url}" style="max-height: 100px; max-width: 100px; border: 1px solid #ddd; border-radius: 4px;">
-                <br><small>Passport</small>
-            </div>
-            ''')
+        # Check passport_photo
+        if obj.passport_photo and hasattr(obj.passport_photo, 'url') and obj.passport_photo.url:
+            try:
+                html_parts.append(f'''
+                <div style="text-align: center; display: inline-block; margin: 5px;">
+                    <img src="{obj.passport_photo.url}" style="max-height: 100px; max-width: 100px; border: 1px solid #ddd; border-radius: 4px;" onerror="this.style.display=\'none\'">
+                    <br><small>Passport</small>
+                </div>
+                ''')
+            except Exception:
+                html_parts.append('<div style="text-align: center; margin: 5px;"><small>Passport (unavailable)</small></div>')
         
-        if obj.id_front:
-            html_parts.append(f'''
-            <div style="text-align: center; display: inline-block; margin: 5px;">
-                <img src="{obj.id_front.url}" style="max-height: 100px; max-width: 100px; border: 1px solid #ddd; border-radius: 4px;">
-                <br><small>ID Front</small>
-            </div>
-            ''')
+        # Check id_front
+        if obj.id_front and hasattr(obj.id_front, 'url') and obj.id_front.url:
+            try:
+                html_parts.append(f'''
+                <div style="text-align: center; display: inline-block; margin: 5px;">
+                    <img src="{obj.id_front.url}" style="max-height: 100px; max-width: 100px; border: 1px solid #ddd; border-radius: 4px;" onerror="this.style.display=\'none\'">
+                    <br><small>ID Front</small>
+                </div>
+                ''')
+            except Exception:
+                html_parts.append('<div style="text-align: center; margin: 5px;"><small>ID Front (unavailable)</small></div>')
         
-        if obj.id_back:
-            html_parts.append(f'''
-            <div style="text-align: center; display: inline-block; margin: 5px;">
-                <img src="{obj.id_back.url}" style="max-height: 100px; max-width: 100px; border: 1px solid #ddd; border-radius: 4px;">
-                <br><small>ID Back</small>
-            </div>
-            ''')
+        # Check id_back
+        if obj.id_back and hasattr(obj.id_back, 'url') and obj.id_back.url:
+            try:
+                html_parts.append(f'''
+                <div style="text-align: center; display: inline-block; margin: 5px;">
+                    <img src="{obj.id_back.url}" style="max-height: 100px; max-width: 100px; border: 1px solid #ddd; border-radius: 4px;" onerror="this.style.display=\'none\'">
+                    <br><small>ID Back</small>
+                </div>
+                ''')
+            except Exception:
+                html_parts.append('<div style="text-align: center; margin: 5px;"><small>ID Back (unavailable)</small></div>')
         
         if not html_parts:
             return "No documents uploaded"
@@ -133,7 +145,7 @@ class StaffAdmin(admin.ModelAdmin):
     list_display = ['staff_id', 'user', 'position', 'is_identity_verified', 'created_at']
     list_filter = ['is_identity_verified', 'position']
     search_fields = ['staff_id', 'user__username', 'user__email']
-    readonly_fields = ['created_at', 'updated_at']
+    readonly_fields = ['created_at', 'updated_at', 'document_preview']
     
     fieldsets = (
         ('Staff Information', {
@@ -144,13 +156,71 @@ class StaffAdmin(admin.ModelAdmin):
                       'verification_submitted_at', 'verified_at', 'verified_by', 'verification_notes')
         }),
         ('Documents', {
-            'fields': ('id_front', 'id_back', 'passport_photo', 'live_photo')
+            'fields': ('id_front', 'id_back', 'passport_photo', 'live_photo', 'document_preview')
         }),
         ('Timestamps', {
             'fields': ('created_at', 'updated_at'),
             'classes': ('collapse',)
         }),
     )
+    
+    def document_preview(self, obj):
+        """Display document previews in admin with safe error handling"""
+        html_parts = []
+        
+        # ID Front
+        if obj.id_front and hasattr(obj.id_front, 'url') and obj.id_front.url:
+            try:
+                html_parts.append(f'''
+                <div style="text-align: center; display: inline-block; margin: 5px;">
+                    <img src="{obj.id_front.url}" style="max-height: 100px; max-width: 100px; border: 1px solid #ddd; border-radius: 4px;" onerror="this.style.display=\'none\'">
+                    <br><small>ID Front</small>
+                </div>
+                ''')
+            except Exception:
+                pass
+        
+        # ID Back
+        if obj.id_back and hasattr(obj.id_back, 'url') and obj.id_back.url:
+            try:
+                html_parts.append(f'''
+                <div style="text-align: center; display: inline-block; margin: 5px;">
+                    <img src="{obj.id_back.url}" style="max-height: 100px; max-width: 100px; border: 1px solid #ddd; border-radius: 4px;" onerror="this.style.display=\'none\'">
+                    <br><small>ID Back</small>
+                </div>
+                ''')
+            except Exception:
+                pass
+        
+        # Passport Photo
+        if obj.passport_photo and hasattr(obj.passport_photo, 'url') and obj.passport_photo.url:
+            try:
+                html_parts.append(f'''
+                <div style="text-align: center; display: inline-block; margin: 5px;">
+                    <img src="{obj.passport_photo.url}" style="max-height: 100px; max-width: 100px; border: 1px solid #ddd; border-radius: 4px;" onerror="this.style.display=\'none\'">
+                    <br><small>Passport</small>
+                </div>
+                ''')
+            except Exception:
+                pass
+        
+        # Live Photo
+        if obj.live_photo and hasattr(obj.live_photo, 'url') and obj.live_photo.url:
+            try:
+                html_parts.append(f'''
+                <div style="text-align: center; display: inline-block; margin: 5px;">
+                    <img src="{obj.live_photo.url}" style="max-height: 100px; max-width: 100px; border: 1px solid #ddd; border-radius: 4px;" onerror="this.style.display=\'none\'">
+                    <br><small>Live Photo</small>
+                </div>
+                ''')
+            except Exception:
+                pass
+        
+        if not html_parts:
+            return "No documents uploaded"
+        
+        return mark_safe('<div style="display: flex; flex-wrap: wrap; gap: 10px;">' + ''.join(html_parts) + '</div>')
+    document_preview.short_description = 'Document Preview'
 
 
 # ============================================
