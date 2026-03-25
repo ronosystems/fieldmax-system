@@ -289,22 +289,20 @@ if not os.path.exists(LOGS_DIR):
 
 
 # ============================================
-# ENHANCED LOGGING FOR DEBUGGING
+# SIMPLIFIED LOGGING - REDUCED NOISE
 # ============================================
+import sys
+
 LOGGING = {
     'version': 1,
-    'disable_existing_loggers': False,
+    'disable_existing_loggers': True, 
     'formatters': {
-        'verbose': {
-            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
-            'style': '{',
-        },
         'simple': {
             'format': '{levelname} {message}',
             'style': '{',
         },
-        'detailed': {
-            'format': '[{asctime}] {levelname} [{name}:{lineno}] {message}',
+        'error_only': {
+            'format': '[{asctime}] {levelname} - {message}',
             'style': '{',
         },
     },
@@ -312,80 +310,71 @@ LOGGING = {
         'console': {
             'class': 'logging.StreamHandler',
             'stream': sys.stdout,
-            'formatter': 'detailed',
+            'formatter': 'error_only',
+            'level': 'ERROR', 
         },
         'console_stderr': {
             'class': 'logging.StreamHandler',
             'stream': sys.stderr,
-            'formatter': 'detailed',
-        },
-        'file': {
-            'class': 'logging.handlers.RotatingFileHandler',
-            'filename': os.path.join(BASE_DIR, 'logs', 'fieldmax.log'),
-            'maxBytes': 1024 * 1024 * 10,
-            'backupCount': 5,
-            'formatter': 'verbose',
-        },
-        'admin_file': {
-            'class': 'logging.handlers.RotatingFileHandler',
-            'filename': os.path.join(BASE_DIR, 'logs', 'admin.log'),
-            'maxBytes': 1024 * 1024 * 5,
-            'backupCount': 3,
-            'formatter': 'detailed',
+            'formatter': 'error_only',
+            'level': 'ERROR',
         },
     },
     'root': {
-        'handlers': ['console', 'file'],
-        'level': 'DEBUG' if DEBUG else 'INFO',
+        'handlers': ['console'],
+        'level': 'ERROR', 
     },
     'loggers': {
         'django': {
-            'handlers': ['console', 'file'],
-            'level': 'DEBUG' if DEBUG else 'INFO',
+            'handlers': ['console'],
+            'level': 'ERROR',
             'propagate': False,
         },
         'django.request': {
-            'handlers': ['console_stderr', 'file'],
-            'level': 'DEBUG' if DEBUG else 'ERROR',
+            'handlers': ['console_stderr'],
+            'level': 'ERROR',
             'propagate': False,
         },
         'django.db.backends': {
-            'handlers': ['file'],
-            'level': 'DEBUG' if DEBUG else 'WARNING',
+            'handlers': ['console'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+        'django.template': {
+            'handlers': ['console'],
+            'level': 'ERROR',
+            'propagate': False,
+        },
+        'django.utils.autoreload': {
+            'handlers': ['console'],
+            'level': 'WARNING', 
             'propagate': False,
         },
         'staff': {
-            'handlers': ['console', 'file', 'admin_file'],
-            'level': 'DEBUG',
+            'handlers': ['console'],
+            'level': 'ERROR',
             'propagate': False,
         },
-        'staff.admin': {
-            'handlers': ['console', 'admin_file'],
-            'level': 'DEBUG',
+        'sales': {
+            'handlers': ['console'],
+            'level': 'ERROR',
             'propagate': False,
         },
-        'staff.views': {
-            'handlers': ['console', 'file'],
-            'level': 'DEBUG',
-            'propagate': False,
-        },
-        'staff.utils': {
-            'handlers': ['console', 'file'],
-            'level': 'DEBUG',
+        'inventory': {
+            'handlers': ['console'],
+            'level': 'ERROR',
             'propagate': False,
         },
         'cloudinary': {
-            'handlers': ['console', 'file'],
-            'level': 'INFO',
+            'handlers': ['console'],
+            'level': 'ERROR',
             'propagate': False,
         },
     },
 }
 
-# Print startup information to console (for Render logs)
-print(f"=== FieldMax Startup ===")
-print(f"DEBUG: {DEBUG}")
-print(f"Cloudinary configured: {bool(cloudinary.config().cloud_name)}")
-print(f"MEDIA_URL: {MEDIA_URL}")
-print(f"MEDIA_ROOT: {MEDIA_ROOT}")
-print(f"========================")
+# Suppress specific warnings
+import warnings
+warnings.filterwarnings("ignore", message=".*Model 'staff.userstatus' was already registered.*")
+warnings.filterwarnings("ignore", category=RuntimeWarning, module="django.db.models.base")
+warnings.filterwarnings("ignore", category=UserWarning, module="django.template.base")

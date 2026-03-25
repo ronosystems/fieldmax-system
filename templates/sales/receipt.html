@@ -1,658 +1,673 @@
-{% extends 'sales/staff_base.html' %}
-{% load static %}
-
-{% block title %}Receipt #{{ sale.sale_id }}{% endblock %}
-
-{% block extra_css %}
-<style>
-    /* ============================================
-       THERMAL RECEIPT PRINTER STYLES - EXPANDED WIDTH
-       ============================================ */
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Receipt #{{ sale.sale_id }}</title>
     
-    .receipt-container {
-        max-width: 600px; /* Expanded from 302px to 600px (DOUBLE the original) */
-        margin: 20px auto;
-        background: white;
-        border-radius: 12px;
-        box-shadow: 0 6px 20px rgba(0,0,0,0.2);
-        overflow: hidden;
-    }
-
-    .receipt {
-        padding: 24px 20px;
-        font-family: 'Courier New', monospace;
-        font-size: 14px; /* Larger font for expanded width */
-        line-height: 1.5;
-        color: #000;
-    }
-
-    /* Company Header */
-    .receipt-header {
-        text-align: center;
-        border-bottom: 3px dashed #28a745;
-        padding-bottom: 18px;
-        margin-bottom: 18px;
-    }
-
-    .company-name {
-        font-size: 28px; /* Much larger for expanded width */
-        font-weight: bold;
-        color: #006eff;
-        margin-bottom: 10px;
-        letter-spacing: 1px;
-        text-transform: uppercase;
-    }
-
-    .company-details {
-        font-size: 16px;
-        line-height: 1.6;
-        color: #333;
-    }
-
-    /* Receipt Info Grid */
-    .receipt-info-grid {
-        background: #93b7db;
-        border-radius: 10px;
-        padding: 16px;
-        margin-bottom: 18px;
-        border: 1px solid #000000;
-    }
-
-    .info-row {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 20px;
-        margin-bottom: 10px;
-        font-size: 15px;
-    }
-
-    .info-row:last-child {
-        margin-bottom: 0;
-    }
-
-    .info-label {
-        font-weight: bold;
-        color: #000000;
-    }
-
-    /* Customer Card */
-    .customer-card {
-        background: #f8f9fa;
-        border-radius: 10px;
-        padding: 16px;
-        margin-bottom: 18px;
-        border-left: 6px solid #28a745;
-    }
-
-    .customer-title {
-        font-weight: bold;
-        color: #0077ff;
-        margin-bottom: 10px;
-        font-size: 16px;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-    }
-
-    .customer-detail {
-        margin-bottom: 5px;
-        font-size: 15px;
-        word-wrap: break-word;
-    }
-
-    /* Items Table */
-    .items-table {
-        margin-bottom: 18px;
-        border: 2px solid #dee2e6;
-        border-radius: 10px;
-        overflow: hidden;
-    }
-
-    .items-header {
-        display: grid;
-        grid-template-columns: 40% 12% 16% 12% 20%; /* Expanded columns */
-        background: #00b7ff;
-        color: white;
-        font-weight: bold;
-        font-size: 14px;
-        padding: 12px 8px;
-        text-transform: uppercase;
-    }
-
-    .items-header > div {
-        padding: 0 4px;
-        text-align: right;
-    }
-
-    .items-header > div:first-child {
-        text-align: left;
-    }
-
-    .item-row {
-        display: grid;
-        grid-template-columns: 40% 12% 16% 12% 20%;
-        font-size: 14px;
-        border-bottom: 1px dashed #dee2e6;
-        padding: 10px 8px;
-    }
-
-    .item-row:last-child {
-        border-bottom: none;
-    }
-
-    .item-row > div {
-        padding: 0 4px;
-        text-align: right;
-        word-wrap: break-word;
-    }
-
-    .item-row > div:first-child {
-        text-align: left;
-    }
-
-    .item-description {
-        font-weight: 600;
-        font-size: 15px;
-    }
-
-    .item-sku {
-        font-size: 11px;
-        color: #6c757d;
-        display: block;
-        margin-top: 3px;
-    }
-
-    /* Totals Card */
-    .totals-card {
-        background: #f8f9fa;
-        border-radius: 10px;
-        padding: 18px;
-        margin-bottom: 18px;
-        border: 1px solid #e9ecef;
-    }
-
-    .total-line {
-        display: flex;
-        justify-content: space-between;
-        margin-bottom: 10px;
-        font-size: 15px;
-    }
-
-    .total-line.grand-total {
-        font-size: 20px;
-        font-weight: bold;
-        border-top: 3px solid #28a745;
-        padding-top: 12px;
-        margin-top: 12px;
-        color: #28a745;
-    }
-
-    /* Payment Card */
-    .payment-card {
-        background: #f8f9fa;
-        border-radius: 10px;
-        padding: 18px;
-        margin-bottom: 18px;
-        border-left: 6px solid #28a745;
-    }
-
-    .payment-line {
-        display: flex;
-        justify-content: space-between;
-        margin-bottom: 10px;
-        font-size: 15px;
-    }
-
-    .change-positive {
-        color: #28a745;
-        font-weight: bold;
-    }
-
-    .change-negative {
-        color: #dc3545;
-        font-weight: bold;
-    }
-
-    /* Loyalty Points Card - Expanded */
-    .loyalty-card {
-        background: linear-gradient(135deg, #6a838a, #819fa1);
-        color: rgb(0, 0, 0);
-        border-radius: 12px;
-        padding: 20px;
-        margin-bottom: 18px;
-        font-size: 16px;
-        box-shadow: 0 4px 12px rgb(0, 0, 0);
-    }
-
-    .loyalty-title {
-        font-size: 20px;
-        font-weight: bold;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        margin-bottom: 15px;
-        text-align: center;
-        color: #0011ff;
-        border-bottom: 2px solid rgb(0, 0, 0);
-        padding-bottom: 10px;
-    }
-
-    .loyalty-row {
-        display: flex;
-        justify-content: space-between;
-        margin-bottom: 12px;
-        padding-bottom: 8px;
-        border-bottom: 1px dashed rgb(0, 0, 0);
-        font-size: 16px;
-    }
-
-    .loyalty-row:last-child {
-        border-bottom: none;
-        margin-bottom: 0;
-        padding-bottom: 0;
-    }
-
-    .loyalty-label {
-        opacity: 0.9;
-        font-weight: 500;
-    }
-
-    .loyalty-value {
-        font-weight: bold;
-        font-size: 18px;
-    }
-
-    .points-earned {
-        color: #020169;
-        font-weight: bold;
-    }
-
-    /* Fiscal Info */
-    .fiscal-info {
-        display: flex;
-        justify-content: space-between;
-        background: #e9ecef;
-        border-radius: 8px;
-        padding: 12px 16px;
-        margin-bottom: 18px;
-        font-size: 14px;
-        font-weight: bold;
-    }
-
-    /* Footer */
-    .receipt-footer {
-        text-align: center;
-        font-size: 13px;
-        color: #6c757d;
-    }
-
-    .thank-you {
-        color: #28a745;
-        font-weight: bold;
-        font-size: 22px;
-        margin: 15px 0 10px;
-        text-transform: uppercase;
-    }
-
-    .footer-divider {
-        border-top: 2px dashed #dee2e6;
-        margin: 15px 0;
-    }
-
-    .receipt-barcode {
-        font-family: 'Courier New', monospace;
-        font-size: 18px;
-        letter-spacing: 4px;
-        margin-top: 15px;
-        color: #28a745;
-        font-weight: bold;
-    }
-
-    /* Print Buttons Container */
-    .print-actions {
-        max-width: 600px;
-        margin: 20px auto 30px auto;
-        display: flex;
-        gap: 15px;
-        justify-content: center;
-    }
-
-    /* Print Button Styles */
-    .print-button {
-        flex: 1;
-        padding: 15px 25px;
-        background: #28a745;
-        color: white;
-        border: none;
-        border-radius: 8px;
-        cursor: pointer;
-        font-size: 16px;
-        font-weight: bold;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-        transition: all 0.2s;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 10px;
-    }
-
-    .print-button:hover {
-        background: #218838;
-        transform: translateY(-3px);
-        box-shadow: 0 8px 16px rgba(0,0,0,0.2);
-    }
-
-    .print-button.secondary {
-        background: #6c757d;
-    }
-
-    .print-button.secondary:hover {
-        background: #5a6268;
-    }
-
-    .print-button i {
-        font-size: 18px;
-    }
-
-    /* Print Styles */
-    @media print {
-        .no-print, .print-actions, .sidebar, .footer, .main-content > .footer {
-            display: none !important;
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        /* ============================================
+           THERMAL RECEIPT PRINTER STYLES - STANDALONE
+           ============================================ */
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-
+        
+        body {
+            background: linear-gradient(135deg, #00aeff 0%, #00b7ff 100%);
+            min-height: 100vh;
+            padding: 20px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
         .receipt-container {
             max-width: 600px;
-            box-shadow: none;
-            margin: 0 auto;
-            border-radius: 0;
-        }
-
-        body {
+            margin: 20px auto;
             background: white;
-            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+            overflow: hidden;
         }
 
-        * {
-            color: #000 !important;
+        .receipt {
+            padding: 24px 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            color: #000;
         }
 
-        .items-header {
-            background: #f0f0f0 !important;
-            color: #000 !important;
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
+        /* Company Header */
+        .receipt-header {
+            text-align: center;
+            border-bottom: 3px dashed #28a745;
+            padding-bottom: 18px;
+            margin-bottom: 18px;
         }
 
         .company-name {
-            color: #000 !important;
+            font-size: 28px;
+            font-weight: bold;
+            color: #28a745;
+            margin-bottom: 10px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .company-details {
+            font-size: 16px;
+            line-height: 1.6;
+            color: #333;
+        }
+
+        /* Receipt Info Grid */
+        .receipt-info-grid {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 16px;
+            margin-bottom: 18px;
+            border: 1px solid #e9ecef;
+        }
+
+        .info-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 10px;
+            font-size: 15px;
+        }
+
+        .info-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .info-label {
+            font-weight: bold;
+            color: #28a745;
+        }
+
+        /* Customer Card */
+        .customer-card {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 16px;
+            margin-bottom: 18px;
+            border-left: 6px solid #28a745;
+        }
+
+        .customer-title {
+            font-weight: bold;
+            color: #28a745;
+            margin-bottom: 10px;
+            font-size: 16px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .customer-detail {
+            margin-bottom: 5px;
+            font-size: 15px;
+            word-wrap: break-word;
+        }
+
+        /* Items Table */
+        .items-table {
+            margin-bottom: 18px;
+            border: 2px solid #dee2e6;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .items-header {
+            display: grid;
+            grid-template-columns: 40% 12% 16% 12% 20%;
+            background: #28a745;
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+            padding: 12px 8px;
+            text-transform: uppercase;
+        }
+
+        .items-header > div {
+            padding: 0 4px;
+            text-align: right;
+        }
+
+        .items-header > div:first-child {
+            text-align: left;
+        }
+
+        .item-row {
+            display: grid;
+            grid-template-columns: 40% 12% 16% 12% 20%;
+            font-size: 14px;
+            border-bottom: 1px dashed #dee2e6;
+            padding: 10px 8px;
+        }
+
+        .item-row:last-child {
+            border-bottom: none;
+        }
+
+        .item-row > div {
+            padding: 0 4px;
+            text-align: right;
+            word-wrap: break-word;
+        }
+
+        .item-row > div:first-child {
+            text-align: left;
+        }
+
+        .item-description {
+            font-weight: 600;
+            font-size: 15px;
+        }
+
+        .item-sku {
+            font-size: 11px;
+            color: #6c757d;
+            display: block;
+            margin-top: 3px;
+        }
+
+        /* Totals Card */
+        .totals-card {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 18px;
+            margin-bottom: 18px;
+            border: 1px solid #e9ecef;
+        }
+
+        .total-line {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-size: 15px;
         }
 
         .total-line.grand-total {
-            color: #000 !important;
+            font-size: 20px;
+            font-weight: bold;
+            border-top: 3px solid #28a745;
+            padding-top: 12px;
+            margin-top: 12px;
+            color: #28a745;
         }
 
+        /* Payment Card */
+        .payment-card {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 18px;
+            margin-bottom: 18px;
+            border-left: 6px solid #28a745;
+        }
+
+        .payment-line {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-size: 15px;
+        }
+
+        .change-positive {
+            color: #28a745;
+            font-weight: bold;
+        }
+
+        .change-negative {
+            color: #dc3545;
+            font-weight: bold;
+        }
+
+        /* Loyalty Points Card */
         .loyalty-card {
-            background: #f0f0f0 !important;
-            color: #000 !important;
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
+            background: linear-gradient(135deg, #6f6f6f, #8b8b8b);
+            color: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 18px;
+            font-size: 16px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .loyalty-title {
+            font-size: 20px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 15px;
+            text-align: center;
+            color: #ffc107;
+            border-bottom: 2px solid #ffc107;
+            padding-bottom: 10px;
+        }
+
+        .loyalty-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px dashed rgba(255,255,255,0.3);
+            font-size: 16px;
+        }
+
+        .loyalty-row:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+
+        .loyalty-label {
+            opacity: 0.9;
+            font-weight: 500;
+        }
+
+        .loyalty-value {
+            font-weight: bold;
+            font-size: 18px;
         }
 
         .points-earned {
-            color: #000 !important;
+            color: #ffc107;
+            font-weight: bold;
         }
-    }
 
-    /* Responsive */
-    @media (max-width: 768px) {
-        .receipt-container {
-            margin: 10px;
+        /* Fiscal Info */
+        .fiscal-info {
+            display: flex;
+            justify-content: space-between;
+            background: #e9ecef;
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 18px;
+            font-size: 14px;
+            font-weight: bold;
         }
-        
+
+        /* Footer */
+        .receipt-footer {
+            text-align: center;
+            font-size: 13px;
+            color: #6c757d;
+        }
+
+        .thank-you {
+            color: #28a745;
+            font-weight: bold;
+            font-size: 22px;
+            margin: 15px 0 10px;
+            text-transform: uppercase;
+        }
+
+        .footer-divider {
+            border-top: 2px dashed #dee2e6;
+            margin: 15px 0;
+        }
+
+        .receipt-barcode {
+            font-family: 'Courier New', monospace;
+            font-size: 18px;
+            letter-spacing: 4px;
+            margin-top: 15px;
+            color: #28a745;
+            font-weight: bold;
+        }
+
+        /* Print Buttons Container */
         .print-actions {
-            margin: 10px;
-            flex-direction: column;
+            max-width: 600px;
+            margin: 20px auto 30px auto;
+            display: flex;
+            gap: 15px;
+            justify-content: center;
         }
-    }
-</style>
-{% endblock %}
 
-{% block content %}
-<!-- Receipt Container - EXPANDED WIDTH (600px) -->
-<div class="receipt-container">
-    <div class="receipt">
-        <!-- ============================================
-             HEADER SECTION - EXPANDED
-             ============================================ -->
-        <div class="receipt-header">
-            <div class="company-name">FIELDMAX SUPPLIERS LIMITED</div>
-            <div class="company-details">
-                Address: NAIROBI KENYA<br>
-                Tel: 0722 558 544<br>
-                Email: fieldmaxsuppliers@gmail.com<br>
-                PIN: ------------<br>
-            </div>
-        </div>
+        /* Print Button Styles */
+        .print-button {
+            flex: 1;
+            padding: 15px 25px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
 
-        <!-- ============================================
-             RECEIPT INFORMATION - EXPANDED
-             ============================================ -->
-        <div class="receipt-info-grid">
-            <div class="info-row">
-                <div><span class="info-label">Receipt No:</span> {{ sale.sale_id }}</div>
-                <div><span class="info-label">Date:</span> {{ sale.sale_date|date:"Y-m-d" }}</div>
-            </div>
-            <div class="info-row">
-                <div><span class="info-label">Served By:</span> 
-                    {% if sale.seller.first_name %}
-                        {{ sale.seller.first_name }}
-                    {% else %}
-                        {{ sale.seller.username|default:"System" }}
-                    {% endif %}
-                </div>
-                <div><span class="info-label">Time:</span> {{ sale.sale_date|date:"H:i:s" }}</div>
-            </div>
-        </div>
+        .print-button:hover {
+            background: #218838;
+            transform: translateY(-3px);
+            box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+        }
 
-        <!-- ============================================
-             CUSTOMER INFORMATION - EXPANDED
-             ============================================ -->
-        {% if sale.buyer_name or sale.buyer_phone %}
-        <div class="customer-card">
-            <div class="customer-title">
-                <i class="fas fa-user me-2"></i> CUSTOMER DETAILS
-            </div>
-            {% if sale.buyer_name %}
-            <div class="customer-detail"><strong>Name:</strong> {{ sale.buyer_name }}</div>
-            {% endif %}
-            {% if sale.buyer_phone %}
-            <div class="customer-detail"><strong>Phone:</strong> {{ sale.buyer_phone }}</div>
-            {% endif %}
-        </div>
-        {% endif %}
+        .print-button.secondary {
+            background: #6c757d;
+        }
 
-        <!-- ============================================
-             ITEMS SECTION - EXPANDED
-             ============================================ -->
-        <div class="items-table">
-            <div class="items-header">
-                <div>Description</div>
-                <div>Qty</div>
-                <div>Price</div>
-                <div>Disc</div>
-                <div>Total</div>
-            </div>
+        .print-button.secondary:hover {
+            background: #5a6268;
+        }
+
+        .print-button i {
+            font-size: 18px;
+        }
+
+        /* Print Styles */
+        @media print {
+            .print-actions {
+                display: none !important;
+            }
+
+            .receipt-container {
+                max-width: 600px;
+                box-shadow: none;
+                margin: 0 auto;
+                border-radius: 0;
+            }
+
+            body {
+                background: white;
+                padding: 0;
+                margin: 0;
+            }
+
+            * {
+                color: #000 !important;
+            }
+
+            .items-header {
+                background: #f0f0f0 !important;
+                color: #000 !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .company-name {
+                color: #28a745 !important;
+            }
+
+            .total-line.grand-total {
+                color: #28a745 !important;
+            }
+
+            .loyalty-card {
+                background: #f0f0f0 !important;
+                color: #000 !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .points-earned {
+                color: #ffc107 !important;
+            }
             
-            {% for item in items %}
-            <div class="item-row">
-                <div>
-                    <span class="item-description">{{ item.product_name }}</span>
-                    <span class="item-sku">
-                        {% if item.product.category.sku_type %}{{ item.product.category.sku_type }}: {% endif %}
-                        {{ item.sku_value|default:"-" }}
+            @page {
+                size: 80mm auto;
+                margin: 0mm;
+            }
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            
+            .receipt-container {
+                margin: 10px auto;
+            }
+            
+            .print-actions {
+                margin: 10px;
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Receipt Container -->
+    <div class="receipt-container">
+        <div class="receipt">
+            <!-- HEADER SECTION -->
+            <div class="receipt-header">
+                <div class="company-name">FIELDMAX SUPPLIERS LIMITED</div>
+                <div class="company-details">
+                    Address: NAIROBI KENYA<br>
+                    Tel: 0722 558 544<br>
+                    Email: fieldmaxsuppliers@gmail.com<br>
+                    PIN: ------------<br>
+                </div>
+            </div>
+
+            <!-- RECEIPT INFORMATION -->
+            <div class="receipt-info-grid">
+                <div class="info-row">
+                    <div><span class="info-label">Receipt No:</span> {{ sale.sale_id }}</div>
+                    <div><span class="info-label">Date:</span> {{ sale.sale_date|date:"Y-m-d" }}</div>
+                </div>
+                <div class="info-row">
+                    <div><span class="info-label">Served By:</span> 
+                        {% if sale.seller.first_name %}
+                            {{ sale.seller.first_name }}
+                        {% else %}
+                            {{ sale.seller.username|default:"System" }}
+                        {% endif %}
+                    </div>
+                    <div><span class="info-label">Time:</span> {{ sale.sale_date|date:"H:i:s" }}</div>
+                </div>
+            </div>
+
+            <!-- CUSTOMER INFORMATION -->
+            {% if sale.buyer_name or sale.buyer_phone %}
+            <div class="customer-card">
+                <div class="customer-title">
+                    <i class="fas fa-user me-2"></i> CUSTOMER DETAILS
+                </div>
+                {% if sale.buyer_name %}
+                <div class="customer-detail"><strong>Name:</strong> {{ sale.buyer_name }}</div>
+                {% endif %}
+                {% if sale.buyer_phone %}
+                <div class="customer-detail"><strong>Phone:</strong> {{ sale.buyer_phone }}</div>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            <!-- ITEMS SECTION -->
+            <div class="items-table">
+                <div class="items-header">
+                    <div>Description</div>
+                    <div>Qty</div>
+                    <div>Price</div>
+                    <div>Disc</div>
+                    <div>Total</div>
+                </div>
+                
+                {% for item in items %}
+                <div class="item-row">
+                    <div>
+                        <span class="item-description">{{ item.product_name }}</span>
+                        <span class="item-sku">
+                            {% if item.sku_value %}IMEI: {{ item.sku_value }}{% endif %}
+                        </span>
+                    </div>
+                    <div>{{ item.quantity }}</div>
+                    <div>KSH {{ item.unit_price|floatformat:0 }}</div>
+                    <div>0</div>
+                    <div><strong>KSH {{ item.total_price|floatformat:0 }}</strong></div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- TOTALS SECTION -->
+            <div class="totals-card">
+                <div class="total-line">
+                    <span>Subtotal:</span>
+                    <span>KSH {{ sale.subtotal|floatformat:2 }}</span>
+                </div>
+
+                {% if sale.tax_amount and sale.tax_amount > 0 %}
+                <div class="total-line">
+                    <span>VAT (16%):</span>
+                    <span>KSH {{ sale.tax_amount|floatformat:2 }}</span>
+                </div>
+                {% endif %}
+
+                {% if sale.points_discount and sale.points_discount > 0 %}
+                <div class="total-line" style="color: #ff9800;">
+                    <span>Points Discount:</span>
+                    <span>-KSH {{ sale.points_discount|floatformat:2 }}</span>
+                </div>
+                {% endif %}
+
+                <div class="total-line grand-total">
+                    <span>GRAND TOTAL:</span>
+                    <span>KSH {{ sale.total_amount|floatformat:2 }}</span>
+                </div>
+            </div>
+
+            <!-- PAYMENT SECTION -->
+            <div class="payment-card">
+                <div class="payment-line">
+                    <span>Payment Method:</span>
+                    <span><strong>{{ sale.payment_method|default:"Cash" }}</strong></span>
+                </div>
+                <div class="payment-line">
+                    <span>Amount Paid:</span>
+                    <span>KSH {{ sale.amount_paid|floatformat:2 }}</span>
+                </div>
+                <div class="payment-line">
+                    <span>Change:</span>
+                    <span class="{% if change >= 0 %}change-positive{% else %}change-negative{% endif %}">
+                        KSH {{ change|floatformat:2 }}
                     </span>
                 </div>
-                <div>{{ item.quantity }}</div>
-                <div>KSH {{ item.unit_price|floatformat:0 }}</div>
-                <div>0</div>
-                <div><strong>KSH {{ item.total_price|floatformat:0 }}</strong></div>
-            </div>
-            {% endfor %}
-        </div>
-
-        <!-- ============================================
-             TOTALS SECTION - EXPANDED
-             ============================================ -->
-        <div class="totals-card">
-            <div class="total-line">
-                <span>Subtotal:</span>
-                <span>KSH {{ sale.subtotal|floatformat:2 }}</span>
             </div>
 
-            {% if sale.tax_amount and sale.tax_amount > 0 %}
-            <div class="total-line">
-                <span>VAT (16%):</span>
-                <span>KSH {{ sale.tax_amount|floatformat:2 }}</span>
+            <!-- LOYALTY POINTS SECTION -->
+            {% if customer %}
+            <div class="loyalty-card">
+                <div class="loyalty-title">
+                    <i class="fas fa-star"></i> LOYALTY POINTS <i class="fas fa-star"></i>
+                </div>
+                
+                <div class="loyalty-row">
+                    <span class="loyalty-label">Customer:</span>
+                    <span class="loyalty-value">{{ customer.full_name }}</span>
+                </div>
+                
+                <div class="loyalty-row">
+                    <span class="loyalty-label">Previous Points:</span>
+                    <span class="loyalty-value">{{ previous_points }}</span>
+                </div>
+                
+                <div class="loyalty-row">
+                    <span class="loyalty-label">Points Earned Today:</span>
+                    <span class="loyalty-value points-earned">+{{ points_earned_today }}</span>
+                </div>
             </div>
             {% endif %}
 
-            {% if sale.points_discount and sale.points_discount > 0 %}
-            <div class="total-line" style="color: #ff9800;">
-                <span>Points Discount:</span>
-                <span>-KSH {{ sale.points_discount|floatformat:2 }}</span>
+            <!-- FISCAL INFORMATION -->
+            <div class="fiscal-info">
+                <span>FISCAL RECEIPT</span>
+                <span>TAX INVOICE</span>
+                {% if sale.fiscal_receipt_number %}
+                <span>| NO: {{ sale.fiscal_receipt_number }}</span>
+                {% endif %}
             </div>
-            {% endif %}
 
-            <div class="total-line grand-total">
-                <span>GRAND TOTAL:</span>
-                <span>KSH {{ sale.total_amount|floatformat:2 }}</span>
-            </div>
-        </div>
-
-        <!-- ============================================
-             PAYMENT SECTION - EXPANDED
-             ============================================ -->
-        <div class="payment-card">
-            <div class="payment-line">
-                <span>Payment Method:</span>
-                <span><strong>{{ sale.payment_method|default:"Cash" }}</strong></span>
-            </div>
-            <div class="payment-line">
-                <span>Amount Paid:</span>
-                <span>KSH {{ sale.amount_paid|floatformat:2 }}</span>
-            </div>
-            <div class="payment-line">
-                <span>Change:</span>
-                <span class="{% if change >= 0 %}change-positive{% else %}change-negative{% endif %}">
-                    KSH {{ change|floatformat:2 }}
-                </span>
-            </div>
-        </div>
-
-        <!-- ============================================
-             LOYALTY POINTS SECTION - EXPANDED
-             PREVIOUS POINTS & POINTS EARNED TODAY ONLY
-             ============================================ -->
-        {% if customer %}
-        <div class="loyalty-card">
-            <div class="loyalty-title">
-                <i class="fas fa-star"></i> LOYALTY POINTS <i class="fas fa-star"></i>
-            </div>
-            
-            <!-- Customer Name -->
-            <div class="loyalty-row">
-                <span class="loyalty-label">Customer:</span>
-                <span class="loyalty-value">{{ customer.full_name }}</span>
-            </div>
-            
-            <!-- Previous Points -->
-            <div class="loyalty-row">
-                <span class="loyalty-label">Previous Points:</span>
-                <span class="loyalty-value">{{ previous_points }}</span>
-            </div>
-            
-            <!-- Points Earned Today -->
-            <div class="loyalty-row">
-                <span class="loyalty-label">Points Earned Today:</span>
-                <span class="loyalty-value points-earned">+{{ points_earned_today }}</span>
-            </div>
-        </div>
-        {% endif %}
-
-        <!-- ============================================
-             FISCAL INFORMATION - EXPANDED
-             ============================================ -->
-        <div class="fiscal-info">
-            <span>FISCAL RECEIPT</span>
-            <span>TAX INVOICE</span>
-            {% if sale.fiscal_receipt_number %}
-            <span>| NO: {{ sale.fiscal_receipt_number }}</span>
-            {% endif %}
-        </div>
-
-        <!-- ============================================
-             FOOTER - EXPANDED
-             ============================================ -->
-        <div class="receipt-footer">
-            <div class="footer-divider"></div>
-            <div class="thank-you">THANK YOU FOR YOUR BUSINESS!</div>
-            <div class="small">
-                Goods once sold cannot be returned<br>
-                Please keep this receipt for your records
-            </div>
-            <div class="footer-divider"></div>
-            <div class="small">
-                This is a computer-generated receipt<br>
-                No signature required
-            </div>
-            <div class="receipt-barcode">
-                * {{ sale.sale_id }} *
+            <!-- FOOTER -->
+            <div class="receipt-footer">
+                <div class="footer-divider"></div>
+                <div class="thank-you">THANK YOU FOR YOUR BUSINESS!</div>
+                <div class="small">
+                    Goods once sold cannot be returned<br>
+                    Please keep this receipt for your records
+                </div>
+                <div class="footer-divider"></div>
+                <div class="small">
+                    This is a computer-generated receipt<br>
+                    No signature required
+                </div>
+                <div class="receipt-barcode">
+                    * {{ sale.sale_id }} *
+                </div>
             </div>
         </div>
     </div>
-</div>
 
-<!-- ============================================
-     PRINT BUTTONS - OUTSIDE THE CONTAINER
-     ============================================ -->
-<div class="print-actions no-print">
-    <button class="print-button" onclick="window.print()">
-        <i class="fas fa-print"></i> Print Receipt
-    </button>
-    <button class="print-button secondary" onclick="window.close()">
-        <i class="fas fa-times"></i> Close
-    </button>
-</div>
-{% endblock %}
+    <!-- PRINT BUTTONS -->
+    <div class="print-actions no-print">
+        <button class="print-button" onclick="window.print()">
+            <i class="fas fa-print"></i> Print Receipt
+        </button>
+        <button class="print-button secondary" onclick="window.close()">
+            <i class="fas fa-times"></i> Close
+        </button>
+    </div>
 
-{% block extra_js %}
-<script>
-(function() {
-    'use strict';
-    
-    // Print function
-    window.printReceipt = function() {
-        window.print();
-    };
-
-    // Keyboard shortcut: Ctrl+P
-    document.addEventListener('keydown', function(e) {
-        if (e.ctrlKSH && e.key === 'p') {
-            e.preventDefault();
+    <script>
+    (function() {
+        'use strict';
+        
+        // Print function
+        window.printReceipt = function() {
             window.print();
-        }
-    });
+        };
 
-    // Auto-focus print button for keyboard users
-    document.addEventListener('DOMContentLoaded', function() {
-        const printBtn = document.querySelector('.print-button');
-        if (printBtn) {
-            printBtn.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
+        // Keyboard shortcut: Ctrl+P
+        document.addEventListener('keydown', function(e) {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+                e.preventDefault();
+                window.print();
+            }
+        });
+
+        // Auto-focus print button for keyboard users
+        document.addEventListener('DOMContentLoaded', function() {
+            const printBtn = document.querySelector('.print-button');
+            if (printBtn) {
+                printBtn.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        window.print();
+                    }
+                });
+            }
+            
+            // Auto-print if coming from sale completion
+            if (window.opener && window.location.search.includes('auto_print=true')) {
+                setTimeout(function() {
                     window.print();
-                }
-            });
-        }
-    });
-})();
-</script>
-{% endblock %}
+                }, 500);
+            }
+        });
+        
+        // Handle print completion
+        window.onafterprint = function() {
+            // Optional: Close window after print (uncomment if desired)
+            // setTimeout(function() { window.close(); }, 1000);
+        };
+    })();
+    </script>
+</body>
+</html>
