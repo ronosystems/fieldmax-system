@@ -1,4 +1,4 @@
-# staff/admin.py
+# staff/admin.py - Complete working version
 from django.contrib import admin
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
@@ -9,14 +9,12 @@ from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
 from .models import StaffApplication, Staff, OTPVerification, UserProfile, UserStatus
 from .utils.user_status import UserStatusManager
-import logging
 
-logger = logging.getLogger(__name__)
 User = get_user_model()
 
 
 # ============================================
-# Staff Application Admin
+# Staff Application Admin - Simplified
 # ============================================
 @admin.register(StaffApplication)
 class StaffApplicationAdmin(admin.ModelAdmin):
@@ -94,7 +92,7 @@ class StaffApplicationAdmin(admin.ModelAdmin):
 
 
 # ============================================
-# Staff Admin - Simplified version without preview
+# Staff Admin
 # ============================================
 @admin.register(Staff)
 class StaffAdmin(admin.ModelAdmin):
@@ -144,7 +142,7 @@ class UserProfileAdmin(admin.ModelAdmin):
 
 
 # ============================================
-# User Status Admin (Inline already used)
+# User Status Admin
 # ============================================
 @admin.register(UserStatus)
 class UserStatusAdmin(admin.ModelAdmin):
