@@ -1,12 +1,11 @@
-# staff/admin.py - Complete working version
+# staff/admin.py
 from django.contrib import admin
-from django.utils.html import format_html
-from django.utils.safestring import mark_safe
-from django.contrib import messages
-from django.utils import timezone
+from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
+from django.contrib import messages
+from django.utils import timezone
 from .models import StaffApplication, Staff, OTPVerification, UserProfile, UserStatus
 from .utils.user_status import UserStatusManager
 
@@ -14,11 +13,32 @@ User = get_user_model()
 
 
 # ============================================
-# Staff Application Admin - Simplified
+# Custom Form for Staff to handle Cloudinary URLs
+# ============================================
+class StaffAdminForm(forms.ModelForm):
+    """Custom form for Staff to handle image fields properly"""
+    
+    class Meta:
+        model = Staff
+        fields = '__all__'
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Don't try to display current image URL if it's not accessible
+        for field_name in ['id_front', 'id_back', 'passport_photo', 'live_photo']:
+            if field_name in self.fields:
+                field = self.fields[field_name]
+                # Remove the URL display from the widget to avoid ValueError
+                if hasattr(field, 'widget'):
+                    field.widget.is_initial = lambda value: False
+
+
+# ============================================
+# Staff Application Admin - Minimal
 # ============================================
 @admin.register(StaffApplication)
 class StaffApplicationAdmin(admin.ModelAdmin):
-    list_display = ['full_name', 'email', 'phone', 'position', 'status_badge', 'application_date']
+    list_display = ['full_name', 'email', 'phone', 'position', 'status', 'application_date']
     list_filter = ['status', 'position', 'application_date']
     search_fields = ['first_name', 'last_name', 'email', 'phone', 'id_number']
     readonly_fields = ['application_date', 'ip_address', 'user_agent']
@@ -46,21 +66,6 @@ class StaffApplicationAdmin(admin.ModelAdmin):
         return obj.full_name()
     full_name.short_description = 'Full Name'
     
-    def status_badge(self, obj):
-        colors = {
-            'pending': 'warning',
-            'approved': 'success',
-            'rejected': 'danger',
-            'under_review': 'info',
-        }
-        color = colors.get(obj.status, 'secondary')
-        return format_html(
-            '<span class="badge bg-{}">{}</span>',
-            color,
-            obj.get_status_display()
-        )
-    status_badge.short_description = 'Status'
-    
     actions = ['approve_applications', 'reject_applications', 'mark_under_review']
     
     def approve_applications(self, request, queryset):
@@ -70,7 +75,6 @@ class StaffApplicationAdmin(admin.ModelAdmin):
             review_date=timezone.now()
         )
         self.message_user(request, f'{updated} applications approved.')
-    approve_applications.short_description = "Approve selected applications"
     
     def reject_applications(self, request, queryset):
         updated = queryset.update(
@@ -79,7 +83,6 @@ class StaffApplicationAdmin(admin.ModelAdmin):
             review_date=timezone.now()
         )
         self.message_user(request, f'{updated} applications rejected.')
-    reject_applications.short_description = "Reject selected applications"
     
     def mark_under_review(self, request, queryset):
         updated = queryset.update(
@@ -88,14 +91,14 @@ class StaffApplicationAdmin(admin.ModelAdmin):
             review_date=timezone.now()
         )
         self.message_user(request, f'{updated} applications marked under review.')
-    mark_under_review.short_description = "Mark as under review"
 
 
 # ============================================
-# Staff Admin
+# Staff Admin - With Custom Form
 # ============================================
 @admin.register(Staff)
 class StaffAdmin(admin.ModelAdmin):
+    form = StaffAdminForm  # Use custom form
     list_display = ['staff_id', 'user', 'position', 'is_identity_verified', 'created_at']
     list_filter = ['is_identity_verified', 'position']
     search_fields = ['staff_id', 'user__username', 'user__email']
@@ -168,23 +171,8 @@ class UserStatusInline(admin.StackedInline):
 
 class CustomUserAdmin(BaseUserAdmin):
     inlines = [UserStatusInline]
-    list_display = ('username', 'email', 'first_name', 'last_name', 'status_badge', 'is_staff', 'is_active')
+    list_display = ('username', 'email', 'first_name', 'last_name', 'is_staff', 'is_active')
     list_filter = ('is_active', 'is_staff', 'is_superuser')
-    
-    def status_badge(self, obj):
-        """Display user status with colored badge"""
-        try:
-            if hasattr(obj, 'status'):
-                if not obj.is_active:
-                    return mark_safe('<span class="badge bg-danger">Deactivated</span>')
-                if obj.status.is_locked:
-                    return mark_safe('<span class="badge bg-info">Locked</span>')
-                if obj.status.is_suspended:
-                    return mark_safe('<span class="badge bg-warning">Suspended</span>')
-            return mark_safe('<span class="badge bg-success">Active</span>')
-        except:
-            return mark_safe('<span class="badge bg-secondary">Unknown</span>')
-    status_badge.short_description = 'Status'
     
     actions = ['lock_users', 'unlock_users', 'suspend_users', 'unsuspend_users', 'deactivate_users', 'activate_users']
     
