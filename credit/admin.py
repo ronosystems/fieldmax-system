@@ -143,7 +143,12 @@ class CreditTransactionAdmin(admin.ModelAdmin):
     credit_company_link.short_description = 'Company'
     
     def commission_amount_display(self, obj):
-        return format_html('KSH {:.2f}', obj.commission_amount)
+        # FIXED: Convert to float and handle Decimal/SafeString
+        try:
+            amount = float(obj.commission_amount) if obj.commission_amount else 0
+            return format_html('KSH {:.2f}', amount)
+        except (TypeError, ValueError):
+            return format_html('KSH {}', obj.commission_amount or 0)
     commission_amount_display.short_description = 'Commission'
     
     def payment_status_colored(self, obj):
@@ -187,11 +192,20 @@ class CreditTransactionAdmin(admin.ModelAdmin):
 
 @admin.register(SellerCommission)
 class SellerCommissionAdmin(admin.ModelAdmin):
-    list_display = ['seller', 'transaction_link', 'amount', 'status_colored', 'paid_date']
+    list_display = ['seller', 'transaction_link', 'amount_display', 'status_colored', 'paid_date']
     list_filter = ['status', 'created_at', 'paid_date']
     search_fields = ['seller__username', 'seller__email', 'transaction__transaction_id']
     readonly_fields = ['created_at', 'updated_at']
     raw_id_fields = ['seller', 'transaction', 'paid_by']
+    
+    def amount_display(self, obj):
+        # FIXED: Add this method to display amount properly
+        try:
+            amount = float(obj.amount) if obj.amount else 0
+            return format_html('KSH {:.2f}', amount)
+        except (TypeError, ValueError):
+            return format_html('KSH {}', obj.amount or 0)
+    amount_display.short_description = 'Amount'
     
     def transaction_link(self, obj):
         url = reverse('admin:credit_credittransaction_change', args=[obj.transaction.id])
@@ -239,11 +253,20 @@ class SellerCommissionSummaryAdmin(admin.ModelAdmin):
 
 @admin.register(CompanyPayment)
 class CompanyPaymentAdmin(admin.ModelAdmin):
-    list_display = ['payment_id', 'credit_company', 'amount', 'payment_method', 'payment_date']
+    list_display = ['payment_id', 'credit_company', 'amount_display', 'payment_method', 'payment_date']
     list_filter = ['payment_method', 'payment_date', 'credit_company']
     search_fields = ['payment_id', 'payment_reference', 'credit_company__name']
     readonly_fields = ['payment_id', 'created_at']
     filter_horizontal = ['transactions']
+    
+    def amount_display(self, obj):
+        # FIXED: Add this method to display amount properly
+        try:
+            amount = float(obj.amount) if obj.amount else 0
+            return format_html('KSH {:.2f}', amount)
+        except (TypeError, ValueError):
+            return format_html('KSH {}', obj.amount or 0)
+    amount_display.short_description = 'Amount'
     
     fieldsets = (
         ('Payment Information', {
