@@ -24,17 +24,30 @@ class StaffAdminForm(forms.ModelForm):
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Don't try to display current image URL if it's not accessible
+        # For each image field, set required=False and disable URL display
         for field_name in ['id_front', 'id_back', 'passport_photo', 'live_photo']:
             if field_name in self.fields:
                 field = self.fields[field_name]
-                # Remove the URL display from the widget to avoid ValueError
+                field.required = False
+                # Disable the "Currently:" link that tries to generate a URL
                 if hasattr(field, 'widget'):
                     field.widget.is_initial = lambda value: False
+    
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        
+        # Handle file uploads manually
+        for field_name in ['id_front', 'id_back', 'passport_photo', 'live_photo']:
+            if field_name in self.files:
+                setattr(instance, field_name, self.files[field_name])
+        
+        if commit:
+            instance.save()
+        return instance
 
 
 # ============================================
-# Staff Application Admin - Minimal
+# Staff Application Admin
 # ============================================
 @admin.register(StaffApplication)
 class StaffApplicationAdmin(admin.ModelAdmin):
@@ -94,11 +107,11 @@ class StaffApplicationAdmin(admin.ModelAdmin):
 
 
 # ============================================
-# Staff Admin - With Custom Form
+# Staff Admin
 # ============================================
 @admin.register(Staff)
 class StaffAdmin(admin.ModelAdmin):
-    form = StaffAdminForm  # Use custom form
+    form = StaffAdminForm
     list_display = ['staff_id', 'user', 'position', 'is_identity_verified', 'created_at']
     list_filter = ['is_identity_verified', 'position']
     search_fields = ['staff_id', 'user__username', 'user__email']

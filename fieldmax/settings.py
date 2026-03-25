@@ -190,13 +190,17 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 
-# Allowed file types
-ALLOWED_UPLOAD_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.pdf', '.webp']
 
 # Authentication settings
 LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'staff:staff_dashboard'
 LOGOUT_REDIRECT_URL = 'website:home'
+
+# Media and Storage Configuration
+
+# Allowed file types
+ALLOWED_UPLOAD_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.pdf', '.webp']
+
 
 # Cloudinary settings - Always use cloudinary, works in both environments
 cloudinary.config(
@@ -206,18 +210,30 @@ cloudinary.config(
     secure=True
 )
 
-
-# Media files - only used for development
+# Storage configuration
 if DEBUG:
+    STORAGES = {
+        "default": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+    }
     MEDIA_URL = '/media/'
     MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-    DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
 else:
-    # Production - use Cloudinary
-    MEDIA_URL = None
-    MEDIA_ROOT = None
-    DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
-
+    STORAGES = {
+        "default": {
+            "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+    }
+    # These must be set to empty strings to avoid NoneType errors
+    MEDIA_URL = ''
+    MEDIA_ROOT = ''
 
 # Optional: Cloudinary settings for better performance
 CLOUDINARY_STORAGE = {
@@ -230,7 +246,7 @@ CLOUDINARY_STORAGE = {
     'MEDIA_TAG': 'media',
     'INVALID_VIDEO_EXTENSIONS': [],
     'STATICFILES_MANIFEST_NAME': 'staticfilesmanifest',
-}   
+}  
 
 
 
@@ -369,7 +385,6 @@ LOGGING = {
 # Print startup information to console (for Render logs)
 print(f"=== FieldMax Startup ===")
 print(f"DEBUG: {DEBUG}")
-print(f"DEFAULT_FILE_STORAGE: {DEFAULT_FILE_STORAGE}")
 print(f"Cloudinary configured: {bool(cloudinary.config().cloud_name)}")
 print(f"MEDIA_URL: {MEDIA_URL}")
 print(f"MEDIA_ROOT: {MEDIA_ROOT}")
