@@ -314,7 +314,10 @@ class Product(models.Model):
         
         # Enforce single item quantity = 1
         if self.category and self.category.is_single_item:
-            self.quantity = 1
+            if self.status == 'sold':
+                self.quantity = 0
+            else:
+                self.quantity = 1
         
         # Auto-update status
         self._update_status()
@@ -469,9 +472,13 @@ class Product(models.Model):
         
         # Single items validation
         if self.category.is_single_item:
-            # Must have quantity = 1
-            if self.quantity != 1:
-                raise ValidationError("Single items must have quantity = 1")
+            # FIXED: Allow quantity = 0 for sold items, 1 for available
+            if self.status == 'sold':
+                if self.quantity != 0:
+                    raise ValidationError("Sold single items must have quantity = 0")
+            else:
+                if self.quantity != 1:
+                    raise ValidationError("Single items must have quantity = 1")
             
             # Must have SKU
             if not self.sku_value:
