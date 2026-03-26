@@ -9,8 +9,8 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- ZXing Barcode Scanner Library -->
-    <script src="https://cdn.jsdelivr.net/npm/@zxing/library@latest/umd/index.min.js"></script>
+    <!-- QuaggaJS Barcode Scanner - reliable real-world scanning -->
+    <script src="https://cdn.jsdelivr.net/npm/quagga@0.12.1/dist/quagga.min.js"></script>
     
     <style>
         :root {
@@ -1069,8 +1069,22 @@
             100% { transform: scale(1); opacity: 1; }
         }
 
-        /* Camera permission error */
-        .camera-error-box {
+        /* Quagga injected elements must fill the wrapper */
+        #cartQuaggaViewport video,
+        #lookupQuaggaViewport video {
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: cover !important;
+            display: block !important;
+        }
+        #cartQuaggaViewport canvas,
+        #lookupQuaggaViewport canvas {
+            position: absolute !important;
+            top: 0 !important; left: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            display: none !important; /* hide debug canvas */
+        }
             background: rgba(220,53,69,0.15);
             border: 1px solid #dc3545;
             border-radius: 10px;
@@ -1537,8 +1551,8 @@
             </div>
 
             <div class="scanner-video-wrapper" id="cartScannerVideoWrapper">
-                <video id="scannerVideo" autoplay muted playsinline></video>
-                <div class="scanner-overlay-frame">
+                <div id="cartQuaggaViewport" style="width:100%;height:100%;position:relative;overflow:hidden;"></div>
+                <div class="scanner-overlay-frame" id="cartOverlayFrame">
                     <div class="scanner-line"></div>
                     <div class="scanner-corner tl"></div>
                     <div class="scanner-corner tr"></div>
@@ -1577,8 +1591,8 @@
             </div>
 
             <div class="scanner-video-wrapper" id="lookupScannerVideoWrapper">
-                <video id="lookupScannerVideo" autoplay muted playsinline></video>
-                <div class="scanner-overlay-frame">
+                <div id="lookupQuaggaViewport" style="width:100%;height:100%;position:relative;overflow:hidden;"></div>
+                <div class="scanner-overlay-frame" id="lookupOverlayFrame">
                     <div class="scanner-line"></div>
                     <div class="scanner-corner tl"></div>
                     <div class="scanner-corner tr"></div>
@@ -1625,367 +1639,252 @@
     const customerVerifyModal = new bootstrap.Modal(document.getElementById('customerVerifyModal'));
     
     // =============================================
-    // BARCODE SCANNER LOGIC
+    // BARCODE SCANNER — QuaggaJS Implementation
     // =============================================
 
-    let cartCodeReader = null;
-    let lookupCodeReader = null;
-    let cartScannerStream = null;
-    let lookupScannerStream = null;
-    let cartScanDebounce = false;
-    let lookupScanDebounce = false;
+    let quaggaRunning = false;        // is Quagga currently active
+    let activeScannerTarget = null;   // 'cart' or 'lookup'
+    let scanDebounce = false;
 
-    // --- Play a beep sound on successful scan ---
+    // --- Beep sound on successful scan ---
     function playBeepSound() {
         try {
             const ctx = new (window.AudioContext || window.webkitAudioContext)();
-            const oscillator = ctx.createOscillator();
-            const gainNode = ctx.createGain();
-            oscillator.connect(gainNode);
-            gainNode.connect(ctx.destination);
-            oscillator.type = 'square';
-            oscillator.frequency.setValueAtTime(880, ctx.currentTime);
-            gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
-            oscillator.start(ctx.currentTime);
-            oscillator.stop(ctx.currentTime + 0.25);
-        } catch (e) { /* Silent fail if audio not available */ }
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(1800, ctx.currentTime);
+            gain.gain.setValueAtTime(0.4, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + 0.18);
+        } catch (e) {}
     }
 
     function showBeepIndicator(indicatorId) {
         const el = document.getElementById(indicatorId);
         if (!el) return;
         el.style.display = 'block';
-        setTimeout(() => { el.style.display = 'none'; }, 800);
+        setTimeout(() => { el.style.display = 'none'; }, 900);
     }
 
-    // --- Initialize ZXing reader and start camera ---
-    async function startCameraScanner(videoElementId, onDecodeCallback, statusElementId, wrapperElementId) {
-        const statusEl = document.getElementById(statusElementId);
-        const videoEl = document.getElementById(videoElementId);
-
-        // Update status
+    // --- Start QuaggaJS in the given viewport div ---
+    function startQuagga(viewportId, onDetected, statusId) {
+        const statusEl = document.getElementById(statusId);
         statusEl.className = 'scanner-status waiting';
         statusEl.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Starting camera...';
 
-        // Check if browser supports getUserMedia
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        if (typeof Quagga === 'undefined') {
             statusEl.className = 'scanner-status error';
-            statusEl.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>Camera not supported in this browser.';
-            document.getElementById(wrapperElementId).innerHTML = `
-                <div class="camera-error-box">
-                    <i class="fas fa-video-slash"></i>
-                    <p><strong>Camera Not Supported</strong></p>
-                    <small>Your browser does not support camera access. Try Chrome or Firefox.</small>
-                </div>
-            `;
-            return null;
+            statusEl.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>Scanner library not loaded. Check internet connection.';
+            return;
         }
 
-        try {
-            // Request camera permission and get stream
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: {
-                    facingMode: { ideal: 'environment' }, // prefer back camera on mobile
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 }
+        // Clear any previous content in viewport
+        const viewport = document.getElementById(viewportId);
+        viewport.innerHTML = '';
+
+        Quagga.init({
+            inputStream: {
+                name: 'Live',
+                type: 'LiveStream',
+                target: viewport,
+                constraints: {
+                    width: { min: 640, ideal: 1280 },
+                    height: { min: 480, ideal: 720 },
+                    facingMode: 'environment',   // back camera on mobile
+                    aspectRatio: { ideal: 1.777 }
+                },
+                area: {   // only scan middle 60% strip — faster & more accurate
+                    top: '20%',
+                    right: '10%',
+                    left: '10%',
+                    bottom: '20%'
                 }
-            });
-
-            videoEl.srcObject = stream;
-            await videoEl.play();
-
-            statusEl.className = 'scanner-status waiting';
-            statusEl.innerHTML = '<i class="fas fa-camera me-2"></i>Camera ready — point at barcode...';
-
-            // Initialize ZXing if available, otherwise use native approach
-            let codeReader = null;
-            if (typeof ZXing !== 'undefined') {
-                try {
-                    const hints = new Map();
-                    const formats = [
-                        ZXing.BarcodeFormat.CODE_128,
-                        ZXing.BarcodeFormat.CODE_39,
-                        ZXing.BarcodeFormat.EAN_13,
-                        ZXing.BarcodeFormat.EAN_8,
-                        ZXing.BarcodeFormat.QR_CODE,
-                        ZXing.BarcodeFormat.UPC_A,
-                        ZXing.BarcodeFormat.UPC_E,
-                        ZXing.BarcodeFormat.ITF,
-                        ZXing.BarcodeFormat.DATA_MATRIX,
-                        ZXing.BarcodeFormat.PDF_417
-                    ];
-                    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
-                    hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-
-                    codeReader = new ZXing.BrowserMultiFormatReader(hints, 300);
-                    codeReader.decodeFromStream(stream, videoEl, (result, error) => {
-                        if (result) {
-                            onDecodeCallback(result.getText());
-                        }
-                        // errors during scanning are normal (no barcode in frame), ignore them
-                    });
-                } catch (zxingError) {
-                    // ZXing failed, fall back to canvas-based scanning
-                    codeReader = startCanvasFallbackScanner(videoEl, stream, onDecodeCallback, statusEl);
+            },
+            locator: {
+                patchSize: 'medium',
+                halfSample: true
+            },
+            numOfWorkers: (navigator.hardwareConcurrency || 2) > 2 ? 2 : 1,
+            frequency: 10,
+            decoder: {
+                readers: [
+                    'code_128_reader',
+                    'ean_reader',
+                    'ean_8_reader',
+                    'code_39_reader',
+                    'code_39_vin_reader',
+                    'upc_reader',
+                    'upc_e_reader',
+                    'i2of5_reader',
+                    'codabar_reader',
+                    'code_93_reader'
+                ],
+                debug: { drawBoundingBox: false, showFrequency: false, drawScanline: false }
+            },
+            locate: true
+        }, function(err) {
+            if (err) {
+                let msg = 'Camera error: ' + (err.message || err);
+                if (String(err).includes('Permission') || String(err).includes('NotAllowed')) {
+                    msg = 'Camera permission denied. Please allow camera access and try again.';
+                } else if (String(err).includes('NotFound') || String(err).includes('Devices')) {
+                    msg = 'No camera found on this device.';
+                } else if (String(err).includes('NotReadable') || String(err).includes('in use')) {
+                    msg = 'Camera is in use by another app. Close it and retry.';
                 }
-            } else {
-                // ZXing not loaded, use canvas fallback with BarcodeDetector API if available
-                codeReader = startCanvasFallbackScanner(videoEl, stream, onDecodeCallback, statusEl);
-            }
-
-            return { stream, codeReader };
-
-        } catch (err) {
-            let errorMessage = 'Camera access denied.';
-            if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-                errorMessage = 'Camera permission denied. Please allow camera access in your browser settings.';
-            } else if (err.name === 'NotFoundError') {
-                errorMessage = 'No camera found on this device.';
-            } else if (err.name === 'NotReadableError') {
-                errorMessage = 'Camera is already in use by another application.';
-            } else {
-                errorMessage = 'Could not start camera: ' + err.message;
-            }
-
-            statusEl.className = 'scanner-status error';
-            statusEl.innerHTML = '<i class="fas fa-times-circle me-2"></i>' + errorMessage;
-
-            document.getElementById(wrapperElementId).innerHTML = `
-                <div class="camera-error-box">
-                    <i class="fas fa-video-slash"></i>
-                    <p><strong>Camera Access Failed</strong></p>
-                    <p>${errorMessage}</p>
-                    <small>On mobile: check browser permissions. On desktop: ensure camera is connected and not in use.</small>
-                </div>
-            `;
-            return null;
-        }
-    }
-
-    // Canvas-based fallback scanner using BarcodeDetector API (Chrome 83+, Edge, Safari 17+)
-    function startCanvasFallbackScanner(videoEl, stream, onDecodeCallback, statusEl) {
-        if (!('BarcodeDetector' in window)) {
-            statusEl.className = 'scanner-status error';
-            statusEl.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>Barcode detection not supported. Try Chrome 83+ or update your browser.';
-            return null;
-        }
-
-        const detector = new BarcodeDetector({
-            formats: ['code_128', 'code_39', 'ean_13', 'ean_8', 'qr_code', 'upc_a', 'upc_e', 'itf', 'data_matrix', 'pdf417']
-        });
-
-        statusEl.className = 'scanner-status waiting';
-        statusEl.innerHTML = '<i class="fas fa-camera me-2"></i>Camera ready — point at barcode...';
-
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        let isRunning = true;
-
-        async function detectFrame() {
-            if (!isRunning || !videoEl.videoWidth) {
-                if (isRunning) requestAnimationFrame(detectFrame);
+                statusEl.className = 'scanner-status error';
+                statusEl.innerHTML = '<i class="fas fa-times-circle me-2"></i>' + msg;
                 return;
             }
-            canvas.width = videoEl.videoWidth;
-            canvas.height = videoEl.videoHeight;
-            ctx.drawImage(videoEl, 0, 0);
 
-            try {
-                const barcodes = await detector.detect(canvas);
-                if (barcodes.length > 0) {
-                    onDecodeCallback(barcodes[0].rawValue);
+            Quagga.start();
+            quaggaRunning = true;
+            statusEl.className = 'scanner-status waiting';
+            statusEl.innerHTML = '<i class="fas fa-camera me-2"></i>Camera live — point at barcode...';
+
+            // Make the video element fill the wrapper properly
+            setTimeout(() => {
+                const video = viewport.querySelector('video');
+                if (video) {
+                    video.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
                 }
-            } catch (e) { /* ignore detection errors */ }
+                const canvas = viewport.querySelectorAll('canvas');
+                canvas.forEach(c => { c.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;'; });
+            }, 300);
+        });
 
-            if (isRunning) requestAnimationFrame(detectFrame);
-        }
+        // Listen for detected barcodes
+        Quagga.offDetected();   // remove any previous listener
+        Quagga.onDetected(function(result) {
+            if (scanDebounce) return;
+            const code = result.codeResult && result.codeResult.code;
+            if (!code || code.trim().length < 2) return;
 
-        videoEl.addEventListener('loadeddata', () => { requestAnimationFrame(detectFrame); }, { once: true });
-        if (videoEl.readyState >= 2) requestAnimationFrame(detectFrame);
+            // Require consistent read — check last 3 results match (reduces false positives)
+            const decodedCodes = result.codeResult.decodedCodes;
+            const errors = decodedCodes
+                .filter(c => c.error !== undefined)
+                .map(c => c.error);
+            const avgError = errors.length ? errors.reduce((a, b) => a + b, 0) / errors.length : 1;
+            if (avgError > 0.25) return;  // skip low-confidence reads
 
-        return { stop: () => { isRunning = false; } };
+            scanDebounce = true;
+            onDetected(code.trim());
+        });
     }
 
-    function stopCameraStream(stream, codeReader) {
-        if (codeReader) {
+    function stopQuagga() {
+        if (quaggaRunning) {
             try {
-                if (typeof codeReader.reset === 'function') codeReader.reset();
-                else if (codeReader.stop) codeReader.stop();
+                Quagga.offDetected();
+                Quagga.stop();
             } catch (e) {}
+            quaggaRunning = false;
         }
-        if (stream) {
-            stream.getTracks().forEach(track => track.stop());
-        }
+        scanDebounce = false;
+        activeScannerTarget = null;
     }
 
     // =============================================
     // CART SCANNER (Add to Cart section)
     // =============================================
 
-    async function openCartScanner() {
-        // Reset video wrapper in case it was replaced by error
-        const wrapper = document.getElementById('cartScannerVideoWrapper');
-        if (!wrapper.querySelector('video')) {
-            wrapper.innerHTML = `
-                <video id="scannerVideo" autoplay muted playsinline></video>
-                <div class="scanner-overlay-frame">
-                    <div class="scanner-line"></div>
-                    <div class="scanner-corner tl"></div>
-                    <div class="scanner-corner tr"></div>
-                    <div class="scanner-corner bl"></div>
-                    <div class="scanner-corner br"></div>
-                </div>
-            `;
-        }
+    function openCartScanner() {
+        if (quaggaRunning) stopQuagga();  // stop any existing scan session
+        activeScannerTarget = 'cart';
+        scanDebounce = false;
 
         document.getElementById('cartScannerModal').style.display = 'flex';
         document.getElementById('cartScanBtn').classList.add('scanning');
-        cartScanDebounce = false;
 
-        const result = await startCameraScanner(
-            'scannerVideo',
-            onCartBarcodeDetected,
-            'cartScannerStatus',
-            'cartScannerVideoWrapper'
-        );
-
-        if (result) {
-            cartScannerStream = result.stream;
-            cartCodeReader = result.codeReader;
-        }
+        // Small delay to let the modal render before Quagga grabs camera
+        setTimeout(() => {
+            startQuagga('cartQuaggaViewport', onCartBarcodeDetected, 'cartScannerStatus');
+        }, 150);
     }
 
     function closeCartScanner() {
+        stopQuagga();
         document.getElementById('cartScannerModal').style.display = 'none';
         document.getElementById('cartScanBtn').classList.remove('scanning');
-        stopCameraStream(cartScannerStream, cartCodeReader);
-        cartScannerStream = null;
-        cartCodeReader = null;
-        cartScanDebounce = false;
+        // Clear viewport to release camera resources
+        document.getElementById('cartQuaggaViewport').innerHTML = '';
     }
 
     function onCartBarcodeDetected(code) {
-        if (cartScanDebounce) return;
-        cartScanDebounce = true;
-
-        const cleanCode = code.trim();
-        if (!cleanCode) { cartScanDebounce = false; return; }
-
-        // Update status
         const statusEl = document.getElementById('cartScannerStatus');
         statusEl.className = 'scanner-status found';
-        statusEl.innerHTML = `<i class="fas fa-check-circle me-2"></i>Scanned: <strong>${escapeHtml(cleanCode)}</strong>`;
+        statusEl.innerHTML = `<i class="fas fa-check-circle me-2"></i>Scanned: <strong>${escapeHtml(code)}</strong>`;
 
-        // Play beep + show indicator
         playBeepSound();
         showBeepIndicator('cartBeepIndicator');
 
-        // Short delay for visual feedback then close scanner
         setTimeout(() => {
             closeCartScanner();
-
-            // Fill the product code input
-            $('#productSearch').val(cleanCode);
-
-            // Focus on custom price field and show hint
+            $('#productSearch').val(code);
             setTimeout(() => {
                 $('#customPrice').focus();
-                showSuccess('Barcode scanned: ' + cleanCode + ' — Enter price (or leave blank) then press Enter to add to cart');
-            }, 100);
-
-        }, 600);
+                showSuccess('✅ Scanned: ' + code + ' — Enter custom price (optional) then press Enter to add to cart');
+            }, 150);
+        }, 700);
     }
 
     // =============================================
     // LOOKUP SCANNER (Product Lookup Modal)
     // =============================================
 
-    async function openLookupScanner() {
-        // Reset video wrapper in case it was replaced by error
-        const wrapper = document.getElementById('lookupScannerVideoWrapper');
-        if (!wrapper.querySelector('video')) {
-            wrapper.innerHTML = `
-                <video id="lookupScannerVideo" autoplay muted playsinline></video>
-                <div class="scanner-overlay-frame">
-                    <div class="scanner-line"></div>
-                    <div class="scanner-corner tl"></div>
-                    <div class="scanner-corner tr"></div>
-                    <div class="scanner-corner bl"></div>
-                    <div class="scanner-corner br"></div>
-                </div>
-            `;
-        }
+    function openLookupScanner() {
+        if (quaggaRunning) stopQuagga();
+        activeScannerTarget = 'lookup';
+        scanDebounce = false;
 
         document.getElementById('lookupScannerModal').style.display = 'flex';
         document.getElementById('lookupScanBtn').classList.add('scanning');
-        lookupScanDebounce = false;
 
-        const result = await startCameraScanner(
-            'lookupScannerVideo',
-            onLookupBarcodeDetected,
-            'lookupScannerStatus',
-            'lookupScannerVideoWrapper'
-        );
-
-        if (result) {
-            lookupScannerStream = result.stream;
-            lookupCodeReader = result.codeReader;
-        }
+        setTimeout(() => {
+            startQuagga('lookupQuaggaViewport', onLookupBarcodeDetected, 'lookupScannerStatus');
+        }, 150);
     }
 
     function closeLookupScanner() {
+        stopQuagga();
         document.getElementById('lookupScannerModal').style.display = 'none';
         document.getElementById('lookupScanBtn').classList.remove('scanning');
-        stopCameraStream(lookupScannerStream, lookupCodeReader);
-        lookupScannerStream = null;
-        lookupCodeReader = null;
-        lookupScanDebounce = false;
+        document.getElementById('lookupQuaggaViewport').innerHTML = '';
     }
 
     function onLookupBarcodeDetected(code) {
-        if (lookupScanDebounce) return;
-        lookupScanDebounce = true;
-
-        const cleanCode = code.trim();
-        if (!cleanCode) { lookupScanDebounce = false; return; }
-
-        // Update status
         const statusEl = document.getElementById('lookupScannerStatus');
         statusEl.className = 'scanner-status found';
-        statusEl.innerHTML = `<i class="fas fa-check-circle me-2"></i>Scanned: <strong>${escapeHtml(cleanCode)}</strong>`;
+        statusEl.innerHTML = `<i class="fas fa-check-circle me-2"></i>Scanned: <strong>${escapeHtml(code)}</strong>`;
 
-        // Play beep + show indicator
         playBeepSound();
         showBeepIndicator('lookupBeepIndicator');
 
         setTimeout(() => {
             closeLookupScanner();
-
-            // Fill the lookup search input and trigger search
-            $('#productSearchLookup').val(cleanCode).trigger('keyup');
+            $('#productSearchLookup').val(code).trigger('keyup');
             $('#productSearchLookup').focus();
-
-        }, 600);
+        }, 700);
     }
 
-    // Close scanner modals when pressing Escape
+    // Escape key closes whichever scanner is open
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') {
             if (document.getElementById('cartScannerModal').style.display === 'flex') {
-                e.preventDefault();
-                closeCartScanner();
-                return;
+                e.preventDefault(); closeCartScanner(); return;
             }
             if (document.getElementById('lookupScannerModal').style.display === 'flex') {
-                e.preventDefault();
-                closeLookupScanner();
-                return;
+                e.preventDefault(); closeLookupScanner(); return;
             }
         }
     });
 
-    // Cleanup scanners if lookup modal is closed while scanner might still be open
+    // Stop scanner if product lookup modal is closed
     document.getElementById('productLookupModal').addEventListener('hide.bs.modal', function() {
         if (document.getElementById('lookupScannerModal').style.display === 'flex') {
             closeLookupScanner();
