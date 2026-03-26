@@ -64,6 +64,8 @@
             position: absolute;
             left: 50%;
             transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
         }
         
         .lookup-btn {
@@ -83,6 +85,28 @@
         }
         
         .lookup-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgb(0, 0, 0);
+        }
+        
+        /* Camera Scan Button */
+        .camera-scan-btn {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            color: white;
+            border: none;
+            padding: 10px 25px;
+            border-radius: 50px;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 3px 10px rgb(0, 0, 0);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .camera-scan-btn:hover {
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgb(0, 0, 0);
         }
@@ -630,6 +654,68 @@
             to { transform: rotate(360deg); }
         }
         
+        /* Camera Modal Styles */
+        #reader {
+            width: 100%;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #000;
+        }
+        
+        #reader video {
+            width: 100%;
+            height: auto;
+        }
+        
+        .scanning-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            border: 2px solid #28a745;
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+            pointer-events: none;
+            animation: scanPulse 1.5s infinite;
+        }
+        
+        @keyframes scanPulse {
+            0% { border-color: #28a745; opacity: 0.5; }
+            50% { border-color: #ffc107; opacity: 1; }
+            100% { border-color: #28a745; opacity: 0.5; }
+        }
+        
+        .scan-line {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #28a745, #ffc107, #28a745, transparent);
+            animation: scanMove 2s linear infinite;
+        }
+        
+        @keyframes scanMove {
+            0% { top: 0; }
+            100% { top: 100%; }
+        }
+        
+        .scanner-feedback {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10001;
+            animation: fadeInOut 2s ease;
+        }
+        
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: translateX(-50%) translateY(20px); }
+            15% { opacity: 1; transform: translateX(-50%) translateY(0); }
+            85% { opacity: 1; transform: translateX(-50%) translateY(0); }
+            100% { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+        }
+        
         /* MODAL PRODUCT CARDS - 2 COLUMN LAYOUT WITH GREEN & BLUE HEADERS */
         .product-grid {
             display: grid;
@@ -870,6 +956,10 @@
                 <button class="lookup-btn" data-bs-toggle="modal" data-bs-target="#productLookupModal">
                     <i class="fas fa-search"></i>
                     <span>Product Lookup</span>
+                </button>
+                <button class="camera-scan-btn" id="cameraScanBtn" type="button">
+                    <i class="fas fa-camera"></i>
+                    <span>Scan Barcode</span>
                 </button>
             </div>
             
@@ -1113,6 +1203,48 @@
         </div>
     </div>
 
+    <!-- Camera Scanner Modal -->
+    <div class="modal fade" id="cameraModal" tabindex="-1" data-bs-backdrop="static">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">
+                        <i class="fas fa-camera me-2"></i>Scan Barcode / QR Code
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="reader" style="width: 100%;"></div>
+                    <div class="mt-3 text-center" id="cameraStatus">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading camera...</span>
+                        </div>
+                        <p class="mt-2 text-muted">Initializing camera...</p>
+                    </div>
+                    <div class="mt-3">
+                        <select id="cameraSelect" class="form-select" style="display: none;">
+                            <option value="">Select camera...</option>
+                        </select>
+                    </div>
+                    <div class="mt-2">
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle"></i> 
+                            Position the barcode/QR code in front of the camera. The code will be detected automatically.
+                        </small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-1"></i>Close
+                    </button>
+                    <button type="button" class="btn btn-danger" id="stopCameraBtn" style="display: none;">
+                        <i class="fas fa-stop me-1"></i>Stop Camera
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- M-PESA Modal -->
     <div class="modal fade" id="mpesaModal" tabindex="-1">
         <div class="modal-dialog">
@@ -1286,6 +1418,7 @@
         </div>
     </div>
 
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
@@ -1303,12 +1436,18 @@
     let countdownInterval = null;
     let autoPrintEnabled = true;
     
+    // Camera scanner variables
+    let html5QrCode = null;
+    let currentCameraId = null;
+    let isScanning = false;
+    
     const mpesaModal = new bootstrap.Modal(document.getElementById('mpesaModal'));
     const bankModal = new bootstrap.Modal(document.getElementById('bankModal'));
     const pointsModal = new bootstrap.Modal(document.getElementById('pointsModal'));
     const cashModal = new bootstrap.Modal(document.getElementById('cashModal'));
     const productLookupModal = new bootstrap.Modal(document.getElementById('productLookupModal'));
     const customerVerifyModal = new bootstrap.Modal(document.getElementById('customerVerifyModal'));
+    const cameraModal = new bootstrap.Modal(document.getElementById('cameraModal'));
     
     function scrollCartToBottom() {
         const cartContainer = document.querySelector('.cart-items');
@@ -1963,6 +2102,246 @@
             } else {
                 window.print();
             }
+        }
+    });
+    
+    // ============================================
+    // CAMERA SCANNER FUNCTIONS
+    // ============================================
+    
+    function initCameraScanner() {
+        if (!html5QrCode) {
+            html5QrCode = new Html5Qrcode("reader");
+        }
+    }
+    
+    async function startCameraScanner() {
+        try {
+            initCameraScanner();
+            
+            document.getElementById('cameraStatus').style.display = 'block';
+            document.getElementById('cameraStatus').innerHTML = `
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading camera...</span>
+                </div>
+                <p class="mt-2 text-muted">Requesting camera access...</p>
+            `;
+            
+            const cameras = await Html5Qrcode.getCameras();
+            
+            if (cameras && cameras.length) {
+                let backCamera = cameras.find(cam => cam.label.toLowerCase().includes('back') || cam.label.toLowerCase().includes('rear'));
+                let cameraId = backCamera ? backCamera.id : cameras[0].id;
+                currentCameraId = cameraId;
+                
+                const cameraSelect = document.getElementById('cameraSelect');
+                cameraSelect.innerHTML = '<option value="">Select camera...</option>';
+                cameras.forEach(cam => {
+                    const option = document.createElement('option');
+                    option.value = cam.id;
+                    option.textContent = cam.label || `Camera ${cam.id}`;
+                    if (cam.id === cameraId) option.selected = true;
+                    cameraSelect.appendChild(option);
+                });
+                cameraSelect.style.display = 'block';
+                
+                cameraSelect.onchange = function() {
+                    if (this.value && isScanning) {
+                        stopCameraScanner();
+                        setTimeout(() => startCameraWithId(this.value), 500);
+                    } else if (this.value) {
+                        startCameraWithId(this.value);
+                    }
+                };
+                
+                await startCameraWithId(cameraId);
+            } else {
+                throw new Error("No cameras found");
+            }
+        } catch (err) {
+            console.error("Camera error:", err);
+            document.getElementById('cameraStatus').innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>Camera Error:</strong> ${err.message || 'Unable to access camera'}<br>
+                    <small>Please ensure you have granted camera permissions and are using HTTPS.</small>
+                </div>
+            `;
+            document.getElementById('stopCameraBtn').style.display = 'none';
+        }
+    }
+    
+    async function startCameraWithId(cameraId) {
+        try {
+            if (html5QrCode && html5QrCode.isScanning) {
+                await html5QrCode.stop();
+            }
+            
+            document.getElementById('cameraStatus').innerHTML = `
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Starting scanner...</span>
+                </div>
+                <p class="mt-2 text-muted">Starting scanner...</p>
+            `;
+            
+            const readerElement = document.getElementById('reader');
+            if (!document.querySelector('.scanning-overlay')) {
+                const overlay = document.createElement('div');
+                overlay.className = 'scanning-overlay';
+                readerElement.style.position = 'relative';
+                readerElement.appendChild(overlay);
+                
+                const scanLine = document.createElement('div');
+                scanLine.className = 'scan-line';
+                readerElement.appendChild(scanLine);
+            }
+            
+            await html5QrCode.start(
+                cameraId,
+                {
+                    fps: 10,
+                    qrbox: { width: 250, height: 250 },
+                    aspectRatio: 1.0
+                },
+                (decodedText, decodedResult) => {
+                    console.log("Scanned:", decodedText);
+                    handleScannedCode(decodedText);
+                },
+                (errorMessage) => {
+                    // Silent error handling
+                }
+            );
+            
+            isScanning = true;
+            document.getElementById('cameraStatus').innerHTML = `
+                <div class="alert alert-success">
+                    <i class="fas fa-camera me-2"></i>
+                    <strong>Camera Active</strong><br>
+                    Position barcode/QR code in the center of the frame.
+                </div>
+            `;
+            document.getElementById('stopCameraBtn').style.display = 'inline-block';
+            
+        } catch (err) {
+            console.error("Start camera error:", err);
+            document.getElementById('cameraStatus').innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>Error:</strong> ${err.message || 'Failed to start camera'}<br>
+                    <small>Please try refreshing the page or check camera permissions.</small>
+                </div>
+            `;
+        }
+    }
+    
+    async function stopCameraScanner() {
+        if (html5QrCode && html5QrCode.isScanning) {
+            try {
+                await html5QrCode.stop();
+                isScanning = false;
+                document.getElementById('cameraStatus').innerHTML = `
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Camera stopped. Click scan button to restart.
+                    </div>
+                `;
+                document.getElementById('stopCameraBtn').style.display = 'none';
+                
+                const overlay = document.querySelector('.scanning-overlay');
+                const scanLine = document.querySelector('.scan-line');
+                if (overlay) overlay.remove();
+                if (scanLine) scanLine.remove();
+                
+            } catch (err) {
+                console.error("Stop camera error:", err);
+            }
+        }
+    }
+    
+    function handleScannedCode(code) {
+        playBeep();
+        
+        const productInput = document.getElementById('productSearch');
+        if (productInput) {
+            productInput.value = code;
+            
+            setTimeout(() => {
+                addToCart();
+            }, 300);
+        }
+        
+        showScannerFeedback(code);
+    }
+    
+    function playBeep() {
+        try {
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            
+            oscillator.frequency.value = 800;
+            gainNode.gain.value = 0.3;
+            
+            oscillator.start();
+            setTimeout(() => {
+                oscillator.stop();
+                audioCtx.close();
+            }, 200);
+        } catch(e) {
+            if (navigator.vibrate) navigator.vibrate(200);
+        }
+    }
+    
+    function showScannerFeedback(code) {
+        const notification = document.createElement('div');
+        notification.className = 'scanner-feedback';
+        notification.innerHTML = `
+            <div style="background: #28a745; color: white; padding: 10px 20px; border-radius: 50px; 
+                        position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); 
+                        z-index: 10000; box-shadow: 0 4px 12px rgba(0,0,0,0.2);">
+                <i class="fas fa-check-circle me-2"></i>
+                Scanned: ${code}
+            </div>
+        `;
+        document.body.appendChild(notification);
+        setTimeout(() => notification.remove(), 2000);
+        
+        const input = document.getElementById('productSearch');
+        if (input) {
+            input.style.backgroundColor = '#d4edda';
+            input.style.transition = 'background-color 0.3s';
+            setTimeout(() => {
+                input.style.backgroundColor = '';
+            }, 500);
+        }
+    }
+    
+    function openCameraScanner() {
+        cameraModal.show();
+        
+        document.getElementById('cameraModal').addEventListener('shown.bs.modal', function() {
+            startCameraScanner();
+        });
+        
+        document.getElementById('cameraModal').addEventListener('hidden.bs.modal', function() {
+            stopCameraScanner();
+        });
+    }
+    
+    // Add camera button event listener
+    document.getElementById('cameraScanBtn').addEventListener('click', openCameraScanner);
+    
+    // Stop camera button
+    document.getElementById('stopCameraBtn').addEventListener('click', stopCameraScanner);
+    
+    // Keyboard shortcut: Ctrl + S to open scanner
+    document.addEventListener('keydown', function(e) {
+        if (e.ctrlKey && e.key === 's') {
+            e.preventDefault();
+            openCameraScanner();
         }
     });
     </script>
