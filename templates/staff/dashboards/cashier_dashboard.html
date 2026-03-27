@@ -1310,6 +1310,32 @@
     const productLookupModal = new bootstrap.Modal(document.getElementById('productLookupModal'));
     const customerVerifyModal = new bootstrap.Modal(document.getElementById('customerVerifyModal'));
     
+    // ============================================
+    // PHONE NUMBER NORMALIZATION FUNCTION
+    // ============================================
+    function normalizePhone(phone) {
+        if (!phone) return '';
+        // Remove all non-digit characters
+        let cleaned = phone.replace(/\D/g, '');
+        
+        // If it starts with 0 and is 10 digits (local format like 0722...)
+        if (cleaned.startsWith('0') && cleaned.length === 10) {
+            return '254' + cleaned.substring(1);
+        }
+        
+        // If it starts with 254 and is 12 digits (already international format)
+        if (cleaned.startsWith('254') && cleaned.length === 12) {
+            return cleaned;
+        }
+        
+        // If it's 9 digits (like 722...), add 254
+        if (cleaned.length === 9) {
+            return '254' + cleaned;
+        }
+        
+        return cleaned;
+    }
+    
     function scrollCartToBottom() {
         const cartContainer = document.querySelector('.cart-items');
         if (cartContainer) {
@@ -1733,7 +1759,18 @@
         setTimeout(() => $('#buyerPhone').focus(), 500);
     }
     
-    function handlePhoneEnter(event) { if (event.key === 'Enter') { event.preventDefault(); verifyCustomer(); } }
+    function handlePhoneEnter(event) { 
+        if (event.key === 'Enter') { 
+            event.preventDefault(); 
+            // Normalize phone number before verification
+            let phone = $('#buyerPhone').val().trim();
+            if (phone) {
+                let normalized = normalizePhone(phone);
+                $('#buyerPhone').val(normalized);
+            }
+            verifyCustomer(); 
+        } 
+    }
     
     $(document).on('keydown', function(e) {
         if (!isVerificationModalActive) return;
@@ -1758,6 +1795,7 @@
     function verifyCustomer() {
         let phone = $('#buyerPhone').val().trim();
         if (!phone) { proceedWithSale(); return; }
+        
         isVerificationModalActive = true;
         $('#customerVerifyContent').html(`<div class="text-center py-4"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div><p class="mt-2">Searching for customer ${escapeHtml(phone)}...</p><p class="small text-muted mt-3">Press ESC to cancel</p></div>`);
         customerVerifyModal.show();
@@ -1962,6 +2000,20 @@
                 printReceipt();
             } else {
                 window.print();
+            }
+        }
+    });
+    
+    // ============================================
+    // PHONE NUMBER NORMALIZATION ON BLUR
+    // ============================================
+    $('#buyerPhone').on('blur', function() {
+        let phone = $(this).val().trim();
+        if (phone) {
+            let normalized = normalizePhone(phone);
+            if (normalized !== phone) {
+                $(this).val(normalized);
+                console.log(`Phone normalized: ${phone} -> ${normalized}`);
             }
         }
     });

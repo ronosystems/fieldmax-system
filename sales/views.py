@@ -1175,11 +1175,8 @@ def sale_create(request):
                 amount_paid = Decimal(str(data.get('amount_paid', '0')))
                 points_redeemed = int(data.get('points_redeemed', '0'))
                 
-                # Set other fields to empty
-                buyer_name = ''
-                buyer_id_number = ''
-                nok_name = ''
-                nok_phone = ''
+                # Get verified customer ID if provided
+                verified_customer_id = data.get('verified_customer_id')
                 
             except json.JSONDecodeError:
                 return JsonResponse({'success': False, 'error': 'Invalid JSON data'})
@@ -1189,11 +1186,7 @@ def sale_create(request):
             payment_method = request.POST.get('payment_method', 'Cash')
             is_credit = request.POST.get('is_credit') == 'on'
             points_redeemed = int(request.POST.get('points_redeemed', '0'))
-            
-            buyer_name = ''
-            buyer_id_number = ''
-            nok_name = ''
-            nok_phone = ''
+            verified_customer_id = request.POST.get('verified_customer_id')
             
             if is_credit:
                 amount_paid = Decimal('0.00')
@@ -1211,6 +1204,33 @@ def sale_create(request):
         
         try:
             with transaction.atomic():
+                # ============================================
+                # NORMALIZE PHONE NUMBER FOR CONSISTENCY
+                # ============================================
+                def normalize_phone(phone):
+                    """Convert phone numbers to international format (254XXXXXXXXX)"""
+                    if not phone:
+                        return ''
+                    # Remove all non-digit characters
+                    phone = ''.join(filter(str.isdigit, phone))
+                    
+                    # If it starts with 0 (local format like 0722...)
+                    if phone.startswith('0') and len(phone) == 10:
+                        return '254' + phone[1:]  # Remove leading 0 and add 254
+                    
+                    # If it starts with 254 and is 12 digits, it's already correct
+                    if phone.startswith('254') and len(phone) == 12:
+                        return phone
+                    
+                    # If it's 9 digits (like 722...), add 254
+                    if len(phone) == 9:
+                        return '254' + phone
+                    
+                    return phone
+                
+                normalized_phone = normalize_phone(buyer_phone)
+                logger.info(f"Phone normalized: '{buyer_phone}' -> '{normalized_phone}'")
+                
                 # Calculate original subtotal before any discounts
                 original_subtotal = Decimal('0.00')
                 for item in cart:
@@ -1225,14 +1245,24 @@ def sale_create(request):
                 
                 # Check if this is a registered customer
                 is_registered_customer = False
-                if buyer_phone:
+                
+                # First try by verified_customer_id if provided
+                if verified_customer_id:
                     try:
-                        customer = Customer.objects.get(phone_number=buyer_phone, is_active=True)
+                        customer = Customer.objects.get(id=verified_customer_id, is_active=True)
                         is_registered_customer = True
-                        logger.info(f"✅ Registered customer found: {customer.phone_number} - {customer.full_name}")
+                        logger.info(f"✅ Registered customer found by ID: {customer.phone_number} - {customer.full_name}")
                     except Customer.DoesNotExist:
-                        # Customer not registered - no points, but sale can continue
-                        logger.info(f"⚠️ Unregistered customer: {buyer_phone} - no points awarded")
+                        logger.warning(f"Customer with ID {verified_customer_id} not found")
+                
+                # If not found by ID, try by normalized phone number
+                if not is_registered_customer and normalized_phone:
+                    try:
+                        customer = Customer.objects.get(phone_number=normalized_phone, is_active=True)
+                        is_registered_customer = True
+                        logger.info(f"✅ Registered customer found by phone: {customer.phone_number} - {customer.full_name}")
+                    except Customer.DoesNotExist:
+                        logger.info(f"⚠️ Unregistered customer: {normalized_phone} - no points awarded")
                         is_registered_customer = False
                         customer = None
                 
@@ -1274,11 +1304,11 @@ def sale_create(request):
                 # Create the sale with final amount
                 sale = Sale.objects.create(
                     seller=request.user,
-                    buyer_name=buyer_name,
-                    buyer_phone=buyer_phone,
-                    buyer_id_number=buyer_id_number,
-                    nok_name=nok_name,
-                    nok_phone=nok_phone,
+                    buyer_name=customer.full_name if is_registered_customer and customer else 'Walk-in Customer',
+                    buyer_phone=normalized_phone,  # Store normalized phone
+                    buyer_id_number=customer.id_number if is_registered_customer and customer else '',
+                    nok_name='',
+                    nok_phone='',
                     payment_method=payment_method,
                     amount_paid=amount_paid,
                     total_amount=final_amount,  # Use amount after points discount
@@ -1290,13 +1320,13 @@ def sale_create(request):
                 )
                 
                 # Process each cart item
-                items_processed = []  # Track items for notification
+                items_processed = []
                 for item in cart:
                     product = Product.objects.select_for_update().get(
                         product_code=item['product_code']
                     )
                     
-                    # ===== refresh from database =====
+                    # refresh from database
                     product.refresh_from_db()
 
                     # Check stock availability
@@ -1306,14 +1336,11 @@ def sale_create(request):
                             f"Available: {product.quantity}, Requested: {item['quantity']}"
                         )
                     
-                    # ============================================
-                    # FIXED: For single items, validate they haven't been sold in an ACTIVE sale
-                    # ============================================
+                    # For single items, validate they haven't been sold in an ACTIVE sale
                     if product.category and product.category.is_single_item:
-                        # Check if this single item was already sold in another ACTIVE transaction (not reversed)
                         active_sale_exists = SaleItem.objects.filter(
                             sku_value=product.sku_value,
-                            sale__is_reversed=False  # Only check non-reversed sales
+                            sale__is_reversed=False
                         ).exists()
                         
                         if active_sale_exists:
@@ -1339,14 +1366,11 @@ def sale_create(request):
                     # For single items, mark as sold and set status
                     if product.category and product.category.is_single_item:
                         product.status = 'sold'
-                        # Ensure quantity is 0 for sold single items
                         product.quantity = 0
                     
                     product.save()
                     
-                    # ============================================
-                    # CREATE STOCK ENTRY FOR AUDIT TRAIL
-                    # ============================================
+                    # Create stock entry for audit trail
                     StockEntry.objects.create(
                         product=product,
                         quantity=-item['quantity'],
@@ -1357,7 +1381,6 @@ def sale_create(request):
                         notes=f"Sale #{sale.sale_id} - {product.display_name}",
                         created_by=request.user
                     )
-                    # ============================================
                     
                     items_processed.append({
                         'name': product.display_name,
@@ -1382,7 +1405,7 @@ def sale_create(request):
                     
                     # Update customer stats
                     customer.total_purchases += 1
-                    customer.total_spent += original_subtotal  # Use original amount for stats
+                    customer.total_spent += original_subtotal
                     customer.last_purchase_date = timezone.now()
                     customer.save()
                     
@@ -1390,9 +1413,8 @@ def sale_create(request):
                     customer.update_tier()
                     
                     # Award loyalty points based on amount spent (after points discount)
-                    # Rules: Every 100 KSH = 1 point
                     points_earned = customer.add_points(
-                        final_amount,  # Pass Decimal directly
+                        final_amount,
                         sale=sale,
                         description=f"Purchase #{sale.sale_id}"
                     )
@@ -1404,8 +1426,7 @@ def sale_create(request):
                         f"New balance: {customer.points_balance} points"
                     )
                 else:
-                    # Unregistered customer - no points awarded
-                    logger.info(f"ℹ️ Unregistered customer {buyer_phone or 'No phone'} - no points awarded")
+                    logger.info(f"ℹ️ Unregistered customer {normalized_phone or 'No phone'} - no points awarded")
                 
                 # Clear the cart
                 request.session['sales_cart'] = []
@@ -1416,12 +1437,12 @@ def sale_create(request):
                         from credit.models import CreditSale
                         credit_sale = CreditSale.objects.create(
                             sale_id=sale.sale_id,
-                            customer_name=buyer_name or "Walk-in Customer",
-                            customer_phone=buyer_phone,
-                            customer_id_number=buyer_id_number,
-                            nok_name=nok_name,
-                            nok_phone=nok_phone,
-                            total_amount=final_amount,  # Use final amount after points
+                            customer_name=customer.full_name if is_registered_customer and customer else "Walk-in Customer",
+                            customer_phone=normalized_phone,
+                            customer_id_number=customer.id_number if is_registered_customer and customer else '',
+                            nok_name='',
+                            nok_phone='',
+                            total_amount=final_amount,
                             created_by=request.user,
                         )
                         sale.credit_sale_id = credit_sale.id
@@ -1448,12 +1469,11 @@ def sale_create(request):
                             'discount': float(points_discount) if points_discount > 0 else 0
                         }
                         response_data['message'] = f'Sale completed! Earned {int(points_earned)} points!'
-                    elif buyer_phone and not is_registered_customer:
-                        response_data['warning'] = f'Phone {buyer_phone} is not registered. No points awarded.'
+                    elif normalized_phone and not is_registered_customer:
+                        response_data['warning'] = f'Phone {normalized_phone} is not registered. No points awarded.'
                     
                     return JsonResponse(response_data)
                 else:
-                    # Add appropriate messages for non-AJAX
                     if is_registered_customer and points_earned > 0:
                         messages.success(
                             request, 
@@ -1464,14 +1484,14 @@ def sale_create(request):
                             request,
                             f'Sale #{sale.sale_id} completed! Redeemed {points_redeemed} points for KSH {points_discount} discount!'
                         )
-                    elif buyer_phone and not is_registered_customer:
+                    elif normalized_phone and not is_registered_customer:
                         messages.warning(
                             request,
-                            f'Sale completed but NO POINTS awarded. Phone {buyer_phone} is not registered.'
+                            f'Sale completed but NO POINTS awarded. Phone {normalized_phone} is not registered.'
                         )
                         messages.info(
                             request,
-                            f'<a href="/sales/customer/register/?phone={buyer_phone}" class="alert-link">Click here to register</a> and start earning points!'
+                            f'<a href="/sales/customer/register/?phone={normalized_phone}" class="alert-link">Click here to register</a> and start earning points!'
                         )
                     else:
                         messages.success(request, f'Sale #{sale.sale_id} completed successfully!')
@@ -1479,7 +1499,7 @@ def sale_create(request):
                     return redirect('sales:sale_detail', sale_id=sale.sale_id)
                 
         except Customer.DoesNotExist:
-            error_msg = f"Customer with phone {buyer_phone} not found. Please register first."
+            error_msg = f"Customer with phone {normalized_phone} not found. Please register first."
             logger.error(f"Error processing sale: {error_msg}")
             if is_ajax:
                 return JsonResponse({'success': False, 'error': error_msg})
@@ -1535,14 +1555,36 @@ def sale_detail(request, sale_id):
 
 
 
-
 @login_required
 def sale_receipt(request, sale_id):
-    """View/print sale receipt with loyalty points"""
+    """View/print sale receipt with loyalty points and VAT calculation"""
     sale = get_object_or_404(Sale.objects.prefetch_related('items__product'), sale_id=sale_id)
     
     # Calculate change
     change = sale.amount_paid - sale.total_amount if sale.amount_paid else 0
+    
+    # ============================================
+    # VAT CALCULATION
+    # ============================================
+    # VAT rate is 16%
+    vat_rate = Decimal('0.16')
+    
+    # Grand total is the total amount of the sale (including VAT)
+    grand_total = sale.total_amount
+    
+    # Calculate VAT amount (16% of grand total)
+    # If grand total is inclusive of VAT, then VAT = grand_total - (grand_total / 1.16)
+    # OR directly: VAT = grand_total * 16/116
+    if grand_total > 0:
+        vat_amount = (grand_total * vat_rate) / (1 + vat_rate)
+        subtotal_excl_vat = grand_total - vat_amount
+    else:
+        vat_amount = Decimal('0.00')
+        subtotal_excl_vat = Decimal('0.00')
+    
+    # Format for display
+    vat_amount_display = vat_amount.quantize(Decimal('0.01'))
+    subtotal_excl_vat_display = subtotal_excl_vat.quantize(Decimal('0.01'))
     
     # ============================================
     # GET CUSTOMER DATA FOR LOYALTY POINTS
@@ -1588,6 +1630,10 @@ def sale_receipt(request, sale_id):
         'customer': customer,
         'previous_points': previous_points,
         'points_earned_today': points_earned_today,
+        'vat_amount': vat_amount_display,
+        'subtotal_excl_vat': subtotal_excl_vat_display,
+        'grand_total': grand_total,
+        'vat_rate': 16,
     }
     
     return render(request, 'sales/receipt.html', context)
@@ -2206,8 +2252,34 @@ def customer_register(request):
             email = request.POST.get('email', '').strip()
             id_number = request.POST.get('id_number', '').strip()
             
+            # ============================================
+            # PHONE NUMBER NORMALIZATION FUNCTION
+            # ============================================
+            def normalize_phone(phone):
+                if not phone:
+                    return ''
+                # Remove all non-digit characters
+                cleaned = ''.join(filter(str.isdigit, phone))
+                
+                # If it starts with 0 and is 10 digits (local format like 0700...)
+                if cleaned.startswith('0') and len(cleaned) == 10:
+                    return '254' + cleaned[1:]
+                
+                # If it's already international format (254...)
+                if cleaned.startswith('254') and len(cleaned) == 12:
+                    return cleaned
+                
+                # If it's 9 digits (missing leading 0)
+                if len(cleaned) == 9:
+                    return '254' + cleaned
+                
+                return cleaned
+            
+            # NORMALIZE THE PHONE NUMBER
+            normalized_phone = normalize_phone(phone_number)
+            
             # Validate required fields
-            if not phone_number:
+            if not normalized_phone:
                 messages.error(request, 'Phone number is required')
                 return redirect('sales:customer_register')
             
@@ -2215,14 +2287,21 @@ def customer_register(request):
                 messages.error(request, 'Full name is required')
                 return redirect('sales:customer_register')
             
-            # Check if customer already exists
-            if Customer.objects.filter(phone_number=phone_number).exists():
-                messages.error(request, f'Customer with phone {phone_number} already exists')
+            # Check if customer already exists (check both formats)
+            from django.db.models import Q
+            existing_customer = Customer.objects.filter(
+                Q(phone_number=normalized_phone) | 
+                Q(phone_number=phone_number) |
+                Q(phone_number__icontains=normalized_phone[-9:])
+            ).first()
+            
+            if existing_customer:
+                messages.error(request, f'Customer with phone {existing_customer.phone_number} already exists')
                 return redirect('sales:customer_register')
             
-            # Create new customer
+            # Create new customer with NORMALIZED phone number
             customer = Customer.objects.create(
-                phone_number=phone_number,
+                phone_number=normalized_phone,  # Store normalized format
                 full_name=full_name,
                 email=email,
                 id_number=id_number,
@@ -2290,7 +2369,27 @@ def customer_search(request):
     if not query or len(query) < 3:
         return JsonResponse({'customers': []})
     
+    # ============================================
+    # NORMALIZE THE SEARCH PHONE NUMBER
+    # ============================================
+    def normalize_phone(phone):
+        if not phone:
+            return ''
+        cleaned = ''.join(filter(str.isdigit, phone))
+        if cleaned.startswith('0') and len(cleaned) == 10:
+            return '254' + cleaned[1:]
+        if cleaned.startswith('254') and len(cleaned) == 12:
+            return cleaned
+        if len(cleaned) == 9:
+            return '254' + cleaned
+        return cleaned
+    
+    normalized_query = normalize_phone(query)
+    
+    # Search with both original and normalized formats
+    from django.db.models import Q
     customers = Customer.objects.filter(
+        Q(phone_number__icontains=normalized_query) |
         Q(phone_number__icontains=query) |
         Q(full_name__icontains=query)
     ).filter(is_active=True)[:10]
@@ -2304,12 +2403,19 @@ def customer_search(request):
         'points': c.points_balance,
         'tier': c.get_tier_display(),
         'tier_class': c.tier,
-        'points_value': float(c.points_balance),  # 1 point = KSH 1
+        'points_value': float(c.points_balance),
         'total_spent': float(c.total_spent),
         'purchases': c.total_purchases,
     } for c in customers]
     
     return JsonResponse({'customers': data})
+
+
+
+
+
+
+    
 
 @login_required
 def customer_detail(request, pk):
