@@ -10,7 +10,7 @@
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- ZXing Barcode Scanner Library (More reliable than HTML5 QR Code) -->
+    <!-- ZXing Barcode Scanner Library -->
     <script src="https://unpkg.com/@zxing/library@0.18.6/umd/index.min.js"></script>
     
     <style>
@@ -632,6 +632,18 @@
             z-index: 10;
         }
         
+        .scanned-value {
+            background: rgba(40, 167, 69, 0.9);
+            color: white;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            margin: 10px;
+            z-index: 10;
+            text-align: center;
+            font-weight: bold;
+        }
+        
         /* Customer Section */
         .customer-section {
             background: white;
@@ -900,10 +912,6 @@
                     <i class="fas fa-search"></i>
                     <span>Product Lookup</span>
                 </button>
-                <button class="camera-btn" id="headerCameraBtn">
-                    <i class="fas fa-camera"></i>
-                    <span>Scan Barcode</span>
-                </button>
             </div>
             
             <div class="cashier-info">
@@ -933,7 +941,7 @@
                     <div class="product-search">
                         <div class="search-row">
                             <input type="text" id="productSearch" class="search-input" 
-                                   placeholder="Enter product code or scan barcode..." autofocus>
+                                   placeholder="Enter product code, barcode, IMEI, or serial number..." autofocus>
                             <input type="number" id="customPrice" class="custom-price-input" 
                                    placeholder="Custom price" step="0.01" min="0" 
                                    onkeyup="autoEnablePriceEdit()" 
@@ -1125,7 +1133,7 @@
         <div class="modal-dialog modal-dialog-centered modal-lg">
             <div class="modal-content">
                 <div class="modal-header bg-success text-white">
-                    <h5 class="modal-title"><i class="fas fa-camera me-2"></i>Scan Barcode / SKU</h5>
+                    <h5 class="modal-title"><i class="fas fa-camera me-2"></i>Scan Barcode / IMEI / Serial Number</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" id="closeCameraModal"></button>
                 </div>
                 <div class="modal-body camera-modal-body" id="cameraModalBody">
@@ -1139,7 +1147,7 @@
                 </div>
                 <div class="modal-footer">
                     <div class="text-center w-100">
-                        <small class="text-muted">Position barcode within the green frame</small>
+                        <small class="text-muted">Position barcode/IMEI within the green frame. Supports: Barcodes (13 digits), IMEI (15 digits), Serial Numbers</small>
                     </div>
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                 </div>
@@ -1357,6 +1365,7 @@
     let videoStream = null;
     let barcodeReader = null;
     let scanningActive = false;
+    let lastScannedCode = '';
     
     const mpesaModal = new bootstrap.Modal(document.getElementById('mpesaModal'));
     const bankModal = new bootstrap.Modal(document.getElementById('bankModal'));
@@ -1366,7 +1375,20 @@
     const customerVerifyModal = new bootstrap.Modal(document.getElementById('customerVerifyModal'));
     const cameraScannerModal = new bootstrap.Modal(document.getElementById('cameraScannerModal'));
     
-    // Camera Scanner using ZXing
+    // Function to validate and identify code type
+    function identifyCodeType(code) {
+        const cleanedCode = code.toString().replace(/\s/g, '');
+        if (/^\d{13}$/.test(cleanedCode)) {
+            return { type: 'Barcode (13 digits)', value: cleanedCode };
+        } else if (/^\d{15}$/.test(cleanedCode)) {
+            return { type: 'IMEI (15 digits)', value: cleanedCode };
+        } else if (/^[A-Za-z0-9]{6,30}$/.test(cleanedCode)) {
+            return { type: 'Serial Number', value: cleanedCode };
+        }
+        return { type: 'Unknown', value: cleanedCode };
+    }
+    
+    // Camera Scanner using ZXing with improved detection
     async function startCameraScanner(onSuccessCallback) {
         const videoElement = document.getElementById('video-preview');
         const statusDiv = document.getElementById('cameraStatus');
@@ -1386,29 +1408,79 @@
             videoElement.srcObject = videoStream;
             await videoElement.play();
             
-            statusDiv.innerHTML = '<i class="fas fa-check-circle"></i> Camera ready. Scanning barcodes...';
+            statusDiv.innerHTML = '<i class="fas fa-check-circle"></i> Camera ready. Scanning for barcodes, IMEI, or serial numbers...';
             
-            // Initialize ZXing barcode reader
+            // Initialize ZXing barcode reader with multiple formats
             if (!barcodeReader) {
-                barcodeReader = new ZXing.BrowserMultiFormatReader();
+                const hints = new Map();
+                const formats = [
+                    ZXing.BarcodeFormat.CODE_128,
+                    ZXing.BarcodeFormat.CODE_39,
+                    ZXing.BarcodeFormat.CODE_93,
+                    ZXing.BarcodeFormat.CODABAR,
+                    ZXing.BarcodeFormat.EAN_13,
+                    ZXing.BarcodeFormat.EAN_8,
+                    ZXing.BarcodeFormat.ITF,
+                    ZXing.BarcodeFormat.UPC_A,
+                    ZXing.BarcodeFormat.UPC_E,
+                    ZXing.BarcodeFormat.QR_CODE,
+                    ZXing.BarcodeFormat.DATA_MATRIX,
+                    ZXing.BarcodeFormat.PDF_417
+                ];
+                hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
+                hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+                barcodeReader = new ZXing.BrowserMultiFormatReader(hints);
             }
             
             scanningActive = true;
+            let detectionCount = 0;
             
-            // Start decoding from video stream
+            // Start decoding from video element
             barcodeReader.decodeFromVideoElement(videoElement, (result, error) => {
                 if (result && scanningActive) {
                     const scannedText = result.getText();
-                    if (scannedText) {
-                        // Stop scanning and close modal
-                        stopCameraScanner();
-                        cameraScannerModal.hide();
-                        if (onSuccessCallback) {
-                            onSuccessCallback(scannedText);
+                    if (scannedText && scannedText !== lastScannedCode) {
+                        detectionCount++;
+                        lastScannedCode = scannedText;
+                        
+                        // Identify the code type
+                        const codeInfo = identifyCodeType(scannedText);
+                        
+                        // Update status with detected value
+                        statusDiv.innerHTML = `<i class="fas fa-check-circle"></i> Detected: ${codeInfo.type}<br><small>${scannedText}</small>`;
+                        statusDiv.style.background = 'rgba(40, 167, 69, 0.9)';
+                        
+                        // Add a temporary display of the scanned value
+                        let scannedDisplay = document.querySelector('.scanned-value');
+                        if (!scannedDisplay) {
+                            scannedDisplay = document.createElement('div');
+                            scannedDisplay.className = 'scanned-value';
+                            document.querySelector('.camera-overlay').appendChild(scannedDisplay);
                         }
+                        scannedDisplay.innerHTML = `<i class="fas fa-barcode"></i> Scanned: ${scannedText}`;
+                        scannedDisplay.style.display = 'block';
+                        
+                        setTimeout(() => {
+                            if (scannedDisplay) scannedDisplay.style.display = 'none';
+                        }, 1500);
+                        
+                        // Stop scanning and close modal after successful detection
+                        setTimeout(() => {
+                            if (scanningActive) {
+                                stopCameraScanner();
+                                cameraScannerModal.hide();
+                                if (onSuccessCallback) {
+                                    onSuccessCallback(scannedText);
+                                }
+                            }
+                        }, 500);
+                    }
+                } else if (error && !result) {
+                    // Continue scanning, no barcode found yet
+                    if (detectionCount === 0 && statusDiv.innerHTML.includes('Camera ready')) {
+                        statusDiv.innerHTML = '<i class="fas fa-camera"></i> Scanning... Position code in frame';
                     }
                 }
-                // Ignore errors (no barcode found yet)
             });
             
         } catch (err) {
@@ -1422,6 +1494,7 @@
     
     function stopCameraScanner() {
         scanningActive = false;
+        lastScannedCode = '';
         if (barcodeReader) {
             try {
                 barcodeReader.reset();
@@ -1435,16 +1508,25 @@
         if (videoElement) {
             videoElement.srcObject = null;
         }
+        // Remove scanned value display
+        const scannedDisplay = document.querySelector('.scanned-value');
+        if (scannedDisplay) scannedDisplay.remove();
     }
     
     function handleScannedBarcode(barcode, source = 'cart') {
         if (!barcode) return;
+        
+        // Identify what was scanned
+        const codeInfo = identifyCodeType(barcode);
+        showSuccess(`Scanned: ${codeInfo.type} - ${barcode}`);
+        
+        // Set the value in the search input
         $('#productSearch').val(barcode);
+        
         if (source === 'cart') {
             addToCartDirectly(barcode);
         } else {
             $('#productSearch').focus();
-            showSuccess(`Scanned: ${barcode}`);
         }
     }
     
@@ -1464,11 +1546,16 @@
                     if (r.cart_items && r.subtotal !== undefined) updateCartUI(r.cart_items, r.subtotal, code);
                     else location.reload();
                     showSuccess('Product added to cart');
-                } else { showError(r.error || 'Product not found'); }
+                } else { 
+                    showError(r.error || 'Product not found. Please check the scanned code.');
+                }
                 $('#addProductBtn').prop('disabled', false).html('<i class="fas fa-cart-plus me-1"></i>Add to Cart');
                 $('#productSearch').focus();
             },
-            error: function() { showError('Error adding product'); $('#addProductBtn').prop('disabled', false).html('<i class="fas fa-cart-plus me-1"></i>Add to Cart'); }
+            error: function() { 
+                showError('Error adding product. Please try again.'); 
+                $('#addProductBtn').prop('disabled', false).html('<i class="fas fa-cart-plus me-1"></i>Add to Cart'); 
+            }
         });
     }
     
