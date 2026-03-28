@@ -176,13 +176,16 @@
                     </td>
                     <td class="text-end">
                         <div class="btn-group btn-group-sm">
-                            <button type="button" class="btn btn-outline-info" onclick="viewCustomer({{ customer.id }})" title="View Details">
+                            <!-- View Details: Redirect to customer detail template page -->
+                            <a href="{% url 'sales:customer_detail' customer.id %}" class="btn btn-outline-info" title="View Details">
                                 <i class="fas fa-eye"></i>
-                            </button>
-                            <button type="button" class="btn btn-outline-primary" onclick="showTransactions({{ customer.id }})" title="View Transactions">
+                            </a>
+                            <!-- View Transactions: Redirect to customer transactions template page -->
+                            <a href="{% url 'sales:customer_transactions' customer.id %}" class="btn btn-outline-primary" title="View Transactions">
                                 <i class="fas fa-history"></i>
-                            </button>
-                            <a href="{% url 'sales:customer_register' %}?id={{ customer.id }}" class="btn btn-outline-success" title="Edit" target="_blank">
+                            </a>
+                            <!-- Edit Customer: Redirect to edit page -->
+                            <a href="{% url 'sales:customer_edit' customer.id %}" class="btn btn-outline-success" title="Edit">
                                 <i class="fas fa-edit"></i>
                             </a>
                         </div>
@@ -234,50 +237,6 @@
     {% endif %}
 </div>
 
-<!-- Customer Detail Modal -->
-<div class="modal fade" id="customerDetailModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header bg-primary text-white">
-                <h5 class="modal-title">
-                    <i class="fas fa-user-circle me-2"></i>
-                    Customer Details
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body" id="customerDetailContent">
-                <div class="text-center py-4">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Transactions Modal -->
-<div class="modal fade" id="transactionsModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header bg-info text-white">
-                <h5 class="modal-title">
-                    <i class="fas fa-history me-2"></i>
-                    Points Transactions
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body" id="transactionsContent">
-                <div class="text-center py-4">
-                    <div class="spinner-border text-info" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
 <style>
     .user-avatar-small {
         width: 40px;
@@ -315,142 +274,6 @@ function applyFilters() {
     const sort = document.getElementById('sortFilter').value;
     
     window.location.href = `?search=${encodeURIComponent(search)}&tier=${tier}&sort=${sort}`;
-}
-
-function viewCustomer(id) {
-    const modal = new bootstrap.Modal(document.getElementById('customerDetailModal'));
-    const content = document.getElementById('customerDetailContent');
-    
-    content.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary"></div></div>';
-    modal.show();
-    
-    fetch(`/sales/customer/${id}/`, {
-        headers: { 'X-Requested-With': 'XMLHttpRequest' }
-    })
-    .then(response => response.json())
-    .then(customer => {
-        let tierClass = customer.tier_class;
-        let html = `
-            <div class="text-center mb-4">
-                <div class="customer-avatar-lg mx-auto mb-3">
-                    ${customer.name ? customer.name.charAt(0).toUpperCase() : 'C'}
-                </div>
-                <h4 class="mb-1">${customer.name || 'Unknown'}</h4>
-                <p class="text-muted mb-2">${customer.phone}</p>
-                <span class="tier-badge tier-${customer.tier_class} me-2">${customer.tier}</span>
-                ${customer.email ? `<span class="badge bg-info">${customer.email}</span>` : ''}
-            </div>
-            
-            <div class="row g-3 mb-4">
-                <div class="col-6">
-                    <div class="card bg-light">
-                        <div class="card-body text-center">
-                            <h2 class="mb-0 text-primary">${customer.points}</h2>
-                            <small class="text-muted">Points Balance</small>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-6">
-                    <div class="card bg-light">
-                        <div class="card-body text-center">
-                            <h2 class="mb-0 text-success">KSH ${customer.points_value}</h2>
-                            <small class="text-muted">Points Value</small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="row g-3 mb-4">
-                <div class="col-4">
-                    <div class="text-center">
-                        <h5 class="mb-0">${customer.total_purchases}</h5>
-                        <small class="text-muted">Purchases</small>
-                    </div>
-                </div>
-                <div class="col-4">
-                    <div class="text-center">
-                        <h5 class="mb-0">KSH ${customer.total_spent.toLocaleString()}</h5>
-                        <small class="text-muted">Total Spent</small>
-                    </div>
-                </div>
-                <div class="col-4">
-                    <div class="text-center">
-                        <h5 class="mb-0">${customer.last_purchase ? new Date(customer.last_purchase).toLocaleDateString() : 'Never'}</h5>
-                        <small class="text-muted">Last Purchase</small>
-                    </div>
-                </div>
-            </div>
-            
-            <h6 class="mb-3">Recent Transactions</h6>
-            <div style="max-height: 250px; overflow-y: auto;">
-        `;
-        
-        if (customer.transactions && customer.transactions.length > 0) {
-            customer.transactions.slice(0, 10).forEach(t => {
-                let typeClass = t.type === 'earned' ? 'badge-success' : 'badge-warning';
-                let sign = t.type === 'earned' ? '+' : '-';
-                html += `
-                    <div class="d-flex justify-content-between align-items-center p-2 border-bottom">
-                        <div>
-                            <span class="badge ${typeClass} me-2">${t.type}</span>
-                            <small class="text-muted">${new Date(t.date).toLocaleDateString()}</small>
-                        </div>
-                        <span class="fw-bold ${t.type === 'earned' ? 'text-success' : 'text-warning'}">${sign}${Math.abs(t.points)} pts</span>
-                    </div>
-                `;
-            });
-        } else {
-            html += '<p class="text-muted text-center">No transactions yet</p>';
-        }
-        
-        html += `</div>`;
-        
-        content.innerHTML = html;
-    })
-    .catch(error => {
-        content.innerHTML = '<div class="alert alert-danger">Failed to load customer details</div>';
-    });
-}
-
-function showTransactions(id) {
-    const modal = new bootstrap.Modal(document.getElementById('transactionsModal'));
-    const content = document.getElementById('transactionsContent');
-    
-    content.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-info"></div></div>';
-    modal.show();
-    
-    fetch(`/sales/customer/${id}/transactions/`, {
-        headers: { 'X-Requested-With': 'XMLHttpRequest' }
-    })
-    .then(response => response.json())
-    .then(data => {
-        let html = '<div class="table-responsive"><table class="table table-sm">';
-        html += '<thead><tr><th>Date</th><th>Type</th><th>Points</th><th>Description</th></tr></thead><tbody>';
-        
-        data.transactions.forEach(t => {
-            let typeClass = t.type === 'earned' ? 'text-success' : 'text-warning';
-            let sign = t.type === 'earned' ? '+' : '-';
-            html += `
-                <tr>
-                    <td>${new Date(t.date).toLocaleDateString()}</td>
-                    <td><span class="badge ${t.type === 'earned' ? 'bg-success' : 'bg-warning'}">${t.type}</span></td>
-                    <td class="${typeClass} fw-bold">${sign}${Math.abs(t.points)}</td>
-                    <td>${t.description || ''}</td>
-                </tr>
-            `;
-        });
-        
-        html += '</tbody></table></div>';
-        
-        if (data.has_next) {
-            html += '<div class="text-center mt-3"><button class="btn btn-sm btn-outline-primary">Load More</button></div>';
-        }
-        
-        content.innerHTML = html;
-    })
-    .catch(error => {
-        content.innerHTML = '<div class="alert alert-danger">Failed to load transactions</div>';
-    });
 }
 
 function exportToCSV() {

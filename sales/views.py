@@ -2555,3 +2555,96 @@ def customer_list(request):
         'tier_choices': Customer.TIER_CHOICES,
     }
     return render(request, 'sales/customer_list.html', context)
+
+
+@login_required
+def customer_edit(request, pk):
+    """Edit customer information"""
+    customer = get_object_or_404(Customer, pk=pk)
+    
+    if request.method == 'POST':
+        try:
+            # Get form data
+            full_name = request.POST.get('full_name', '').strip()
+            email = request.POST.get('email', '').strip()
+            id_number = request.POST.get('id_number', '').strip()
+            is_active = request.POST.get('is_active') == 'true' if request.user.is_staff else customer.is_active
+            
+            # Validate
+            if not full_name:
+                messages.error(request, 'Full name is required')
+                return redirect('sales:customer_edit', pk=pk)
+            
+            # Update customer fields
+            customer.full_name = full_name
+            customer.email = email
+            customer.id_number = id_number
+            customer.is_active = is_active
+            customer.save()
+            
+            # Handle points adjustment (admin only)
+            if request.user.is_staff or request.user.is_superuser:
+                points_adjustment = request.POST.get('points_adjustment')
+                if points_adjustment and points_adjustment.strip():
+                    points = int(points_adjustment)
+                    adjustment_type = request.POST.get('adjustment_type')
+                    reason = request.POST.get('adjustment_reason', '').strip()
+                    
+                    if points > 0 and reason:
+                        if adjustment_type == 'add':
+                            customer.add_points(
+                                points,
+                                description=f"Manual adjustment: {reason}"
+                            )
+                            messages.success(request, f'Added {points} points to customer balance')
+                        elif adjustment_type == 'subtract':
+                            if points <= customer.points_balance:
+                                # Create redemption transaction for points subtraction
+                                from sales.models import LoyaltyTransaction
+                                LoyaltyTransaction.objects.create(
+                                    customer=customer,
+                                    points=points,
+                                    transaction_type='adjustment',
+                                    description=f"Manual adjustment: {reason}"
+                                )
+                                customer.points_balance -= points
+                                customer.save()
+                                messages.success(request, f'Subtracted {points} points from customer balance')
+                            else:
+                                messages.warning(request, f'Cannot subtract {points} points. Customer only has {customer.points_balance} points.')
+            
+            messages.success(request, f'Customer "{customer.full_name}" updated successfully')
+            return redirect('sales:customer_detail', pk=customer.id)
+            
+        except Exception as e:
+            logger.error(f"Error updating customer {pk}: {str(e)}")
+            messages.error(request, f'Error updating customer: {str(e)}')
+            return redirect('sales:customer_edit', pk=pk)
+    
+    context = {
+        'customer': customer,
+    }
+    return render(request, 'sales/customer_edit.html', context)
+
+
+@login_required
+def customer_delete(request, pk):
+    """Delete a customer (admin only)"""
+    if not (request.user.is_staff or request.user.is_superuser):
+        messages.error(request, 'You do not have permission to delete customers')
+        return redirect('sales:customer_list')
+    
+    customer = get_object_or_404(Customer, pk=pk)
+    
+    if request.method == 'POST':
+        try:
+            customer_name = customer.full_name
+            customer.delete()
+            messages.success(request, f'Customer "{customer_name}" has been deleted')
+            return redirect('sales:customer_list')
+        except Exception as e:
+            logger.error(f"Error deleting customer {pk}: {str(e)}")
+            messages.error(request, f'Error deleting customer: {str(e)}')
+            return redirect('sales:customer_detail', pk=pk)
+    
+    return redirect('sales:customer_detail', pk=pk)

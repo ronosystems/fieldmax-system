@@ -1,0 +1,347 @@
+{% extends 'sales/staff_base.html' %}
+{% load static %}
+
+{% block title %}Transaction History - {{ customer.full_name }}{% endblock %}
+
+{% block page_icon %}fas fa-history{% endblock %}
+{% block page_title %}Points Transaction History{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'sales:sales_dashboard' %}">Dashboard</a></li>
+<li class="breadcrumb-item"><a href="{% url 'sales:customer_list' %}">Customer Records</a></li>
+<li class="breadcrumb-item"><a href="{% url 'sales:customer_detail' customer.id %}">{{ customer.full_name }}</a></li>
+<li class="breadcrumb-item active">Transactions</li>
+{% endblock %}
+
+{% block page_actions %}
+<div class="btn-group">
+    <a href="{% url 'sales:customer_detail' customer.id %}" class="btn btn-outline-primary">
+        <i class="fas fa-user me-2"></i>Customer Profile
+    </a>
+    <button type="button" class="btn btn-outline-secondary" onclick="exportTransactions()">
+        <i class="fas fa-download me-2"></i>Export
+    </button>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Customer Summary Card -->
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="row align-items-center">
+            <div class="col-md-3 text-center text-md-start">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="customer-avatar" style="width: 60px; height: 60px; border-radius: 50%; background: var(--primary-gradient); display: flex; align-items: center; justify-content: center; color: white; font-size: 1.5rem; font-weight: 600;">
+                        {{ customer.full_name|default:customer.phone_number|first|upper }}
+                    </div>
+                    <div>
+                        <h4 class="mb-0">{{ customer.full_name|default:"Unknown" }}</h4>
+                        <p class="text-muted mb-0">{{ customer.phone_number }}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 text-center">
+                <div class="stat-card-mini">
+                    <div class="stat-value text-primary">{{ customer.points_balance }}</div>
+                    <div class="stat-label">Current Points</div>
+                </div>
+            </div>
+            <div class="col-md-3 text-center">
+                <div class="stat-card-mini">
+                    <div class="stat-value text-success">KSH {{ customer.total_spent|floatformat:0 }}</div>
+                    <div class="stat-label">Total Spent</div>
+                </div>
+            </div>
+            <div class="col-md-3 text-center">
+                <div class="stat-card-mini">
+                    <div class="stat-value text-info">{{ customer.total_purchases }}</div>
+                    <div class="stat-label">Total Purchases</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Transaction History Table -->
+<div class="card">
+    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">
+            <i class="fas fa-list me-2"></i>All Points Transactions
+        </h5>
+        <div>
+            <div class="btn-group btn-group-sm">
+                <button type="button" class="btn btn-light" onclick="filterTransactions('all')">All</button>
+                <button type="button" class="btn btn-light" onclick="filterTransactions('earned')">Earned</button>
+                <button type="button" class="btn btn-light" onclick="filterTransactions('redeemed')">Redeemed</button>
+            </div>
+        </div>
+    </div>
+    <div class="card-body">
+        {% if transactions %}
+        <div class="table-responsive">
+            <table class="table table-hover" id="transactionsTable">
+                <thead>
+                    <tr>
+                        <th>Date & Time</th>
+                        <th>Type</th>
+                        <th>Points</th>
+                        <th>Description</th>
+                        <th>Sale ID</th>
+                        <th>Reference</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for transaction in transactions %}
+                    <tr data-type="{{ transaction.transaction_type }}">
+                        <td>{{ transaction.created_at|date:"d M Y H:i:s" }}</td>
+                        <td>
+                            {% if transaction.transaction_type == 'earned' %}
+                            <span class="badge bg-success">Earned</span>
+                            {% elif transaction.transaction_type == 'redeemed' %}
+                            <span class="badge bg-warning">Redeemed</span>
+                            {% elif transaction.transaction_type == 'adjustment' %}
+                            <span class="badge bg-secondary">Adjustment</span>
+                            {% elif transaction.transaction_type == 'expired' %}
+                            <span class="badge bg-danger">Expired</span>
+                            {% else %}
+                            <span class="badge bg-secondary">{{ transaction.transaction_type }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if transaction.transaction_type == 'earned' %}
+                            <span class="text-success fw-bold fs-5">+{{ transaction.points }}</span>
+                            {% elif transaction.transaction_type == 'redeemed' %}
+                            <span class="text-warning fw-bold fs-5">-{{ transaction.points }}</span>
+                            {% elif transaction.transaction_type == 'expired' %}
+                            <span class="text-danger fw-bold">-{{ transaction.points }}</span>
+                            {% else %}
+                            <span class="text-secondary fw-bold">{{ transaction.points }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ transaction.description|default:"-" }}</td>
+                        <td>
+                            {% if transaction.sale %}
+                            <a href="{% url 'sales:sale_detail' transaction.sale.sale_id %}" target="_blank" class="text-decoration-none">
+                                <i class="fas fa-receipt me-1"></i>{{ transaction.sale.sale_id }}
+                            </a>
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if transaction.reference %}
+                            <small class="text-muted">{{ transaction.reference }}</small>
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination -->
+        {% if transactions.has_other_pages %}
+        <nav class="mt-4">
+            <ul class="pagination justify-content-center">
+                {% if transactions.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ transactions.previous_page_number }}">
+                        <i class="fas fa-chevron-left"></i> Previous
+                    </a>
+                </li>
+                {% endif %}
+                
+                {% for num in transactions.paginator.page_range %}
+                    {% if transactions.number == num %}
+                    <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                    {% elif num > transactions.number|add:'-3' and num < transactions.number|add:'3' %}
+                    <li class="page-item"><a class="page-link" href="?page={{ num }}">{{ num }}</a></li>
+                    {% endif %}
+                {% endfor %}
+                
+                {% if transactions.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ transactions.next_page_number }}">
+                        Next <i class="fas fa-chevron-right"></i>
+                    </a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+        
+        <!-- Summary Stats -->
+        <div class="row mt-4 pt-3 border-top">
+            <div class="col-md-4 text-center">
+                <div class="card bg-light">
+                    <div class="card-body">
+                        <h6 class="text-muted mb-2">Total Points Earned</h6>
+                        <h3 class="text-success mb-0">
+                            {% with total_earned=transactions|dictsortreversed:"transaction_type" %}
+                                {% with earned=0 %}
+                                    {% for t in transactions %}
+                                        {% if t.transaction_type == 'earned' %}
+                                            {% with earned=earned|add:t.points %}{% endwith %}
+                                        {% endif %}
+                                    {% endfor %}
+                                {% endwith %}
+                            {% endwith %}
+                            {% for t in transactions %}
+                                {% if t.transaction_type == 'earned' %}
+                                    {% with total_earned=total_earned|add:t.points %}
+                                    {% endwith %}
+                                {% endif %}
+                            {% endfor %}
+                            <span id="total-earned">Calculating...</span>
+                        </h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 text-center">
+                <div class="card bg-light">
+                    <div class="card-body">
+                        <h6 class="text-muted mb-2">Total Points Redeemed</h6>
+                        <h3 class="text-warning mb-0">
+                            <span id="total-redeemed">Calculating...</span>
+                        </h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 text-center">
+                <div class="card bg-light">
+                    <div class="card-body">
+                        <h6 class="text-muted mb-2">Points Value Redeemed</h6>
+                        <h3 class="text-primary mb-0">KSH <span id="redeemed-value">Calculating...</span></h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        {% else %}
+        <div class="text-center py-5">
+            <i class="fas fa-receipt fa-4x text-muted mb-3"></i>
+            <h5 class="text-muted">No Transactions Found</h5>
+            <p class="text-muted">This customer hasn't earned or redeemed any points yet.</p>
+            <a href="{% url 'sales:sale_create' %}" class="btn btn-primary mt-3">
+                <i class="fas fa-shopping-cart me-2"></i>Make a Sale
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<style>
+    .stat-card-mini {
+        text-align: center;
+        padding: 0.5rem;
+    }
+    .stat-card-mini .stat-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+    }
+    .stat-card-mini .stat-label {
+        font-size: 0.8rem;
+        color: #6c757d;
+    }
+    .customer-avatar {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    .badge {
+        font-size: 0.75rem;
+        padding: 0.35rem 0.65rem;
+    }
+    .btn-group .btn-light.active {
+        background-color: var(--primary-color);
+        color: white;
+    }
+</style>
+
+<script>
+function filterTransactions(type) {
+    const rows = document.querySelectorAll('#transactionsTable tbody tr');
+    const buttons = document.querySelectorAll('.btn-group .btn-light');
+    
+    // Update active button state
+    buttons.forEach(btn => {
+        btn.classList.remove('active');
+        if ((type === 'all' && btn.innerText === 'All') ||
+            (type === 'earned' && btn.innerText === 'Earned') ||
+            (type === 'redeemed' && btn.innerText === 'Redeemed')) {
+            btn.classList.add('active');
+        }
+    });
+    
+    rows.forEach(row => {
+        if (type === 'all') {
+            row.style.display = '';
+        } else {
+            const rowType = row.getAttribute('data-type');
+            row.style.display = rowType === type ? '' : 'none';
+        }
+    });
+}
+
+function exportTransactions() {
+    // Get all visible rows
+    const rows = document.querySelectorAll('#transactionsTable tbody tr');
+    const visibleRows = Array.from(rows).filter(row => row.style.display !== 'none');
+    
+    // Create CSV content
+    let csvContent = "Date,Type,Points,Description,Sale ID,Reference\n";
+    
+    visibleRows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        const rowData = Array.from(cells).map(cell => {
+            let text = cell.innerText.trim();
+            // Escape commas and quotes
+            if (text.includes(',') || text.includes('"')) {
+                text = text.replace(/"/g, '""');
+                text = `"${text}"`;
+            }
+            return text;
+        });
+        csvContent += rowData.join(',') + '\n';
+    });
+    
+    // Download file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `transactions_{{ customer.full_name|slugify }}_{{ now|date:"Y-m-d" }}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+}
+
+// Calculate totals
+document.addEventListener('DOMContentLoaded', function() {
+    const rows = document.querySelectorAll('#transactionsTable tbody tr');
+    let totalEarned = 0;
+    let totalRedeemed = 0;
+    
+    rows.forEach(row => {
+        const type = row.getAttribute('data-type');
+        const pointsCell = row.querySelector('td:nth-child(3)');
+        if (pointsCell) {
+            const pointsText = pointsCell.innerText.trim();
+            const points = parseInt(pointsText.replace(/[^0-9-]/g, '')) || 0;
+            
+            if (type === 'earned') {
+                totalEarned += Math.abs(points);
+            } else if (type === 'redeemed') {
+                totalRedeemed += Math.abs(points);
+            }
+        }
+    });
+    
+    document.getElementById('total-earned').innerText = totalEarned;
+    document.getElementById('total-redeemed').innerText = totalRedeemed;
+    document.getElementById('redeemed-value').innerText = totalRedeemed;
+});
+</script>
+{% endblock %}

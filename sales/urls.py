@@ -21,6 +21,8 @@ urlpatterns = [
     path('customers/', views.customer_list, name='customer_list'),
     path('customer/search/', views.customer_search, name='customer_search'),
     path('customer/<int:pk>/', views.customer_detail, name='customer_detail'),
+    path('customer/<int:pk>/edit/', views.customer_edit, name='customer_edit'),
+    path('customer/<int:pk>/delete/', views.customer_delete, name='customer_delete'),
     path('customer/<int:pk>/transactions/', views.customer_transactions, name='customer_transactions'),
     
     # ===== PERIOD DETAILS - MUST COME BEFORE CATCH-ALL PATTERNS =====

@@ -986,11 +986,11 @@ class Customer(models.Model):
         """Auto-update customer tier based on total spent"""
         old_tier = self.tier
         
-        if self.total_spent >= 100000:
+        if self.total_spent >= 10000000:
             self.tier = 'platinum'
-        elif self.total_spent >= 50000:
+        elif self.total_spent >= 1000000:
             self.tier = 'gold'
-        elif self.total_spent >= 10000:
+        elif self.total_spent >= 100000:
             self.tier = 'silver'
         else:
             self.tier = 'bronze'

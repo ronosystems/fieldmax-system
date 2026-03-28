@@ -1,0 +1,314 @@
+{% extends 'sales/staff_base.html' %}
+{% load static %}
+
+{% block title %}Edit Customer - {{ customer.full_name }}{% endblock %}
+
+{% block page_icon %}fas fa-user-edit{% endblock %}
+{% block page_title %}Edit Customer{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'sales:sales_dashboard' %}">Dashboard</a></li>
+<li class="breadcrumb-item"><a href="{% url 'sales:customer_list' %}">Customer Records</a></li>
+<li class="breadcrumb-item"><a href="{% url 'sales:customer_detail' customer.id %}">{{ customer.full_name }}</a></li>
+<li class="breadcrumb-item active">Edit</li>
+{% endblock %}
+
+{% block page_actions %}
+<div class="btn-group">
+    <a href="{% url 'sales:customer_detail' customer.id %}" class="btn btn-outline-info">
+        <i class="fas fa-eye me-2"></i>View Profile
+    </a>
+    <a href="{% url 'sales:customer_list' %}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left me-2"></i>Back to List
+    </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-user-edit me-2"></i>Edit Customer Information
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" id="customerEditForm">
+                    {% csrf_token %}
+                    
+                    <!-- Phone Number (Required - Display Only) -->
+                    <div class="mb-3">
+                        <label for="phone_number" class="form-label">
+                            <i class="fas fa-phone me-1 text-primary"></i>Phone Number *
+                        </label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light">+254</span>
+                            <input type="tel" 
+                                   class="form-control bg-light" 
+                                   id="phone_number" 
+                                   name="phone_number" 
+                                   value="{{ customer.phone_number|slice:'3:' }}"
+                                   readonly
+                                   disabled>
+                        </div>
+                        <small class="text-muted">Phone number cannot be changed. To update, please delete and re-register.</small>
+                        <input type="hidden" name="phone_number" value="{{ customer.phone_number }}">
+                    </div>
+                    
+                    <!-- Full Name (Required) -->
+                    <div class="mb-3">
+                        <label for="full_name" class="form-label">
+                            <i class="fas fa-user me-1 text-primary"></i>Full Name *
+                        </label>
+                        <input type="text" 
+                               class="form-control" 
+                               id="full_name" 
+                               name="full_name" 
+                               value="{{ customer.full_name }}"
+                               required>
+                    </div>
+                    
+                    <!-- Email (Optional) -->
+                    <div class="mb-3">
+                        <label for="email" class="form-label">
+                            <i class="fas fa-envelope me-1 text-primary"></i>Email Address
+                        </label>
+                        <input type="email" 
+                               class="form-control" 
+                               id="email" 
+                               name="email" 
+                               value="{{ customer.email|default:'' }}">
+                    </div>
+                    
+                    <!-- ID Number (Optional) -->
+                    <div class="mb-3">
+                        <label for="id_number" class="form-label">
+                            <i class="fas fa-id-card me-1 text-primary"></i>ID/Passport Number
+                        </label>
+                        <input type="text" 
+                               class="form-control" 
+                               id="id_number" 
+                               name="id_number" 
+                               value="{{ customer.id_number|default:'' }}">
+                    </div>
+                    
+                    <!-- Customer Status (Admin only) -->
+                    {% if request.user.is_staff or request.user.is_superuser %}
+                    <div class="mb-3">
+                        <label for="is_active" class="form-label">
+                            <i class="fas fa-toggle-on me-1 text-primary"></i>Customer Status
+                        </label>
+                        <select class="form-select" id="is_active" name="is_active">
+                            <option value="true" {% if customer.is_active %}selected{% endif %}>Active</option>
+                            <option value="false" {% if not customer.is_active %}selected{% endif %}>Inactive</option>
+                        </select>
+                        <small class="text-muted">Inactive customers cannot earn or redeem points.</small>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Points Adjustment (Admin only) -->
+                    {% if request.user.is_staff or request.user.is_superuser %}
+                    <div class="card bg-light mb-4">
+                        <div class="card-header bg-white">
+                            <h6 class="mb-0">
+                                <i class="fas fa-adjust me-1 text-warning"></i>Points Adjustment (Admin Only)
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="points_adjustment" class="form-label">Adjust Points</label>
+                                    <div class="input-group">
+                                        <input type="number" 
+                                               class="form-control" 
+                                               id="points_adjustment" 
+                                               name="points_adjustment" 
+                                               placeholder="0"
+                                               step="1">
+                                        <span class="input-group-text">
+                                            <select name="adjustment_type" class="form-select-sm border-0 bg-transparent" style="width: auto;">
+                                                <option value="add">+ Add</option>
+                                                <option value="subtract">- Subtract</option>
+                                            </select>
+                                        </span>
+                                    </div>
+                                    <small class="text-muted">Enter points to add or subtract from current balance</small>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="adjustment_reason" class="form-label">Adjustment Reason</label>
+                                    <input type="text" 
+                                           class="form-control" 
+                                           id="adjustment_reason" 
+                                           name="adjustment_reason" 
+                                           placeholder="e.g., Bonus points, Correction">
+                                </div>
+                            </div>
+                            <div class="alert alert-info small mb-0">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Current Points Balance: <strong>{{ customer.points_balance }}</strong> points (KSH {{ customer.points_balance }})
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Tier Information (Read-only) -->
+                    <div class="card bg-light mb-4">
+                        <div class="card-header bg-white">
+                            <h6 class="mb-0">
+                                <i class="fas fa-trophy me-1 text-warning"></i>Loyalty Information
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <label class="text-muted">Current Tier</label>
+                                    <p class="mb-0">
+                                        <span class="tier-badge tier-{{ customer.tier }}">
+                                            {{ customer.get_tier_display }}
+                                        </span>
+                                    </p>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="text-muted">Total Spent</label>
+                                    <p class="mb-0 fw-bold">KSH {{ customer.total_spent|floatformat:0 }}</p>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="text-muted">Total Purchases</label>
+                                    <p class="mb-0 fw-bold">{{ customer.total_purchases }}</p>
+                                </div>
+                            </div>
+                            <hr class="my-3">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <label class="text-muted">Member Since</label>
+                                    <p class="mb-0">{{ customer.created_at|date:"d M Y" }}</p>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="text-muted">Last Purchase</label>
+                                    <p class="mb-0">
+                                        {% if customer.last_purchase_date %}
+                                        {{ customer.last_purchase_date|date:"d M Y" }}
+                                        {% else %}
+                                        <span class="text-muted">Never</span>
+                                        {% endif %}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Submit Buttons -->
+                    <div class="d-flex justify-content-between align-items-center mt-4">
+                        <a href="{% url 'sales:customer_detail' customer.id %}" class="btn btn-outline-secondary">
+                            <i class="fas fa-times me-2"></i>Cancel
+                        </a>
+                        <div>
+                            {% if request.user.is_staff or request.user.is_superuser %}
+                            <button type="button" class="btn btn-danger me-2" onclick="confirmDelete()">
+                                <i class="fas fa-trash-alt me-2"></i>Delete Customer
+                            </button>
+                            {% endif %}
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-2"></i>Save Changes
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-exclamation-triangle me-2"></i>Delete Customer
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete <strong>{{ customer.full_name }}</strong>?</p>
+                <p class="text-danger small mb-0">
+                    <i class="fas fa-warning me-1"></i>
+                    This action cannot be undone. All customer data including points, transactions, and purchase history will be permanently removed.
+                </p>
+                <div class="alert alert-warning mt-3 mb-0">
+                    <i class="fas fa-info-circle me-1"></i>
+                    Current Points: <strong>{{ customer.points_balance }}</strong> points (KSH {{ customer.points_balance }})
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form method="POST" action="{% url 'sales:customer_delete' customer.id %}" style="display: inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash-alt me-2"></i>Delete Permanently
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .tier-badge {
+        padding: 6px 15px;
+        border-radius: 50px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        display: inline-block;
+    }
+    .tier-bronze { background: #cd7f32; color: white; }
+    .tier-silver { background: #c0c0c0; color: #333; }
+    .tier-gold { background: #ffd700; color: #333; }
+    .tier-platinum { background: #e5e4e2; color: #333; }
+</style>
+
+<script>
+function confirmDelete() {
+    const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
+    modal.show();
+}
+
+// Form validation
+document.getElementById('customerEditForm').addEventListener('submit', function(e) {
+    const fullName = document.getElementById('full_name').value.trim();
+    
+    if (!fullName) {
+        e.preventDefault();
+        alert('Please enter the customer\'s full name');
+        return false;
+    }
+    
+    // Points adjustment validation
+    const pointsAdjustment = document.getElementById('points_adjustment');
+    if (pointsAdjustment && pointsAdjustment.value) {
+        const points = parseInt(pointsAdjustment.value);
+        const adjustmentType = document.querySelector('select[name="adjustment_type"]').value;
+        const reason = document.getElementById('adjustment_reason').value.trim();
+        
+        if (points <= 0) {
+            e.preventDefault();
+            alert('Points adjustment must be a positive number');
+            return false;
+        }
+        
+        if (adjustmentType === 'subtract' && points > {{ customer.points_balance }}) {
+            e.preventDefault();
+            alert('Cannot subtract more points than the current balance');
+            return false;
+        }
+        
+        if (!reason) {
+            e.preventDefault();
+            alert('Please provide a reason for points adjustment');
+            return false;
+        }
+    }
+});
+</script>
+{% endblock %}

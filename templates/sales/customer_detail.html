@@ -1,0 +1,366 @@
+{% extends 'sales/staff_base.html' %}
+{% load static %}
+
+{% block title %}Customer Details - {{ customer.full_name }}{% endblock %}
+
+{% block page_icon %}fas fa-user-circle{% endblock %}
+{% block page_title %}Customer Details{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'sales:sales_dashboard' %}">Dashboard</a></li>
+<li class="breadcrumb-item"><a href="{% url 'sales:customer_list' %}">Customer Records</a></li>
+<li class="breadcrumb-item active">{{ customer.full_name }}</li>
+{% endblock %}
+
+{% block page_actions %}
+<div class="btn-group">
+    <a href="{% url 'sales:customer_edit' customer.id %}" class="btn btn-warning">
+        <i class="fas fa-edit me-2"></i>Edit Customer
+    </a>
+    <a href="{% url 'sales:customer_list' %}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left me-2"></i>Back to List
+    </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- Customer Profile Card -->
+    <div class="col-md-4 mb-4">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-id-card me-2"></i>Customer Profile
+                </h5>
+            </div>
+            <div class="card-body text-center">
+                <div class="customer-avatar-lg mx-auto mb-3" style="width: 100px; height: 100px; border-radius: 50%; background: var(--primary-gradient); display: flex; align-items: center; justify-content: center; color: white; font-size: 2.5rem; font-weight: 600;">
+                    {{ customer.full_name|default:customer.phone_number|first|upper }}
+                </div>
+                <h4 class="mb-2">{{ customer.full_name|default:"Unknown" }}</h4>
+                <span class="tier-badge tier-{{ customer.tier }} mb-3 d-inline-block">
+                    {{ customer.get_tier_display }}
+                </span>
+                
+                <hr>
+                
+                <div class="text-start">
+                    <p class="mb-2">
+                        <i class="fas fa-phone me-2 text-muted"></i>
+                        <strong>Phone:</strong> {{ customer.phone_number }}
+                    </p>
+                    {% if customer.email %}
+                    <p class="mb-2">
+                        <i class="fas fa-envelope me-2 text-muted"></i>
+                        <strong>Email:</strong> {{ customer.email }}
+                    </p>
+                    {% endif %}
+                    {% if customer.id_number %}
+                    <p class="mb-2">
+                        <i class="fas fa-id-card me-2 text-muted"></i>
+                        <strong>ID Number:</strong> {{ customer.id_number }}
+                    </p>
+                    {% endif %}
+                    <p class="mb-2">
+                        <i class="fas fa-calendar-alt me-2 text-muted"></i>
+                        <strong>Member Since:</strong> {{ customer.created_at|date:"d M Y" }}
+                    </p>
+                    {% if customer.last_purchase_date %}
+                    <p class="mb-2">
+                        <i class="fas fa-shopping-cart me-2 text-muted"></i>
+                        <strong>Last Purchase:</strong> {{ customer.last_purchase_date|date:"d M Y" }}
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Points & Stats Card -->
+    <div class="col-md-4 mb-4">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-star me-2"></i>Loyalty Points
+                </h5>
+            </div>
+            <div class="card-body text-center">
+                <div class="points-display mb-4">
+                    <h1 class="display-3 text-primary fw-bold mb-0">{{ customer.points_balance }}</h1>
+                    <p class="text-muted">Points Balance</p>
+                    <h4 class="text-success">KSH {{ customer.points_balance }}</h4>
+                    <p class="small text-muted">1 point = KSH 1</p>
+                </div>
+                
+                <div class="row g-3 mt-3">
+                    <div class="col-6">
+                        <div class="card bg-light">
+                            <div class="card-body text-center p-3">
+                                <h3 class="mb-0 text-success">KSH {{ customer.total_spent|floatformat:0 }}</h3>
+                                <small class="text-muted">Total Spent</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="card bg-light">
+                            <div class="card-body text-center p-3">
+                                <h3 class="mb-0 text-info">{{ customer.total_purchases }}</h3>
+                                <small class="text-muted">Total Purchases</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Progress to Next Tier -->
+                <div class="mt-4">
+                    <div class="progress" style="height: 10px;">
+                        {% with total_spent=customer.total_spent|floatformat:0|add:0 %}
+                            {% if customer.tier == 'bronze' %}
+                                {% with next_tier=5000 %}
+                                    {% with progress=total_spent|default:0 %}
+                                        <div class="progress-bar bg-warning" style="width: {% widthratio progress next_tier 100 %}%"></div>
+                                    {% endwith %}
+                                {% endwith %}
+                            {% elif customer.tier == 'silver' %}
+                                {% with next_tier=10000 %}
+                                    {% with progress=total_spent|default:0 %}
+                                        <div class="progress-bar bg-warning" style="width: {% widthratio progress next_tier 100 %}%"></div>
+                                    {% endwith %}
+                                {% endwith %}
+                            {% elif customer.tier == 'gold' %}
+                                {% with next_tier=25000 %}
+                                    {% with progress=total_spent|default:0 %}
+                                        <div class="progress-bar bg-warning" style="width: {% widthratio progress next_tier 100 %}%"></div>
+                                    {% endwith %}
+                                {% endwith %}
+                            {% else %}
+                                <div class="progress-bar bg-success" style="width: 100%"></div>
+                            {% endif %}
+                        {% endwith %}
+                    </div>
+                    <p class="small text-muted mt-2">
+                        {% if customer.tier == 'bronze' %}
+                            KSH {{ customer.total_spent|floatformat:0 }} / KSH 5,000 to reach Silver
+                        {% elif customer.tier == 'silver' %}
+                            KSH {{ customer.total_spent|floatformat:0 }} / KSH 10,000 to reach Gold
+                        {% elif customer.tier == 'gold' %}
+                            KSH {{ customer.total_spent|floatformat:0 }} / KSH 25,000 to reach Platinum
+                        {% else %}
+                            🏆 Platinum Member - Top Tier!
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Tier Benefits Card -->
+    <div class="col-md-4 mb-4">
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-gift me-2"></i>Tier Benefits
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="benefits-list">
+                    {% if customer.tier == 'bronze' %}
+                    <div class="benefit-item mb-3">
+                        <i class="fas fa-star text-bronze me-2"></i>
+                        <strong>Bronze Tier</strong>
+                        <ul class="mt-2 mb-0">
+                            <li>1 point per KSH 100 spent</li>
+                            <li>Birthday bonus: 100 points</li>
+                            <li>Basic customer support</li>
+                        </ul>
+                    </div>
+                    {% elif customer.tier == 'silver' %}
+                    <div class="benefit-item mb-3">
+                        <i class="fas fa-star text-silver me-2"></i>
+                        <strong>Silver Tier</strong>
+                        <ul class="mt-2 mb-0">
+                            <li>1.5 points per KSH 100 spent</li>
+                            <li>Birthday bonus: 250 points</li>
+                            <li>Priority customer support</li>
+                            <li>5% off on select items</li>
+                        </ul>
+                    </div>
+                    {% elif customer.tier == 'gold' %}
+                    <div class="benefit-item mb-3">
+                        <i class="fas fa-star text-gold me-2"></i>
+                        <strong>Gold Tier</strong>
+                        <ul class="mt-2 mb-0">
+                            <li>2 points per KSH 100 spent</li>
+                            <li>Birthday bonus: 500 points</li>
+                            <li>VIP customer support</li>
+                            <li>10% off on select items</li>
+                            <li>Free delivery on orders > KSH 5,000</li>
+                        </ul>
+                    </div>
+                    {% else %}
+                    <div class="benefit-item mb-3">
+                        <i class="fas fa-crown text-platinum me-2"></i>
+                        <strong>Platinum Tier</strong>
+                        <ul class="mt-2 mb-0">
+                            <li>3 points per KSH 100 spent</li>
+                            <li>Birthday bonus: 1000 points</li>
+                            <li>24/7 dedicated support</li>
+                            <li>15% off on select items</li>
+                            <li>Free delivery on all orders</li>
+                            <li>Exclusive early access to sales</li>
+                        </ul>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Transactions -->
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">
+            <i class="fas fa-history me-2"></i>Recent Points Transactions
+        </h5>
+        <a href="{% url 'sales:customer_transactions' customer.id %}" class="btn btn-sm btn-light">
+            View All <i class="fas fa-arrow-right ms-1"></i>
+        </a>
+    </div>
+    <div class="card-body">
+        {% if transactions %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Type</th>
+                        <th>Points</th>
+                        <th>Description</th>
+                        <th>Sale ID</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for transaction in transactions %}
+                    <tr>
+                        <td>{{ transaction.created_at|date:"d M Y H:i" }}</td>
+                        <td>
+                            {% if transaction.transaction_type == 'earned' %}
+                            <span class="badge bg-success">Earned</span>
+                            {% elif transaction.transaction_type == 'redeemed' %}
+                            <span class="badge bg-warning">Redeemed</span>
+                            {% else %}
+                            <span class="badge bg-secondary">{{ transaction.transaction_type }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if transaction.transaction_type == 'earned' %}
+                            <span class="text-success fw-bold">+{{ transaction.points }}</span>
+                            {% else %}
+                            <span class="text-warning fw-bold">-{{ transaction.points }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ transaction.description|default:"-" }}</td>
+                        <td>
+                            {% if transaction.sale %}
+                            <a href="{% url 'sales:sale_detail' transaction.sale.sale_id %}" target="_blank">
+                                {{ transaction.sale.sale_id }}
+                            </a>
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-4">
+            <i class="fas fa-receipt fa-3x text-muted mb-3"></i>
+            <p class="text-muted">No transactions yet</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Recent Sales -->
+<div class="card">
+    <div class="card-header bg-info text-white">
+        <h5 class="mb-0">
+            <i class="fas fa-shopping-cart me-2"></i>Recent Purchases
+        </h5>
+    </div>
+    <div class="card-body">
+        {% if recent_sales %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Sale ID</th>
+                        <th>Date</th>
+                        <th>Amount</th>
+                        <th>Payment Method</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for sale in recent_sales %}
+                    <tr>
+                        <td>
+                            <a href="{% url 'sales:sale_detail' sale.sale_id %}" target="_blank">
+                                {{ sale.sale_id }}
+                            </a>
+                        </td>
+                        <td>{{ sale.sale_date|date:"d M Y H:i" }}</td>
+                        <td class="fw-bold">KSH {{ sale.total_amount|floatformat:0 }}</td>
+                        <td>
+                            <span class="badge bg-secondary">{{ sale.payment_method }}</span>
+                        </td>
+                        <td>
+                            <a href="{% url 'sales:sale_receipt' sale.sale_id %}" class="btn btn-sm btn-outline-primary" target="_blank">
+                                <i class="fas fa-print"></i> Receipt
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-4">
+            <i class="fas fa-shopping-bag fa-3x text-muted mb-3"></i>
+            <p class="text-muted">No purchases yet</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<style>
+    .tier-badge {
+        padding: 6px 15px;
+        border-radius: 50px;
+        font-size: 0.9rem;
+        font-weight: 600;
+    }
+    .tier-bronze { background: #cd7f32; color: white; }
+    .tier-silver { background: #c0c0c0; color: #333; }
+    .tier-gold { background: #ffd700; color: #333; }
+    .tier-platinum { background: #e5e4e2; color: #333; }
+    .text-bronze { color: #cd7f32; }
+    .text-silver { color: #c0c0c0; }
+    .text-gold { color: #ffd700; }
+    .text-platinum { color: #e5e4e2; }
+    .benefit-item ul {
+        padding-left: 1.5rem;
+    }
+    .benefit-item li {
+        margin-bottom: 0.25rem;
+    }
+    .points-display {
+        background: linear-gradient(135deg, #f5f7fa 0%, #e9ecef 100%);
+        border-radius: 15px;
+        padding: 1rem;
+    }
+</style>
+{% endblock %}
