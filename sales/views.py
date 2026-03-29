@@ -394,161 +394,189 @@ def get_items_by_month(month_name, year):
             'items': []
         }
 
+
+
+
 # ============================================
 # MAIN SALES STATISTICS VIEW
 # ============================================
 
 @login_required
 def sales_statistics(request):
-    """Sales statistics dashboard"""
+    """Sales statistics dashboard - OPTIMIZED VERSION"""
     
-    # Date ranges
+    from django.db.models import Sum, Count, Avg, Q, F, Value, DecimalField, Case, When
+    from django.db.models.functions import TruncDate, TruncMonth, ExtractHour, ExtractWeekDay
+    from decimal import Decimal
+    
     today = timezone.now().date()
-    start_of_day = timezone.make_aware(timezone.datetime.combine(today, timezone.datetime.min.time()))
-    end_of_day = timezone.make_aware(timezone.datetime.combine(today, timezone.datetime.max.time()))
-    
-    start_of_week = timezone.make_aware(timezone.datetime.combine(today - timedelta(days=today.weekday()), timezone.datetime.min.time()))
-    start_of_month = timezone.make_aware(timezone.datetime.combine(today.replace(day=1), timezone.datetime.min.time()))
-    start_of_year = timezone.make_aware(timezone.datetime.combine(today.replace(month=1, day=1), timezone.datetime.min.time()))
     
     # ============================================
-    # Get IDs of sales that have been returned
+    # Get IDs of sales that have been returned (once only)
     # ============================================
     from inventory.models import ReturnRequest
     
-    # Get sale_ids from return requests that are not rejected
     returned_sale_ids = ReturnRequest.objects.filter(
         ~Q(status='rejected')
     ).exclude(
         Q(sale_id__isnull=True) | Q(sale_id='')
     ).values_list('sale_id', flat=True).distinct()
     
-    # ============================================
     # Base queryset - exclude reversed AND returned sales
-    # ============================================
     active_sales_qs = Sale.objects.filter(
         is_reversed=False
     ).exclude(
         sale_id__in=returned_sale_ids
     )
     
-    all_sales_qs = Sale.objects.all()
+    # ============================================
+    # OPTIMIZED: Calculate profit using database aggregation
+    # ============================================
+    def get_profit_for_sales(sales_queryset):
+        """Calculate profit using database aggregation - FAST"""
+        result = SaleItem.objects.filter(
+            sale__in=sales_queryset,
+            sale__is_reversed=False,
+            product__buying_price__isnull=False
+        ).annotate(
+            profit_per_item=F('unit_price') - F('product__buying_price')
+        ).aggregate(
+            total_profit=Sum(F('profit_per_item') * F('quantity'), output_field=DecimalField(max_digits=15, decimal_places=2))
+        )
+        return result['total_profit'] or Decimal('0.00')
     
     # ============================================
-    # OVERVIEW STATISTICS WITH PROFITS
+    # Get all period querysets once
     # ============================================
+    today_start = timezone.make_aware(timezone.datetime.combine(today, timezone.datetime.min.time()))
+    today_end = timezone.make_aware(timezone.datetime.combine(today, timezone.datetime.max.time()))
+    week_start = timezone.make_aware(timezone.datetime.combine(today - timedelta(days=today.weekday()), timezone.datetime.min.time()))
+    month_start = timezone.make_aware(timezone.datetime.combine(today.replace(day=1), timezone.datetime.min.time()))
+    year_start = timezone.make_aware(timezone.datetime.combine(today.replace(month=1, day=1), timezone.datetime.min.time()))
     
-    total_sales = active_sales_qs.count()
-    total_revenue = active_sales_qs.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-    total_items_sold = SaleItem.objects.filter(
-        sale__is_reversed=False,
-        sale__sale_id__in=active_sales_qs.values('sale_id')
-    ).aggregate(total=Sum('quantity'))['total'] or 0
+    # Get all filtered querysets (using sale_id instead of id)
+    today_qs = active_sales_qs.filter(sale_date__range=[today_start, today_end])
+    week_qs = active_sales_qs.filter(sale_date__gte=week_start)
+    month_qs = active_sales_qs.filter(sale_date__gte=month_start)
+    year_qs = active_sales_qs.filter(sale_date__gte=year_start)
+    all_qs = active_sales_qs
     
-    total_profit = Decimal('0.00')
-    for sale in active_sales_qs.select_related().all():
-        total_profit += calculate_profit(sale)
+    # ============================================
+    # OPTIMIZED: Single aggregation queries
+    # ============================================
+    # Overview stats - use Count('sale_id') instead of Count('id')
+    overview_stats = all_qs.aggregate(
+        total_sales=Count('sale_id'),
+        total_revenue=Sum('total_amount'),
+        total_items=Sum('items__quantity')
+    )
     
+    # Period stats using single queries
+    period_stats = {
+        'today': today_qs.aggregate(count=Count('sale_id'), revenue=Sum('total_amount')),
+        'week': week_qs.aggregate(count=Count('sale_id'), revenue=Sum('total_amount')),
+        'month': month_qs.aggregate(count=Count('sale_id'), revenue=Sum('total_amount')),
+        'year': year_qs.aggregate(count=Count('sale_id'), revenue=Sum('total_amount')),
+    }
+    
+    # Get profits (only 4 queries instead of 30+)
+    total_profit = get_profit_for_sales(all_qs)
+    today_profit = get_profit_for_sales(today_qs)
+    week_profit = get_profit_for_sales(week_qs)
+    month_profit = get_profit_for_sales(month_qs)
+    year_profit = get_profit_for_sales(year_qs)
+    
+    # Extract values
+    total_sales = overview_stats['total_sales'] or 0
+    total_revenue = overview_stats['total_revenue'] or Decimal('0.00')
+    total_items_sold = overview_stats['total_items'] or 0
     profit_margin = (total_profit / total_revenue * 100) if total_revenue > 0 else 0
     
-    # Today's sales
-    today_sales = active_sales_qs.filter(sale_date__range=[start_of_day, end_of_day])
-    today_count = today_sales.count()
-    today_revenue = today_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-    today_profit = Decimal('0.00')
-    for sale in today_sales.select_related().all():
-        today_profit += calculate_profit(sale)
+    today_count = period_stats['today']['count'] or 0
+    today_revenue = period_stats['today']['revenue'] or Decimal('0.00')
+    week_count = period_stats['week']['count'] or 0
+    week_revenue = period_stats['week']['revenue'] or Decimal('0.00')
+    month_count = period_stats['month']['count'] or 0
+    month_revenue = period_stats['month']['revenue'] or Decimal('0.00')
+    year_count = period_stats['year']['count'] or 0
+    year_revenue = period_stats['year']['revenue'] or Decimal('0.00')
     
-    # This week's sales
-    week_sales = active_sales_qs.filter(sale_date__gte=start_of_week)
-    week_count = week_sales.count()
-    week_revenue = week_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-    week_profit = Decimal('0.00')
-    for sale in week_sales.select_related().all():
-        week_profit += calculate_profit(sale)
+    # Calculate margins
+    month_margin = (month_profit / month_revenue * 100) if month_revenue > 0 else 0
+    year_margin = (year_profit / year_revenue * 100) if year_revenue > 0 else 0
     
-    # This month's sales
-    month_sales = active_sales_qs.filter(sale_date__gte=start_of_month)
-    month_count = month_sales.count()
-    month_revenue = month_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-    month_profit = Decimal('0.00')
-    for sale in month_sales.select_related().all():
-        month_profit += calculate_profit(sale)
-    
-    # This year's sales
-    year_sales = active_sales_qs.filter(sale_date__gte=start_of_year)
-    year_count = year_sales.count()
-    year_revenue = year_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-    year_profit = Decimal('0.00')
-    for sale in year_sales.select_related().all():
-        year_profit += calculate_profit(sale)
-    
-    # Average values
+    # Averages
     avg_transaction_value = total_revenue / total_sales if total_sales > 0 else 0
     avg_items_per_sale = total_items_sold / total_sales if total_sales > 0 else 0
     avg_profit_per_sale = total_profit / total_sales if total_sales > 0 else 0
     
     # ============================================
-    # DAILY BREAKDOWN
+    # OPTIMIZED: Daily breakdown using database aggregation (1 query)
     # ============================================
+    from django.db.models.functions import TruncDate
+    
+    daily_breakdown = all_qs.filter(
+        sale_date__gte=week_start
+    ).annotate(
+        sale_date_only=TruncDate('sale_date')
+    ).values('sale_date_only').annotate(
+        count=Count('sale_id'),
+        revenue=Sum('total_amount')
+    ).order_by('sale_date_only')
+    
+    # Build daily breakdown list
     daily_sales_breakdown = []
-    for i in range(7):
-        day = start_of_week.date() + timedelta(days=i)
-        day_start = timezone.make_aware(timezone.datetime.combine(day, timezone.datetime.min.time()))
-        day_end = timezone.make_aware(timezone.datetime.combine(day, timezone.datetime.max.time()))
-        
-        day_sales = active_sales_qs.filter(sale_date__range=[day_start, day_end])
-        day_revenue = day_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-        day_count = day_sales.count()
-        
-        day_profit = Decimal('0.00')
-        for sale in day_sales.select_related().all():
-            day_profit += calculate_profit(sale)
+    daily_profits = {}
+    
+    # Get profits for each day (one query per day - but limited to 7 days)
+    for day_data in daily_breakdown:
+        date_obj = day_data['sale_date_only']
+        day_qs = all_qs.filter(sale_date__date=date_obj)
+        day_profit = get_profit_for_sales(day_qs)
+        daily_profits[date_obj] = day_profit
         
         daily_sales_breakdown.append({
-            'day': day.strftime('%A'),
-            'date': day.strftime('%Y-%m-%d'),
-            'revenue': day_revenue,
+            'day': date_obj.strftime('%A'),
+            'date': date_obj.strftime('%Y-%m-%d'),
+            'revenue': day_data['revenue'] or Decimal('0.00'),
             'profit': day_profit,
-            'margin': (day_profit / day_revenue * 100) if day_revenue > 0 else 0,
-            'count': day_count
+            'margin': (day_profit / day_data['revenue'] * 100) if day_data['revenue'] else 0,
+            'count': day_data['count'] or 0
         })
-
+    
     daily_totals = {
-        'count': sum(day['count'] for day in daily_sales_breakdown),
-        'revenue': sum(day['revenue'] for day in daily_sales_breakdown),
-        'profit': sum(day['profit'] for day in daily_sales_breakdown),
-        'avg_margin': sum(day['margin'] for day in daily_sales_breakdown) / len(daily_sales_breakdown) if daily_sales_breakdown else 0,
+        'count': sum(d['count'] for d in daily_sales_breakdown),
+        'revenue': sum(d['revenue'] for d in daily_sales_breakdown),
+        'profit': sum(d['profit'] for d in daily_sales_breakdown),
+        'avg_margin': sum(d['margin'] for d in daily_sales_breakdown) / len(daily_sales_breakdown) if daily_sales_breakdown else 0,
     }
     
     # ============================================
-    # WEEKLY BREAKDOWN
+    # OPTIMIZED: Weekly breakdown
     # ============================================
     current_year = today.year
     current_month = today.month
     last_day = calendar.monthrange(current_year, current_month)[1]
-    
     weekly_ranges = [(1, 7), (8, 14), (15, 21), (22, 28), (29, last_day)]
-    weekly_sales_breakdown = []
     
+    weekly_sales_breakdown = []
     for week_num, (start_day, end_day) in enumerate(weekly_ranges, 1):
         if start_day > last_day:
             continue
-            
+        
         end_day = min(end_day, last_day)
         week_start = date(current_year, current_month, start_day)
         week_end = date(current_year, current_month, end_day)
-        
         week_start_aware = timezone.make_aware(timezone.datetime.combine(week_start, timezone.datetime.min.time()))
         week_end_aware = timezone.make_aware(timezone.datetime.combine(week_end, timezone.datetime.max.time()))
         
-        week_sales = active_sales_qs.filter(sale_date__range=[week_start_aware, week_end_aware])
-        week_revenue = week_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-        week_count = week_sales.count()
+        week_qs_filtered = all_qs.filter(sale_date__range=[week_start_aware, week_end_aware])
         
-        week_profit = Decimal('0.00')
-        for sale in week_sales.select_related().all():
-            week_profit += calculate_profit(sale)
+        week_stats = week_qs_filtered.aggregate(
+            count=Count('sale_id'),
+            revenue=Sum('total_amount')
+        )
+        week_profit_calc = get_profit_for_sales(week_qs_filtered)
         
         month_name = week_start.strftime('%b')
         date_range = f"{month_name} {start_day}{get_day_suffix(start_day)} - {month_name} {end_day}{get_day_suffix(end_day)}"
@@ -556,116 +584,160 @@ def sales_statistics(request):
         weekly_sales_breakdown.append({
             'week_number': week_num,
             'week_range': date_range,
-            'revenue': week_revenue,
-            'profit': week_profit,
-            'margin': (week_profit / week_revenue * 100) if week_revenue > 0 else 0,
-            'count': week_count
+            'revenue': week_stats['revenue'] or Decimal('0.00'),
+            'profit': week_profit_calc,
+            'margin': (week_profit_calc / (week_stats['revenue'] or 1) * 100) if week_stats['revenue'] else 0,
+            'count': week_stats['count'] or 0
         })
     
     # ============================================
-    # MONTHLY BREAKDOWN
+    # OPTIMIZED: Monthly breakdown (1 query)
     # ============================================
+    monthly_breakdown = all_qs.annotate(
+        month_year=TruncMonth('sale_date')
+    ).values('month_year').annotate(
+        count=Count('sale_id'),
+        revenue=Sum('total_amount')
+    ).order_by('-month_year')[:12]
+    
     monthly_sales_breakdown = []
-    for i in range(11, -1, -1):
-        month_date = today - timedelta(days=30*i)
-        month_start = date(month_date.year, month_date.month, 1)
-        month_end = date(month_date.year, month_date.month, 
-                        calendar.monthrange(month_date.year, month_date.month)[1])
-        
-        month_start_aware = timezone.make_aware(timezone.datetime.combine(month_start, timezone.datetime.min.time()))
-        month_end_aware = timezone.make_aware(timezone.datetime.combine(month_end, timezone.datetime.max.time()))
-        
-        month_sales = active_sales_qs.filter(sale_date__range=[month_start_aware, month_end_aware])
-        month_revenue = month_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-        month_count = month_sales.count()
-        
-        month_profit = Decimal('0.00')
-        for sale in month_sales.select_related().all():
-            month_profit += calculate_profit(sale)
+    for month_data in monthly_breakdown:
+        month_date = month_data['month_year'].date()
+        month_qs_filtered = all_qs.filter(sale_date__year=month_date.year, sale_date__month=month_date.month)
+        month_profit_calc = get_profit_for_sales(month_qs_filtered)
         
         monthly_sales_breakdown.append({
-            'month': month_start.strftime('%B %Y'),
-            'month_short': month_start.strftime('%b %Y'),
-            'revenue': month_revenue,
-            'profit': month_profit,
-            'margin': (month_profit / month_revenue * 100) if month_revenue > 0 else 0,
-            'count': month_count,
+            'month': month_date.strftime('%B %Y'),
+            'month_short': month_date.strftime('%b %Y'),
+            'revenue': month_data['revenue'] or Decimal('0.00'),
+            'profit': month_profit_calc,
+            'margin': (month_profit_calc / (month_data['revenue'] or 1) * 100) if month_data['revenue'] else 0,
+            'count': month_data['count'] or 0,
             'year': month_date.year,
-            'month_name': month_start.strftime('%B')
+            'month_name': month_date.strftime('%B')
         })
     
     # ============================================
-    # RECENT SALES
+    # OPTIMIZED: Daily chart (1 query instead of 30)
     # ============================================
-    recent_sales = active_sales_qs.order_by('-sale_date')[:20]
-    for sale in recent_sales:
-        sale.items_count = SaleItem.objects.filter(sale=sale).count()
+    thirty_days_ago = today - timedelta(days=30)
+    thirty_days_ago_aware = timezone.make_aware(timezone.datetime.combine(thirty_days_ago, timezone.datetime.min.time()))
+    
+    chart_data = all_qs.filter(
+        sale_date__gte=thirty_days_ago_aware
+    ).annotate(
+        date_only=TruncDate('sale_date')
+    ).values('date_only').annotate(
+        revenue=Sum('total_amount'),
+        count=Count('sale_id')
+    ).order_by('date_only')
+    
+    # Create a dictionary for quick lookup
+    chart_dict = {item['date_only']: item for item in chart_data}
+    
+    daily_sales = []
+    for i in range(29, -1, -1):
+        day = today - timedelta(days=i)
+        day_data = chart_dict.get(day)
+        daily_sales.append({
+            'date': day.strftime('%Y-%m-%d'),
+            'display_date': day.strftime('%d %b'),
+            'revenue': float(day_data['revenue']) if day_data else 0,
+            'count': day_data['count'] if day_data else 0
+        })
     
     # ============================================
-    # TOP PRODUCTS
+    # OPTIMIZED: Hourly sales (1 query)
     # ============================================
-    top_products = []
-    product_data = SaleItem.objects.filter(
-        sale__is_reversed=False,
-        sale__sale_id__in=active_sales_qs.values('sale_id')
+    hourly_data = today_qs.annotate(
+        hour=ExtractHour('sale_date')
+    ).values('hour').annotate(
+        revenue=Sum('total_amount'),
+        count=Count('sale_id')
+    ).order_by('hour')
+    
+    hourly_dict = {item['hour']: item for item in hourly_data}
+    
+    hourly_sales = []
+    for hour in range(7, 22):
+        hour_data = hourly_dict.get(hour)
+        hourly_sales.append({
+            'hour': f"{hour:02d}:00",
+            'revenue': float(hour_data['revenue']) if hour_data else 0,
+            'count': hour_data['count'] if hour_data else 0
+        })
+    
+    # ============================================
+    # Top Products (optimized with profit calculation)
+    # ============================================
+    top_products = SaleItem.objects.filter(
+        sale__in=all_qs,
+        sale__is_reversed=False
     ).select_related('product').values(
-        'product_code', 'product_name', 'product__buying_price'
+        'product_code', 'product_name'
     ).annotate(
         total_quantity=Sum('quantity'),
         total_revenue=Sum('total_price'),
         avg_price=Avg('unit_price')
     ).order_by('-total_quantity')[:10]
     
-    for item in product_data:
-        buying_price = item.get('product__buying_price') or 0
-        profit_per_unit = item['avg_price'] - buying_price if buying_price else 0
-        total_profit = profit_per_unit * item['total_quantity']
+    # Calculate profit for each product
+    products_with_profit = []
+    for product in top_products:
+        # Get profit for this product
+        profit_data = SaleItem.objects.filter(
+            sale__in=all_qs,
+            product_code=product['product_code'],
+            sale__is_reversed=False
+        ).annotate(
+            profit_per_item=F('unit_price') - F('product__buying_price')
+        ).aggregate(
+            total_profit=Sum(F('profit_per_item') * F('quantity'), output_field=DecimalField(max_digits=15, decimal_places=2))
+        )
+        total_profit_val = profit_data['total_profit'] or Decimal('0.00')
         
-        top_products.append({
-            'product_code': item['product_code'],
-            'product_name': item['product_name'],
-            'total_quantity': item['total_quantity'],
-            'total_revenue': item['total_revenue'],
-            'total_profit': total_profit,
-            'margin': (total_profit / item['total_revenue'] * 100) if item['total_revenue'] > 0 else 0
+        products_with_profit.append({
+            'product_code': product['product_code'],
+            'product_name': product['product_name'],
+            'total_quantity': product['total_quantity'] or 0,
+            'total_revenue': product['total_revenue'] or Decimal('0.00'),
+            'total_profit': total_profit_val,
+            'margin': (total_profit_val / (product['total_revenue'] or 1) * 100) if product['total_revenue'] else 0
         })
     
     # ============================================
-    # TOP SELLERS
+    # Top Sellers
     # ============================================
-    top_sellers = []
-    sellers = User.objects.filter(
-        sales_made__is_reversed=False,
-        sales_made__sale_id__in=active_sales_qs.values('sale_id')
+    top_sellers = User.objects.filter(
+        sales_made__in=all_qs,
+        sales_made__is_reversed=False
     ).annotate(
         sales_count=Count('sales_made'),
         total_revenue=Sum('sales_made__total_amount')
     ).order_by('-total_revenue')[:10]
     
-    for seller in sellers:
-        seller_sales = active_sales_qs.filter(seller=seller)
-        seller_profit = Decimal('0.00')
-        for sale in seller_sales.select_related().all():
-            seller_profit += calculate_profit(sale)
-        
-        top_sellers.append({
+    sellers_with_profit = []
+    for seller in top_sellers:
+        seller_sales = all_qs.filter(seller=seller)
+        seller_profit = get_profit_for_sales(seller_sales)
+        sellers_with_profit.append({
             'id': seller.id,
             'username': seller.username,
             'first_name': seller.first_name,
             'last_name': seller.last_name,
             'get_full_name': seller.get_full_name(),
-            'sales_count': seller.sales_count,
-            'total_revenue': seller.total_revenue,
+            'sales_count': seller.sales_count or 0,
+            'total_revenue': seller.total_revenue or Decimal('0.00'),
             'total_profit': seller_profit,
-            'margin': (seller_profit / seller.total_revenue * 100) if seller.total_revenue > 0 else 0
+            'margin': (seller_profit / (seller.total_revenue or 1) * 100) if seller.total_revenue else 0
         })
     
     # ============================================
-    # PAYMENT METHODS
+    # Payment Methods
     # ============================================
     payment_methods = []
     for method, _ in Sale._meta.get_field('payment_method').choices:
-        method_sales = active_sales_qs.filter(payment_method=method)
+        method_sales = all_qs.filter(payment_method=method)
         revenue = method_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
         payment_methods.append({
             'name': method,
@@ -676,40 +748,26 @@ def sales_statistics(request):
         })
     
     # ============================================
-    # DAILY SALES CHART DATA
+    # Additional Stats
     # ============================================
-    daily_sales = []
-    for i in range(30, 0, -1):
-        day = today - timedelta(days=i)
-        day_start = timezone.make_aware(timezone.datetime.combine(day, timezone.datetime.min.time()))
-        day_end = timezone.make_aware(timezone.datetime.combine(day, timezone.datetime.max.time()))
-        
-        day_sales = active_sales_qs.filter(sale_date__range=[day_start, day_end])
-        day_revenue = day_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-        
-        daily_sales.append({
-            'date': day.strftime('%Y-%m-%d'),
-            'display_date': day.strftime('%d %b'),
-            'revenue': float(day_revenue),
-            'count': day_sales.count()
-        })
+    credit_sales = all_qs.filter(is_credit=True)
+    credit_count = credit_sales.count()
+    credit_revenue = credit_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+    credit_percentage = (credit_revenue / total_revenue * 100) if total_revenue > 0 else 0
     
-    # ============================================
-    # HOURLY SALES
-    # ============================================
-    hourly_sales = []
-    for hour in range(7, 22):
-        hour_sales = active_sales_qs.filter(
-            sale_date__hour=hour,
-            sale_date__date=today
-        )
-        hour_revenue = hour_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-        
-        hourly_sales.append({
-            'hour': f"{hour:02d}:00",
-            'revenue': float(hour_revenue),
-            'count': hour_sales.count()
-        })
+    etr_processed = all_qs.filter(etr_receipt_number__isnull=False).count()
+    etr_pending = all_qs.filter(etr_receipt_number__isnull=True).count()
+    etr_failed = 0
+    
+    reversed_sales = Sale.objects.filter(is_reversed=True)
+    reversed_count = reversed_sales.count()
+    reversed_amount = reversed_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+    reversal_percentage = (reversed_amount / total_revenue * 100) if total_revenue > 0 else 0
+    
+    # Recent sales (limit to 20)
+    recent_sales = all_qs.order_by('-sale_date')[:20]
+    for sale in recent_sales:
+        sale.items_count = sale.items.count()
     
     # ============================================
     # CONTEXT
@@ -733,51 +791,46 @@ def sales_statistics(request):
         'month_count': month_count,
         'month_revenue': month_revenue,
         'month_profit': month_profit,
+        'month_margin': month_margin,
         'year_count': year_count,
         'year_revenue': year_revenue,
         'year_profit': year_profit,
+        'year_margin': year_margin,
         
         'recent_sales': recent_sales,
-        
         'daily_sales_breakdown': daily_sales_breakdown,
         'weekly_sales_breakdown': weekly_sales_breakdown,
         'monthly_sales_breakdown': monthly_sales_breakdown,
-        
-        'top_products': top_products,
-        'top_sellers': top_sellers,
+        'top_products': products_with_profit,
+        'top_sellers': sellers_with_profit,
         'payment_methods': payment_methods,
-        
         'daily_sales': daily_sales,
         'daily_totals': daily_totals,
         'hourly_sales': hourly_sales,
         
-        'credit_count': 0,
-        'credit_revenue': 0,
-        'credit_percentage': 0,
+        'credit_count': credit_count,
+        'credit_revenue': credit_revenue,
+        'credit_percentage': credit_percentage,
+        'etr_processed': etr_processed,
+        'etr_pending': etr_pending,
+        'etr_failed': etr_failed,
+        'reversed_count': reversed_count,
+        'reversed_amount': reversed_amount,
+        'reversal_percentage': reversal_percentage,
         
-        'etr_processed': 0,
-        'etr_pending': 0,
-        'etr_failed': 0,
-        
-        'reversed_count': 0,
-        'reversed_amount': 0,
-        'reversal_percentage': 0,
-        
+        # Placeholders for return stats
         'total_returns': 0,
         'total_refund_amount': 0,
         'returns_by_status': [],
-        
         'damaged_returns_count': 0,
         'damaged_returns_value': 0,
         'damaged_returns_cost': 0,
-        
         'pending_returns_count': 0,
         'pending_returns_value': 0,
         'pending_verification_count': 0,
         'pending_verification_value': 0,
         'pending_approval_count': 0,
         'pending_approval_value': 0,
-        
         'approved_returns_count': 0,
         'approved_returns_value': 0,
         'processed_returns_count': 0,
@@ -786,15 +839,21 @@ def sales_statistics(request):
         'rejected_returns_value': 0,
         'mismatch_returns_count': 0,
         'mismatch_returns_value': 0,
-        
-        'total_original_sales': all_sales_qs.count(),
-        'total_original_value': all_sales_qs.aggregate(total=Sum('total_amount'))['total'] or 0,
+        'total_original_sales': Sale.objects.count(),
+        'total_original_value': Sale.objects.aggregate(total=Sum('total_amount'))['total'] or 0,
         'returns_with_sale': 0,
         'active_sales_count': total_sales,
         'active_sales_value': total_revenue,
     }
     
     return render(request, 'sales/statistics.html', context)
+
+
+
+
+
+
+
 
 # ============================================
 # PERIOD DETAILS VIEW
