@@ -79,19 +79,20 @@ def get_commission_status_color(status):
 
 
 
-# ====================================
-# STATISTICS VIEW (UPDATED WITH COMMISSION)
-# ====================================
-# ====================================
-# STATISTICS VIEW (UPDATED WITH COMMISSION)
-# ====================================
+
+
+
+
+# ============================================
+# CREDIT STATISTICS VIEW 
+# ============================================
 
 @login_required
 def credit_statistics(request):
-    """Credit statistics dashboard with daily, weekly, and monthly breakdowns"""
+    """Credit statistics dashboard with daily, weekly, and monthly breakdowns - OPTIMIZED"""
     
     from django.db.models import Sum, Count, Q, F, Value, DecimalField, Case, When, IntegerField
-    from django.db.models.functions import Coalesce, TruncDate, TruncMonth
+    from django.db.models.functions import Coalesce, TruncDate, TruncMonth, ExtractWeekDay
     
     # Date ranges
     today = timezone.now().date()
@@ -106,391 +107,291 @@ def credit_statistics(request):
     transactions_qs = CreditTransaction.objects.exclude(payment_status='reversed')
     
     # ============================================
-    # OVERVIEW STATISTICS
+    # SINGLE QUERY: Overview + Commission + Aging
     # ============================================
+    overview_aggregate = transactions_qs.aggregate(
+        total_transactions=Count('id'),
+        total_value=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())),
+        pending_count=Count('id', filter=Q(payment_status='pending')),
+        pending_value=Coalesce(Sum('ceiling_price', filter=Q(payment_status='pending')), Value(0, output_field=DecimalField())),
+        paid_count=Count('id', filter=Q(payment_status='paid')),
+        paid_value=Coalesce(Sum('ceiling_price', filter=Q(payment_status='paid')), Value(0, output_field=DecimalField())),
+        cancelled_count=Count('id', filter=Q(payment_status='cancelled')),
+        reversed_count=Count('id', filter=Q(payment_status='reversed')),
+        total_commission=Coalesce(Sum('commission_amount', filter=Q(payment_status='paid')), Value(0, output_field=DecimalField())),
+        paid_commission=Coalesce(Sum('commission_amount', filter=Q(commission_status='paid')), Value(0, output_field=DecimalField())),
+        aging_total=Count('id', filter=Q(payment_status='pending')),
+        aging_0_30=Count('id', filter=Q(payment_status='pending', transaction_date__date__gte=today - timedelta(days=30))),
+        aging_31_60=Count('id', filter=Q(
+            payment_status='pending',
+            transaction_date__date__lt=today - timedelta(days=30),
+            transaction_date__date__gte=today - timedelta(days=60)
+        )),
+        aging_61_90=Count('id', filter=Q(
+            payment_status='pending',
+            transaction_date__date__lt=today - timedelta(days=60),
+            transaction_date__date__gte=today - timedelta(days=90)
+        )),
+        aging_90_plus=Count('id', filter=Q(payment_status='pending', transaction_date__date__lt=today - timedelta(days=90))),
+    )
     
-    # All time totals
-    total_transactions = transactions_qs.count()
-    total_value = transactions_qs.aggregate(total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())))['total']
-    
-    # Pending payments (company hasn't paid yet)
-    pending_transactions = transactions_qs.filter(payment_status='pending')
-    pending_count = pending_transactions.count()
-    pending_value = pending_transactions.aggregate(total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())))['total']
-    
-    # Paid transactions
-    paid_transactions = transactions_qs.filter(payment_status='paid')
-    paid_count = paid_transactions.count()
-    paid_value = paid_transactions.aggregate(total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())))['total']
-    
-    # Cancelled transactions
-    cancelled_count = CreditTransaction.objects.filter(payment_status='cancelled').count()
-    reversed_count = CreditTransaction.objects.filter(payment_status='reversed').count()
-    
-    # Today's transactions
-    today_transactions = transactions_qs.filter(transaction_date__range=[start_of_day, end_of_day])
-    today_count = today_transactions.count()
-    today_value = today_transactions.aggregate(total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())))['total']
-    
-    # This month's transactions
-    month_transactions = transactions_qs.filter(transaction_date__gte=start_of_month)
-    month_count = month_transactions.count()
-    month_value = month_transactions.aggregate(total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())))['total']
-    
-    # Average values
+    # Extract values
+    total_transactions = overview_aggregate['total_transactions']
+    total_value = overview_aggregate['total_value']
+    pending_count = overview_aggregate['pending_count']
+    pending_value = overview_aggregate['pending_value']
+    paid_count = overview_aggregate['paid_count']
+    paid_value = overview_aggregate['paid_value']
+    cancelled_count = overview_aggregate['cancelled_count']
+    reversed_count = overview_aggregate['reversed_count']
     avg_transaction_value = total_value / total_transactions if total_transactions > 0 else 0
     
-    # ============================================
-    # COMMISSION STATISTICS
-    # ============================================
-    paid_transactions = transactions_qs.filter(payment_status='paid')
-    
-    commission_stats = paid_transactions.aggregate(
-        total_commission=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField())),
-        paid_commission=Coalesce(Sum('commission_amount', filter=Q(commission_status='paid')), Value(0, output_field=DecimalField()))
-    )
-    
-    total_commission = commission_stats['total_commission']
-    paid_commission = commission_stats['paid_commission']
+    total_commission = overview_aggregate['total_commission']
+    paid_commission = overview_aggregate['paid_commission']
     pending_commission = total_commission - paid_commission
     
-    # ============================================
-    # AGING ANALYSIS (OPTIMIZED - SINGLE QUERY, NO LOOP)
-    # ============================================
-    pending_transactions_qs = transactions_qs.filter(payment_status='pending')
+    # Aging dict
+    aging_dict = {
+        '0_30': overview_aggregate['aging_0_30'],
+        '31_60': overview_aggregate['aging_31_60'],
+        '61_90': overview_aggregate['aging_61_90'],
+        '90_plus': overview_aggregate['aging_90_plus'],
+        'total': overview_aggregate['aging_total'],
+    }
+    for key in ['0_30', '31_60', '61_90', '90_plus']:
+        aging_dict[key + '_percentage'] = (aging_dict[key] / aging_dict['total'] * 100) if aging_dict['total'] > 0 else 0
     
-    aging_data = pending_transactions_qs.aggregate(
-        total=Count('id'),
-        days_0_30=Count(Case(
-            When(transaction_date__date__gte=today - timedelta(days=30), then=1),
-            output_field=IntegerField()
-        )),
-        days_31_60=Count(Case(
-            When(
-                transaction_date__date__lt=today - timedelta(days=30),
-                transaction_date__date__gte=today - timedelta(days=60),
-                then=1
-            ),
-            output_field=IntegerField()
-        )),
-        days_61_90=Count(Case(
-            When(
-                transaction_date__date__lt=today - timedelta(days=60),
-                transaction_date__date__gte=today - timedelta(days=90),
-                then=1
-            ),
-            output_field=IntegerField()
-        )),
-        days_90_plus=Count(Case(
-            When(transaction_date__date__lt=today - timedelta(days=90), then=1),
-            output_field=IntegerField()
-        ))
+    # ============================================
+    # SINGLE QUERY: Today + Month totals
+    # ============================================
+    period_aggregate = transactions_qs.aggregate(
+        today_count=Count('id', filter=Q(transaction_date__range=[start_of_day, end_of_day])),
+        today_value=Coalesce(Sum('ceiling_price', filter=Q(transaction_date__range=[start_of_day, end_of_day])), Value(0, output_field=DecimalField())),
+        month_count=Count('id', filter=Q(transaction_date__gte=start_of_month)),
+        month_value=Coalesce(Sum('ceiling_price', filter=Q(transaction_date__gte=start_of_month)), Value(0, output_field=DecimalField())),
+        month_paid=Coalesce(Sum('ceiling_price', filter=Q(transaction_date__gte=start_of_month, payment_status='paid')), Value(0, output_field=DecimalField())),
+        month_commission=Coalesce(Sum('commission_amount', filter=Q(transaction_date__gte=start_of_month, payment_status='paid')), Value(0, output_field=DecimalField())),
+        week_value=Coalesce(Sum('ceiling_price', filter=Q(transaction_date__gte=start_of_week)), Value(0, output_field=DecimalField())),
+        week_paid=Coalesce(Sum('ceiling_price', filter=Q(transaction_date__gte=start_of_week, payment_status='paid')), Value(0, output_field=DecimalField())),
+        week_commission=Coalesce(Sum('commission_amount', filter=Q(transaction_date__gte=start_of_week, payment_status='paid')), Value(0, output_field=DecimalField())),
     )
     
-    aging_dict = {
-        '0_30': aging_data['days_0_30'],
-        '31_60': aging_data['days_31_60'],
-        '61_90': aging_data['days_61_90'],
-        '90_plus': aging_data['days_90_plus'],
-        'total': aging_data['total'],
-    }
+    today_count = period_aggregate['today_count']
+    today_value = period_aggregate['today_value']
+    month_count = period_aggregate['month_count']
+    month_value = period_aggregate['month_value']
+    month_paid = period_aggregate['month_paid']
+    month_commission = period_aggregate['month_commission']
+    week_credit_value = period_aggregate['week_value']
+    week_paid = period_aggregate['week_paid']
+    week_commission = period_aggregate['week_commission']
     
-    # Calculate percentages for aging
-    for key in ['0_30', '31_60', '61_90', '90_plus']:
-        if aging_dict['total'] > 0:
-            aging_dict[key + '_percentage'] = (aging_dict[key] / aging_dict['total'] * 100)
-        else:
-            aging_dict[key + '_percentage'] = 0
-
+    month_collection_rate = (month_paid / month_value * 100) if month_value > 0 else 0
+    week_collection_rate = (week_paid / week_credit_value * 100) if week_credit_value > 0 else 0
+    
     # ============================================
-    # DAILY BREAKDOWN - Monday to Sunday
+    # SINGLE QUERY: Daily breakdown (Monday-Sunday)
     # ============================================
+    daily_data = transactions_qs.filter(
+        transaction_date__gte=start_of_week
+    ).annotate(
+        weekday=ExtractWeekDay('transaction_date'),
+        date_only=TruncDate('transaction_date')
+    ).values('weekday', 'date_only').annotate(
+        value=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())),
+        count=Count('id'),
+        paid_value=Coalesce(Sum('ceiling_price', filter=Q(payment_status='paid')), Value(0, output_field=DecimalField())),
+        commission=Coalesce(Sum('commission_amount', filter=Q(payment_status='paid')), Value(0, output_field=DecimalField()))
+    ).order_by('date_only')
+    
+    weekday_names = {1: 'Monday', 2: 'Tuesday', 3: 'Wednesday', 4: 'Thursday', 5: 'Friday', 6: 'Saturday', 7: 'Sunday'}
+    
     daily_credit_breakdown = []
     daily_credit_total_commission = 0
+    daily_credit_total_value = 0
+    daily_credit_total_count = 0
+    daily_credit_total_paid = 0
     
-    for i in range(7):
-        day = start_of_week.date() + timedelta(days=i)
-        day_start = timezone.make_aware(datetime.combine(day, datetime.min.time()))
-        day_end = timezone.make_aware(datetime.combine(day, datetime.max.time()))
+    for day_data in daily_data:
+        day_value = day_data['value']
+        day_paid = day_data['paid_value']
+        day_commission = day_data['commission']
         
-        day_transactions = transactions_qs.filter(transaction_date__range=[day_start, day_end])
-        day_value = day_transactions.aggregate(total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())))['total']
-        day_count = day_transactions.count()
-        
-        # Calculate collection rate for the day
-        day_paid = day_transactions.filter(payment_status='paid').aggregate(total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())))['total']
-        day_collection_rate = (day_paid / day_value * 100) if day_value > 0 else 0
-        
-        # Calculate commission for the day
-        day_commission = day_transactions.filter(payment_status='paid').aggregate(
-            total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
-        )['total']
+        daily_credit_total_value += day_value
+        daily_credit_total_count += day_data['count']
         daily_credit_total_commission += day_commission
+        daily_credit_total_paid += day_paid
         
         daily_credit_breakdown.append({
-            'day': day.strftime('%A'),
-            'date': day.strftime('%Y-%m-%d'),
+            'day': weekday_names.get(day_data['weekday'], 'Unknown'),
+            'date': day_data['date_only'].strftime('%Y-%m-%d'),
             'value': day_value,
-            'count': day_count,
-            'collection_rate': day_collection_rate,
+            'count': day_data['count'],
+            'collection_rate': (day_paid / day_value * 100) if day_value > 0 else 0,
             'commission': day_commission,
         })
-
-    # After the daily_credit_breakdown loop — compute true Mon-Sun totals
-    daily_credit_total_value = sum(d['value'] for d in daily_credit_breakdown)
-    daily_credit_total_count = sum(d['count'] for d in daily_credit_breakdown)
-
-    # Weighted collection rate (paid / total), not an average of rates
-    daily_credit_paid = sum(
-        d['value'] * d['collection_rate'] / 100
-        for d in daily_credit_breakdown
-        if d['value'] > 0
-    )
+    
     daily_credit_totals = {
         'count': daily_credit_total_count,
         'value': daily_credit_total_value,
-        'collection_rate': (daily_credit_paid / daily_credit_total_value * 100)
-                       if daily_credit_total_value > 0 else 0,
+        'collection_rate': (daily_credit_total_paid / daily_credit_total_value * 100) if daily_credit_total_value > 0 else 0,
         'commission': daily_credit_total_commission,
     }
     
-    # Week totals for collection rate
-    week_transactions = transactions_qs.filter(transaction_date__gte=start_of_week)
-    week_credit_value = week_transactions.aggregate(total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())))['total']
-    week_paid = week_transactions.filter(payment_status='paid').aggregate(total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())))['total']
-    week_collection_rate = (week_paid / week_credit_value * 100) if week_credit_value > 0 else 0
-    week_commission = week_transactions.filter(payment_status='paid').aggregate(
-        total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
-    )['total']
+    # ============================================
+    # WEEKLY BREAKDOWN (Current Month)
+    # ============================================
+    weekly_credit_breakdown = []  # ← Initialize here
     
-    # ============================================
-    # WEEKLY BREAKDOWN - By Date Ranges of Current Month
-    # ============================================
     current_year = today.year
     current_month = today.month
-    
-    # Get last day of month
     last_day = calendar.monthrange(current_year, current_month)[1]
     
-    # Define weekly date ranges
-    weekly_ranges = [
-        (1, 7),      # Week 1: 1st - 7th
-        (8, 14),     # Week 2: 8th - 14th
-        (15, 21),    # Week 3: 15th - 21st
-        (22, 28),    # Week 4: 22nd - 28th
-        (29, last_day) # Week 5: 29th - last day (if exists)
-    ]
+    month_start_aware = timezone.make_aware(datetime.combine(date(current_year, current_month, 1), datetime.min.time()))
+    month_end_aware = timezone.make_aware(datetime.combine(date(current_year, current_month, last_day), datetime.max.time()))
     
-    weekly_credit_breakdown = []
+    month_transactions_all = transactions_qs.filter(
+        transaction_date__range=[month_start_aware, month_end_aware]
+    )
     
-    for week_num, (start_day, end_day) in enumerate(weekly_ranges, 1):
-        # Skip if start day is beyond month
+    week_starts = [1, 8, 15, 22, 29]
+    weekly_ranges = []
+    for start_day in week_starts:
         if start_day > last_day:
             continue
-            
-        # Adjust end day if beyond month
-        end_day = min(end_day, last_day)
+        end_day = min(start_day + 6, last_day)
+        weekly_ranges.append((start_day, end_day))
+    
+    for week_num, (start_day, end_day) in enumerate(weekly_ranges, 1):
+        week_start_aware = timezone.make_aware(datetime.combine(date(current_year, current_month, start_day), datetime.min.time()))
+        week_end_aware = timezone.make_aware(datetime.combine(date(current_year, current_month, end_day), datetime.max.time()))
         
-        week_start = date(current_year, current_month, start_day)
-        week_end = date(current_year, current_month, end_day)
+        week_trans = month_transactions_all.filter(
+            transaction_date__range=[week_start_aware, week_end_aware]
+        )
         
-        week_start_aware = timezone.make_aware(datetime.combine(week_start, datetime.min.time()))
-        week_end_aware = timezone.make_aware(datetime.combine(week_end, datetime.max.time()))
+        week_agg = week_trans.aggregate(
+            value=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())),
+            count=Count('id'),
+            paid_value=Coalesce(Sum('ceiling_price', filter=Q(payment_status='paid')), Value(0, output_field=DecimalField())),
+            commission=Coalesce(Sum('commission_amount', filter=Q(payment_status='paid')), Value(0, output_field=DecimalField()))
+        )
         
-        week_trans = transactions_qs.filter(transaction_date__range=[week_start_aware, week_end_aware])
-        week_value = week_trans.aggregate(total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())))['total']
-        week_count = week_trans.count()
-        
-        # Calculate collection rate for the week
-        week_paid = week_trans.filter(payment_status='paid').aggregate(total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())))['total']
-        week_collection = (week_paid / week_value * 100) if week_value > 0 else 0
-        
-        # Calculate commission for the week
-        week_commission_value = week_trans.filter(payment_status='paid').aggregate(
-            total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
-        )['total']
-        
-        # Format date range
-        month_name = week_start.strftime('%b')
+        month_name = date(current_year, current_month, start_day).strftime('%b')
         date_range = f"{month_name} {start_day}{get_day_suffix(start_day)} - {month_name} {end_day}{get_day_suffix(end_day)}"
-        if start_day == end_day:
-            date_range = f"{month_name} {start_day}{get_day_suffix(start_day)}"
         
         weekly_credit_breakdown.append({
             'week_number': week_num,
             'week_range': date_range,
-            'value': week_value,
-            'count': week_count,
-            'collection_rate': week_collection,
-            'commission': week_commission_value,
+            'value': week_agg['value'],
+            'count': week_agg['count'],
+            'collection_rate': (week_agg['paid_value'] / week_agg['value'] * 100) if week_agg['value'] > 0 else 0,
+            'commission': week_agg['commission'],
         })
-    
-    # Month totals
-    month_credit_value = month_transactions.aggregate(total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())))['total']
-    month_paid = month_transactions.filter(payment_status='paid').aggregate(total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())))['total']
-    month_collection_rate = (month_paid / month_credit_value * 100) if month_credit_value > 0 else 0
-    month_commission = month_transactions.filter(payment_status='paid').aggregate(
-        total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
-    )['total']
     
     # ============================================
     # MONTHLY BREAKDOWN - Last 12 months
     # ============================================
+    monthly_data = transactions_qs.filter(
+        transaction_date__gte=start_of_year - timedelta(days=365)
+    ).annotate(
+        month_year=TruncMonth('transaction_date')
+    ).values('month_year').annotate(
+        value=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())),
+        count=Count('id'),
+        paid_value=Coalesce(Sum('ceiling_price', filter=Q(payment_status='paid')), Value(0, output_field=DecimalField())),
+        commission=Coalesce(Sum('commission_amount', filter=Q(payment_status='paid')), Value(0, output_field=DecimalField()))
+    ).order_by('-month_year')[:12]
+    
     monthly_credit_breakdown = []
-    for i in range(11, -1, -1):
-        month_date = today - timedelta(days=30*i)
-        month_start = date(month_date.year, month_date.month, 1)
-        month_end = date(month_date.year, month_date.month, 
-                        calendar.monthrange(month_date.year, month_date.month)[1])
-        
-        month_start_aware = timezone.make_aware(datetime.combine(month_start, datetime.min.time()))
-        month_end_aware = timezone.make_aware(datetime.combine(month_end, datetime.max.time()))
-        
-        month_trans = transactions_qs.filter(transaction_date__range=[month_start_aware, month_end_aware])
-        month_value = month_trans.aggregate(total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())))['total']
-        month_count = month_trans.count()
-        
-        # Calculate paid amount for the month
-        month_paid_amount = month_trans.filter(payment_status='paid').aggregate(total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())))['total']
-        month_collection = (month_paid_amount / month_value * 100) if month_value > 0 else 0
-        
-        # Calculate commission for the month
-        month_commission_value = month_trans.filter(payment_status='paid').aggregate(
-            total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
-        )['total']
-        
+    for month_data in monthly_data:
+        month_date = month_data['month_year'].date()
         monthly_credit_breakdown.append({
-            'month': month_start.strftime('%B %Y'),
-            'month_short': month_start.strftime('%b %Y'),
-            'value': month_value,
-            'count': month_count,
-            'paid_value': month_paid_amount,
-            'collection_rate': month_collection,
-            'commission': month_commission_value,
+            'month': month_date.strftime('%B %Y'),
+            'month_short': month_date.strftime('%b %Y'),
+            'value': month_data['value'],
+            'count': month_data['count'],
+            'paid_value': month_data['paid_value'],
+            'collection_rate': (month_data['paid_value'] / month_data['value'] * 100) if month_data['value'] > 0 else 0,
+            'commission': month_data['commission'],
         })
     
     # Year totals
-    year_transactions = transactions_qs.filter(transaction_date__gte=start_of_year)
-    year_credit_value = year_transactions.aggregate(total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())))['total']
-    year_paid_value = year_transactions.filter(payment_status='paid').aggregate(total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())))['total']
+    year_data = transactions_qs.filter(transaction_date__gte=start_of_year).aggregate(
+        year_credit_value=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())),
+        year_paid_value=Coalesce(Sum('ceiling_price', filter=Q(payment_status='paid')), Value(0, output_field=DecimalField())),
+        year_count=Count('id'),
+        year_commission=Coalesce(Sum('commission_amount', filter=Q(payment_status='paid')), Value(0, output_field=DecimalField()))
+    )
+    
+    year_credit_value = year_data['year_credit_value']
+    year_paid_value = year_data['year_paid_value']
+    year_count = year_data['year_count']
+    year_commission = year_data['year_commission']
     year_collection_rate = (year_paid_value / year_credit_value * 100) if year_credit_value > 0 else 0
-    year_count = year_transactions.count()
-    year_commission = year_transactions.filter(payment_status='paid').aggregate(
-        total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
-    )['total']
     
     # ============================================
     # COMPANY BREAKDOWN
     # ============================================
-    
     company_stats = []
-    for company in CreditCompany.objects.filter(is_active=True):
-        company_transactions = transactions_qs.filter(credit_company=company)
-        company_pending = company_transactions.filter(payment_status='pending')
-        company_paid = company_transactions.filter(payment_status='paid')
-        
-        total = company_transactions.aggregate(total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())))['total']
-        pending = company_pending.aggregate(total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())))['total']
-        paid = company_paid.aggregate(total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())))['total']
-        
-        # Company commission
-        company_commission_value = company_paid.aggregate(
-            total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
-        )['total']
+    for company in CreditCompany.objects.filter(is_active=True)[:20]:
+        company_trans = transactions_qs.filter(credit_company=company)
+        company_agg = company_trans.aggregate(
+            total=Coalesce(Sum('ceiling_price'), Value(0, output_field=DecimalField())),
+            pending=Coalesce(Sum('ceiling_price', filter=Q(payment_status='pending')), Value(0, output_field=DecimalField())),
+            paid=Coalesce(Sum('ceiling_price', filter=Q(payment_status='paid')), Value(0, output_field=DecimalField())),
+            commission=Coalesce(Sum('commission_amount', filter=Q(payment_status='paid')), Value(0, output_field=DecimalField())),
+            total_count=Count('id'),
+            pending_count=Count('id', filter=Q(payment_status='pending')),
+            paid_count=Count('id', filter=Q(payment_status='paid')),
+        )
         
         company_stats.append({
             'name': company.name,
             'code': company.code,
-            'total_count': company_transactions.count(),
-            'total_value': total,
-            'pending_count': company_pending.count(),
-            'pending_value': pending,
-            'paid_count': company_paid.count(),
-            'paid_value': paid,
-            'pending_percentage': (pending / total * 100) if total > 0 else 0,
-            'paid_percentage': (paid / total * 100) if total > 0 else 0,
-            'commission': company_commission_value,
+            'total_count': company_agg['total_count'],
+            'total_value': company_agg['total'],
+            'pending_count': company_agg['pending_count'],
+            'pending_value': company_agg['pending'],
+            'paid_count': company_agg['paid_count'],
+            'paid_value': company_agg['paid'],
+            'pending_percentage': (company_agg['pending'] / company_agg['total'] * 100) if company_agg['total'] > 0 else 0,
+            'paid_percentage': (company_agg['paid'] / company_agg['total'] * 100) if company_agg['total'] > 0 else 0,
+            'commission': company_agg['commission'],
         })
     
-    # Sort by total value descending
     company_stats.sort(key=lambda x: x['total_value'], reverse=True)
     
     # ============================================
-    # TOP CUSTOMERS 
+    # TOP CUSTOMERS
     # ============================================
-    
     top_customers = CreditCustomer.objects.filter(
         transactions__payment_status__in=['pending', 'paid']
     ).annotate(
         txn_count=Count('transactions'),
-        total_credit_value=Coalesce(
-            Sum('transactions__ceiling_price', output_field=DecimalField()), 
-            Value(0, output_field=DecimalField())
-        ),
-        pending_credit_value=Coalesce(
-            Sum('transactions__ceiling_price', 
-                filter=Q(transactions__payment_status='pending'),
-                output_field=DecimalField()), 
-            Value(0, output_field=DecimalField())
-        ),
-        paid_credit_value=Coalesce(
-            Sum('transactions__ceiling_price', 
-                filter=Q(transactions__payment_status='paid'),
-                output_field=DecimalField()), 
-            Value(0, output_field=DecimalField())
-        )
+        total_credit_value=Coalesce(Sum('transactions__ceiling_price'), Value(0, output_field=DecimalField())),
+        pending_credit_value=Coalesce(Sum('transactions__ceiling_price', filter=Q(transactions__payment_status='pending')), Value(0, output_field=DecimalField())),
+        paid_credit_value=Coalesce(Sum('transactions__ceiling_price', filter=Q(transactions__payment_status='paid')), Value(0, output_field=DecimalField()))
     ).order_by('-total_credit_value')[:10]
     
     # ============================================
-    # TOP SELLERS (DEALERS) - UPDATED WITH COMMISSION
+    # TOP SELLERS
     # ============================================
-    
-    # First, get the base queryset with annotations for counts and sums
     top_sellers_base = User.objects.filter(
         credit_transactions__payment_status__in=['pending', 'paid']
     ).annotate(
         sales_count=Count('credit_transactions'),
-        total_credit=Coalesce(
-            Sum('credit_transactions__ceiling_price', output_field=DecimalField()),
-            Value(0, output_field=DecimalField())
-        ),
-        pending_credit=Coalesce(
-            Sum('credit_transactions__ceiling_price', 
-                filter=Q(credit_transactions__payment_status='pending'),
-                output_field=DecimalField()),
-            Value(0, output_field=DecimalField())
-        ),
-        paid_credit=Coalesce(
-            Sum('credit_transactions__ceiling_price', 
-                filter=Q(credit_transactions__payment_status='paid'),
-                output_field=DecimalField()),
-            Value(0, output_field=DecimalField())
-        ),
-        # Commission annotations
-        total_commission=Coalesce(
-            Sum('credit_transactions__commission_amount',
-                filter=Q(credit_transactions__payment_status='paid'),
-                output_field=DecimalField()),
-            Value(0, output_field=DecimalField())
-        ),
-        paid_commission=Coalesce(
-            Sum('credit_transactions__commission_amount',
-                filter=Q(credit_transactions__commission_status='paid'),
-                output_field=DecimalField()),
-            Value(0, output_field=DecimalField())
-        )
+        total_credit=Coalesce(Sum('credit_transactions__ceiling_price'), Value(0, output_field=DecimalField())),
+        pending_credit=Coalesce(Sum('credit_transactions__ceiling_price', filter=Q(credit_transactions__payment_status='pending')), Value(0, output_field=DecimalField())),
+        paid_credit=Coalesce(Sum('credit_transactions__ceiling_price', filter=Q(credit_transactions__payment_status='paid')), Value(0, output_field=DecimalField())),
+        total_commission=Coalesce(Sum('credit_transactions__commission_amount', filter=Q(credit_transactions__payment_status='paid')), Value(0, output_field=DecimalField())),
+        paid_commission=Coalesce(Sum('credit_transactions__commission_amount', filter=Q(credit_transactions__commission_status='paid')), Value(0, output_field=DecimalField()))
     ).order_by('-total_credit')[:10]
     
-    # Format top sellers for template - calculate collection rate in Python
     top_sellers_list = []
     for seller in top_sellers_base:
-        # Calculate collection rate safely in Python
-        if seller.total_credit and seller.total_credit > 0:
-            collection_rate = float(seller.paid_credit * 100 / seller.total_credit)
-        else:
-            collection_rate = 0
+        collection_rate = float(seller.paid_credit * 100 / seller.total_credit) if seller.total_credit else 0
         
-        # Build the seller dictionary with all needed fields
         top_sellers_list.append({
             'id': seller.id,
             'username': seller.username,
@@ -508,9 +409,8 @@ def credit_statistics(request):
         })
     
     # ============================================
-    # MONTHLY TREND (Last 6 months) - for chart
+    # MONTHLY TREND (Last 6 months)
     # ============================================
-    
     monthly_trend = []
     for i in range(5, -1, -1):
         month_date = today.replace(day=1) - timedelta(days=30*i)
@@ -523,7 +423,7 @@ def credit_statistics(request):
             month_end = end_of_day
         
         month_trans = transactions_qs.filter(transaction_date__range=[month_start, month_end])
-        month_paid = paid_transactions.filter(transaction_date__range=[month_start, month_end])
+        month_paid = month_trans.filter(payment_status='paid')
         
         monthly_trend.append({
             'month': month_date.strftime('%b %Y'),
@@ -536,11 +436,10 @@ def credit_statistics(request):
     # ============================================
     # PAYMENT METHOD BREAKDOWN
     # ============================================
-    
-    payment_methods = []
     payments_qs = CompanyPayment.objects.all()
     total_payments = payments_qs.aggregate(total=Coalesce(Sum('amount'), Value(0, output_field=DecimalField())))['total']
     
+    payment_methods = []
     for method, _ in CompanyPayment.PAYMENT_METHODS:
         method_payments = payments_qs.filter(payment_method=method)
         amount = method_payments.aggregate(total=Coalesce(Sum('amount'), Value(0, output_field=DecimalField())))['total']
@@ -559,7 +458,6 @@ def credit_statistics(request):
     # CONTEXT DICTIONARY
     # ============================================
     context = {
-        # Overview
         'total_transactions': total_transactions,
         'total_value': total_value,
         'pending_count': pending_count,
@@ -569,62 +467,38 @@ def credit_statistics(request):
         'cancelled_count': cancelled_count,
         'reversed_count': reversed_count,
         'avg_transaction_value': avg_transaction_value,
-        
-        # Commission overview
         'total_commission': total_commission,
         'paid_commission': paid_commission,
         'pending_commission': pending_commission,
-        
-        # Time periods
         'today_count': today_count,
         'today_value': today_value,
         'month_count': month_count,
         'month_value': month_value,
-        
-        # Daily breakdown
         'daily_credit_breakdown': daily_credit_breakdown,
         'week_credit_value': week_credit_value,
         'week_collection_rate': week_collection_rate,
         'week_commission': week_commission,
         'daily_credit_totals': daily_credit_totals,
-        
-        # Weekly breakdown
         'weekly_credit_breakdown': weekly_credit_breakdown,
-        'month_credit_value': month_credit_value,
+        'month_credit_value': month_value,
         'month_collection_rate': month_collection_rate,
         'month_commission': month_commission,
-        
-        # Monthly breakdown
         'monthly_credit_breakdown': monthly_credit_breakdown,
         'year_credit_value': year_credit_value,
         'year_paid_value': year_paid_value,
         'year_collection_rate': year_collection_rate,
         'year_count': year_count,
         'year_commission': year_commission,
-        
-        # Companies
         'company_stats': company_stats,
         'total_companies': CreditCompany.objects.filter(is_active=True).count(),
-        
-        # Customers
         'top_customers': top_customers,
         'total_customers': CreditCustomer.objects.filter(is_active=True).count(),
-        
-        # Top sellers
         'top_sellers': top_sellers_list,
-        
-        # Trends
         'monthly_trend': monthly_trend,
-        
-        # Payments
         'payment_methods': payment_methods,
         'total_payments': total_payments,
         'payment_count': payments_qs.count(),
-        
-        # Aging (using optimized dict with percentages)
         'aging': aging_dict,
-        
-        # Additional stats
         'today': today,
         'current_month': today.strftime('%B %Y'),
         'total_pending_percentage': (pending_value / total_value * 100) if total_value > 0 else 0,
