@@ -82,10 +82,16 @@ def get_commission_status_color(status):
 # ====================================
 # STATISTICS VIEW (UPDATED WITH COMMISSION)
 # ====================================
+# ====================================
+# STATISTICS VIEW (UPDATED WITH COMMISSION)
+# ====================================
 
 @login_required
 def credit_statistics(request):
     """Credit statistics dashboard with daily, weekly, and monthly breakdowns"""
+    
+    from django.db.models import Sum, Count, Q, F, Value, DecimalField, Case, When, IntegerField
+    from django.db.models.functions import Coalesce, TruncDate, TruncMonth
     
     # Date ranges
     today = timezone.now().date()
@@ -135,24 +141,67 @@ def credit_statistics(request):
     avg_transaction_value = total_value / total_transactions if total_transactions > 0 else 0
     
     # ============================================
-    # COMMISSION STATISTICS (NEW)
+    # COMMISSION STATISTICS
     # ============================================
-    total_commission = paid_transactions.aggregate(
-        total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
-    )['total']
+    paid_transactions = transactions_qs.filter(payment_status='paid')
     
-    paid_commission = paid_transactions.filter(
-        commission_status='paid'
-    ).aggregate(
-        total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
-    )['total']
+    commission_stats = paid_transactions.aggregate(
+        total_commission=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField())),
+        paid_commission=Coalesce(Sum('commission_amount', filter=Q(commission_status='paid')), Value(0, output_field=DecimalField()))
+    )
     
-    pending_commission = paid_transactions.filter(
-        commission_status='pending'
-    ).aggregate(
-        total=Coalesce(Sum('commission_amount'), Value(0, output_field=DecimalField()))
-    )['total']
+    total_commission = commission_stats['total_commission']
+    paid_commission = commission_stats['paid_commission']
+    pending_commission = total_commission - paid_commission
     
+    # ============================================
+    # AGING ANALYSIS (OPTIMIZED - SINGLE QUERY, NO LOOP)
+    # ============================================
+    pending_transactions_qs = transactions_qs.filter(payment_status='pending')
+    
+    aging_data = pending_transactions_qs.aggregate(
+        total=Count('id'),
+        days_0_30=Count(Case(
+            When(transaction_date__date__gte=today - timedelta(days=30), then=1),
+            output_field=IntegerField()
+        )),
+        days_31_60=Count(Case(
+            When(
+                transaction_date__date__lt=today - timedelta(days=30),
+                transaction_date__date__gte=today - timedelta(days=60),
+                then=1
+            ),
+            output_field=IntegerField()
+        )),
+        days_61_90=Count(Case(
+            When(
+                transaction_date__date__lt=today - timedelta(days=60),
+                transaction_date__date__gte=today - timedelta(days=90),
+                then=1
+            ),
+            output_field=IntegerField()
+        )),
+        days_90_plus=Count(Case(
+            When(transaction_date__date__lt=today - timedelta(days=90), then=1),
+            output_field=IntegerField()
+        ))
+    )
+    
+    aging_dict = {
+        '0_30': aging_data['days_0_30'],
+        '31_60': aging_data['days_31_60'],
+        '61_90': aging_data['days_61_90'],
+        '90_plus': aging_data['days_90_plus'],
+        'total': aging_data['total'],
+    }
+    
+    # Calculate percentages for aging
+    for key in ['0_30', '31_60', '61_90', '90_plus']:
+        if aging_dict['total'] > 0:
+            aging_dict[key + '_percentage'] = (aging_dict[key] / aging_dict['total'] * 100)
+        else:
+            aging_dict[key + '_percentage'] = 0
+
     # ============================================
     # DAILY BREAKDOWN - Monday to Sunday
     # ============================================
@@ -507,33 +556,8 @@ def credit_statistics(request):
         })
     
     # ============================================
-    # AGING ANALYSIS (How long pending)
+    # CONTEXT DICTIONARY
     # ============================================
-    
-    aging = {
-        '0_30': 0,
-        '31_60': 0,
-        '61_90': 0,
-        '90_plus': 0,
-        'total': 0
-    }
-    
-    for transaction in pending_transactions:
-        days = (today - transaction.transaction_date.date()).days
-        if days <= 30:
-            aging['0_30'] += 1
-        elif days <= 60:
-            aging['31_60'] += 1
-        elif days <= 90:
-            aging['61_90'] += 1
-        else:
-            aging['90_plus'] += 1
-        aging['total'] += 1
-    
-    # ============================================
-    # CONTEXT DICTIONARY - UPDATED WITH COMMISSION
-    # ============================================
-    
     context = {
         # Overview
         'total_transactions': total_transactions,
@@ -557,20 +581,20 @@ def credit_statistics(request):
         'month_count': month_count,
         'month_value': month_value,
         
-        # Daily breakdown (Mon-Sun)
+        # Daily breakdown
         'daily_credit_breakdown': daily_credit_breakdown,
         'week_credit_value': week_credit_value,
         'week_collection_rate': week_collection_rate,
         'week_commission': week_commission,
         'daily_credit_totals': daily_credit_totals,
         
-        # Weekly breakdown (Week 1-4)
+        # Weekly breakdown
         'weekly_credit_breakdown': weekly_credit_breakdown,
         'month_credit_value': month_credit_value,
         'month_collection_rate': month_collection_rate,
         'month_commission': month_commission,
         
-        # Monthly breakdown (Last 12 months)
+        # Monthly breakdown
         'monthly_credit_breakdown': monthly_credit_breakdown,
         'year_credit_value': year_credit_value,
         'year_paid_value': year_paid_value,
@@ -586,7 +610,7 @@ def credit_statistics(request):
         'top_customers': top_customers,
         'total_customers': CreditCustomer.objects.filter(is_active=True).count(),
         
-        # Top sellers (dealers) - UPDATED
+        # Top sellers
         'top_sellers': top_sellers_list,
         
         # Trends
@@ -597,11 +621,22 @@ def credit_statistics(request):
         'total_payments': total_payments,
         'payment_count': payments_qs.count(),
         
-        # Aging
-        'aging': aging,
+        # Aging (using optimized dict with percentages)
+        'aging': aging_dict,
+        
+        # Additional stats
+        'today': today,
+        'current_month': today.strftime('%B %Y'),
+        'total_pending_percentage': (pending_value / total_value * 100) if total_value > 0 else 0,
+        'total_paid_percentage': (paid_value / total_value * 100) if total_value > 0 else 0,
     }
     
     return render(request, 'credit/statistics.html', context)
+
+
+
+
+
 
 
 # ====================================
