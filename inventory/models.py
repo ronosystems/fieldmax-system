@@ -434,6 +434,7 @@ class Product(models.Model):
         logger.info(f"✅ Generated barcode: {barcode} for product {self.product_code}")
         return barcode
 
+
     def _update_status(self):
         """
         Auto-update status based on quantity and item type
@@ -441,21 +442,24 @@ class Product(models.Model):
         if not self.category:
             return
             
+        # ============================================
+        # SINGLE ITEMS - Just mark as available or outofstock
+        # ============================================
         if self.category.is_single_item:
-            # Single items: available, reserved, sold, or damaged
             if self.quantity > 0:
-                if self.status not in ['sold', 'damaged']:
-                    self.status = 'available'
-            elif self.quantity == 0:
-                self.status = 'sold'
-        else:
-            # Bulk items: based on quantity levels
-            if self.quantity > 5:
                 self.status = 'available'
-            elif 1 <= self.quantity <= 5:
-                self.status = 'lowstock'
             elif self.quantity == 0:
                 self.status = 'outofstock'
+
+        # ============================================
+        # BULK ITEMS - Stock level based status
+        # ============================================
+        if self.quantity > 5:
+            self.status = 'available'
+        elif 1 <= self.quantity <= 5:
+            self.status = 'lowstock'
+        elif self.quantity == 0:
+            self.status = 'outofstock'
 
     def clean(self):
         """Validation before saving"""
@@ -1166,71 +1170,74 @@ def update_product_quantity_from_entries(sender, instance, created, **kwargs):
 # =========================================
 @receiver(post_save, sender=Product)
 def create_stock_alerts(sender, instance, created, **kwargs):
-    """Auto-create or update stock alerts for products"""
+    """Auto-create or update stock alerts for products - EXCLUDING SINGLE ITEMS"""
     try:
         if not instance.category:
             return
         
-        # Determine alert type and threshold
-        alert_type = 'lowstock'
+        # ============================================
+        # SKIP SINGLE ITEMS - They don't need stock alerts
+        # ============================================
+        if instance.category.is_single_item:
+            # Deactivate any existing alerts for single items
+            StockAlert.objects.filter(product=instance, is_active=True).update(
+                is_active=False,
+                is_dismissed=True
+            )
+            return
+        
+        # ============================================
+        # ONLY BULK ITEMS GET STOCK ALERTS
+        # ============================================
+        alert_type = None
         threshold = 5
         severity = 'warning'
         
-        if instance.category.is_bulk_item:
-            if instance.quantity <= 0:
-                alert_type = 'outofstock'
-                severity = 'critical'
-            elif instance.reorder_level and instance.quantity <= instance.reorder_level:
-                alert_type = 'needs_reorder'
-                severity = 'danger'
-            elif instance.quantity <= threshold:
-                alert_type = 'lowstock'
-                severity = 'warning'
-            else:
-                # Stock is fine, deactivate any existing alerts
-                StockAlert.objects.filter(product=instance, is_active=True).update(
-                    is_active=False,
-                    is_dismissed=True
-                )
-                return
+        # Bulk items logic
+        if instance.quantity <= 0:
+            alert_type = 'outofstock'
+            severity = 'critical'
+            threshold = 0
+        elif instance.reorder_level and instance.quantity <= instance.reorder_level:
+            alert_type = 'needs_reorder'
+            severity = 'danger'
+            threshold = instance.reorder_level
+        elif instance.quantity <= 5:
+            alert_type = 'lowstock'
+            severity = 'warning'
+            threshold = 5
         else:
-            # Single items
-            if instance.quantity == 0:
-                alert_type = 'outofstock'
-                severity = 'critical'
-            elif instance.status == 'damaged':
-                alert_type = 'damaged'
-                severity = 'danger'
+            # Stock is fine, deactivate any existing alerts
+            StockAlert.objects.filter(product=instance, is_active=True).update(
+                is_active=False,
+                is_dismissed=True
+            )
+            return
+        
+        if alert_type:
+            # Create or update alert
+            alert, created = StockAlert.objects.update_or_create(
+                product=instance,
+                is_dismissed=False,
+                defaults={
+                    'alert_type': alert_type,
+                    'severity': severity,
+                    'current_stock': instance.quantity,
+                    'threshold': threshold,
+                    'reorder_level': instance.reorder_level,
+                    'is_active': True,
+                    'last_alerted': timezone.now(),
+                }
+            )
+            
+            if created:
+                logger.info(f"✅ Created {alert_type} alert for bulk item {instance.product_code}")
             else:
-                # Available, deactivate alerts
-                StockAlert.objects.filter(product=instance, is_active=True).update(
-                    is_active=False,
-                    is_dismissed=True
-                )
-                return
-        
-        # Create or update alert
-        alert, created = StockAlert.objects.update_or_create(
-            product=instance,
-            is_dismissed=False,
-            defaults={
-                'alert_type': alert_type,
-                'severity': severity,
-                'current_stock': instance.quantity,
-                'threshold': threshold,
-                'reorder_level': instance.reorder_level,
-                'is_active': True,
-                'last_alerted': timezone.now(),
-            }
-        )
-        
-        if created:
-            logger.info(f"✅ Created {alert_type} alert for {instance.product_code}")
-        else:
-            logger.info(f"✅ Updated {alert_type} alert for {instance.product_code}")
+                logger.info(f"✅ Updated {alert_type} alert for bulk item {instance.product_code}")
             
     except Exception as e:
         logger.error(f"❌ Error creating stock alert: {str(e)}")
+
 
 
 

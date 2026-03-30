@@ -15,7 +15,7 @@
     </div>
     
     <div class="text-muted small">
-        Showing {{ page_obj.start_index }} to {{ page_obj.end_index }} of {{ page_obj.paginator.count }} entries
+        Showing {{ alerts.start_index }} to {{ alerts.end_index }} of {{ alerts.paginator.count }} entries
     </div>
 </div>
 
@@ -32,38 +32,37 @@
                 <th>Alert Type</th>
                 <th>Status</th>
                 <th class="text-end">Actions</th>
-            </tr>
-        </thead>
+            </thead>
         <tbody>
             {% for alert in alerts %}
-            <tr>
+             <tr>
                 <!-- Severity Badge -->
-                <td>
+                 <td>
                     <span class="badge {% if alert.severity == 'critical' %}bg-danger{% elif alert.severity == 'warning' %}bg-warning{% else %}bg-info{% endif %}">
                         {{ alert.get_severity_display|upper }}
                     </span>
-                </td>
+                 </td>
                 
                 <!-- Product Name -->
-                <td>
+                 <td>
                     <div class="fw-bold">{{ alert.product.display_name|truncatechars:30 }}</div>
                     {% if alert.product.brand %}
                     <small class="text-muted">{{ alert.product.brand }}</small>
                     {% endif %}
-                </td>
+                 </td>
                 
                 <!-- Product Code -->
-                <td>
+                 <td>
                     <code class="bg-light p-1 rounded">{{ alert.product.product_code }}</code>
-                </td>
+                 </td>
                 
                 <!-- Category -->
-                <td>
+                 <td>
                     <span class="badge bg-secondary">{{ alert.product.category.name|default:"Uncategorized" }}</span>
-                </td>
+                 </td>
                 
                 <!-- Current Stock -->
-                <td>
+                 <td>
                     <div class="d-flex align-items-center">
                         <div class="rounded-circle bg-light d-flex align-items-center justify-content-center me-2" 
                              style="width: 32px; height: 32px;">
@@ -73,15 +72,15 @@
                         </div>
                         <small class="text-muted">units</small>
                     </div>
-                </td>
+                 </td>
                 
                 <!-- Threshold -->
-                <td>
+                 <td>
                     <span class="badge bg-info bg-opacity-25 text-dark">{{ alert.threshold }}</span>
-                </td>
+                 </td>
                 
                 <!-- Alert Type -->
-                <td>
+                 <td>
                     <span class="badge 
                         {% if alert.alert_type == 'outofstock' %}bg-danger
                         {% elif alert.alert_type == 'lowstock' %}bg-warning
@@ -89,10 +88,10 @@
                         {% else %}bg-info{% endif %} bg-opacity-25 text-dark">
                         {{ alert.get_alert_type_display }}
                     </span>
-                </td>
+                 </td>
                 
                 <!-- Status Indicator -->
-                <td>
+                 <td>
                     {% if alert.current_stock == 0 %}
                         <span class="badge bg-danger">Out of Stock</span>
                     {% elif alert.current_stock <= alert.threshold %}
@@ -100,7 +99,7 @@
                     {% else %}
                         <span class="badge bg-success">Normal</span>
                     {% endif %}
-                </td>
+                 </td>
                 
                 <!-- Action Buttons -->
                 <td class="text-end">
@@ -131,32 +130,32 @@
                             <i class="fas fa-check"></i>
                         </a>
                     </div>
-                </td>
-            </tr>
+                 </td>
+             </tr>
             {% endfor %}
         </tbody>
-    </table>
+     </table>
 </div>
 
 <!-- Pagination Controls - Bottom -->
 <div class="d-flex justify-content-between align-items-center mt-3">
     <div>
-        <span class="text-muted">Total Alerts: <strong>{{ page_obj.paginator.count }}</strong></span>
+        <span class="text-muted">Total Alerts: <strong>{{ alerts.paginator.count }}</strong></span>
         {% if page_size != 'all' %}
-        <span class="text-muted ms-2">(Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }})</span>
+        <span class="text-muted ms-2">(Page {{ alerts.number }} of {{ alerts.paginator.num_pages }})</span>
         {% endif %}
     </div>
     
     <nav aria-label="Page navigation">
         <ul class="pagination pagination-sm mb-0">
-            {% if page_obj.has_previous %}
+            {% if alerts.has_previous %}
             <li class="page-item">
                 <a class="page-link" href="?page=1&page_size={{ page_size }}" aria-label="First">
                     <span aria-hidden="true">&laquo;&laquo;</span>
                 </a>
             </li>
             <li class="page-item">
-                <a class="page-link" href="?page={{ page_obj.previous_page_number }}&page_size={{ page_size }}" aria-label="Previous">
+                <a class="page-link" href="?page={{ alerts.previous_page_number }}&page_size={{ page_size }}" aria-label="Previous">
                     <span aria-hidden="true">&laquo;</span>
                 </a>
             </li>
@@ -169,22 +168,22 @@
             </li>
             {% endif %}
 
-            {% for num in page_obj.paginator.page_range %}
-                {% if page_obj.number == num %}
+            {% for num in alerts.paginator.page_range %}
+                {% if alerts.number == num %}
                     <li class="page-item active"><span class="page-link">{{ num }}</span></li>
-                {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                {% elif num > alerts.number|add:'-3' and num < alerts.number|add:'3' %}
                     <li class="page-item"><a class="page-link" href="?page={{ num }}&page_size={{ page_size }}">{{ num }}</a></li>
                 {% endif %}
             {% endfor %}
 
-            {% if page_obj.has_next %}
+            {% if alerts.has_next %}
             <li class="page-item">
-                <a class="page-link" href="?page={{ page_obj.next_page_number }}&page_size={{ page_size }}" aria-label="Next">
+                <a class="page-link" href="?page={{ alerts.next_page_number }}&page_size={{ page_size }}" aria-label="Next">
                     <span aria-hidden="true">&raquo;</span>
                 </a>
             </li>
             <li class="page-item">
-                <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}&page_size={{ page_size }}" aria-label="Last">
+                <a class="page-link" href="?page={{ alerts.paginator.num_pages }}&page_size={{ page_size }}" aria-label="Last">
                     <span aria-hidden="true">&raquo;&raquo;</span>
                 </a>
             </li>
@@ -315,7 +314,7 @@ function exportCurrentPageToCSV() {
     // Download CSV file
     var csvFile = new Blob([csv.join('\n')], {type: 'text/csv'});
     var downloadLink = document.createElement('a');
-    downloadLink.download = 'stock_alerts_page_{{ page_obj.number }}.csv';
+    downloadLink.download = 'stock_alerts_page_{{ alerts.number }}.csv';
     downloadLink.href = window.URL.createObjectURL(csvFile);
     downloadLink.style.display = 'none';
     document.body.appendChild(downloadLink);

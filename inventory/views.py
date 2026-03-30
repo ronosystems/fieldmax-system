@@ -1811,7 +1811,6 @@ def reverse_entry(request, pk):
 
 
 
-
 @login_required
 def stock_alerts(request):
     """List all stock alerts with counts and dismissed alerts"""
@@ -1819,94 +1818,109 @@ def stock_alerts(request):
     # Get page size from request, default to 20
     page_size = request.GET.get('page_size', '20')
     
-    # Get active alerts queryset (stock alerts only)
-    active_alerts_qs = StockAlert.objects.select_related(
+    # Get ALL active alerts (unpaginated) - for filtering
+    all_active_alerts = StockAlert.objects.select_related(
         'product', 
         'product__category',
         'dismissed_by'
     ).filter(
         is_active=True,
-        is_dismissed=False
+        is_dismissed=False,
+        product__category__item_type='bulk'
     ).order_by(
-        '-severity',  # Critical first
+        '-severity',
         'alert_type',
         'product__name'
     )
     
     # ============================================
-    # ADD DAMAGED RETURNS FROM RETURN REQUEST
+    # PRE-FILTER FOR EACH TAB (BEFORE PAGINATION)
+    # ============================================
+    needs_reorder_alerts = all_active_alerts.filter(alert_type='needs_reorder')
+    lowstock_alerts = all_active_alerts.filter(alert_type='lowstock')
+    outofstock_alerts = all_active_alerts.filter(alert_type='outofstock')  # ← KEY!
+    
+    # ============================================
+    # DAMAGED RETURNS
     # ============================================
     from .models import ReturnRequest
     from django.db.models import Sum
+    from decimal import Decimal
     
-    # Get damaged returns (status = 'damaged_loss')
     damaged_returns = ReturnRequest.objects.filter(
         status='damaged_loss'
     ).select_related('product', 'requested_by', 'approved_by').order_by('-processed_at')
     
-    # Count damaged returns
     damaged_returns_count = damaged_returns.count()
+    damaged_returns_loss = damaged_returns.aggregate(total=Sum('loss_amount'))['total'] or Decimal('0.00')
     
-    # Calculate total value of damaged returns
-    damaged_returns_value = damaged_returns.aggregate(
-        total=Sum('refund_amount')
-    )['total'] or Decimal('0.00')
-    
-    # Calculate total loss amount
-    damaged_returns_loss = damaged_returns.aggregate(
-        total=Sum('loss_amount')
-    )['total'] or Decimal('0.00')
-    
-    # Get dismissed alerts (last 50)
+    # ============================================
+    # DISMISSED ALERTS
+    # ============================================
     dismissed_alerts = StockAlert.objects.select_related(
         'product',
         'product__category',
         'dismissed_by'
     ).filter(
-        is_dismissed=True
+        is_dismissed=True,
+        product__category__item_type='bulk'
     ).order_by('-dismissed_at')[:50]
     
-    # Calculate counts by type (using the queryset before pagination)
+    dismissed_count = StockAlert.objects.filter(
+        is_dismissed=True,
+        product__category__item_type='bulk'
+    ).count()
+    
+    # ============================================
+    # COUNT STATS
+    # ============================================
     alert_counts = {
-        'needs_reorder': active_alerts_qs.filter(alert_type='needs_reorder').count(),
-        'lowstock': active_alerts_qs.filter(alert_type='lowstock').count(),
-        'outofstock': active_alerts_qs.filter(alert_type='outofstock').count(),
-        'damaged': damaged_returns_count,  # Now counts actual damaged returns!
-        'total': active_alerts_qs.count() + damaged_returns_count
+        'needs_reorder': needs_reorder_alerts.count(),
+        'lowstock': lowstock_alerts.count(),
+        'outofstock': outofstock_alerts.count(),
+        'damaged': damaged_returns_count,
+        'total': all_active_alerts.count() + damaged_returns_count
     }
     
-    # Count dismissed
-    dismissed_count = StockAlert.objects.filter(is_dismissed=True).count()
-    
-    # Apply pagination to active alerts
+    # ============================================
+    # PAGINATION - Only for the "All Alerts" tab
+    # ============================================
     if page_size == 'all':
-        paginator = Paginator(active_alerts_qs, active_alerts_qs.count()) if active_alerts_qs.exists() else Paginator(active_alerts_qs, 1)
+        paginator = Paginator(all_active_alerts, all_active_alerts.count()) if all_active_alerts.exists() else Paginator(all_active_alerts, 1)
     else:
-        paginator = Paginator(active_alerts_qs, int(page_size))
+        paginator = Paginator(all_active_alerts, int(page_size))
     
     page_number = request.GET.get('page', 1)
     page_obj = paginator.get_page(page_number)
     
-    # For the damaged tab, we need to show damaged returns, not stock alerts
-    # Pass damaged_returns separately to the template
     context = {
-        'alerts': page_obj,  # Stock alerts only
-        'damaged_returns': damaged_returns,  # Add damaged returns
+        # Paginated alerts (for All Alerts tab)
+        'alerts': page_obj,
+        
+        # Pre-filtered alerts for each tab (unpaginated)
+        'needs_reorder_alerts': needs_reorder_alerts,
+        'lowstock_alerts': lowstock_alerts,
+        'outofstock_alerts': outofstock_alerts,  # ← THIS IS CRITICAL
+        
+        # Damaged returns
+        'damaged_returns': damaged_returns,
         'damaged_returns_count': damaged_returns_count,
-        'damaged_returns_value': damaged_returns_value,
         'damaged_returns_loss': damaged_returns_loss,
-        'page_obj': page_obj,
-        'page_size': page_size,
+        
+        # Dismissed
         'dismissed_alerts': dismissed_alerts,
-        'alert_counts': alert_counts,
         'dismissed_count': dismissed_count,
-        'page_title': 'Stock Alerts',
-        'show_dismissed': False,
-        'total_alerts': active_alerts_qs.count(),
+        
+        # Counts
+        'alert_counts': alert_counts,
+        
+        # Pagination info
+        'page_size': page_size,
+        'total_alerts': all_active_alerts.count(),
+        'page_obj': page_obj,
     }
     
     return render(request, 'inventory/stock/alerts_list.html', context)
-
 
 
 

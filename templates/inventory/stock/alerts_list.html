@@ -140,141 +140,152 @@
         </div>
     </div>
 
-    <!-- Tab Content -->
-    <div class="tab-content">
-        <!-- All Alerts Tab -->
-        <div class="tab-pane fade show active" id="all">
-            {% include "inventory/stock/_alerts_list.html" with alerts=alerts show_dismissed=False %}
-        </div>
-        
-        <!-- Needs Reorder Tab -->
-        <div class="tab-pane fade" id="reorder">
-            {% with filtered_alerts=alerts|filter_by_type:'needs_reorder' %}
-                {% include "inventory/stock/_alerts_list.html" with alerts=filtered_alerts show_dismissed=False %}
-            {% endwith %}
-        </div>
-        
-        <!-- Low Stock Tab -->
-        <div class="tab-pane fade" id="lowstock">
-            {% with filtered_alerts=alerts|filter_by_type:'lowstock' %}
-                {% include "inventory/stock/_alerts_list.html" with alerts=filtered_alerts show_dismissed=False %}
-            {% endwith %}
-        </div>
-        
-        <!-- Out of Stock Tab -->
-        <div class="tab-pane fade" id="outofstock">
-            {% with filtered_alerts=alerts|filter_by_type:'outofstock' %}
-                {% include "inventory/stock/_alerts_list.html" with alerts=filtered_alerts show_dismissed=False %}
-            {% endwith %}
-        </div>
-        
-        <!-- Damaged Returns Tab - Shows actual damaged returns from ReturnRequest -->
-        <div class="tab-pane fade" id="damaged">
-            {% if damaged_returns %}
-                <div class="card shadow-sm">
-                    <div class="card-header bg-white">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <h6 class="mb-0">
-                                <i class="fas fa-tools text-dark me-2"></i>
-                                Damaged Returns ({{ damaged_returns_count }})
-                            </h6>
-                            <div class="text-muted small">
-                                <i class="fas fa-chart-line me-1"></i>
-                                Total Loss: KES {{ damaged_returns_loss|floatformat:2 }}
-                            </div>
-                        </div>
-                    </div>
-                    <div class="card-body p-0">
-                        <div class="list-group list-group-flush">
-                            {% for return_item in damaged_returns %}
-                            <div class="list-group-item alert-item border-start border-dark" style="border-left-width: 4px;">
-                                <div class="row align-items-center">
-                                    <div class="col-md-4">
-                                        <div class="d-flex align-items-center">
-                                            <div class="alert-icon me-3">
-                                                <div class="bg-dark bg-opacity-10 rounded-circle p-3">
-                                                    <i class="fas fa-tools text-dark fa-2x"></i>
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <h6 class="mb-0 fw-bold">{{ return_item.product_name }}</h6>
-                                                <div class="mt-1">
-                                                    <span class="badge bg-secondary">{{ return_item.product_code }}</span>
-                                                    {% if return_item.sku_value %}
-                                                    <span class="badge bg-light text-dark ms-1">{{ return_item.sku_value }}</span>
-                                                    {% endif %}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-2">
-                                        <div class="text-center">
-                                            <div class="text-muted small">Quantity</div>
-                                            <div class="fw-bold fs-5">{{ return_item.quantity }}</div>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-2">
-                                        <div class="text-center">
-                                            <div class="text-muted small">Loss Amount</div>
-                                            <div class="fw-bold text-danger">KES {{ return_item.loss_amount|floatformat:2 }}</div>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-2">
-                                        <div class="text-center">
-                                            <div class="text-muted small">Refund Amount</div>
-                                            <div class="fw-bold">KES {{ return_item.refund_amount|floatformat:2 }}</div>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-2 text-end">
-                                        <a href="{% url 'inventory:return_detail' return_item.id %}" 
-                                           class="btn btn-sm btn-outline-info" 
-                                           title="View Return Details">
-                                            <i class="fas fa-eye me-1"></i> Details
-                                        </a>
-                                    </div>
-                                </div>
-                                <div class="row mt-3 pt-2 border-top">
-                                    <div class="col-12">
-                                        <div class="d-flex flex-wrap gap-3 small text-muted">
-                                            <div>
-                                                <i class="fas fa-receipt me-1"></i>
-                                                <strong>Sale ID:</strong> {{ return_item.sale_id|default:"N/A" }}
-                                            </div>
-                                            <div>
-                                                <i class="fas fa-calendar me-1"></i>
-                                                <strong>Returned:</strong> {{ return_item.processed_at|date:"Y-m-d H:i"|default:return_item.requested_at|date:"Y-m-d H:i" }}
-                                            </div>
-                                            <div>
-                                                <i class="fas fa-user me-1"></i>
-                                                <strong>Requested by:</strong> {{ return_item.requested_by.get_full_name|default:return_item.requested_by.username }}
-                                            </div>
-                                            {% if return_item.loss_reason %}
-                                            <div>
-                                                <i class="fas fa-info-circle me-1"></i>
-                                                <strong>Reason:</strong> {{ return_item.loss_reason }}
-                                            </div>
-                                            {% endif %}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            {% endfor %}
+<!-- Tab Content -->
+<div class="tab-content">
+    <!-- All Alerts Tab -->
+    <div class="tab-pane fade show active" id="all">
+        {% include "inventory/stock/_alerts_list.html" with alerts=alerts show_dismissed=False %}
+    </div>
+    
+    <!-- Needs Reorder Tab -->
+    <div class="tab-pane fade" id="reorder">
+        {% if needs_reorder_alerts %}
+            {% include "inventory/stock/_alerts_list.html" with alerts=needs_reorder_alerts show_dismissed=False %}
+        {% else %}
+            <div class="alert alert-info text-center m-3">
+                <i class="fas fa-check-circle me-2"></i>No needs reorder alerts
+            </div>
+        {% endif %}
+    </div>
+    
+    <!-- Low Stock Tab -->
+    <div class="tab-pane fade" id="lowstock">
+        {% if lowstock_alerts %}
+            {% include "inventory/stock/_alerts_list.html" with alerts=lowstock_alerts show_dismissed=False %}
+        {% else %}
+            <div class="alert alert-info text-center m-3">
+                <i class="fas fa-check-circle me-2"></i>No low stock alerts
+            </div>
+        {% endif %}
+    </div>
+    
+    <!-- Out of Stock Tab -->
+    <div class="tab-pane fade" id="outofstock">
+        {% if outofstock_alerts %}
+            {% include "inventory/stock/_alerts_list.html" with alerts=outofstock_alerts show_dismissed=False %}
+        {% else %}
+            <div class="alert alert-info text-center m-3">
+                <i class="fas fa-check-circle me-2"></i>No out of stock alerts
+            </div>
+        {% endif %}
+    </div>
+    
+    <!-- Damaged Returns Tab -->
+    <div class="tab-pane fade" id="damaged">
+        {% if damaged_returns %}
+            <!-- Your existing damaged returns display code -->
+            <div class="card shadow-sm">
+                <div class="card-header bg-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0">
+                            <i class="fas fa-tools text-dark me-2"></i>
+                            Damaged Returns ({{ damaged_returns_count }})
+                        </h6>
+                        <div class="text-muted small">
+                            <i class="fas fa-chart-line me-1"></i>
+                            Total Loss: KES {{ damaged_returns_loss|floatformat:2 }}
                         </div>
                     </div>
                 </div>
-            {% else %}
-                <div class="alert alert-info text-center">
-                    <i class="fas fa-check-circle fa-2x mb-2"></i>
-                    <h6 class="mb-0">No damaged returns recorded</h6>
-                    <p class="small mb-0 mt-1">Damaged products from returns will appear here</p>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush">
+                        {% for return_item in damaged_returns %}
+                        <div class="list-group-item alert-item border-start border-dark" style="border-left-width: 4px;">
+                            <!-- Your damaged returns display content -->
+                            <div class="row align-items-center">
+                                <div class="col-md-4">
+                                    <div class="d-flex align-items-center">
+                                        <div class="alert-icon me-3">
+                                            <div class="bg-dark bg-opacity-10 rounded-circle p-3">
+                                                <i class="fas fa-tools text-dark fa-2x"></i>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <h6 class="mb-0 fw-bold">{{ return_item.product_name }}</h6>
+                                            <div class="mt-1">
+                                                <span class="badge bg-secondary">{{ return_item.product_code }}</span>
+                                                {% if return_item.sku_value %}
+                                                <span class="badge bg-light text-dark ms-1">{{ return_item.sku_value }}</span>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-2">
+                                    <div class="text-center">
+                                        <div class="text-muted small">Quantity</div>
+                                        <div class="fw-bold fs-5">{{ return_item.quantity }}</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-2">
+                                    <div class="text-center">
+                                        <div class="text-muted small">Loss Amount</div>
+                                        <div class="fw-bold text-danger">KES {{ return_item.loss_amount|floatformat:2 }}</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-2">
+                                    <div class="text-center">
+                                        <div class="text-muted small">Refund Amount</div>
+                                        <div class="fw-bold">KES {{ return_item.refund_amount|floatformat:2 }}</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-2 text-end">
+                                    <a href="{% url 'inventory:return_detail' return_item.id %}" 
+                                       class="btn btn-sm btn-outline-info" 
+                                       title="View Return Details">
+                                        <i class="fas fa-eye me-1"></i> Details
+                                    </a>
+                                </div>
+                            </div>
+                            <div class="row mt-3 pt-2 border-top">
+                                <div class="col-12">
+                                    <div class="d-flex flex-wrap gap-3 small text-muted">
+                                        <div>
+                                            <i class="fas fa-receipt me-1"></i>
+                                            <strong>Sale ID:</strong> {{ return_item.sale_id|default:"N/A" }}
+                                        </div>
+                                        <div>
+                                            <i class="fas fa-calendar me-1"></i>
+                                            <strong>Returned:</strong> {{ return_item.processed_at|date:"Y-m-d H:i"|default:return_item.requested_at|date:"Y-m-d H:i" }}
+                                        </div>
+                                        <div>
+                                            <i class="fas fa-user me-1"></i>
+                                            <strong>Requested by:</strong> {{ return_item.requested_by.get_full_name|default:return_item.requested_by.username }}
+                                        </div>
+                                        {% if return_item.loss_reason %}
+                                        <div>
+                                            <i class="fas fa-info-circle me-1"></i>
+                                            <strong>Reason:</strong> {{ return_item.loss_reason }}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
                 </div>
-            {% endif %}
-        </div>
-        
-        <!-- Dismissed Tab -->
-        <div class="tab-pane fade" id="dismissed">
-            {% include "inventory/stock/_alerts_list.html" with alerts=dismissed_alerts show_dismissed=True %}
-        </div>
+            </div>
+        {% else %}
+            <div class="alert alert-info text-center m-3">
+                <i class="fas fa-check-circle me-2"></i>No damaged returns recorded
+            </div>
+        {% endif %}
+    </div>
+    
+    <!-- Dismissed Tab -->
+    <div class="tab-pane fade" id="dismissed">
+        {% include "inventory/stock/_alerts_list.html" with alerts=dismissed_alerts show_dismissed=True %}
     </div>
 </div>
 

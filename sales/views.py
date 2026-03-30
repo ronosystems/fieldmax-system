@@ -1049,8 +1049,6 @@ def search_products(request):
 
 
 
-
-
 @login_required
 def sales_dashboard(request):
     """Sales dashboard with statistics and charts"""
@@ -1076,15 +1074,16 @@ def sales_dashboard(request):
     
     avg_sale_today = today_sales / today_transactions if today_transactions > 0 else 0
     
-    # Recent sales
+    # Recent sales - DON'T try to set item_count, it's already a property!
     recent_sales = Sale.objects.order_by('-sale_date')[:5]
-    for sale in recent_sales:
-        sale.item_count = sale.items.count()
+    # REMOVE THIS LINE:
+    # for sale in recent_sales:
+    #     sale.item_count = sale.items.count()
     
-    # Top selling products - FIXED: removed is_single_item from values()
+    # Top selling products
     top_products = SaleItem.objects.values(
         'product__name', 
-        'product__category__item_type'  # Use item_type instead of is_single_item
+        'product__category__item_type'
     ).annotate(
         total_sold=Sum('quantity'),
         total_revenue=Sum('total_price')
@@ -1116,7 +1115,7 @@ def sales_dashboard(request):
     ]
     
     # ============================================
-    # HOURLY SALES DATA - ADD THIS SECTION
+    # HOURLY SALES DATA
     # ============================================
     hourly_labels = []
     hourly_data = []
@@ -1161,8 +1160,6 @@ def sales_dashboard(request):
     }
     
     return render(request, 'sales/dashboard.html', context)
-
-
 
 
 @login_required

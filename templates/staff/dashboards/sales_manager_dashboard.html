@@ -199,7 +199,7 @@
                     </h5>
                     <div>
                         <span class="badge bg-success me-2">Total: KES {{ team_sales_today.total|default:"0"|floatformat:0 }}</span>
-                        <span class="badge bg-info">{{ chart_labels|length }} Hours</span>
+                        <span class="badge bg-info">{{ hourly_labels|length }} Hours</span>
                     </div>
                 </div>
             </div>
@@ -208,24 +208,17 @@
             </div>
             <div class="chart-footer mt-3">
                 <div class="d-flex justify-content-between text-muted small">
-                    <span><i class="fas fa-circle text-primary me-1"></i>Sales (KES)</span>
+                    <span><i class="fas fa-chart-bar text-primary me-1"></i>Sales (KES)</span>
                     <span><i class="fas fa-clock me-1"></i>
-                        {% if hourly_sales %}
-                            {% with max_hour=hourly_sales.0 %}
-                                {% for hour in hourly_sales %}
-                                    {% if hour.amount > max_hour.amount %}
-                                        {% with max_hour=hour %}{% endwith %}
+                        {% if hourly_data %}
+                            {% for amount in hourly_data %}
+                                {% if amount > 0 %}
+                                    {% if forloop.counter0 < hourly_labels|length %}
+                                        {{ hourly_labels|slice:forloop.counter0|last|default:"N/A" }}: KES {{ amount|floatformat:0 }}
                                     {% endif %}
-                                {% endfor %}
-                                Peak: 
-                                {% for hour in hourly_sales %}
-                                    {% if forloop.counter0 == 0 or hour.amount > max_hour.amount %}
-                                        {% with max_hour=hour %}
-                                            {{ hour.hour }}:00 (KES {{ hour.amount|floatformat:0 }})
-                                        {% endwith %}
-                                    {% endif %}
-                                {% endfor %}
-                            {% endwith %}
+                                    {% if not forloop.last and forloop.counter0 < hourly_labels|length|add:"-1" %}{% endif %}
+                                {% endif %}
+                            {% endfor %}
                         {% else %}
                             No data available
                         {% endif %}
@@ -316,12 +309,11 @@
                             <th>Total Sales</th>
                             <th>Avg Ticket</th>
                             <th>Performance</th>
-                        </tr>
-                    </thead>
+                         </thead>
                     <tbody>
                         {% for member in sales_by_member_today %}
-                        <tr>
-                            <td>
+                          <tr>
+                              <td>
                                 {% if forloop.counter == 1 %}
                                 <span class="badge bg-warning rounded-circle p-2"><i class="fas fa-crown text-white"></i></span>
                                 {% elif forloop.counter == 2 %}
@@ -331,8 +323,8 @@
                                 {% else %}
                                 <span class="badge bg-light text-dark rounded-circle p-2">{{ forloop.counter }}</span>
                                 {% endif %}
-                            </td>
-                            <td>
+                              </td>
+                              <td>
                                 <div class="d-flex align-items-center">
                                     <img src="https://ui-avatars.com/api/?name={{ member.seller__first_name|default:member.seller__username }}&size=32&background=11998e&color=fff&rounded=true" class="rounded-circle me-2" width="32" height="32">
                                     <div>
@@ -340,18 +332,18 @@
                                         <small class="text-muted">{{ member.seller__username }}</small>
                                     </div>
                                 </div>
-                            </td>
-                            <td><span class="badge bg-info rounded-pill">{{ member.transaction_count }}</span></td>
+                              </td>
+                              <td><span class="badge bg-info rounded-pill">{{ member.transaction_count }}</span></td>
                             <td class="fw-bold text-success">KES {{ member.total_sales|floatformat:0 }}</td>
                             <td>KES {{ member.avg_ticket|floatformat:0 }}</td>
-                            <td>
+                              <td>
                                 <div class="progress" style="height: 5px; width: 80px;">
                                     <div class="progress-bar bg-success" style="width: {{ member.avg_ticket|default:0|floatformat:0 }}%"></div>
                                 </div>
-                            </td>
-                        </tr>
+                              </td>
+                          </tr>
                         {% empty %}
-                        <tr>
+                          <tr>
                             <td colspan="6" class="text-center py-5">
                                 <div class="empty-state">
                                     <i class="fas fa-users fa-3x text-muted mb-3"></i>
@@ -359,10 +351,10 @@
                                     <p class="small text-muted">Sales will appear here as team members make transactions</p>
                                 </div>
                             </td>
-                        </tr>
+                          </tr>
                         {% endfor %}
                     </tbody>
-                </table>
+                  </table>
             </div>
             
             <div class="table-footer text-end mt-3">
@@ -391,30 +383,30 @@
             <div class="table-responsive">
                 <table class="table table-hover align-middle">
                     <thead class="table-light">
-                        <tr>
+                         <tr>
                             <th>Product</th>
                             <th>Code</th>
                             <th>Qty Sold</th>
                             <th>Revenue</th>
-                        </tr>
+                         </tr>
                     </thead>
                     <tbody>
                         {% for product in top_products_today %}
-                        <tr>
-                            <td>
+                          <tr>
+                              <td>
                                 <div class="d-flex align-items-center">
                                     <div class="product-icon bg-light rounded p-2 me-2">
                                         <i class="fas fa-box text-primary"></i>
                                     </div>
                                     <div class="fw-bold">{{ product.product_name|truncatechars:25 }}</div>
                                 </div>
-                            </td>
-                            <td><span class="badge bg-secondary">{{ product.product_code|default:"N/A" }}</span></td>
-                            <td><span class="badge bg-success rounded-pill">{{ product.total_qty }}</span></td>
+                              </td>
+                              <td><span class="badge bg-secondary">{{ product.product_code|default:"N/A" }}</span></td>
+                              <td><span class="badge bg-success rounded-pill">{{ product.total_qty }}</span></td>
                             <td class="fw-bold text-success">KES {{ product.total_value|floatformat:0 }}</td>
-                        </tr>
+                          </tr>
                         {% empty %}
-                        <tr>
+                          <tr>
                             <td colspan="4" class="text-center py-5">
                                 <div class="empty-state">
                                     <i class="fas fa-box-open fa-3x text-muted mb-3"></i>
@@ -422,10 +414,10 @@
                                     <p class="small text-muted">Product sales will appear here as transactions are made</p>
                                 </div>
                             </td>
-                        </tr>
+                          </tr>
                         {% endfor %}
                     </tbody>
-                </table>
+                  </table>
             </div>
         </div>
     </div>
@@ -456,7 +448,7 @@
     <div class="table-responsive">
         <table class="table table-hover align-middle" id="recentSalesTable">
             <thead class="table-light">
-                <tr>
+                 <tr>
                     <th>Time</th>
                     <th>Sale ID</th>
                     <th>Agent</th>
@@ -465,11 +457,11 @@
                     <th>Payment</th>
                     <th>Amount</th>
                     <th>Actions</th>
-                </tr>
+                 </tr>
             </thead>
             <tbody>
                 {% for sale in recent_sales %}
-                <tr>
+                  <tr>
                     <td>
                         <div class="d-flex align-items-center">
                             <i class="far fa-clock text-muted me-2"></i>
@@ -511,9 +503,9 @@
                             </a>
                         </div>
                     </td>
-                </tr>
+                  </tr>
                 {% empty %}
-                <tr>
+                  <tr>
                     <td colspan="8" class="text-center py-5">
                         <div class="empty-state">
                             <i class="fas fa-receipt fa-3x text-muted mb-3"></i>
@@ -521,7 +513,7 @@
                             <p class="small text-muted">Sales transactions will appear here as they are made</p>
                         </div>
                     </td>
-                </tr>
+                  </tr>
                 {% endfor %}
             </tbody>
         </table>
@@ -731,9 +723,9 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 $(document).ready(function() {
-    // Log data for debugging
     console.log('Dashboard initialized');
     
     // Initialize charts
@@ -755,33 +747,48 @@ $(document).ready(function() {
 });
 
 function initializeCharts() {
-    // Hourly Sales Chart
-    var ctx1 = document.getElementById('hourlySalesChart');
-    if (!ctx1) return;
+    // Hourly Sales Chart - BAR CHART
+    var canvas = document.getElementById('hourlySalesChart');
+    if (!canvas) {
+        console.error('Canvas element hourlySalesChart not found');
+        return;
+    }
     
-    ctx1 = ctx1.getContext('2d');
+    var ctx = canvas.getContext('2d');
     
-    var hourlyLabels = {{ chart_labels|safe }};
-    var hourlyData = {{ chart_data|safe }};
+    // Get data from template
+    var hourlyLabels = {{ hourly_labels|safe }};
+    var hourlyData = {{ hourly_data|safe }};
     
-    if (hourlyLabels && hourlyLabels.length > 0 && hourlyData && hourlyData.length > 0) {
-        new Chart(ctx1, {
-            type: 'line',
+    console.log('Hourly Labels:', hourlyLabels);
+    console.log('Hourly Data:', hourlyData);
+    
+    // Check if we have data
+    if (!hourlyLabels || !hourlyData || hourlyLabels.length === 0) {
+        console.log('No hourly data available');
+        canvas.parentNode.innerHTML = '<div class="text-center py-5"><i class="fas fa-chart-bar fa-3x text-muted mb-3"></i><p class="text-muted">No hourly sales data available for today</p></div>';
+        return;
+    }
+    
+    // Check if there's any non-zero data
+    var hasData = hourlyData.some(function(value) { return value > 0; });
+    
+    if (hasData) {
+        console.log('Rendering bar chart with data');
+        
+        new Chart(ctx, {
+            type: 'bar',
             data: {
                 labels: hourlyLabels,
                 datasets: [{
                     label: 'Sales (KES)',
                     data: hourlyData,
+                    backgroundColor: 'rgba(17, 153, 142, 0.7)',
                     borderColor: '#11998e',
-                    backgroundColor: 'rgba(17, 153, 142, 0.1)',
-                    borderWidth: 3,
-                    fill: true,
-                    tension: 0.4,
-                    pointBackgroundColor: '#11998e',
-                    pointBorderColor: '#fff',
-                    pointBorderWidth: 2,
-                    pointRadius: 4,
-                    pointHoverRadius: 6
+                    borderWidth: 2,
+                    borderRadius: 6,
+                    barPercentage: 0.7,
+                    categoryPercentage: 0.8
                 }]
             },
             options: {
@@ -789,12 +796,16 @@ function initializeCharts() {
                 maintainAspectRatio: false,
                 plugins: {
                     legend: {
-                        display: false
+                        display: true,
+                        position: 'top',
+                        labels: {
+                            font: { size: 12 }
+                        }
                     },
                     tooltip: {
                         callbacks: {
                             label: function(context) {
-                                return 'KES ' + context.raw.toFixed(0);
+                                return 'KES ' + context.raw.toLocaleString();
                             }
                         }
                     }
@@ -802,79 +813,95 @@ function initializeCharts() {
                 scales: {
                     y: {
                         beginAtZero: true,
-                        grid: {
-                            color: 'rgba(0,0,0,0.05)'
+                        title: {
+                            display: true,
+                            text: 'Sales Amount (KES)',
+                            font: { weight: 'bold', size: 12 }
                         },
+                        grid: { color: 'rgba(0,0,0,0.05)' },
                         ticks: {
                             callback: function(value) {
                                 return 'KES ' + value.toLocaleString();
-                            }
+                            },
+                            stepSize: Math.ceil(Math.max(...hourlyData, 500) / 5)
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Hour of Day',
+                            font: { weight: 'bold', size: 12 }
+                        },
+                        ticks: {
+                            maxRotation: 45,
+                            minRotation: 45,
+                            autoSkip: true,
+                            maxTicksLimit: 14
                         }
                     }
                 }
             }
         });
+        
+        console.log('Chart rendered successfully');
+        
     } else {
-        // Show empty state
-        ctx1.canvas.parentNode.innerHTML = '<div class="text-center py-5"><i class="fas fa-chart-line fa-3x text-muted mb-3"></i><p class="text-muted">No hourly sales data available</p></div>';
+        console.log('No sales data (all zeros)');
+        canvas.parentNode.innerHTML = '<div class="text-center py-5"><i class="fas fa-chart-bar fa-3x text-muted mb-3"></i><p class="text-muted">No hourly sales data available for today</p><small class="text-muted">Sales will appear here as transactions are made</small></div>';
     }
 
     // Payment Methods Chart
-    var ctx2 = document.getElementById('paymentChart');
-    if (!ctx2) return;
-    
-    ctx2 = ctx2.getContext('2d');
-    
-    var paymentLabels = [];
-    var paymentData = [];
-    var paymentColors = ['#28a745', '#007bff', '#ffc107', '#dc3545'];
-    
-    {% for method in payment_methods_today %}
-        paymentLabels.push('{{ method.payment_method|escapejs }}');
-        paymentData.push({{ method.total|default:0 }});
-    {% endfor %}
-    
-    if (paymentData.length > 0 && paymentData.some(val => val > 0)) {
-        new Chart(ctx2, {
-            type: 'doughnut',
-            data: {
-                labels: paymentLabels,
-                datasets: [{
-                    data: paymentData,
-                    backgroundColor: paymentColors.slice(0, paymentData.length),
-                    borderWidth: 0,
-                    hoverOffset: 5
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: 'bottom',
-                        labels: {
-                            boxWidth: 12,
-                            padding: 15
-                        }
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                let label = context.label || '';
-                                let value = context.raw || 0;
-                                let total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                let percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
-                                return `${label}: KES ${value.toLocaleString()} (${percentage}%)`;
+    var paymentCanvas = document.getElementById('paymentChart');
+    if (paymentCanvas) {
+        var paymentCtx = paymentCanvas.getContext('2d');
+        
+        var paymentLabels = [];
+        var paymentData = [];
+        var paymentColors = ['#28a745', '#007bff', '#ffc107', '#dc3545'];
+        
+        {% for method in payment_methods_today %}
+            paymentLabels.push('{{ method.payment_method|escapejs }}');
+            paymentData.push({{ method.total|default:0 }});
+        {% endfor %}
+        
+        if (paymentData.length > 0 && paymentData.some(val => val > 0)) {
+            new Chart(paymentCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: paymentLabels,
+                    datasets: [{
+                        data: paymentData,
+                        backgroundColor: paymentColors.slice(0, paymentData.length),
+                        borderWidth: 0,
+                        hoverOffset: 5
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { boxWidth: 12, padding: 15 }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.label || '';
+                                    let value = context.raw || 0;
+                                    let total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    let percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                                    return `${label}: KES ${value.toLocaleString()} (${percentage}%)`;
+                                }
                             }
                         }
-                    }
-                },
-                cutout: '70%'
-            }
-        });
-    } else {
-        // Show empty state
-        ctx2.canvas.parentNode.innerHTML = '<div class="text-center py-5"><i class="fas fa-chart-pie fa-3x text-muted mb-3"></i><p class="text-muted">No payment data available</p></div>';
+                    },
+                    cutout: '70%'
+                }
+            });
+        } else {
+            paymentCanvas.parentNode.innerHTML = '<div class="text-center py-5"><i class="fas fa-chart-pie fa-3x text-muted mb-3"></i><p class="text-muted">No payment data available</p></div>';
+        }
     }
 }
 
@@ -894,7 +921,6 @@ function filterTable() {
 
 function setDateRange(range) {
     console.log('Setting date range:', range);
-    // Implement date range change
 }
 
 function customDateRange() {

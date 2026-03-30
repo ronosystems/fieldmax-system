@@ -2016,8 +2016,6 @@ def product_lookup_api(request):
 
 
 
-
-
 # ============================================
 # SALES MANAGER DASHBOARD - CORRECTED VERSION
 # ============================================
@@ -2139,9 +2137,17 @@ def sales_manager_dashboard(request):
         total=Sum('total_amount')
     )
     
-    # Hourly sales data for chart
-    hourly_sales = []
-    for hour in range(8, 21):  # 8 AM to 8 PM
+    # ============================================
+    # HOURLY SALES DATA - FIXED VARIABLE NAMES
+    # ============================================
+    hourly_labels = []
+    hourly_data = []
+    
+    # Create hour labels from 7 AM to 10 PM (14 hours)
+    for hour in range(7, 22):  # 7 AM to 9 PM
+        hourly_labels.append(f"{hour:02d}:00")
+        
+        # Get sales for this hour
         hour_sales = Sale.objects.filter(
             sale_date__date=today,
             sale_date__hour=hour
@@ -2149,16 +2155,21 @@ def sales_manager_dashboard(request):
             total=Sum('total_amount'),
             count=Count('sale_id')
         )
+        
+        hourly_data.append(float(hour_sales['total'] or 0))
+    
+    # Optional: Create hourly_sales list for detailed info (if needed)
+    hourly_sales = []
+    for i, hour in enumerate(range(7, 22)):
         hourly_sales.append({
             'hour': hour,
-            'amount': float(hour_sales['total'] or 0),
-            'count': hour_sales['count'] or 0,
-            'percentage': (float(hour_sales['total'] or 0) / float(team_sales_today['total'] or 1)) * 100
+            'amount': hourly_data[i],
+            'count': Sale.objects.filter(
+                sale_date__date=today,
+                sale_date__hour=hour
+            ).count(),
+            'percentage': (hourly_data[i] / float(team_sales_today['total'] or 1)) * 100 if team_sales_today['total'] else 0
         })
-    
-    # Chart labels and data
-    chart_labels = [f"{h}:00" for h in range(8, 21)]
-    chart_data = [s['amount'] for s in hourly_sales]
     
     # Top performing team member
     top_performer = sales_by_member_today[0] if sales_by_member_today else None
@@ -2190,9 +2201,9 @@ def sales_manager_dashboard(request):
         'credit_sales_today': credit_sales_today,
         'cash_sales_today': cash_sales_today,
         
-        # Chart data
-        'chart_labels': chart_labels,
-        'chart_data': chart_data,
+        # Chart data - FIXED: Use correct variable names for template
+        'hourly_labels': hourly_labels,   # ← FIXED: Changed from chart_labels
+        'hourly_data': hourly_data,       # ← FIXED: Changed from chart_data
         'hourly_sales': hourly_sales,
         
         # Top performer
@@ -2203,6 +2214,8 @@ def sales_manager_dashboard(request):
     }
     
     return render(request, 'staff/dashboards/sales_manager_dashboard.html', context)
+
+    
 
 
 
