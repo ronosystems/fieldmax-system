@@ -1051,7 +1051,6 @@ def search_products(request):
 
 
 
-
 @login_required
 def sales_dashboard(request):
     """Sales dashboard with statistics and charts"""
@@ -1079,6 +1078,8 @@ def sales_dashboard(request):
     
     # Recent sales
     recent_sales = Sale.objects.order_by('-sale_date')[:5]
+    for sale in recent_sales:
+        sale.item_count = sale.items.count()
     
     # Top selling products - FIXED: removed is_single_item from values()
     top_products = SaleItem.objects.values(
@@ -1114,6 +1115,36 @@ def sales_dashboard(request):
         Sale.objects.filter(payment_method='Points').count(),
     ]
     
+    # ============================================
+    # HOURLY SALES DATA - ADD THIS SECTION
+    # ============================================
+    hourly_labels = []
+    hourly_data = []
+    
+    # Get today's date range
+    today_start = timezone.make_aware(timezone.datetime.combine(today, timezone.datetime.min.time()))
+    today_end = timezone.make_aware(timezone.datetime.combine(today, timezone.datetime.max.time()))
+    
+    # Query sales for today (only non-reversed sales)
+    today_sales_qs = Sale.objects.filter(
+        sale_date__range=[today_start, today_end],
+        is_reversed=False
+    )
+    
+    # Create hour labels from 7 AM to 10 PM (14 hours)
+    for hour in range(7, 22):  # 7 AM to 9 PM
+        hourly_labels.append(f"{hour:02d}:00")
+        
+        # Get sales for this hour
+        hour_start = today_start.replace(hour=hour, minute=0, second=0, microsecond=0)
+        hour_end = today_start.replace(hour=hour, minute=59, second=59, microsecond=999999)
+        
+        hour_sales = today_sales_qs.filter(
+            sale_date__range=[hour_start, hour_end]
+        ).aggregate(total=Sum('total_amount'))['total'] or 0
+        
+        hourly_data.append(float(hour_sales))
+    
     context = {
         'total_sales': total_sales,
         'today_sales': today_sales,
@@ -1125,11 +1156,11 @@ def sales_dashboard(request):
         'chart_labels': chart_labels,
         'sales_data': sales_data,
         'payment_data': payment_data,
+        'hourly_labels': hourly_labels,
+        'hourly_data': hourly_data,     
     }
     
     return render(request, 'sales/dashboard.html', context)
-
-
 
 
 

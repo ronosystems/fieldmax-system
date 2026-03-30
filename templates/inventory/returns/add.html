@@ -43,40 +43,74 @@
                     <form method="post" id="returnForm" action="{% url 'inventory:return_submit' %}" enctype="multipart/form-data">
                         {% csrf_token %}
                         
-                        <!-- Step 1: Product Search -->
+                        <!-- Step 1: Search -->
                         <div class="card mb-3 border-primary">
                             <div class="card-header bg-primary text-white py-2">
-                                <h6 class="mb-0"><i class="fas fa-search me-2"></i>Step 1: Find Product</h6>
+                                <h6 class="mb-0"><i class="fas fa-search me-2"></i>Step 1: Search by Sale ID or Product Code</h6>
                             </div>
                             <div class="card-body">
-                                <div class="alert alert-info">
-                                    <i class="fas fa-info-circle me-2"></i>
-                                    Search by ETR number, product code, or SKU/IMEI number.
-                                </div>
-                                
-                                <div class="row">
-                                    <div class="col-md-8">
-                                        <div class="input-group input-group-lg">
-                                            <span class="input-group-text"><i class="fas fa-barcode"></i></span>
-                                            <input type="text" class="form-control" id="productSearch" 
-                                                   placeholder="Enter ETR number, product code, or SKU..." 
-                                                   value="{{ search_term|default:'' }}" autocomplete="off">
-                                            <button class="btn btn-primary" type="button" id="searchBtn">
-                                                <i class="fas fa-search me-2"></i>Search
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label"><i class="fas fa-receipt me-1"></i>Search by Sale ID</label>
+                                        <div class="input-group">
+                                            <span class="input-group-text"><i class="fas fa-receipt"></i></span>
+                                            <input type="text" class="form-control" id="saleIdSearch" 
+                                                   placeholder="Enter Sale ID (e.g., SALE-0545)" 
+                                                   autocomplete="off">
+                                            <button class="btn btn-outline-primary" type="button" id="searchBySaleBtn">
+                                                <i class="fas fa-search me-1"></i>Find Sale
                                             </button>
                                         </div>
                                     </div>
-                                    <div class="col-md-4">
-                                        <small class="text-muted d-block mt-2">
-                                            <i class="fas fa-lightbulb me-1"></i>
-                                            Try: FSL00001, IMEI number, or Sale ID
-                                        </small>
+                                    <div class="col-md-6">
+                                        <label class="form-label"><i class="fas fa-barcode me-1"></i>Search by Product Code</label>
+                                        <div class="input-group">
+                                            <span class="input-group-text"><i class="fas fa-barcode"></i></span>
+                                            <input type="text" class="form-control" id="productCodeSearch" 
+                                                   placeholder="Enter Product Code (e.g., FSL00200)" 
+                                                   autocomplete="off">
+                                            <button class="btn btn-outline-primary" type="button" id="searchByProductBtn">
+                                                <i class="fas fa-search me-1"></i>Find Product
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                                 
-                                <!-- Search Results Dropdown -->
-                                <div id="searchResults" class="list-group mt-2" style="max-height: 250px; overflow-y: auto; display: none;"></div>
-                                <div id="searchError" class="alert alert-danger mt-2" style="display: none;"></div>
+                                <!-- Loading Indicator -->
+                                <div id="loadingIndicator" class="text-center mt-3" style="display: none;">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    <p class="mt-2 text-muted">Searching...</p>
+                                </div>
+                                
+                                <!-- Search Results -->
+                                <div id="searchResults" style="display: none;">
+                                    <div class="card border-info mt-3">
+                                        <div class="card-header bg-info text-white py-2 d-flex justify-content-between align-items-center">
+                                            <h6 class="mb-0"><i class="fas fa-list me-2"></i>Search Results</h6>
+                                            <span id="resultCount" class="badge bg-light text-dark">0 items</span>
+                                        </div>
+                                        <div class="card-body p-0">
+                                            <!-- Quick Filter Input (shown based on search type) -->
+                                            <div id="quickFilterSection" class="p-2 border-bottom bg-light" style="display: none;">
+                                                <div class="input-group input-group-sm">
+                                                    <span class="input-group-text"><i class="fas fa-filter"></i></span>
+                                                    <input type="text" class="form-control" id="quickFilterInput" 
+                                                           placeholder="Filter by Product Code or SKU..." 
+                                                           autocomplete="off">
+                                                    <button class="btn btn-outline-secondary" type="button" id="clearFilterBtn">
+                                                        <i class="fas fa-times"></i>
+                                                    </button>
+                                                </div>
+                                                <small class="text-muted" id="filterHint"></small>
+                                            </div>
+                                            <div id="searchResultsList" class="list-group list-group-flush" style="max-height: 400px; overflow-y: auto;"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div id="searchError" class="alert alert-danger mt-3" style="display: none;"></div>
                             </div>
                         </div>
                         
@@ -84,30 +118,54 @@
                         <div id="selectedProductSection" style="display: none;">
                             <div class="card mb-3 border-success">
                                 <div class="card-header bg-success text-white py-2">
-                                    <h6 class="mb-0"><i class="fas fa-check-circle me-2"></i>Step 2: Selected Product</h6>
+                                    <h6 class="mb-0"><i class="fas fa-check-circle me-2"></i>Step 2: Selected Sale & Product</h6>
                                 </div>
                                 <div class="card-body">
-                                    <div class="selected-product-card p-3 bg-light rounded">
+                                    <!-- Sale Information -->
+                                    <div class="sale-info p-3 bg-light rounded mb-3">
+                                        <h6 class="mb-3"><i class="fas fa-receipt me-2"></i>Sale Information</h6>
                                         <div class="row">
-                                            <div class="col-md-6">
-                                                <p class="mb-1"><strong>Product:</strong> <span id="selectedProductName"></span></p>
-                                                <p class="mb-1"><strong>Code:</strong> <span id="selectedProductCode"></span></p>
-                                                <p class="mb-1"><strong>SKU/IMEI:</strong> <span id="selectedProductSku"></span></p>
+                                            <div class="col-md-4">
+                                                <p class="mb-1"><strong>Sale ID:</strong> <span id="selectedSaleId" class="badge bg-primary"></span></p>
+                                                <p class="mb-1"><strong>ETR Number:</strong> <span id="selectedEtrNumber"></span></p>
                                             </div>
-                                            <div class="col-md-6">
-                                                <p class="mb-1"><strong>Original Sale:</strong> <span id="selectedSaleId"></span></p>
+                                            <div class="col-md-4">
                                                 <p class="mb-1"><strong>Sale Date:</strong> <span id="selectedSaleDate"></span></p>
+                                                <p class="mb-1"><strong>Sale Time:</strong> <span id="selectedSaleTime"></span></p>
+                                            </div>
+                                            <div class="col-md-4">
                                                 <p class="mb-1"><strong>Customer:</strong> <span id="selectedCustomer"></span></p>
                                             </div>
                                         </div>
-                                        <input type="hidden" name="product_id" id="productId">
-                                        <input type="hidden" name="sale_id" id="saleId">
-                                        <input type="hidden" name="etr_number" id="etrNumber">
                                     </div>
+                                    
+                                    <!-- Product Information -->
+                                    <div class="product-info p-3 bg-light rounded">
+                                        <h6 class="mb-3"><i class="fas fa-box me-2"></i>Product Information</h6>
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <p class="mb-1"><strong>Product:</strong> <span id="selectedProductName"></span></p>
+                                                <p class="mb-1"><strong>Product Code:</strong> <code id="selectedProductCode"></code></p>
+                                                <p class="mb-1"><strong>SKU/IMEI:</strong> <span id="selectedProductSku"></span></p>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <p class="mb-1"><strong>Original Price:</strong> <span id="selectedProductPrice"></span></p>
+                                                <p class="mb-1"><strong>Quantity Sold:</strong> <span id="selectedProductQty"></span></p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Hidden Fields -->
+                                    <input type="hidden" name="product_id" id="productId">
+                                    <input type="hidden" name="sale_item_id" id="saleItemId">
+                                    <input type="hidden" name="sale_id" id="saleId">
+                                    <input type="hidden" name="etr_number" id="etrNumber">
                                 </div>
                             </div>
-                            
-                            <!-- Step 3: Return Details -->
+                        </div>
+                        
+                        <!-- Step 3: Return Details -->
+                        <div id="returnDetailsSection" style="display: none;">
                             <div class="card mb-3 border-warning">
                                 <div class="card-header bg-warning text-dark py-2">
                                     <h6 class="mb-0"><i class="fas fa-clipboard-list me-2"></i>Step 3: Return Details</h6>
@@ -128,8 +186,9 @@
                                         </div>
                                         
                                         <div class="col-md-6 mb-3">
-                                            <label class="form-label">Quantity</label>
-                                            <input type="number" name="quantity" class="form-control" value="1" min="1" id="quantity">
+                                            <label class="form-label">Quantity to Return</label>
+                                            <input type="number" name="quantity" class="form-control" value="1" min="1" id="returnQuantity">
+                                            <small class="text-muted">Maximum: <span id="maxQuantity">1</span></small>
                                         </div>
                                         
                                         <div class="col-md-6 mb-3">
@@ -202,64 +261,38 @@
             </div>
         </div>
         
-        <!-- Right Column - Instructions & Policy -->
+        <!-- Right Column - Instructions -->
         <div class="col-md-4">
-            <!-- Return Policy Card -->
             <div class="card mb-4">
                 <div class="card-header bg-info text-white">
-                    <h6 class="mb-0"><i class="fas fa-info-circle me-2"></i>Return Policy</h6>
+                    <h6 class="mb-0"><i class="fas fa-info-circle me-2"></i>How to Process a Return</h6>
                 </div>
                 <div class="card-body">
-                    <ul class="list-unstyled mb-0">
-                        <li class="mb-2">
-                            <i class="fas fa-check-circle text-success me-2"></i>
-                            <strong>14-day return window</strong>
-                        </li>
-                        <li class="mb-2">
-                            <i class="fas fa-check-circle text-success me-2"></i>
-                            Product must be in original condition
-                        </li>
-                        <li class="mb-2">
-                            <i class="fas fa-check-circle text-success me-2"></i>
-                            Original receipt required
-                        </li>
-                        <li class="mb-2">
-                            <i class="fas fa-check-circle text-success me-2"></i>
-                            All accessories must be included
-                        </li>
-                        <li class="mb-2">
-                            <i class="fas fa-exclamation-triangle text-warning me-2"></i>
-                            Manager verification required
-                        </li>
-                    </ul>
-                </div>
-            </div>
-            
-            <!-- Quick Tips Card -->
-            <div class="card mb-4">
-                <div class="card-header bg-success text-white">
-                    <h6 class="mb-0"><i class="fas fa-lightbulb me-2"></i>Quick Tips</h6>
-                </div>
-                <div class="card-body">
-                    <div class="tip-item mb-3">
-                        <h6><i class="fas fa-search me-2 text-primary"></i>Finding Products</h6>
-                        <p class="small text-muted">Search by ETR number from receipt, product code (FSL00001), or IMEI/SKU number.</p>
+                    <div class="mb-3">
+                        <h6><i class="fas fa-receipt text-primary me-2"></i>If you have the Sale ID:</h6>
+                        <ol class="mb-0">
+                            <li>Enter the <strong>Sale ID</strong> and click "Find Sale"</li>
+                            <li>Use the <strong>filter box</strong> to quickly find the product by code or SKU</li>
+                            <li>Click on the product to select it</li>
+                            <li>Complete the return details</li>
+                        </ol>
                     </div>
-                    <div class="tip-item mb-3">
-                        <h6><i class="fas fa-camera me-2 text-primary"></i>Photos</h6>
-                        <p class="small text-muted">Take clear photos showing the product condition and any damage.</p>
-                    </div>
-                    <div class="tip-item">
-                        <h6><i class="fas fa-clock me-2 text-primary"></i>Processing Time</h6>
-                        <p class="small text-muted">Returns are verified within 24-48 hours by a manager.</p>
+                    <hr>
+                    <div>
+                        <h6><i class="fas fa-barcode text-primary me-2"></i>If you have the Product Code:</h6>
+                        <ol class="mb-0">
+                            <li>Enter the <strong>Product Code</strong> and click "Find Product"</li>
+                            <li>Use the <strong>filter box</strong> to quickly find the correct sale by Sale ID</li>
+                            <li>Click on the sale to select it</li>
+                            <li>Complete the return details</li>
+                        </ol>
                     </div>
                 </div>
             </div>
             
-            <!-- Status Guide Card -->
             <div class="card">
-                <div class="card-header bg-secondary text-white">
-                    <h6 class="mb-0"><i class="fas fa-tasks me-2"></i>Return Status Guide</h6>
+                <div class="card-header bg-warning text-dark">
+                    <h6 class="mb-0"><i class="fas fa-flag-checkered me-2"></i>Return Status Guide</h6>
                 </div>
                 <div class="card-body p-0">
                     <div class="list-group list-group-flush">
@@ -295,198 +328,401 @@
         content: " *";
         color: #dc3545;
     }
-    .selected-product-card {
-        border-left: 4px solid #28a745;
-        animation: slideDown 0.3s ease;
-    }
-    @keyframes slideDown {
-        from {
-            opacity: 0;
-            transform: translateY(-10px);
-        }
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
-    #searchResults {
-        position: absolute;
-        z-index: 1000;
-        width: calc(100% - 30px);
-        background: white;
-        border: 1px solid #dee2e6;
-        border-radius: 8px;
-        box-shadow: 0 5px 20px rgba(0,0,0,0.15);
-    }
     .search-result-item {
         cursor: pointer;
-        padding: 12px 15px;
-        border-bottom: 1px solid #dee2e6;
-        transition: background 0.2s;
+        transition: all 0.2s;
+        border-left: 3px solid transparent;
     }
     .search-result-item:hover {
-        background: #f8f9fa;
+        background-color: #f8f9fa;
+        border-left-color: #0d6efd;
+        transform: translateX(5px);
     }
-    .search-result-item:last-child {
-        border-bottom: none;
+    .search-result-item.selected {
+        background-color: #d4edda;
+        border-left-color: #28a745;
     }
-    .tip-item {
-        border-bottom: 1px dashed #dee2e6;
-        padding-bottom: 10px;
+    .search-result-item.filtered-out {
+        display: none;
     }
-    .tip-item:last-child {
-        border-bottom: none;
-        padding-bottom: 0;
+    .sale-info, .product-info {
+        border-left: 4px solid #28a745;
+    }
+    #searchResultsList {
+        max-height: 400px;
+        overflow-y: auto;
+    }
+    .badge-sale-id {
+        font-family: monospace;
+        font-size: 12px;
+    }
+    .filter-active {
+        background-color: #e7f1ff;
     }
 </style>
-{% endblock %}
 
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const searchInput = document.getElementById('productSearch');
-    const searchBtn = document.getElementById('searchBtn');
+    // DOM Elements
+    const saleIdSearch = document.getElementById('saleIdSearch');
+    const productCodeSearch = document.getElementById('productCodeSearch');
+    const searchBySaleBtn = document.getElementById('searchBySaleBtn');
+    const searchByProductBtn = document.getElementById('searchByProductBtn');
+    const loadingIndicator = document.getElementById('loadingIndicator');
     const searchResults = document.getElementById('searchResults');
+    const searchResultsList = document.getElementById('searchResultsList');
     const searchError = document.getElementById('searchError');
+    const resultCount = document.getElementById('resultCount');
+    const quickFilterSection = document.getElementById('quickFilterSection');
+    const quickFilterInput = document.getElementById('quickFilterInput');
+    const clearFilterBtn = document.getElementById('clearFilterBtn');
+    const filterHint = document.getElementById('filterHint');
     const selectedProductSection = document.getElementById('selectedProductSection');
+    const returnDetailsSection = document.getElementById('returnDetailsSection');
     const returnForm = document.getElementById('returnForm');
-    const reasonSelect = document.getElementById('reasonSelect');
-    const quantity = document.getElementById('quantity');
-    const refundAmount = document.getElementById('refundAmount');
-    let searchTimer;
-    let currentRequest = null;
     
-    // Search function using actual API
-    function performSearch() {
-        const query = searchInput.value.trim();
-        
-        if (query.length < 2) {
-            searchResults.style.display = 'none';
+    let currentSearchResults = [];
+    let currentSearchType = null; // 'sale' or 'product'
+    let currentFilterText = '';
+    
+    // Search by Sale ID
+    function searchBySaleId() {
+        const query = saleIdSearch.value.trim();
+        if (!query) {
+            searchError.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>Please enter a Sale ID.';
+            searchError.style.display = 'block';
             return;
         }
         
-        // Show loading
-        searchResults.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div> Searching...</div>';
-        searchResults.style.display = 'block';
-        searchError.style.display = 'none';
-        
-        // Cancel previous request
-        if (currentRequest) {
-            currentRequest.abort();
-        }
-        
-        // Make AJAX call to search API
-        currentRequest = $.ajax({
-            url: '{% url "inventory:return_search_api" %}',
-            method: 'GET',
-            data: { q: query },
-            success: function(data) {
-                if (data.results && data.results.length > 0) {
-                    let html = '';
-                    data.results.forEach(item => {
-                        if (item.type === 'product') {
-                            html += `
-                                <div class="search-result-item" onclick="selectProduct(${item.id}, '${item.code}', '${item.name}', '${item.sku}', '${item.sale_id || ''}', '${item.sale_date || ''}', '${item.customer || 'Unknown'}', ${item.price})">
-                                    <div class="d-flex justify-content-between">
-                                        <div>
-                                            <strong>${item.code}</strong> - ${item.name}
-                                            <br>
-                                            <small class="text-muted">SKU: ${item.sku}</small>
-                                        </div>
-                                        <div class="text-end">
-                                            <span class="badge bg-info">KSH ${item.price}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            `;
-                        } else {
-                            html += `
-                                <div class="search-result-item" onclick="selectSale(${item.id}, '${item.sale_id}', '${item.etr}', '${item.date}', '${item.customer}', ${item.amount})">
-                                    <div class="d-flex justify-content-between">
-                                        <div>
-                                            <strong>Sale: ${item.sale_id}</strong>
-                                            <br>
-                                            <small class="text-muted">ETR: ${item.etr || 'N/A'}</small>
-                                        </div>
-                                        <div class="text-end">
-                                            <span class="badge bg-warning">KSH ${item.amount}</span>
-                                            <br>
-                                            <small class="text-muted">${item.date}</small>
-                                        </div>
-                                    </div>
-                                </div>
-                            `;
-                        }
-                    });
-                    searchResults.innerHTML = html;
-                } else {
-                    searchResults.innerHTML = '<div class="text-center py-3 text-muted">No products found</div>';
-                }
-            },
-            error: function(xhr, status, error) {
-                if (status !== 'abort') {
-                    searchError.textContent = 'Error searching for products. Please try again.';
-                    searchError.style.display = 'block';
-                    searchResults.style.display = 'none';
-                }
-            },
-            complete: function() {
-                currentRequest = null;
-            }
-        });
+        currentSearchType = 'sale';
+        performSearch(query, 'sale');
     }
     
-    searchInput.addEventListener('input', function() {
-        clearTimeout(searchTimer);
-        searchTimer = setTimeout(performSearch, 300);
+    // Search by Product Code
+    function searchByProductCode() {
+        const query = productCodeSearch.value.trim();
+        if (!query) {
+            searchError.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>Please enter a Product Code.';
+            searchError.style.display = 'block';
+            return;
+        }
+        
+        currentSearchType = 'product';
+        performSearch(query, 'product');
+    }
+    
+    // Perform search
+    function performSearch(query, type) {
+        loadingIndicator.style.display = 'block';
+        searchError.style.display = 'none';
+        searchResults.style.display = 'none';
+        selectedProductSection.style.display = 'none';
+        returnDetailsSection.style.display = 'none';
+        quickFilterSection.style.display = 'none';
+        
+        fetch(`/inventory/return-search-api/?q=${encodeURIComponent(query)}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.results && data.results.length > 0) {
+                    currentSearchResults = data.results;
+                    displaySearchResults(data.results, type);
+                    searchResults.style.display = 'block';
+                    resultCount.textContent = `${data.results.length} item(s)`;
+                    
+                    // Show quick filter section and set hint
+                    quickFilterSection.style.display = 'block';
+                    if (type === 'sale') {
+                        filterHint.innerHTML = '<i class="fas fa-filter me-1"></i>Filter by Product Code or SKU to quickly find the item';
+                        quickFilterInput.placeholder = 'Filter by Product Code or SKU...';
+                    } else {
+                        filterHint.innerHTML = '<i class="fas fa-filter me-1"></i>Filter by Sale ID to quickly find the correct sale';
+                        quickFilterInput.placeholder = 'Filter by Sale ID...';
+                    }
+                    quickFilterInput.value = '';
+                    currentFilterText = '';
+                    
+                } else {
+                    searchError.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>No results found. Please check the Sale ID or Product Code.';
+                    searchError.style.display = 'block';
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                searchError.innerHTML = `<i class="fas fa-exclamation-triangle me-2"></i>Error searching: ${error.message}`;
+                searchError.style.display = 'block';
+            })
+            .finally(() => {
+                loadingIndicator.style.display = 'none';
+            });
+    }
+    
+    // Display search results with filter support
+    function displaySearchResults(results, type) {
+        let html = '';
+        
+        results.forEach((item, index) => {
+            let filterKey = '';
+            let displayHtml = '';
+            
+            if (type === 'sale') {
+                // Searching by Sale ID - show products in that sale
+                filterKey = (item.code + ' ' + (item.sku || '')).toLowerCase();
+                displayHtml = `
+                    <div class="list-group-item search-result-item" data-filter-key="${filterKey}" data-index="${index}" onclick="selectProductFromSale(${index})">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <i class="fas fa-box text-success me-2"></i>
+                                <strong>${escapeHtml(item.name)}</strong>
+                                <br>
+                                <small class="text-muted">
+                                    Code: ${escapeHtml(item.code)} | SKU: ${escapeHtml(item.sku) || 'N/A'}
+                                </small>
+                            </div>
+                            <div class="text-end">
+                                <span class="badge bg-primary">KSH ${item.price}</span>
+                                <br>
+                                <small class="text-muted">Qty: ${item.quantity_sold}</small>
+                            </div>
+                        </div>
+                        <div class="mt-1">
+                            <small class="text-info">
+                                <i class="fas fa-receipt me-1"></i>Sale: ${item.sale_id}
+                                <i class="fas fa-calendar ms-2 me-1"></i>${item.sale_date}
+                            </small>
+                        </div>
+                    </div>
+                `;
+            } else {
+                // Searching by Product Code - show sales where product was sold
+                filterKey = item.sale_id.toLowerCase();
+                displayHtml = `
+                    <div class="list-group-item search-result-item" data-filter-key="${filterKey}" data-index="${index}" onclick="selectSaleWithProduct(${index})">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <i class="fas fa-receipt text-primary me-2"></i>
+                                <strong>Sale: ${item.sale_id}</strong>
+                                <br>
+                                <small class="text-muted">
+                                    <i class="fas fa-box me-1"></i>${escapeHtml(item.product_name)}
+                                    <br>
+                                    Code: ${escapeHtml(item.product_code)} | SKU: ${escapeHtml(item.product_sku) || 'N/A'}
+                                </small>
+                            </div>
+                            <div class="text-end">
+                                <span class="badge bg-success">KSH ${item.product_price}</span>
+                                <br>
+                                <small class="text-muted">Qty: ${item.quantity_sold}</small>
+                            </div>
+                        </div>
+                        <div class="mt-1">
+                            <small class="text-info">
+                                <i class="fas fa-calendar me-1"></i>${item.sale_date} ${item.sale_time}
+                                <i class="fas fa-user ms-2 me-1"></i>${escapeHtml(item.customer)}
+                            </small>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            html += displayHtml;
+        });
+        
+        searchResultsList.innerHTML = html;
+        
+        // Apply any existing filter
+        if (currentFilterText) {
+            applyFilter(currentFilterText);
+        }
+    }
+    
+    // Apply filter to results
+    function applyFilter(filterText) {
+        currentFilterText = filterText.toLowerCase();
+        const items = document.querySelectorAll('.search-result-item');
+        let visibleCount = 0;
+        
+        items.forEach(item => {
+            const filterKey = item.getAttribute('data-filter-key') || '';
+            if (filterKey.includes(currentFilterText) || currentFilterText === '') {
+                item.style.display = '';
+                visibleCount++;
+            } else {
+                item.style.display = 'none';
+            }
+        });
+        
+        resultCount.textContent = `${visibleCount} item(s) (filtered)`;
+        
+        if (visibleCount === 0 && currentFilterText) {
+            const noResultsMsg = document.createElement('div');
+            noResultsMsg.className = 'list-group-item text-center text-muted';
+            noResultsMsg.id = 'noFilterResults';
+            noResultsMsg.innerHTML = `<i class="fas fa-search me-2"></i>No items match "${escapeHtml(currentFilterText)}"`;
+            if (!document.getElementById('noFilterResults')) {
+                searchResultsList.appendChild(noResultsMsg);
+            }
+        } else {
+            const noResultsMsg = document.getElementById('noFilterResults');
+            if (noResultsMsg) noResultsMsg.remove();
+        }
+    }
+    
+    // Clear filter
+    function clearFilter() {
+        quickFilterInput.value = '';
+        currentFilterText = '';
+        applyFilter('');
+        resultCount.textContent = `${currentSearchResults.length} item(s)`;
+    }
+    
+    // Select product when searched by Sale ID
+    window.selectProductFromSale = function(index) {
+        const item = currentSearchResults[index];
+        if (!item) return;
+        
+        selectProduct(
+            item.id,           // product_id
+            item.code,         // product_code
+            item.name,         // product_name
+            item.sku,          // sku
+            item.sale_id,      // sale_id
+            item.sale_date,    // sale_date
+            item.sale_time,    // sale_time
+            item.customer,     // customer
+            item.price,        // price
+            item.etr_number,   // etr_number
+            item.quantity_sold // quantity_sold
+        );
+    };
+    
+    // Select sale with product when searched by Product Code
+    window.selectSaleWithProduct = function(index) {
+        const item = currentSearchResults[index];
+        if (!item) return;
+        
+        selectProduct(
+            item.product_id,   // product_id
+            item.product_code, // product_code
+            item.product_name, // product_name
+            item.product_sku,  // sku
+            item.sale_id,      // sale_id
+            item.sale_date,    // sale_date
+            item.sale_time,    // sale_time
+            item.customer,     // customer
+            item.product_price,// price
+            item.etr_number,   // etr_number
+            item.quantity_sold // quantity_sold
+        );
+    };
+    
+    // Main select function
+    function selectProduct(id, code, name, sku, saleId, saleDate, saleTime, customer, price, etrNumber, quantitySold) {
+        // Populate sale information
+        document.getElementById('selectedSaleId').innerHTML = saleId || 'N/A';
+        document.getElementById('selectedEtrNumber').textContent = etrNumber || 'N/A';
+        document.getElementById('selectedSaleDate').textContent = saleDate || 'N/A';
+        document.getElementById('selectedSaleTime').textContent = saleTime || 'N/A';
+        document.getElementById('selectedCustomer').textContent = customer || 'Walk-in Customer';
+        
+        // Populate product information
+        document.getElementById('selectedProductName').textContent = name;
+        document.getElementById('selectedProductCode').innerHTML = code;
+        document.getElementById('selectedProductSku').textContent = sku || 'N/A';
+        document.getElementById('selectedProductPrice').innerHTML = `KSH ${price}`;
+        document.getElementById('selectedProductQty').textContent = quantitySold || 1;
+        
+        // Set hidden fields
+        document.getElementById('productId').value = id;
+        document.getElementById('saleId').value = saleId || '';
+        document.getElementById('etrNumber').value = etrNumber || '';
+        
+        // Set refund amount to original price
+        document.getElementById('refundAmount').value = price;
+        
+        // Set max quantity
+        const maxQty = quantitySold || 1;
+        document.getElementById('maxQuantity').textContent = maxQty;
+        document.getElementById('returnQuantity').max = maxQty;
+        document.getElementById('returnQuantity').value = 1;
+        
+        // Hide search results, show selected product and return details
+        searchResults.style.display = 'none';
+        quickFilterSection.style.display = 'none';
+        selectedProductSection.style.display = 'block';
+        returnDetailsSection.style.display = 'block';
+        
+        // Scroll to the selected product section
+        selectedProductSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    
+    // Helper function to escape HTML
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    // Event Listeners
+    searchBySaleBtn.addEventListener('click', searchBySaleId);
+    searchByProductBtn.addEventListener('click', searchByProductCode);
+    
+    quickFilterInput.addEventListener('input', function(e) {
+        applyFilter(e.target.value);
     });
     
-    searchBtn.addEventListener('click', performSearch);
+    clearFilterBtn.addEventListener('click', clearFilter);
     
-    document.addEventListener('click', function(e) {
-        if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
-            searchResults.style.display = 'none';
+    // Enter key handlers
+    saleIdSearch.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            searchBySaleId();
         }
     });
     
-    // Select product function
-    window.selectProduct = function(id, code, name, sku, saleId, saleDate, customer, price) {
-        document.getElementById('selectedProductName').textContent = name;
-        document.getElementById('selectedProductCode').textContent = code;
-        document.getElementById('selectedProductSku').textContent = sku || 'N/A';
-        document.getElementById('selectedSaleId').textContent = saleId || 'N/A';
-        document.getElementById('selectedSaleDate').textContent = saleDate || 'N/A';
-        document.getElementById('selectedCustomer').textContent = customer || 'Unknown';
-        document.getElementById('productId').value = id;
-        document.getElementById('saleId').value = saleId || '';
-        document.getElementById('etrNumber').value = saleId || '';
-        
-        // Set default refund amount
-        document.getElementById('refundAmount').value = price;
-        
-        selectedProductSection.style.display = 'block';
-        searchResults.style.display = 'none';
-        searchInput.value = code;
-        
-        // Scroll to form
-        selectedProductSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    };
-    
-    // Select sale function (if you want to handle sales directly)
-    window.selectSale = function(id, saleId, etr, date, customer, amount) {
-        // You can implement this to fetch products from the sale
-        alert('Please search by product code or SKU instead.');
-    };
+    productCodeSearch.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            searchByProductCode();
+        }
+    });
     
     // Reset form
     window.resetForm = function() {
         if (confirm('Clear all form data?')) {
             returnForm.reset();
+            saleIdSearch.value = '';
+            productCodeSearch.value = '';
+            searchResults.style.display = 'none';
+            searchError.style.display = 'none';
+            quickFilterSection.style.display = 'none';
             selectedProductSection.style.display = 'none';
-            searchInput.value = '';
-            searchInput.focus();
+            returnDetailsSection.style.display = 'none';
+            currentSearchResults = [];
+            currentFilterText = '';
+            saleIdSearch.focus();
         }
     };
+    
+    // Quantity validation
+    document.getElementById('returnQuantity').addEventListener('change', function() {
+        const max = parseInt(this.max);
+        let val = parseInt(this.value);
+        if (val > max) {
+            this.value = max;
+            alert(`Maximum quantity is ${max}`);
+        }
+        if (val < 1) {
+            this.value = 1;
+        }
+    });
     
     // Form validation
     returnForm.addEventListener('submit', function(e) {
@@ -496,13 +732,20 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        if (!reasonSelect.value) {
+        if (!document.getElementById('saleId').value) {
+            e.preventDefault();
+            alert('Please select a valid sale.');
+            return;
+        }
+        
+        if (!document.getElementById('reasonSelect').value) {
             e.preventDefault();
             alert('Please select a reason for return.');
             return;
         }
         
-        if (quantity.value < 1) {
+        const quantity = document.getElementById('returnQuantity').value;
+        if (quantity < 1) {
             e.preventDefault();
             alert('Quantity must be at least 1.');
             return;
@@ -513,6 +756,10 @@ document.addEventListener('DOMContentLoaded', function() {
         submitBtn.disabled = true;
         submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Submitting...';
     });
+    
+    // Focus on sale ID search on page load
+    saleIdSearch.focus();
 });
 </script>
+{% endblock %}
 {% endblock %}

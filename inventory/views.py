@@ -2485,12 +2485,16 @@ def return_submit(request):
             # Get basic required fields
             product_id = request.POST.get('product_id')
             reason = request.POST.get('reason')
-            sale_id = request.POST.get('sale_id', '')
-            etr_number = request.POST.get('etr_number', '')
+            sale_id = request.POST.get('sale_id', '')  # Get the sale_id from form
+            etr_number = request.POST.get('etr_number', '')  # Get ETR number
+            quantity = request.POST.get('quantity', 1)
+            refund_amount = request.POST.get('refund_amount', '')
             
             print(f"Product ID: {product_id}")
             print(f"Reason: {reason}")
-            print(f"Sale ID: {sale_id}")
+            print(f"Sale ID: {sale_id}")  # Now captured
+            print(f"ETR Number: {etr_number}")  # Now captured
+            print(f"Quantity: {quantity}")
             
             if not product_id:
                 messages.error(request, 'Product ID is required.')
@@ -2501,7 +2505,6 @@ def return_submit(request):
                 return redirect('inventory:return_product')
             
             # Get the product
-            from inventory.models import Product
             try:
                 product = Product.objects.get(id=product_id)
                 print(f"Product found: {product.product_code} - {product.display_name}")
@@ -2514,24 +2517,27 @@ def return_submit(request):
             product_photo_1 = request.FILES.get('product_photo_1')
             product_photo_2 = request.FILES.get('product_photo_2')
             damage_photo = request.FILES.get('damage_photo')
+            receipt_photo = request.FILES.get('receipt_photo')
             
-            # Prepare return data with CORRECT field names
+            # Prepare return data with ALL fields
             return_data = {
                 'product': product,
                 'product_code': product.product_code,
                 'product_name': product.display_name,
                 'sku_value': product.sku_value,
-                'quantity': request.POST.get('quantity', 1),
+                'quantity': int(quantity),
                 'reason': reason,
                 'reason_text': request.POST.get('reason_text', ''),
                 'reported_condition': request.POST.get('reported_condition', 'good'),
-                'refund_amount': request.POST.get('refund_amount', product.selling_price),
-                'etr_number': etr_number,
-                'sale_id': sale_id,  # This matches your model field name
+                'refund_amount': Decimal(refund_amount) if refund_amount else product.selling_price,
+                'etr_number': etr_number,  # Save ETR number
+                'sale_id': sale_id,  # Save Sale ID - THIS IS KEY!
                 'requested_by': request.user,
                 'status': 'submitted',
                 'verification_status': 'pending',
             }
+            
+            print(f"Return data prepared: {return_data}")
             
             # Create return request
             from inventory.models import ReturnRequest
@@ -2544,10 +2550,13 @@ def return_submit(request):
                 return_request.product_photo_2 = product_photo_2
             if damage_photo:
                 return_request.damage_photo = damage_photo
+            if receipt_photo:
+                return_request.receipt_photo = receipt_photo
             
             return_request.save()
             
             print(f"✅ RETURN CREATED: ID={return_request.id}, Return ID={return_request.return_id}")
+            print(f"✅ SALE ID SAVED: {return_request.sale_id}")
             
             messages.success(
                 request, 
@@ -2740,60 +2749,93 @@ def return_process(request, pk):
 
 
 
-
 @login_required
 def return_search_api(request):
-    """AJAX endpoint for searching products by ETR, code, or SKU"""
+    """AJAX endpoint for searching by Sale ID or Product Code"""
     query = request.GET.get('q', '').strip()
+    
+    logger.info(f"🔍 Search API called with query: {query}")
     
     if len(query) < 2:
         return JsonResponse({'results': []})
     
-    # Search products by code, name, or SKU
-    products = Product.objects.filter(
-        Q(product_code__icontains=query) |
-        Q(name__icontains=query) |
-        Q(sku_value__icontains=query)  # Search by SKU value
-    )[:10]
-    
-    # Search sales by sale_id or ETR number
-    sales = Sale.objects.filter(
-        Q(sale_id__icontains=query) |
-        Q(etr_receipt_number__icontains=query)
-    )[:10]
-    
     results = []
     
-    for product in products:
-        # Find if this product was sold (get latest sale)
-        latest_sale = SaleItem.objects.filter(
-            product=product,
-            sale__is_reversed=False
-        ).select_related('sale').order_by('-sale__sale_date').first()
+    # ============================================
+    # CASE 1: Search by Sale ID (shows all products in that sale)
+    # ============================================
+    try:
+        # Check if query looks like a Sale ID (starts with SALE- or contains numbers)
+        sale = Sale.objects.filter(
+            Q(sale_id__icontains=query) |
+            Q(etr_receipt_number__icontains=query)
+        ).first()
         
-        results.append({
-            'type': 'product',
-            'id': product.id,
-            'code': product.product_code,
-            'name': product.display_name,
-            'sku': product.sku_value or '',
-            'price': float(product.selling_price),
-            'sale_id': latest_sale.sale.sale_id if latest_sale else None,
-            'sale_date': latest_sale.sale.sale_date.strftime('%Y-%m-%d') if latest_sale else None,
-            'customer': latest_sale.sale.buyer_name if latest_sale and latest_sale.sale.buyer_name else 'Unknown',
-        })
+        if sale:
+            logger.info(f"✅ Found sale: {sale.sale_id}")
+            
+            # Get all products from this sale
+            sale_items = SaleItem.objects.filter(sale=sale).select_related('product')
+            
+            for item in sale_items:
+                if item.product:
+                    results.append({
+                        'type': 'product_in_sale',
+                        'id': item.product.id,
+                        'sale_item_id': item.id,
+                        'code': item.product.product_code,
+                        'name': item.product.display_name,
+                        'sku': item.product.sku_value or '',
+                        'price': float(item.unit_price),
+                        'sale_id': sale.sale_id,
+                        'sale_date': sale.sale_date.strftime('%Y-%m-%d'),
+                        'sale_time': sale.sale_date.strftime('%H:%M:%S'),
+                        'customer': sale.buyer_name or 'Walk-in Customer',
+                        'etr_number': sale.etr_receipt_number or '',
+                        'quantity_sold': item.quantity,
+                    })
+    except Exception as e:
+        logger.error(f"Error searching by Sale ID: {str(e)}")
     
-    for sale in sales:
-        results.append({
-            'type': 'sale',
-            'id': sale.id,
-            'sale_id': sale.sale_id,
-            'etr': sale.etr_receipt_number,
-            'date': sale.sale_date.strftime('%Y-%m-%d'),
-            'amount': float(sale.total_amount),
-            'customer': sale.buyer_name or 'Unknown',
-            'items': list(sale.items.values('product_code', 'product_name', 'sku_value')),
-        })
+    # ============================================
+    # CASE 2: Search by Product Code (shows all sales where product was sold)
+    # ============================================
+    if len(results) == 0:
+        try:
+            # First find the product by code or SKU
+            products = Product.objects.filter(
+                Q(product_code__icontains=query) |
+                Q(name__icontains=query) |
+                Q(sku_value__icontains=query)
+            )[:5]
+            
+            for product in products:
+                # Find all sales where this product was sold
+                sale_items = SaleItem.objects.filter(
+                    product=product,
+                    sale__is_reversed=False
+                ).select_related('sale').order_by('-sale__sale_date')
+                
+                for item in sale_items:
+                    results.append({
+                        'type': 'sale_with_product',
+                        'product_id': product.id,
+                        'sale_item_id': item.id,
+                        'product_code': product.product_code,
+                        'product_name': product.display_name,
+                        'product_sku': product.sku_value or '',
+                        'product_price': float(item.unit_price),
+                        'sale_id': item.sale.sale_id,
+                        'sale_date': item.sale.sale_date.strftime('%Y-%m-%d'),
+                        'sale_time': item.sale.sale_date.strftime('%H:%M:%S'),
+                        'customer': item.sale.buyer_name or 'Walk-in Customer',
+                        'etr_number': item.sale.etr_receipt_number or '',
+                        'quantity_sold': item.quantity,
+                    })
+        except Exception as e:
+            logger.error(f"Error searching by product: {str(e)}")
+    
+    logger.info(f"🔍 Search returned {len(results)} results")
     
     return JsonResponse({'results': results})
 
