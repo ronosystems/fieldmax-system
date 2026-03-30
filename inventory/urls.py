@@ -55,6 +55,7 @@ urlpatterns = [
     path('stock/', views.stock_movements, name='stock_movements'),
     path('stock/add/<int:product_id>/', views.stock_entry_add, name='stock_entry_add'),
     path('stock/<int:pk>/reverse/', views.reverse_entry, name='reverse_entry'),
+    path('stock-movements/<int:pk>/', views.stock_movement_detail, name='stock_movement_detail'),
     
     
     # Stock Alerts

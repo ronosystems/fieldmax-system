@@ -1,0 +1,351 @@
+{% extends 'inventory/staff_base.html' %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}Stock Movement Details{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="mb-1">
+                <i class="fas fa-exchange-alt text-info me-2"></i>
+                Stock Movement Details
+            </h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{% url 'inventory:dashboard' %}">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{% url 'inventory:stock_movements' %}">Stock Movements</a></li>
+                    <li class="breadcrumb-item active">Entry #{{ entry.id }}</li>
+                </ol>
+            </nav>
+        </div>
+        <div>
+            <a href="{% url 'inventory:stock_movements' %}" class="btn btn-outline-secondary me-2">
+                <i class="fas fa-arrow-left me-2"></i>Back to Movements
+            </a>
+            <a href="{% url 'inventory:product_detail' entry.product.id %}" class="btn btn-outline-primary">
+                <i class="fas fa-box me-2"></i>View Product
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Main Details -->
+        <div class="col-lg-8">
+            <div class="card mb-4">
+                <div class="card-header {% if entry.entry_type == 'purchase' %}bg-success{% elif entry.entry_type == 'sale' %}bg-danger{% else %}bg-info{% endif %} text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-{% if entry.entry_type == 'purchase' %}plus-circle{% elif entry.entry_type == 'sale' %}minus-circle{% else %}undo{% endif %} me-2"></i>
+                        {{ entry.get_entry_type_display|title }} Entry
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="info-group mb-3">
+                                <label class="text-muted small text-uppercase">Product</label>
+                                <div class="h5 mb-0">{{ entry.product.display_name }}</div>
+                                <small class="text-muted">Code: {{ entry.product.product_code }}</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="info-group mb-3">
+                                <label class="text-muted small text-uppercase">Category</label>
+                                <div>{{ entry.product.category.name|default:"Uncategorized" }}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="info-group mb-3">
+                                <label class="text-muted small text-uppercase">Quantity</label>
+                                <div class="h2 {% if entry.quantity > 0 %}text-success{% else %}text-danger{% endif %} mb-0">
+                                    {% if entry.quantity > 0 %}+{% endif %}{{ entry.quantity|floatformat:0 }}
+                                </div>
+                                <small class="text-muted">units</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="info-group mb-3">
+                                <label class="text-muted small text-uppercase">Unit Price</label>
+                                <div class="h2 mb-0">KES {{ entry.unit_price|floatformat:2|intcomma }}</div>
+                                <small class="text-muted">per unit</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="info-group mb-3">
+                                <label class="text-muted small text-uppercase">Total Amount</label>
+                                <div class="h2 mb-0">KES {{ entry.total_amount|floatformat:2|intcomma }}</div>
+                                <small class="text-muted">transaction value</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="info-group mb-3">
+                                <label class="text-muted small text-uppercase">Reference ID</label>
+                                <div><code>{{ entry.reference_id|default:"—" }}</code></div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="info-group mb-3">
+                                <label class="text-muted small text-uppercase">Created By</label>
+                                <div>
+                                    <i class="fas fa-user me-1"></i>
+                                    {{ entry.created_by.get_full_name|default:entry.created_by.username|default:"System" }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="info-group mb-3">
+                                <label class="text-muted small text-uppercase">Date & Time</label>
+                                <div>{{ entry.created_at|date:"F j, Y H:i:s" }}</div>
+                                <small class="text-muted">{{ entry.created_at|timesince }} ago</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="info-group mb-3">
+                                <label class="text-muted small text-uppercase">Entry Type</label>
+                                <div>
+                                    <span class="badge {% if entry.entry_type == 'purchase' %}bg-success{% elif entry.entry_type == 'sale' %}bg-danger{% else %}bg-info{% endif %} px-3 py-2">
+                                        {{ entry.get_entry_type_display }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {% if entry.notes %}
+                    <div class="alert alert-secondary mt-3">
+                        <i class="fas fa-sticky-note me-2"></i>
+                        <strong>Notes:</strong> {{ entry.notes }}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <!-- Product Status Card -->
+            <div class="card mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">
+                        <i class="fas fa-boxes me-2"></i>
+                        Current Product Status
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="text-center mb-3">
+                        <div class="display-4 {% if entry.product.quantity == 0 %}text-danger{% elif entry.product.quantity <= entry.product.reorder_level %}text-warning{% else %}text-success{% endif %}">
+                            {{ entry.product.quantity }}
+                        </div>
+                        <small class="text-muted">Current Stock Level</small>
+                    </div>
+                    
+                    <div class="progress mb-3" style="height: 10px;">
+                        <div class="progress-bar {% if entry.product.quantity == 0 %}bg-danger{% elif entry.product.quantity <= entry.product.reorder_level %}bg-warning{% else %}bg-success{% endif %}" 
+                             style="width: {% widthratio entry.product.quantity entry.product.reorder_level 100 %}%">
+                        </div>
+                    </div>
+                    
+                    <ul class="list-unstyled small">
+                        <li class="mb-2">
+                            <i class="fas fa-chart-line text-primary me-2"></i>
+                            <strong>Reorder Level:</strong> {{ entry.product.reorder_level|default:"Not Set" }}
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-tag text-success me-2"></i>
+                            <strong>Selling Price:</strong> KES {{ entry.product.selling_price|floatformat:2|intcomma }}
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-shopping-cart text-danger me-2"></i>
+                            <strong>Buying Price:</strong> KES {{ entry.product.buying_price|floatformat:2|intcomma }}
+                        </li>
+                        <li>
+                            <i class="fas fa-chart-pie text-info me-2"></i>
+                            <strong>Profit Margin:</strong> KES {{ entry.product.profit_margin|floatformat:2 }}
+                        </li>
+                    </ul>
+                    
+                    <div class="d-grid gap-2 mt-3">
+                        <a href="{% url 'inventory:product_detail' entry.product.id %}" class="btn btn-outline-primary">
+                            <i class="fas fa-eye me-2"></i>View Full Product Details
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Related Movements -->
+            {% if related_movements %}
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">
+                        <i class="fas fa-history me-2"></i>
+                        Recent Movements
+                    </h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush">
+                        {% for movement in related_movements %}
+                        <a href="{% url 'inventory:stock_movement_detail' movement.id %}" class="list-group-item list-group-item-action">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <i class="fas fa-{% if movement.entry_type == 'purchase' %}plus-circle text-success{% elif movement.entry_type == 'sale' %}minus-circle text-danger{% else %}undo text-info{% endif %} me-2"></i>
+                                    {{ movement.get_entry_type_display|title }}
+                                </div>
+                                <span class="badge {% if movement.quantity > 0 %}bg-success{% else %}bg-danger{% endif %}">
+                                    {% if movement.quantity > 0 %}+{% endif %}{{ movement.quantity|floatformat:0 }}
+                                </span>
+                            </div>
+                            <small class="text-muted">{{ movement.created_at|timesince }} ago</small>
+                            <br>
+                            <small class="text-muted">KES {{ movement.total_amount|floatformat:2|intcomma }}</small>
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <div>
+                            <a href="{% url 'inventory:stock_movements' %}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left me-2"></i>Back to Movements
+                            </a>
+                            <a href="{% url 'inventory:product_detail' entry.product.id %}" class="btn btn-outline-info ms-2">
+                                <i class="fas fa-box me-2"></i>View Product
+                            </a>
+                        </div>
+                        {% if entry.entry_type != 'reversal' %}
+                        <button class="btn btn-outline-danger" onclick="reverseEntry({{ entry.id }})">
+                            <i class="fas fa-undo-alt me-2"></i>Reverse Entry
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Reverse Entry Modal -->
+<div class="modal fade" id="reverseModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-exclamation-triangle me-2"></i>Reverse Stock Entry
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{% url 'inventory:reverse_entry' entry.id %}" id="reverseForm">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <p>Are you sure you want to reverse this stock entry?</p>
+                    <div class="alert alert-warning">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Warning:</strong> This will create a reversal entry and update the product quantity.
+                        <ul class="mt-2 mb-0">
+                            <li>Current stock: <strong>{{ entry.product.quantity }}</strong> units</li>
+                            <li>Entry quantity: <strong>{% if entry.quantity > 0 %}+{% endif %}{{ entry.quantity|floatformat:0 }}</strong> units</li>
+                            <li>New stock after reversal: <strong>{{ entry.product.quantity|add:entry.quantity|add:0 }}</strong> units</li>
+                        </ul>
+                    </div>
+                    <div class="mb-3">
+                        <label for="reverse_reason" class="form-label">Reason for reversal:</label>
+                        <textarea class="form-control" id="reverse_reason" name="reason" rows="2" required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger">Reverse Entry</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+    .info-group {
+        background: #f8f9fa;
+        padding: 12px;
+        border-radius: 10px;
+    }
+    
+    .info-group label {
+        letter-spacing: 0.5px;
+        font-weight: 600;
+    }
+    
+    .progress {
+        background-color: #e9ecef;
+        border-radius: 10px;
+    }
+    
+    .badge {
+        font-size: 0.85rem;
+        padding: 0.4rem 0.8rem;
+    }
+    
+    .card {
+        border: none;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+    
+    .card-header {
+        border-bottom: 1px solid #e9ecef;
+        font-weight: 600;
+    }
+    
+    .list-group-item {
+        border-left: none;
+        border-right: none;
+    }
+    
+    .list-group-item:first-child {
+        border-top: none;
+    }
+    
+    .list-group-item:last-child {
+        border-bottom: none;
+    }
+</style>
+
+<script>
+function reverseEntry(entryId) {
+    var modal = new bootstrap.Modal(document.getElementById('reverseModal'));
+    modal.show();
+}
+
+// Handle enter key in textarea
+document.addEventListener('DOMContentLoaded', function() {
+    const reasonTextarea = document.getElementById('reverse_reason');
+    if (reasonTextarea) {
+        reasonTextarea.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && e.ctrlKey) {
+                document.getElementById('reverseForm').submit();
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

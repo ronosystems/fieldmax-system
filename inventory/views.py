@@ -1672,6 +1672,32 @@ def stock_movements(request):
 
 
 
+
+@login_required
+def stock_movement_detail(request, pk):
+    """View details of a specific stock movement"""
+    entry = get_object_or_404(StockEntry.objects.select_related('product', 'created_by'), pk=pk)
+    
+    # Get related movements for the same product
+    related_movements = StockEntry.objects.filter(
+        product=entry.product
+    ).exclude(pk=pk).order_by('-created_at')[:5]
+    
+    context = {
+        'entry': entry,
+        'related_movements': related_movements,
+    }
+    return render(request, 'inventory/stock/movement_detail.html', context)
+
+
+
+
+
+
+
+
+
+
 @login_required
 def stock_entry_add(request, product_id):
     """Add stock entry for a product"""
