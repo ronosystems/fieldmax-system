@@ -1819,7 +1819,7 @@ def stock_alerts(request):
     # Get page size from request, default to 20
     page_size = request.GET.get('page_size', '20')
     
-    # Get active alerts queryset
+    # Get active alerts queryset (stock alerts only)
     active_alerts_qs = StockAlert.objects.select_related(
         'product', 
         'product__category',
@@ -1833,7 +1833,31 @@ def stock_alerts(request):
         'product__name'
     )
     
-    # Get dismissed alerts (last 50) - no pagination needed for this
+    # ============================================
+    # ADD DAMAGED RETURNS FROM RETURN REQUEST
+    # ============================================
+    from .models import ReturnRequest
+    from django.db.models import Sum
+    
+    # Get damaged returns (status = 'damaged_loss')
+    damaged_returns = ReturnRequest.objects.filter(
+        status='damaged_loss'
+    ).select_related('product', 'requested_by', 'approved_by').order_by('-processed_at')
+    
+    # Count damaged returns
+    damaged_returns_count = damaged_returns.count()
+    
+    # Calculate total value of damaged returns
+    damaged_returns_value = damaged_returns.aggregate(
+        total=Sum('refund_amount')
+    )['total'] or Decimal('0.00')
+    
+    # Calculate total loss amount
+    damaged_returns_loss = damaged_returns.aggregate(
+        total=Sum('loss_amount')
+    )['total'] or Decimal('0.00')
+    
+    # Get dismissed alerts (last 50)
     dismissed_alerts = StockAlert.objects.select_related(
         'product',
         'product__category',
@@ -1847,8 +1871,8 @@ def stock_alerts(request):
         'needs_reorder': active_alerts_qs.filter(alert_type='needs_reorder').count(),
         'lowstock': active_alerts_qs.filter(alert_type='lowstock').count(),
         'outofstock': active_alerts_qs.filter(alert_type='outofstock').count(),
-        'damaged': active_alerts_qs.filter(alert_type='damaged').count(),
-        'total': active_alerts_qs.count()
+        'damaged': damaged_returns_count,  # Now counts actual damaged returns!
+        'total': active_alerts_qs.count() + damaged_returns_count
     }
     
     # Count dismissed
@@ -1863,8 +1887,14 @@ def stock_alerts(request):
     page_number = request.GET.get('page', 1)
     page_obj = paginator.get_page(page_number)
     
+    # For the damaged tab, we need to show damaged returns, not stock alerts
+    # Pass damaged_returns separately to the template
     context = {
-        'alerts': page_obj,  # This is now a paginated page object
+        'alerts': page_obj,  # Stock alerts only
+        'damaged_returns': damaged_returns,  # Add damaged returns
+        'damaged_returns_count': damaged_returns_count,
+        'damaged_returns_value': damaged_returns_value,
+        'damaged_returns_loss': damaged_returns_loss,
         'page_obj': page_obj,
         'page_size': page_size,
         'dismissed_alerts': dismissed_alerts,
