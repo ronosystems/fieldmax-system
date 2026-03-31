@@ -295,7 +295,7 @@ class Sale(models.Model):
             )
 
     # ============================================
-    # FIXED REVERSE SALE METHOD
+    # REVERSE SALE METHOD
     # ============================================
     def reverse_sale(self, reversed_by=None, reason=''):
         """
@@ -321,16 +321,13 @@ class Sale(models.Model):
                     logger.info(f"Reversing item: {product.product_code}, Status: {old_status}, Quantity: {old_quantity}")
                     
                     # ============================================
-                    # CRITICAL FIX: Properly restore product
+                    # PROPERLY RESTORE PRODUCT
                     # ============================================
                     if product.category.is_single_item:
-                        # Single item: Restore to available with quantity 1
+                        # Single item: Restore to available (status only, no quantity)
                         product.status = 'available'
-                        product.quantity = 1
-                        # Reset any sold-related flags
-                        if hasattr(product, 'is_sold'):
-                            product.is_sold = False
-                        logger.info(f"Single item {product.product_code}: Status changed to 'available', Quantity set to 1")
+                        # Quantity remains 0 (not used for single items)
+                        logger.info(f"Single item {product.product_code}: Status changed to 'available'")
                     else:
                         # Bulk item: Add quantity back
                         product.quantity += item.quantity
@@ -486,7 +483,7 @@ class SaleItem(models.Model):
         self.sale.recalculate_totals()
 
     # ============================================
-    # FIXED CAN_BE_SOLD METHOD
+    # CAN BE SOLD METHOD
     # ============================================
     def can_be_sold(self) -> tuple:
         """
@@ -500,11 +497,9 @@ class SaleItem(models.Model):
             product.refresh_from_db()
             
             if product.category.is_single_item:
-                # Check if already sold
+                # Single items: just check status
                 if product.status == 'sold':
                     return False, f"Item {product.display_name} has already been sold"
-                if product.quantity <= 0:
-                    return False, f"Item {product.display_name} is out of stock"
                 if self.quantity != 1:
                     return False, "Single items must be sold one at a time"
                 
@@ -518,7 +513,7 @@ class SaleItem(models.Model):
                 if active_sales.exists():
                     return False, f"Item {product.display_name} has already been sold in another transaction"
             else:
-                # Bulk items check
+                # Bulk items: check quantity
                 if product.quantity < self.quantity:
                     return False, f"Insufficient stock. Available: {product.quantity}, Requested: {self.quantity}"
             
@@ -531,7 +526,7 @@ class SaleItem(models.Model):
     def process_sale(self):
         """
         Process this item's sale (deduct stock)
-        - For single items: Mark as SOLD and set quantity to 0
+        - For single items: Mark as SOLD (no quantity change)
         - For bulk items: Reduce quantity
         - Create stock entry for the sale
         """
@@ -539,48 +534,38 @@ class SaleItem(models.Model):
             # Lock the product row to prevent race conditions
             product = Product.objects.select_for_update().get(pk=self.product.pk)
             
-            # Check if product is already sold (for single items)
-            if product.category.is_single_item:
-                if product.status == 'sold' or product.quantity <= 0:
-                    raise ValueError(
-                        f"Cannot sell {product.display_name} - "
-                        f"This item has already been sold"
-                    )
-                if self.quantity != 1:
-                    raise ValueError(
-                        f"Single items must be sold with quantity 1. "
-                        f"Requested: {self.quantity}"
-                    )
-            else:
-                # Bulk items check
-                if product.quantity < self.quantity:
-                    raise ValueError(
-                        f"Insufficient stock for {product.display_name}. "
-                        f"Available: {product.quantity}, Requested: {self.quantity}"
-                    )
-            
             # Store old values for logging
             old_quantity = product.quantity
             old_status = product.status
             
             # Update product based on type
             if product.category.is_single_item:
-                # Single item: mark as sold
+                # Single item: just mark as sold - NO QUANTITY CHANGE
+                if product.status == 'sold':
+                    raise ValueError(
+                        f"Cannot sell {product.display_name} - "
+                        f"This item has already been sold"
+                    )
                 product.status = 'sold'
-                product.quantity = 0
+                # Quantity remains 0 (not used for single items)
                 log_type = "SINGLE ITEM"
             else:
                 # Bulk item: reduce quantity
+                if product.quantity < self.quantity:
+                    raise ValueError(
+                        f"Insufficient stock for {product.display_name}. "
+                        f"Available: {product.quantity}, Requested: {self.quantity}"
+                    )
                 product.quantity -= self.quantity
                 log_type = "BULK ITEM"
             
-            # Save product (will trigger _update_status for bulk items)
+            # Save product
             product.save()
             
             # Create stock entry for the sale
             stock_entry = StockEntry.objects.create(
                 product=product,
-                quantity=-self.quantity,  # Negative for stock OUT
+                quantity=-self.quantity if not product.category.is_single_item else -1,
                 entry_type='sale',
                 unit_price=self.unit_price,
                 total_amount=self.total_price,
@@ -597,8 +582,6 @@ class SaleItem(models.Model):
                 f"Product: {product.product_code} | "
                 f"Name: {product.display_name} | "
                 f"Quantity: {self.quantity} | "
-                f"Old Stock: {old_quantity} | "
-                f"New Stock: {product.quantity} | "
                 f"Old Status: {old_status} | "
                 f"New Status: {product.status} | "
                 f"Unit Price: KSH {self.unit_price} | "
@@ -684,7 +667,7 @@ class SaleReversal(models.Model):
     def process_reversal(self):
         """
         Reverse all items in the sale
-        - Single items: Mark as 'available' with quantity 1
+        - Single items: Mark as 'available' (no quantity)
         - Bulk items: Add quantity back to stock
         - Create stock entries for each reversed item
         - Mark the original sale as reversed
@@ -720,9 +703,9 @@ class SaleReversal(models.Model):
                 # UPDATE PRODUCT BASED ON TYPE
                 # -------------------------
                 if product.category.is_single_item:
-                    # Single item: restore to available with quantity 1
+                    # Single item: restore to available (status only)
                     product.status = 'available'
-                    product.quantity = 1
+                    # Quantity remains 0 (not used)
                     reversal_type = "SINGLE ITEM"
                 else:
                     # Bulk item: add quantity back

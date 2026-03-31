@@ -443,13 +443,19 @@ class Product(models.Model):
             return
             
         # ============================================
-        # SINGLE ITEMS - Just mark as available or outofstock
+        # SINGLE ITEMS - Just mark as available or sold
         # ============================================
         if self.category.is_single_item:
-            if self.quantity > 0:
+            if self.status == 'sold':
+                # Keep as sold, quantity should be 0
+                if self.quantity != 0:
+                    self.quantity = 0
+            else:
+                # Available single items should have quantity 1
                 self.status = 'available'
-            elif self.quantity == 0:
-                self.status = 'outofstock'
+                self.quantity = 1
+            return
+
 
         # ============================================
         # BULK ITEMS - Stock level based status
