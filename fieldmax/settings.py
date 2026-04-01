@@ -80,7 +80,7 @@ INSTALLED_APPS = [
     'website',
     'inventory',
     'sales',
-    'store',
+    'finance',
     'staff',
     'credit',
     'profiles',

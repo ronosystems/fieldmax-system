@@ -1,0 +1,329 @@
+{% extends 'finance/base.html' %}
+{% load static %}
+
+{% block title %}Create Salary - FieldMax Finance{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-money-bill-wave me-2"></i>Create Staff Salary</h2>
+    <div>
+        <a href="{% url 'finance:salary_list' %}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left me-2"></i>Back to List
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-user-plus me-2"></i>Salary Information
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" id="salaryForm">
+                    {% csrf_token %}
+                    
+                    <!-- Staff Selection -->
+                    <div class="mb-3">
+                        <label for="staff" class="form-label required">Staff Member *</label>
+                        <select name="staff" id="staff" class="form-select" required>
+                            <option value="">Select Staff Member</option>
+                            {% for staff in staff_list %}
+                            <option value="{{ staff.id }}" data-base-salary="{{ staff.staff_profile.base_salary|default:0 }}">
+                                {{ staff.get_full_name|default:staff.username }}
+                                {% if staff.staff_profile.position %} - {{ staff.staff_profile.position }}{% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <!-- Month and Year -->
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="month" class="form-label required">Month *</label>
+                            <select name="month" id="month" class="form-select" required>
+                                <option value="">Select Month</option>
+                                {% for month_value, month_name in months %}
+                                    <option value="{{ month_value }}" {% if month_value == current_month %}selected{% endif %}>
+                                        {{ month_name }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="year" class="form-label required">Year *</label>
+                            <select name="year" id="year" class="form-select" required>
+                                <option value="">Select Year</option>
+                                {% for year in years %}
+                                <option value="{{ year }}" {% if year == current_year %}selected{% endif %}>
+                                    {{ year }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <!-- Base Salary -->
+                    <div class="mb-3">
+                        <label for="base_salary" class="form-label required">Base Salary (KES) *</label>
+                        <input type="number" 
+                               class="form-control" 
+                               id="base_salary" 
+                               name="base_salary" 
+                               step="0.01" 
+                               min="0" 
+                               required>
+                    </div>
+                    
+                    <!-- Bonus Section -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-success text-white">
+                            <h6 class="mb-0">Bonus</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" id="has_bonus" name="has_bonus">
+                                <label class="form-check-label" for="has_bonus">
+                                    Add Bonus
+                                </label>
+                            </div>
+                            
+                            <div id="bonus_section" style="display: none;">
+                                <div class="mb-2">
+                                    <label for="bonus_amount" class="form-label">Bonus Amount (KES)</label>
+                                    <input type="number" 
+                                           class="form-control" 
+                                           id="bonus_amount" 
+                                           name="bonus_amount" 
+                                           step="0.01" 
+                                           min="0" 
+                                           value="0">
+                                </div>
+                                <div class="mb-2">
+                                    <label for="bonus_reason" class="form-label">Bonus Reason</label>
+                                    <textarea name="bonus_reason" id="bonus_reason" class="form-control" rows="2"></textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Deductions Section -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-danger text-white">
+                            <h6 class="mb-0">Deductions</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" id="has_deductions" name="has_deductions">
+                                <label class="form-check-label" for="has_deductions">
+                                    Apply Deductions
+                                </label>
+                            </div>
+                            
+                            <div id="deductions_section" style="display: none;">
+                                <div class="mb-2">
+                                    <label for="deduction_type" class="form-label">Deduction Type</label>
+                                    <select name="deduction_type" id="deduction_type" class="form-select">
+                                        <option value="loss">Loss/Damage</option>
+                                        <option value="advance">Salary Advance</option>
+                                        <option value="loan">Staff Loan</option>
+                                        <option value="absenteeism">Absenteeism</option>
+                                        <option value="late">Late Penalty</option>
+                                        <option value="other">Other</option>
+                                    </select>
+                                </div>
+                                <div class="mb-2">
+                                    <label for="deduction_amount" class="form-label">Deduction Amount (KES)</label>
+                                    <input type="number" 
+                                           class="form-control" 
+                                           id="deduction_amount" 
+                                           name="deduction_amount" 
+                                           step="0.01" 
+                                           min="0" 
+                                           value="0">
+                                </div>
+                                <div class="mb-2">
+                                    <label for="deduction_reason" class="form-label">Deduction Reason</label>
+                                    <textarea name="deduction_reason" id="deduction_reason" class="form-control" rows="2"></textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Summary -->
+                    <div class="card mb-3 bg-light">
+                        <div class="card-body">
+                            <h6 class="mb-3">Salary Summary</h6>
+                            <div class="row">
+                                <div class="col-6">Base Salary:</div>
+                                <div class="col-6 text-end" id="summary_base">KES 0</div>
+                            </div>
+                            <div class="row text-success">
+                                <div class="col-6">Bonus:</div>
+                                <div class="col-6 text-end" id="summary_bonus">KES 0</div>
+                            </div>
+                            <div class="row text-danger">
+                                <div class="col-6">Deductions:</div>
+                                <div class="col-6 text-end" id="summary_deductions">KES 0</div>
+                            </div>
+                            <hr>
+                            <div class="row fw-bold">
+                                <div class="col-6">Total:</div>
+                                <div class="col-6 text-end" id="summary_total">KES 0</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Notes -->
+                    <div class="mb-3">
+                        <label for="notes" class="form-label">Additional Notes</label>
+                        <textarea name="notes" id="notes" class="form-control" rows="2"></textarea>
+                    </div>
+                    
+                    <!-- Submit Buttons -->
+                    <div class="d-flex justify-content-end gap-2">
+                        <a href="{% url 'finance:salary_list' %}" class="btn btn-secondary">Cancel</a>
+                        <button type="submit" class="btn btn-primary">Create Salary</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Simple JavaScript to toggle bonus and deduction sections
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Page loaded');
+    
+    // Bonus toggle
+    const hasBonusCheckbox = document.getElementById('has_bonus');
+    const bonusSection = document.getElementById('bonus_section');
+    const bonusAmount = document.getElementById('bonus_amount');
+    const bonusReason = document.getElementById('bonus_reason');
+    
+    if (hasBonusCheckbox) {
+        console.log('Bonus checkbox found');
+        hasBonusCheckbox.addEventListener('change', function() {
+            console.log('Bonus checkbox changed:', this.checked);
+            if (this.checked) {
+                bonusSection.style.display = 'block';
+                if (bonusAmount) bonusAmount.disabled = false;
+                if (bonusReason) bonusReason.disabled = false;
+            } else {
+                bonusSection.style.display = 'none';
+                if (bonusAmount) {
+                    bonusAmount.value = 0;
+                    bonusAmount.disabled = true;
+                }
+                if (bonusReason) {
+                    bonusReason.value = '';
+                    bonusReason.disabled = true;
+                }
+            }
+            updateSummary();
+        });
+        
+        // Initialize - hide by default
+        bonusSection.style.display = 'none';
+        if (bonusAmount) bonusAmount.disabled = true;
+        if (bonusReason) bonusReason.disabled = true;
+    }
+    
+    // Deductions toggle
+    const hasDeductionsCheckbox = document.getElementById('has_deductions');
+    const deductionsSection = document.getElementById('deductions_section');
+    const deductionAmount = document.getElementById('deduction_amount');
+    const deductionType = document.getElementById('deduction_type');
+    const deductionReason = document.getElementById('deduction_reason');
+    
+    if (hasDeductionsCheckbox) {
+        console.log('Deductions checkbox found');
+        hasDeductionsCheckbox.addEventListener('change', function() {
+            console.log('Deductions checkbox changed:', this.checked);
+            if (this.checked) {
+                deductionsSection.style.display = 'block';
+                if (deductionAmount) deductionAmount.disabled = false;
+                if (deductionType) deductionType.disabled = false;
+                if (deductionReason) deductionReason.disabled = false;
+            } else {
+                deductionsSection.style.display = 'none';
+                if (deductionAmount) {
+                    deductionAmount.value = 0;
+                    deductionAmount.disabled = true;
+                }
+                if (deductionType) deductionType.disabled = true;
+                if (deductionReason) {
+                    deductionReason.value = '';
+                    deductionReason.disabled = true;
+                }
+            }
+            updateSummary();
+        });
+        
+        // Initialize - hide by default
+        deductionsSection.style.display = 'none';
+        if (deductionAmount) deductionAmount.disabled = true;
+        if (deductionType) deductionType.disabled = true;
+        if (deductionReason) deductionReason.disabled = true;
+    }
+    
+    // Staff selection - auto-populate base salary
+    const staffSelect = document.getElementById('staff');
+    const baseSalaryInput = document.getElementById('base_salary');
+    
+    if (staffSelect && baseSalaryInput) {
+        staffSelect.addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            const baseSalary = selectedOption.getAttribute('data-base-salary') || 0;
+            baseSalaryInput.value = baseSalary;
+            updateSummary();
+        });
+    }
+    
+    // Update summary
+    function updateSummary() {
+        const baseSalary = parseFloat(baseSalaryInput?.value) || 0;
+        const bonusAmountValue = (hasBonusCheckbox && hasBonusCheckbox.checked) ? (parseFloat(bonusAmount?.value) || 0) : 0;
+        const deductionAmountValue = (hasDeductionsCheckbox && hasDeductionsCheckbox.checked) ? (parseFloat(deductionAmount?.value) || 0) : 0;
+        const total = baseSalary + bonusAmountValue - deductionAmountValue;
+        
+        document.getElementById('summary_base').innerHTML = `KES ${baseSalary.toLocaleString()}`;
+        document.getElementById('summary_bonus').innerHTML = `KES ${bonusAmountValue.toLocaleString()}`;
+        document.getElementById('summary_deductions').innerHTML = `KES ${deductionAmountValue.toLocaleString()}`;
+        document.getElementById('summary_total').innerHTML = `KES ${total.toLocaleString()}`;
+    }
+    
+    // Listen to amount changes
+    if (bonusAmount) bonusAmount.addEventListener('input', updateSummary);
+    if (deductionAmount) deductionAmount.addEventListener('input', updateSummary);
+    if (baseSalaryInput) baseSalaryInput.addEventListener('input', updateSummary);
+    
+    // Initial update
+    updateSummary();
+});
+</script>
+
+<style>
+    .required:after {
+        content: " *";
+        color: red;
+    }
+    
+    input:disabled, select:disabled, textarea:disabled {
+        background-color: #e9ecef;
+        cursor: not-allowed;
+    }
+    
+    .card {
+        border-radius: 10px;
+        overflow: hidden;
+    }
+    
+    .card-header {
+        border-bottom: none;
+    }
+</style>
+{% endblock %}

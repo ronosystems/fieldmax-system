@@ -255,6 +255,13 @@ class SellerCommission(models.Model):
     """
     Track commissions earned by sellers from credit transactions
     """
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),      # Commission requested, waiting for approval
+        ('approved', 'Approved'),    # Commission approved, ready for payment
+        ('paid', 'Paid'),            # Commission paid to seller
+        ('cancelled', 'Cancelled'),  # Commission cancelled/rejected
+    ]
+    
     seller = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
@@ -275,21 +282,38 @@ class SellerCommission(models.Model):
     
     status = models.CharField(
         max_length=20,
-        choices=[
-            ('pending', 'Pending'),
-            ('paid', 'Paid'),
-            ('cancelled', 'Cancelled'),
-        ],
+        choices=STATUS_CHOICES,
         default='pending'
     )
     
-    paid_date = models.DateTimeField(null=True, blank=True)
+    # Approval tracking
+    approved_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='approved_commissions'
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+    
+    # Payment tracking
     paid_by = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='commission_payouts_made'
+        related_name='paid_commissions'
+    )
+    paid_date = models.DateTimeField(null=True, blank=True)
+    payment_reference = models.CharField(max_length=100, blank=True)
+    payment_method = models.CharField(
+        max_length=20, 
+        blank=True,
+        choices=[
+            ('cash', 'Cash'),
+            ('bank', 'Bank Transfer'),
+            ('mpesa', 'M-Pesa'),
+        ]
     )
     
     notes = models.TextField(blank=True)
@@ -307,27 +331,50 @@ class SellerCommission(models.Model):
     def __str__(self):
         return f"{self.seller.username} - KSH {self.amount} - {self.status}"
     
-    def mark_as_paid(self, paid_by=None, notes=""):
-        """Mark commission as paid"""
-        self.status = 'paid'
-        self.paid_date = timezone.now()
-        self.paid_by = paid_by
+    def mark_as_approved(self, approved_by=None, notes=""):
+        """Mark commission as approved"""
+        self.status = 'approved'
+        self.approved_by = approved_by
+        self.approved_at = timezone.now()
         if notes:
-            self.notes = notes
+            self.notes = f"{self.notes}\nApproval notes: {notes}" if self.notes else f"Approval notes: {notes}"
         self.save()
         
-        # Also update the transaction
+        # Update the transaction
+        self.transaction.commission_status = 'approved'
+        self.transaction.save()
+        
+        # Log
+        CreditTransactionLog.objects.create(
+            transaction=self.transaction,
+            action='commission_approved',
+            performed_by=approved_by,
+            notes=f"Commission of KSH {self.amount} approved. {notes}"
+        )
+    
+    def mark_as_paid(self, paid_by=None, notes="", payment_reference="", payment_method=""):
+        """Mark commission as paid"""
+        self.status = 'paid'
+        self.paid_by = paid_by
+        self.paid_date = timezone.now()
+        self.payment_reference = payment_reference
+        self.payment_method = payment_method
+        if notes:
+            self.notes = f"{self.notes}\nPayment notes: {notes}" if self.notes else f"Payment notes: {notes}"
+        self.save()
+        
+        # Update transaction
         self.transaction.commission_status = 'paid'
         self.transaction.commission_paid_date = self.paid_date
         self.transaction.commission_paid_by = paid_by
         self.transaction.save()
         
-        # Log commission payment
+        # Log
         CreditTransactionLog.objects.create(
             transaction=self.transaction,
             action='commission_paid',
             performed_by=paid_by,
-            notes=f"Commission of KSH {self.amount} paid to seller. {notes}"
+            notes=f"Commission of KSH {self.amount} paid. Ref: {payment_reference}. {notes}"
         )
 
 
@@ -595,6 +642,27 @@ class CreditTransaction(models.Model):
     # Metadata
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+
+    # Link to finance accounts
+    finance_transaction_id = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="Link to FinancialTransaction in finance app"
+    )
+    
+    finance_account_type = models.CharField(
+        max_length=20,
+        choices=[
+            ('cash', 'Cash Account'),
+            ('bank', 'Bank Account'),
+            ('credit', 'Credit Account'),
+        ],
+        blank=True,
+        null=True,
+        help_text="Which finance account this payment was recorded in"
+    )
     
     class Meta:
         ordering = ['-transaction_date']

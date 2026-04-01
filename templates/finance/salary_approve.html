@@ -1,0 +1,70 @@
+{% extends 'finance/base.html' %}
+{% load static %}
+
+{% block title %}Approve Salary - {{ staff_name }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-check-circle me-2"></i>Approve Salary</h2>
+    <div>
+        <a href="{% url 'finance:salary_approve_list' %}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left me-2"></i>Back to List
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-6 mx-auto">
+        <div class="card">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0">Confirm Salary Approval</h5>
+            </div>
+            <div class="card-body">
+                <!-- Salary Summary -->
+                <div class="alert alert-info mb-4">
+                    <div class="text-center">
+                        <h4 class="mb-2">{{ staff_name }}</h4>
+                        <p class="mb-2">{{ period }}</p>
+                        <hr>
+                        <h3 class="text-primary mb-0">KES {{ total_amount|floatformat:2 }}</h3>
+                        <small class="text-muted">Total Amount</small>
+                    </div>
+                </div>
+                
+                <!-- Approval Form - Make sure action is correct -->
+                <form method="POST" action="{% url 'finance:salary_approve' salary.id %}" id="approveForm">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label for="notes" class="form-label">Approval Notes (Optional)</label>
+                        <textarea name="notes" id="notes" class="form-control" rows="2" 
+                                  placeholder="Add notes about this approval..."></textarea>
+                    </div>
+                    
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Approving this salary will mark it as ready for payment.
+                    </div>
+                    
+                    <div class="d-flex gap-2">
+                        <a href="{% url 'finance:salary_approve_list' %}" class="btn btn-secondary w-50">
+                            Cancel
+                        </a>
+                        <button type="submit" class="btn btn-warning w-50" id="approveBtn">
+                            <i class="fas fa-check-circle me-2"></i>Approve
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Remove any JavaScript that might prevent submission
+document.getElementById('approveBtn').addEventListener('click', function(e) {
+    console.log('Approve button clicked - form will submit');
+    // Don't prevent default, let the form submit
+});
+</script>
+{% endblock %}

@@ -1,0 +1,357 @@
+{% extends 'finance/base.html' %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}Financial Transactions - FieldMax Finance{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-exchange-alt me-2"></i>Financial Transactions</h2>
+    <div>
+        <a href="{% url 'finance:salary_list' %}" class="btn btn-outline-primary me-2">
+            <i class="fas fa-money-bill-wave me-2"></i>Salaries
+        </a>
+        <a href="{% url 'finance:commission_pay_list' %}" class="btn btn-outline-success">
+            <i class="fas fa-hand-holding-usd me-2"></i>Commissions
+        </a>
+        <a href="{% url 'finance:add_account_transaction' %}" class="btn btn-primary">
+            <i class="fas fa-plus-circle me-2"></i>Add Transaction
+        </a>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="stat-card" style="border-left: 5px solid #10b981;">
+            <div class="stat-value">KES {{ total_income|floatformat:2|intcomma }}</div>
+            <div class="stat-label">Total Income</div>
+            <i class="fas fa-arrow-up stat-icon" style="color: #10b981;"></i>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card" style="border-left: 5px solid #ef4444;">
+            <div class="stat-value">KES {{ total_expenses|floatformat:2|intcomma }}</div>
+            <div class="stat-label">Total Expenses</div>
+            <i class="fas fa-arrow-down stat-icon" style="color: #ef4444;"></i>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card" style="border-left: 5px solid #f59e0b;">
+            <div class="stat-value">KES {{ net_balance|floatformat:2|intcomma }}</div>
+            <div class="stat-label">Net Balance</div>
+            <i class="fas fa-chart-line stat-icon" style="color: #f59e0b;"></i>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card" style="border-left: 5px solid #8b5cf6;">
+            <div class="stat-value">KES {{ total_profit|floatformat:2|intcomma }}</div>
+            <div class="stat-label">Total Profit (Sales)</div>
+            <i class="fas fa-chart-pie stat-icon" style="color: #8b5cf6;"></i>
+        </div>
+    </div>
+</div>
+
+<!-- Filter Section -->
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <h6 class="mb-0"><i class="fas fa-filter me-2"></i>Filter Transactions</h6>
+    </div>
+    <div class="card-body">
+        <form method="GET" class="row g-3">
+            <div class="col-md-3">
+                <label for="type" class="form-label">Transaction Type</label>
+                <select name="type" id="type" class="form-select">
+                    <option value="">All Types</option>
+                    {% for type_value, type_name in transaction_types %}
+                    <option value="{{ type_value }}" {% if request.GET.type == type_value %}selected{% endif %}>
+                        {{ type_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="account" class="form-label">Account Source</label>
+                <select name="account" id="account" class="form-select">
+                    <option value="">All Accounts</option>
+                    {% for acc_value, acc_name in account_types %}
+                    <option value="{{ acc_value }}" {% if request.GET.account == acc_value %}selected{% endif %}>
+                        {{ acc_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="date_from" class="form-label">Date From</label>
+                <input type="date" name="date_from" id="date_from" class="form-control" value="{{ request.GET.date_from|default:'' }}">
+            </div>
+            <div class="col-md-3">
+                <label for="date_to" class="form-label">Date To</label>
+                <input type="date" name="date_to" id="date_to" class="form-control" value="{{ request.GET.date_to|default:'' }}">
+            </div>
+            <div class="col-md-12">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-search me-2"></i>Apply Filters
+                </button>
+                <a href="{% url 'finance:financial_transactions' %}" class="btn btn-secondary">
+                    <i class="fas fa-undo me-2"></i>Clear Filters
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Transactions Table -->
+<div class="card">
+    <div class="card-header bg-white">
+        <div class="d-flex justify-content-between align-items-center">
+            <h6 class="mb-0">
+                <i class="fas fa-table me-2"></i>All Transactions
+            </h6>
+            <div class="text-muted small">
+                Showing {{ transactions.start_index }} to {{ transactions.end_index }} of {{ transactions.paginator.count }} entries
+            </div>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Date</th>
+                        <th>Account</th>
+                        <th>Type</th>
+                        <th>Description</th>
+                        <th>Amount</th>
+                        <th>Reference</th>
+                        <th>Created By</th>
+                     </thead>
+                <tbody>
+                    {% for transaction in transactions %}
+                    <tr>
+                        <td class="text-nowrap">{{ transaction.transaction_date|date:"Y-m-d H:i" }}</td>
+                        <td>
+                            {% if transaction.source == 'salary' %}
+                                <span class="badge bg-primary">
+                                    <i class="fas fa-money-bill-wave me-1"></i> Salary
+                                </span>
+                            {% elif transaction.source == 'commission' %}
+                                <span class="badge bg-info">
+                                    <i class="fas fa-hand-holding-usd me-1"></i> Commission
+                                </span>
+                            {% elif transaction.source == 'cash_account' %}
+                                <span class="badge bg-success">
+                                    <i class="fas fa-wallet me-1"></i> Cash
+                                </span>
+                            {% elif transaction.source == 'bank_account' %}
+                                <span class="badge bg-primary">
+                                    <i class="fas fa-university me-1"></i> Bank
+                                </span>
+                            {% elif transaction.source == 'credit_account' %}
+                                <span class="badge bg-warning text-dark">
+                                    <i class="fas fa-credit-card me-1"></i> Credit
+                                </span>
+                            {% elif transaction.source == 'sales' %}
+                                <span class="badge bg-success">
+                                    <i class="fas fa-chart-line me-1"></i> Sales
+                                </span>
+                            {% elif transaction.source == 'credit_sales' %}
+                                <span class="badge bg-info">
+                                    <i class="fas fa-building me-1"></i> Credit Sales
+                                </span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ transaction.source|title }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if transaction.transaction_type == 'income' %}
+                                <span class="badge bg-success">Income</span>
+                            {% elif transaction.transaction_type == 'expense' %}
+                                <span class="badge bg-danger">Expense</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ transaction.transaction_type|title }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="fw-bold">{{ transaction.description }}</div>
+                            {% if transaction.notes %}
+                            <small class="text-muted">{{ transaction.notes|truncatechars:50 }}</small>
+                            {% endif %}
+                        </td>
+                        <td class="fw-bold {% if transaction.transaction_type == 'income' %}text-success{% else %}text-danger{% endif %}">
+                            {% if transaction.transaction_type == 'income' %}
+                                + KES {{ transaction.amount|floatformat:2|intcomma }}
+                            {% else %}
+                                - KES {{ transaction.amount|floatformat:2|intcomma }}
+                            {% endif %}
+                        </td>
+                        <td><code>{{ transaction.reference|default:"—" }}</code></td>
+                        <td>
+                            <small>{{ transaction.created_by.get_full_name|default:transaction.created_by.username|default:"System" }}</small>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center py-5">
+                            <i class="fas fa-receipt fa-3x text-muted mb-3"></i>
+                            <h6>No transactions found</h6>
+                            <p class="text-muted">No financial transactions have been recorded yet.</p>
+                            <a href="{% url 'finance:add_account_transaction' %}" class="btn btn-primary btn-sm">
+                                <i class="fas fa-plus-circle me-1"></i>Add Transaction
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="table-light">
+                    <tr class="fw-bold">
+                        <td colspan="4">TOTAL</td>
+                        <td class="{% if net_balance >= 0 %}text-success{% else %}text-danger{% endif %}">
+                            KES {{ net_balance|floatformat:2|intcomma }}
+                        </td>
+                        <td colspan="2"></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+    
+    <!-- Pagination -->
+    {% if transactions.has_other_pages %}
+    <div class="card-footer bg-white">
+        <nav aria-label="Page navigation">
+            <ul class="pagination justify-content-center mb-0">
+                {% if transactions.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page=1{% if request.GET.type %}&type={{ request.GET.type }}{% endif %}{% if request.GET.account %}&account={{ request.GET.account }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}">
+                        <i class="fas fa-angle-double-left"></i>
+                    </a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ transactions.previous_page_number }}{% if request.GET.type %}&type={{ request.GET.type }}{% endif %}{% if request.GET.account %}&account={{ request.GET.account }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}">
+                        <i class="fas fa-angle-left"></i>
+                    </a>
+                </li>
+                {% endif %}
+
+                {% for num in transactions.paginator.page_range %}
+                    {% if transactions.number == num %}
+                    <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                    {% elif num > transactions.number|add:'-3' and num < transactions.number|add:'3' %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ num }}{% if request.GET.type %}&type={{ request.GET.type }}{% endif %}{% if request.GET.account %}&account={{ request.GET.account }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}">
+                            {{ num }}
+                        </a>
+                    </li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if transactions.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ transactions.next_page_number }}{% if request.GET.type %}&type={{ request.GET.type }}{% endif %}{% if request.GET.account %}&account={{ request.GET.account }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}">
+                        <i class="fas fa-angle-right"></i>
+                    </a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ transactions.paginator.num_pages }}{% if request.GET.type %}&type={{ request.GET.type }}{% endif %}{% if request.GET.account %}&account={{ request.GET.account }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}">
+                        <i class="fas fa-angle-double-right"></i>
+                    </a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+    .stat-card {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        position: relative;
+        overflow: hidden;
+        transition: transform 0.2s;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+    }
+    
+    .stat-value {
+        font-size: 28px;
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+    
+    .stat-label {
+        color: #6c757d;
+        font-size: 14px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .stat-icon {
+        position: absolute;
+        right: 20px;
+        bottom: 20px;
+        font-size: 48px;
+        opacity: 0.2;
+    }
+    
+    .table td, .table th {
+        vertical-align: middle;
+    }
+    
+    .badge {
+        padding: 0.35rem 0.65rem;
+        font-weight: 500;
+    }
+    
+    code {
+        background: #f1f5f9;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 0.8rem;
+    }
+    
+    @media (max-width: 768px) {
+        .table-responsive {
+            font-size: 0.85rem;
+        }
+        
+        .table td, .table th {
+            padding: 0.5rem;
+        }
+        
+        .stat-value {
+            font-size: 20px;
+        }
+        
+        .stat-icon {
+            font-size: 32px;
+        }
+    }
+</style>
+
+<script>
+// Auto-submit when filters change
+document.getElementById('type')?.addEventListener('change', function() {
+    this.form.submit();
+});
+
+document.getElementById('account')?.addEventListener('change', function() {
+    this.form.submit();
+});
+
+document.getElementById('date_from')?.addEventListener('change', function() {
+    this.form.submit();
+});
+
+document.getElementById('date_to')?.addEventListener('change', function() {
+    this.form.submit();
+});
+</script>
+{% endblock %}

@@ -33,6 +33,7 @@ urlpatterns = [
     path('payments/', views.payment_list, name='payment_list'),
     path('payments/add/', views.payment_add, name='payment_add'),
     path('payments/<int:pk>/', views.payment_detail, name='payment_detail'),
+    path('company/<int:company_id>/payment/', views.credit_company_payment, name='credit_company_payment'),
 
     # ===== COMMISSION URLS (5 buttons) =====
     

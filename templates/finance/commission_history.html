@@ -1,0 +1,244 @@
+{% extends 'finance/base.html' %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}Commission History - FieldMax Finance{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-history me-2"></i>Commission Payment History</h2>
+    <div>
+        <a href="{% url 'finance:commission_pay_list' %}" class="btn btn-primary me-2">
+            <i class="fas fa-hand-holding-usd me-2"></i>Pay Commissions
+        </a>
+        <a href="{% url 'finance:commission_approve_list' %}" class="btn btn-info me-2">
+            <i class="fas fa-check-circle me-2"></i>Approve Commissions
+        </a>
+        <a href="{% url 'finance:commission_request_list' %}" class="btn btn-warning">
+            <i class="fas fa-hand-holding-usd me-2"></i>Request Commissions
+        </a>
+    </div>
+</div>
+
+<!-- Summary Card -->
+<div class="alert alert-success mb-4">
+    <div class="row text-center">
+        <div class="col-md-12">
+            <strong>Total Commission Paid:</strong> KES {{ total_paid|floatformat:2|intcomma }}
+        </div>
+    </div>
+</div>
+
+<!-- Filter Section -->
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <h6 class="mb-0"><i class="fas fa-filter me-2"></i>Filter History</h6>
+    </div>
+    <div class="card-body">
+        <form method="GET" class="row g-3">
+            <div class="col-md-3">
+                <label for="seller" class="form-label">Seller</label>
+                <select name="seller" id="seller" class="form-select">
+                    <option value="">All Sellers</option>
+                    {% for seller in sellers %}
+                    <option value="{{ seller.id }}" {% if current_filters.seller == seller.id|stringformat:"s" %}selected{% endif %}>
+                        {{ seller.get_full_name|default:seller.username }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="date_from" class="form-label">Date From</label>
+                <input type="date" name="date_from" id="date_from" class="form-control" value="{{ current_filters.date_from|default:'' }}">
+            </div>
+            <div class="col-md-3">
+                <label for="date_to" class="form-label">Date To</label>
+                <input type="date" name="date_to" id="date_to" class="form-control" value="{{ current_filters.date_to|default:'' }}">
+            </div>
+            <div class="col-md-3">
+                <button type="submit" class="btn btn-primary w-100 mt-4">
+                    <i class="fas fa-search me-2"></i>Apply Filters
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Commission Table -->
+<div class="card">
+    <div class="card-header bg-white">
+        <div class="d-flex justify-content-between align-items-center">
+            <h6 class="mb-0">
+                <i class="fas fa-table me-2"></i>Commission Payments
+            </h6>
+            <div class="text-muted small">
+                Showing {{ commissions.start_index }} to {{ commissions.end_index }} of {{ commissions.paginator.count }} entries
+            </div>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Payment Date</th>
+                        <th>Seller</th>
+                        <th>Transaction ID</th>
+                        <th>Product</th>
+                        <th>Sale Amount</th>
+                        <th>Commission Amount</th>
+                        <th>Payment Method</th>
+                        <th>Paid By</th>
+                        <th>Reference</th>
+                     </thead>
+                <tbody>
+                    {% for commission in commissions %}
+                    <tr>
+                        <td>{{ commission.paid_date|date:"Y-m-d H:i"|default:"—" }}</td>
+                        <td>
+                            <strong>{{ commission.seller.get_full_name|default:commission.seller.username }}</strong>
+                            <br>
+                            <small class="text-muted">{{ commission.seller.email|default:"No email" }}</small>
+                        </td>
+                        <td>
+                            <code>{{ commission.transaction.transaction_id }}</code>
+                        </td>
+                        <td>{{ commission.transaction.product_name|default:commission.transaction.product.display_name }}</td>
+                        <td>KES {{ commission.transaction.ceiling_price|floatformat:2|intcomma }}</td>
+                        <td class="fw-bold text-success">KES {{ commission.amount|floatformat:2|intcomma }}</td>
+                        <td>
+                            {% if commission.paid_by %}
+                                <span class="badge bg-info">{{ commission.payment_method|default:"Bank Transfer" }}</span>
+                            {% else %}
+                                <span class="badge bg-secondary">—</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if commission.paid_by %}
+                                {{ commission.paid_by.get_full_name|default:commission.paid_by.username }}
+                            {% else %}
+                                —
+                            {% endif %}
+                        </td>
+                        <td>
+                            <small class="text-muted">{{ commission.payment_reference|default:"—" }}</small>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="9" class="text-center py-5">
+                            <i class="fas fa-receipt fa-3x text-muted mb-3"></i>
+                            <h6>No commission payments found</h6>
+                            <p class="text-muted">No commissions have been paid yet.</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="table-light">
+                    <tr class="fw-bold">
+                        <td colspan="5">TOTAL</td>
+                        <td class="text-success">KES {{ total_paid|floatformat:2|intcomma }}</td>
+                        <td colspan="3"></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+    
+    <!-- Pagination -->
+    {% if commissions.has_other_pages %}
+    <div class="card-footer bg-white">
+        <nav aria-label="Page navigation">
+            <ul class="pagination justify-content-center mb-0">
+                {% if commissions.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page=1{% if current_filters.seller %}&seller={{ current_filters.seller }}{% endif %}{% if current_filters.date_from %}&date_from={{ current_filters.date_from }}{% endif %}{% if current_filters.date_to %}&date_to={{ current_filters.date_to }}{% endif %}">
+                        <i class="fas fa-angle-double-left"></i>
+                    </a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ commissions.previous_page_number }}{% if current_filters.seller %}&seller={{ current_filters.seller }}{% endif %}{% if current_filters.date_from %}&date_from={{ current_filters.date_from }}{% endif %}{% if current_filters.date_to %}&date_to={{ current_filters.date_to }}{% endif %}">
+                        <i class="fas fa-angle-left"></i>
+                    </a>
+                </li>
+                {% endif %}
+
+                {% for num in commissions.paginator.page_range %}
+                    {% if commissions.number == num %}
+                    <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                    {% elif num > commissions.number|add:'-3' and num < commissions.number|add:'3' %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ num }}{% if current_filters.seller %}&seller={{ current_filters.seller }}{% endif %}{% if current_filters.date_from %}&date_from={{ current_filters.date_from }}{% endif %}{% if current_filters.date_to %}&date_to={{ current_filters.date_to }}{% endif %}">
+                            {{ num }}
+                        </a>
+                    </li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if commissions.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ commissions.next_page_number }}{% if current_filters.seller %}&seller={{ current_filters.seller }}{% endif %}{% if current_filters.date_from %}&date_from={{ current_filters.date_from }}{% endif %}{% if current_filters.date_to %}&date_to={{ current_filters.date_to }}{% endif %}">
+                        <i class="fas fa-angle-right"></i>
+                    </a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ commissions.paginator.num_pages }}{% if current_filters.seller %}&seller={{ current_filters.seller }}{% endif %}{% if current_filters.date_from %}&date_from={{ current_filters.date_from }}{% endif %}{% if current_filters.date_to %}&date_to={{ current_filters.date_to }}{% endif %}">
+                        <i class="fas fa-angle-double-right"></i>
+                    </a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+    .table td, .table th {
+        vertical-align: middle;
+    }
+    
+    .badge {
+        padding: 0.35rem 0.65rem;
+        font-weight: 500;
+    }
+    
+    .alert-success {
+        background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+        border: none;
+        color: #065f46;
+    }
+    
+    code {
+        background: #f1f5f9;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 0.8rem;
+    }
+    
+    @media (max-width: 768px) {
+        .table-responsive {
+            font-size: 0.85rem;
+        }
+        
+        .table td, .table th {
+            padding: 0.5rem;
+        }
+    }
+</style>
+
+<script>
+// Auto-submit when filters change
+document.getElementById('seller')?.addEventListener('change', function() {
+    this.form.submit();
+});
+
+document.getElementById('date_from')?.addEventListener('change', function() {
+    this.form.submit();
+});
+
+document.getElementById('date_to')?.addEventListener('change', function() {
+    this.form.submit();
+});
+</script>
+{% endblock %}

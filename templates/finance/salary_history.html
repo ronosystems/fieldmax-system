@@ -1,0 +1,164 @@
+{% extends 'finance/base.html' %}
+{% load static %}
+
+{% block title %}Salary History - FieldMax Finance{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-history me-2"></i>Salary History</h2>
+    <div>
+        <a href="{% url 'finance:salary_create' %}" class="btn btn-primary">
+            <i class="fas fa-plus me-2"></i>Create Salary
+        </a>
+    </div>
+</div>
+
+<!-- Filter Section -->
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <h6 class="mb-0"><i class="fas fa-filter me-2"></i>Filter Salaries</h6>
+    </div>
+    <div class="card-body">
+        <form method="GET" class="row g-3">
+            <div class="col-md-3">
+                <label for="month" class="form-label">Month</label>
+                <select name="month" id="month" class="form-select">
+                    <option value="">All Months</option>
+                    {% for month_value, month_name in months %}
+                    <option value="{{ month_value }}" {% if current_filters.month == month_value|stringformat:"s" %}selected{% endif %}>
+                        {{ month_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="year" class="form-label">Year</label>
+                <select name="year" id="year" class="form-select">
+                    <option value="">All Years</option>
+                    {% for year in years %}
+                    <option value="{{ year }}" {% if current_filters.year == year|stringformat:"s" %}selected{% endif %}>
+                        {{ year }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="staff" class="form-label">Staff Member</label>
+                <select name="staff" id="staff" class="form-select">
+                    <option value="">All Staff</option>
+                    {% for staff in staff_list %}
+                    <option value="{{ staff.id }}" {% if current_filters.staff == staff.id|stringformat:"s" %}selected{% endif %}>
+                        {{ staff.get_full_name|default:staff.username }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="status" class="form-label">Status</label>
+                <select name="status" id="status" class="form-select">
+                    <option value="">All Status</option>
+                    <option value="pending" {% if current_filters.status == 'pending' %}selected{% endif %}>Pending</option>
+                    <option value="approved" {% if current_filters.status == 'approved' %}selected{% endif %}>Approved</option>
+                    <option value="paid" {% if current_filters.status == 'paid' %}selected{% endif %}>Paid</option>
+                </select>
+            </div>
+            <div class="col-md-12">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-search me-2"></i>Apply Filters
+                </button>
+                <a href="{% url 'finance:salary_history' %}" class="btn btn-secondary">
+                    <i class="fas fa-undo me-2"></i>Clear Filters
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="stat-card" style="border-left: 5px solid #10b981;">
+            <div class="stat-value">KES {{ total_base_salary|floatformat:0 }}</div>
+            <div class="stat-label">Total Base Salary</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card" style="border-left: 5px solid #f59e0b;">
+            <div class="stat-value">KES {{ total_bonus|floatformat:0 }}</div>
+            <div class="stat-label">Total Bonuses</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card" style="border-left: 5px solid #ef4444;">
+            <div class="stat-value">KES {{ total_deductions|floatformat:0 }}</div>
+            <div class="stat-label">Total Deductions</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card" style="border-left: 5px solid #3b82f6;">
+            <div class="stat-value">KES {{ total_amount|floatformat:0 }}</div>
+            <div class="stat-label">Total Paid</div>
+        </div>
+    </div>
+</div>
+
+<!-- Salary Table -->
+<div class="card">
+    <div class="card-header bg-white">
+        <div class="d-flex justify-content-between align-items-center">
+            <h6 class="mb-0">
+                <i class="fas fa-table me-2"></i>Salary Records
+            </h6>
+            <div class="text-muted small">
+                Showing {{ salaries.start_index }} to {{ salaries.end_index }} of {{ salaries.paginator.count }} entries
+            </div>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Staff</th>
+                        <th>Period</th>
+                        <th>Base Salary</th>
+                        <th>Bonus</th>
+                        <th>Deductions</th>
+                        <th>Total</th>
+                        <th>Status</th>
+                        <th>Paid Date</th>
+                     </thead>
+                <tbody>
+                    {% for salary in salaries %}
+                     <tr>
+                         <td>{{ salary.staff.get_full_name|default:salary.staff.username }}</td>
+                         <td>{{ salary.get_month_display }} {{ salary.year }}</td>
+                         <td>KES {{ salary.base_salary|floatformat:0 }}</td>
+                         <td class="text-success">KES {{ salary.bonus|floatformat:0 }}</td>
+                         <td class="text-danger">KES {{ salary.deductions|floatformat:0 }}</td>
+                         <td class="fw-bold">KES {{ salary.total_amount|floatformat:0 }}</td>
+                         <td>
+                            {% if salary.status == 'pending' %}
+                                <span class="badge bg-warning">Pending</span>
+                            {% elif salary.status == 'approved' %}
+                                <span class="badge bg-info">Approved</span>
+                            {% elif salary.status == 'paid' %}
+                                <span class="badge bg-success">Paid</span>
+                            {% endif %}
+                         </td>
+                         <td>{{ salary.paid_date|date:"Y-m-d"|default:"-" }}</td>
+                     </tr>
+                    {% empty %}
+                     <tr>
+                        <td colspan="8" class="text-center py-5">No salary records found</td>
+                     </tr>
+                    {% endfor %}
+                </tbody>
+             </table>
+        </div>
+    </div>
+    
+    <!-- Pagination -->
+    {% include "includes/pagination.html" with page_obj=salaries %}
+</div>
+{% endblock %}

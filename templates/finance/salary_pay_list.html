@@ -1,0 +1,144 @@
+{% extends 'finance/base.html' %}
+{% load static %}
+
+{% block title %}Pay Salaries - FieldMax Finance{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-money-bill-wave me-2"></i>Pay Salaries</h2>
+    <div>
+        <a href="{% url 'finance:salary_list' %}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left me-2"></i>Back to List
+        </a>
+    </div>
+</div>
+
+<!-- Summary Card -->
+<div class="alert alert-info mb-4">
+    <div class="row">
+        <div class="col-md-6">
+            <strong>Total Ready for Payment:</strong> KES {{ total_amount|floatformat:2 }}
+        </div>
+        <div class="col-md-6">
+            <strong>Total Records:</strong> {{ approved_count }} salary record(s) ready for payment
+        </div>
+    </div>
+</div>
+
+<!-- Filter Section -->
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <h6 class="mb-0"><i class="fas fa-filter me-2"></i>Filter Salaries</h6>
+    </div>
+    <div class="card-body">
+        <form method="GET" class="row g-3">
+            <div class="col-md-3">
+                <label for="month" class="form-label">Month</label>
+                <select name="month" id="month" class="form-select">
+                    <option value="">All Months</option>
+                    {% for month_value, month_name in months %}
+                    <option value="{{ month_value }}" {% if current_filters.month == month_value|stringformat:"s" %}selected{% endif %}>
+                        {{ month_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="year" class="form-label">Year</label>
+                <select name="year" id="year" class="form-select">
+                    <option value="">All Years</option>
+                    {% for year in years %}
+                    <option value="{{ year }}" {% if current_filters.year == year|stringformat:"s" %}selected{% endif %}>
+                        {{ year }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="staff" class="form-label">Staff Member</label>
+                <select name="staff" id="staff" class="form-select">
+                    <option value="">All Staff</option>
+                    {% for staff in staff_list %}
+                    <option value="{{ staff.id }}" {% if current_filters.staff == staff.id|stringformat:"s" %}selected{% endif %}>
+                        {{ staff.get_full_name|default:staff.username }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <button type="submit" class="btn btn-primary w-100 mt-4">
+                    <i class="fas fa-search me-2"></i>Apply Filters
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Salary Table -->
+<div class="card">
+    <div class="card-header bg-white">
+        <div class="d-flex justify-content-between align-items-center">
+            <h6 class="mb-0">
+                <i class="fas fa-table me-2"></i>Salaries Ready for Payment
+            </h6>
+            <div class="text-muted small">
+                Showing {{ salaries.start_index }} to {{ salaries.end_index }} of {{ salaries.paginator.count }} entries
+            </div>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Staff Member</th>
+                        <th>Period</th>
+                        <th>Base Salary</th>
+                        <th>Bonus</th>
+                        <th>Deductions</th>
+                        <th>Total Amount</th>
+                        <th>Actions</th>
+                     </thead>
+                <tbody>
+                    {% for salary in salaries %}
+                      <tr>
+                          <td>
+                              <div class="fw-bold">{{ salary.staff.get_full_name|default:salary.staff.username }}</div>
+                              <small class="text-muted">{{ salary.staff.email|default:"No email" }}</small>
+                          </td>
+                          <td>{{ salary.get_month_display }} {{ salary.year }}</td>
+                          <td>KES {{ salary.base_salary|floatformat:0 }}</td>
+                          <td class="text-success">KES {{ salary.bonus|floatformat:0 }}</td>
+                          <td class="text-danger">KES {{ salary.deductions|floatformat:0 }}</td>
+                          <td class="fw-bold text-primary">KES {{ salary.total_amount|floatformat:0 }}</td>
+                          <td>
+                              <a href="{% url 'finance:salary_pay' salary.id %}" class="btn btn-success btn-sm">
+                                  <i class="fas fa-money-bill-wave me-1"></i>Pay Now
+                              </a>
+                          </td>
+                      </tr>
+                    {% empty %}
+                      <tr>
+                          <td colspan="7" class="text-center py-5">
+                              <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+                              <h6>No salaries ready for payment</h6>
+                              <p class="text-muted">All approved salaries have been paid or are pending approval.</p>
+                          </td>
+                      </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="table-light">
+                    <tr class="fw-bold">
+                        <td colspan="5">TOTAL</td>
+                        <td>KES {{ total_amount|floatformat:0 }}</td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+    
+    <!-- Pagination -->
+    {% include "includes/pagination.html" with page_obj=salaries %}
+</div>
+{% endblock %}

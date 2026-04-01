@@ -1,0 +1,262 @@
+{% extends 'finance/base.html' %}
+{% load static %}
+
+{% block title %}Add Transaction - FieldMax Finance{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-plus-circle me-2"></i>Add Transaction</h2>
+    <div>
+        <a href="javascript:history.back()" class="btn btn-secondary">
+            <i class="fas fa-arrow-left me-2"></i>Back
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-exchange-alt me-2"></i>Transaction Details
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    Record a new transaction for your account. All transactions are tracked for financial reporting.
+                </div>
+                
+                <form method="POST" action="{% url 'finance:add_account_transaction' %}" id="transactionForm">
+                    {% csrf_token %}
+                    
+                    <!-- Account Selection -->
+                    <div class="mb-4">
+                        <label class="form-label required">Account Type</label>
+                        <select name="account_type" id="account_type" class="form-select" required>
+                            <option value="">Select Account</option>
+                            <option value="cash" {% if request.GET.account == 'cash' %}selected{% endif %}>Cash Account</option>
+                            <option value="bank" {% if request.GET.account == 'bank' %}selected{% endif %}>Bank Account</option>
+                            <option value="credit" {% if request.GET.account == 'credit' %}selected{% endif %}>Credit Account</option>
+                        </select>
+                        <div class="form-text">Select which account this transaction affects</div>
+                    </div>
+                    
+                    <!-- Transaction Type -->
+                    <div class="mb-4">
+                        <label class="form-label required">Transaction Type</label>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="card border-success transaction-card" onclick="selectTransactionType('income')" id="card_income">
+                                    <div class="card-body text-center">
+                                        <i class="fas fa-arrow-down fa-2x text-success mb-2"></i>
+                                        <h6 class="mb-0">Income</h6>
+                                        <small class="text-muted">Money coming in</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card border-danger transaction-card" onclick="selectTransactionType('expense')" id="card_expense">
+                                    <div class="card-body text-center">
+                                        <i class="fas fa-arrow-up fa-2x text-danger mb-2"></i>
+                                        <h6 class="mb-0">Expense</h6>
+                                        <small class="text-muted">Money going out</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <input type="hidden" name="transaction_type" id="transaction_type" required>
+                        <div id="type_error" class="text-danger small mt-2" style="display: none;">Please select a transaction type</div>
+                    </div>
+                    
+                    <!-- Amount -->
+                    <div class="mb-4">
+                        <label class="form-label required">Amount (KES)</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light">KES</span>
+                            <input type="number" 
+                                   name="amount" 
+                                   id="amount" 
+                                   class="form-control" 
+                                   step="0.01" 
+                                   min="0.01" 
+                                   placeholder="0.00" 
+                                   required>
+                        </div>
+                        <div class="form-text">Enter the transaction amount</div>
+                    </div>
+                    
+                    <!-- Description -->
+                    <div class="mb-4">
+                        <label class="form-label required">Description</label>
+                        <input type="text" 
+                               name="description" 
+                               id="description" 
+                               class="form-control" 
+                               placeholder="e.g., Customer payment, Rent payment, etc." 
+                               required>
+                        <div class="form-text">Brief description of the transaction</div>
+                    </div>
+                    
+                    <!-- Reference (Optional) -->
+                    <div class="mb-4">
+                        <label class="form-label">Reference Number</label>
+                        <input type="text" 
+                               name="reference" 
+                               id="reference" 
+                               class="form-control" 
+                               placeholder="Invoice No, Receipt No, M-Pesa Code, etc.">
+                        <div class="form-text">Optional reference for tracking</div>
+                    </div>
+                    
+                    <!-- Notes (Optional) -->
+                    <div class="mb-4">
+                        <label class="form-label">Notes</label>
+                        <textarea name="notes" 
+                                  id="notes" 
+                                  class="form-control" 
+                                  rows="2" 
+                                  placeholder="Additional notes about this transaction..."></textarea>
+                    </div>
+                    
+                    <!-- Preview Card -->
+                    <div class="card mb-4 border-info">
+                        <div class="card-header bg-info text-white">
+                            <h6 class="mb-0"><i class="fas fa-calculator me-2"></i>Transaction Preview</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row text-center">
+                                <div class="col-md-6">
+                                    <div class="small text-muted">Amount</div>
+                                    <div class="h4" id="preview_amount">KES 0.00</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="small text-muted">Type</div>
+                                    <div class="h4" id="preview_type">—</div>
+                                </div>
+                            </div>
+                            <div class="mt-2">
+                                <div class="small text-muted">Description</div>
+                                <div id="preview_description" class="fw-bold">—</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Submit Buttons -->
+                    <div class="d-flex justify-content-end gap-2">
+                        <a href="javascript:history.back()" class="btn btn-secondary">
+                            <i class="fas fa-times me-2"></i>Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary" id="submitBtn">
+                            <i class="fas fa-save me-2"></i>Add Transaction
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .transaction-card {
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    
+    .transaction-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    }
+    
+    .transaction-card.selected {
+        background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+        border: 2px solid #10b981;
+    }
+    
+    .transaction-card.selected .text-success {
+        color: #10b981 !important;
+    }
+    
+    .transaction-card.selected .text-danger {
+        color: #ef4444 !important;
+    }
+    
+    .required:after {
+        content: " *";
+        color: #dc3545;
+    }
+</style>
+
+<script>
+let selectedType = null;
+
+function selectTransactionType(type) {
+    selectedType = type;
+    document.getElementById('transaction_type').value = type;
+    
+    // Update UI
+    document.getElementById('card_income').classList.remove('selected');
+    document.getElementById('card_expense').classList.remove('selected');
+    
+    if (type === 'income') {
+        document.getElementById('card_income').classList.add('selected');
+        document.getElementById('preview_type').innerHTML = '<span class="badge bg-success">Income</span>';
+    } else {
+        document.getElementById('card_expense').classList.add('selected');
+        document.getElementById('preview_type').innerHTML = '<span class="badge bg-danger">Expense</span>';
+    }
+    
+    document.getElementById('type_error').style.display = 'none';
+    updatePreview();
+}
+
+function updatePreview() {
+    const amount = parseFloat(document.getElementById('amount').value) || 0;
+    const description = document.getElementById('description').value || '—';
+    
+    document.getElementById('preview_amount').innerHTML = `KES ${amount.toLocaleString()}`;
+    document.getElementById('preview_description').innerHTML = description;
+}
+
+// Event listeners
+document.getElementById('amount').addEventListener('input', updatePreview);
+document.getElementById('description').addEventListener('input', updatePreview);
+
+// Form validation
+document.getElementById('transactionForm').addEventListener('submit', function(e) {
+    if (!selectedType) {
+        e.preventDefault();
+        document.getElementById('type_error').style.display = 'block';
+        alert('Please select a transaction type');
+        return false;
+    }
+    
+    const amount = parseFloat(document.getElementById('amount').value);
+    if (!amount || amount <= 0) {
+        e.preventDefault();
+        alert('Please enter a valid amount');
+        return false;
+    }
+    
+    const description = document.getElementById('description').value.trim();
+    if (!description) {
+        e.preventDefault();
+        alert('Please enter a description');
+        return false;
+    }
+    
+    const submitBtn = document.getElementById('submitBtn');
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Processing...';
+});
+
+// Auto-select if account is passed in URL
+document.addEventListener('DOMContentLoaded', function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const account = urlParams.get('account');
+    if (account) {
+        document.getElementById('account_type').value = account;
+    }
+});
+</script>
+{% endblock %}

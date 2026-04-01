@@ -1,0 +1,355 @@
+{% extends 'finance/base.html' %}
+{% load humanize %}
+{% load static %}
+
+{% block title %}Pay Commissions - FieldMax Finance{% endblock %}
+
+{% block page_icon %}fas fa-hand-holding-usd{% endblock %}
+{% block page_title %}Pay Commissions{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'finance:dashboard' %}">Dashboard</a></li>
+<li class="breadcrumb-item"><a href="{% url 'finance:commission_list' %}">All Commissions</a></li>
+<li class="breadcrumb-item active">Pay Commissions</li>
+{% endblock %}
+
+{% block content %}
+<div class="pay-commissions">
+
+    <!-- Summary Cards -->
+    <div class="stats-grid mb-4">
+        <div class="stat-card">
+            <div class="stat-icon success">
+                <i class="fas fa-check-circle"></i>
+            </div>
+            <div class="stat-value">{{ approved_count|default:0 }}</div>
+            <div class="stat-label">Approved for Payment</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon primary">
+                <i class="fas fa-coins"></i>
+            </div>
+            <div class="stat-value">KES {{ total_approved|default:0|floatformat:2|intcomma }}</div>
+            <div class="stat-label">Total to Pay</div>
+        </div>
+    </div>
+
+    <!-- Filter Section -->
+    <div class="card-custom mb-4">
+        <div class="card-header-custom">
+            <h5 class="mb-0"><i class="fas fa-filter me-2"></i>Filter Payments</h5>
+        </div>
+        <div class="card-body-custom">
+            <form method="get" id="filterForm">
+                <div class="row">
+                    <div class="col-md-4">
+                        <label for="seller" class="form-label">Seller</label>
+                        <select name="seller" id="seller" class="form-select">
+                            <option value="">All Sellers</option>
+                            {% for seller in sellers %}
+                            <option value="{{ seller.id }}" {% if request.GET.seller == seller.id|stringformat:"i" %}selected{% endif %}>
+                                {{ seller.get_full_name|default:seller.username }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="date_from" class="form-label">Date From</label>
+                        <input type="date" class="form-control" id="date_from" name="date_from" value="{{ request.GET.date_from|default:'' }}">
+                    </div>
+                    <div class="col-md-4">
+                        <label for="date_to" class="form-label">Date To</label>
+                        <input type="date" class="form-control" id="date_to" name="date_to" value="{{ request.GET.date_to|default:'' }}">
+                    </div>
+                    <div class="col-12 mt-3">
+                        <button type="submit" class="btn btn-primary-custom">
+                            <i class="fas fa-search me-2"></i>Apply Filter
+                        </button>
+                        <a href="{% url 'finance:commission_pay_list' %}" class="btn btn-secondary ms-2">
+                            <i class="fas fa-undo me-2"></i>Reset
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Approved Commissions Table -->
+    <div class="card-custom">
+        <div class="card-header-custom d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-list me-2"></i>Approved Commissions Ready for Payment</h5>
+            <span class="badge bg-success">{{ approved_count|default:0 }} Approved</span>
+        </div>
+        <div class="card-body-custom p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th width="40">
+                                <input type="checkbox" id="selectAll" class="form-check-input">
+                            </th>
+                            <th>Commission ID</th>
+                            <th>Transaction ID</th>
+                            <th>Date Approved</th>
+                            <th>Seller</th>
+                            <th>Customer</th>
+                            <th>Product</th>
+                            <th class="text-end">Sale Amount</th>
+                            <th class="text-end">Commission</th>
+                            <th class="text-center">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for commission in commissions %}
+                        <tr id="row-{{ commission.id }}">
+                            <td>
+                                <input type="checkbox" class="form-check-input transaction-checkbox" 
+                                       value="{{ commission.id }}" 
+                                       data-amount="{{ commission.amount }}">
+                            </td>
+                            <td>
+                                <strong>#{{ commission.id }}</strong>
+                            </td>
+                            <td>
+                                <strong>{{ commission.transaction.transaction_id }}</strong>
+                                <br>
+                                <small class="text-muted">{{ commission.transaction.transaction_date|date:"d M Y" }}</small>
+                            </td>
+                            <td>
+                                {% if commission.approved_at %}
+                                {{ commission.approved_at|date:"d M Y H:i" }}
+                                {% else %}
+                                <span class="text-muted">N/A</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <div class="user-avatar me-2">
+                                        {{ commission.seller.first_name|first|default:commission.seller.username|first|upper }}
+                                    </div>
+                                    {{ commission.seller.get_full_name|default:commission.seller.username }}
+                                </div>
+                            </td>
+                            <td>{{ commission.transaction.customer.full_name|truncatechars:20 }}</td>
+                            <td>{{ commission.transaction.product.name|truncatechars:20 }}</td>
+                            <td class="text-end">KES {{ commission.transaction.ceiling_price|floatformat:2|intcomma }}</td>
+                            <td class="text-end fw-bold text-success">
+                                KES {{ commission.amount|floatformat:2|intcomma }}
+                            </td>
+                            <td class="text-center">
+                                <a href="{% url 'finance:commission_pay' commission.id %}" 
+                                   class="btn btn-sm btn-success pay-btn"
+                                   data-id="{{ commission.id }}"
+                                   data-amount="{{ commission.amount }}">
+                                    <i class="fas fa-hand-holding-usd me-1"></i>Pay
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="10" class="text-center py-5">
+                                <i class="fas fa-check-circle text-success fa-3x mb-3"></i>
+                                <h5 class="text-secondary">No Approved Commissions</h5>
+                                <p class="text-secondary">All approved commissions have been paid.</p>
+                                <a href="{% url 'finance:commission_list' %}" class="btn btn-primary mt-3">
+                                    <i class="fas fa-list me-2"></i>View All Commissions
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            {% if commissions.has_other_pages %}
+            <div class="pagination-wrapper p-3 border-top">
+                <nav aria-label="Page navigation">
+                    <ul class="pagination justify-content-center mb-0">
+                        {% if commissions.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ commissions.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                                <i class="fas fa-chevron-left"></i> Previous
+                            </a>
+                        </li>
+                        {% endif %}
+                        
+                        {% for num in commissions.paginator.page_range %}
+                            {% if commissions.number == num %}
+                            <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                            {% elif num > commissions.number|add:'-3' and num < commissions.number|add:'3' %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ num }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">{{ num }}</a>
+                            </li>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if commissions.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ commissions.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                                Next <i class="fas fa-chevron-right"></i>
+                            </a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Auto-submit on filter change
+    $('#seller').change(function() {
+        $('#filterForm').submit();
+    });
+});
+</script>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .pay-commissions .card-custom {
+        margin-bottom: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 20px;
+    }
+    
+    .stat-card {
+        background: white;
+        border-radius: 10px;
+        padding: 20px;
+        text-align: center;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .stat-icon {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 10px;
+        font-size: 1.5rem;
+    }
+    
+    .stat-icon.success {
+        background: rgba(40, 167, 69, 0.1);
+        color: #28a745;
+    }
+    
+    .stat-icon.primary {
+        background: rgba(0, 123, 255, 0.1);
+        color: #007bff;
+    }
+    
+    .stat-value {
+        font-size: 1.8rem;
+        font-weight: 600;
+        color: #333;
+    }
+    
+    .stat-label {
+        color: #666;
+        font-size: 0.9rem;
+    }
+    
+    .user-avatar {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: 600;
+        font-size: 0.8rem;
+    }
+    
+    .table th {
+        background: #f8f9fa;
+        color: #6c757d;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        padding: 12px 10px;
+        border-bottom: 2px solid #dee2e6;
+    }
+    
+    .table td {
+        vertical-align: middle;
+        padding: 12px 10px;
+    }
+    
+    .badge {
+        padding: 5px 10px;
+        font-size: 0.75rem;
+        border-radius: 5px;
+    }
+    
+    .btn-success {
+        background-color: #28a745;
+        border-color: #28a745;
+    }
+    
+    .btn-success:hover {
+        background-color: #218838;
+        border-color: #1e7e34;
+    }
+    
+    /* Selected row highlight */
+    tr:has(.transaction-checkbox:checked) {
+        background-color: rgba(40, 167, 69, 0.1);
+    }
+    
+    [data-theme="dark"] .stat-card {
+        background: var(--sidebar-solid);
+        color: white;
+    }
+    
+    [data-theme="dark"] .stat-value {
+        color: white;
+    }
+    
+    [data-theme="dark"] .stat-label {
+        color: #adb5bd;
+    }
+    
+    [data-theme="dark"] .table th {
+        background: var(--sidebar-solid);
+        color: #adb5bd;
+        border-bottom-color: #495057;
+    }
+    
+    [data-theme="dark"] .table td {
+        color: #e9ecef;
+    }
+    
+    @media (max-width: 768px) {
+        .table-responsive {
+            font-size: 0.8rem;
+        }
+        
+        .stats-grid {
+            grid-template-columns: 1fr;
+        }
+        
+        .user-avatar {
+            width: 25px;
+            height: 25px;
+            font-size: 0.7rem;
+        }
+    }
+</style>
+{% endblock %}

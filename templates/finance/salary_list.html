@@ -1,0 +1,353 @@
+{% extends 'finance/base.html' %}
+{% load static %}
+
+{% block title %}Salary List - FieldMax Finance{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-money-bill-wave me-2"></i>Salary Management</h2>
+    <div>
+        <a href="{% url 'finance:salary_create' %}" class="btn btn-primary">
+            <i class="fas fa-plus me-2"></i>Create Salary
+        </a>
+    </div>
+</div>
+
+<!-- Filter Section -->
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <h6 class="mb-0"><i class="fas fa-filter me-2"></i>Filter Salaries</h6>
+    </div>
+    <div class="card-body">
+        <form method="GET" class="row g-3">
+            <div class="col-md-3">
+                <label for="month" class="form-label">Month</label>
+                <select name="month" id="month" class="form-select">
+                    <option value="">All Months</option>
+                    {% for month_value, month_name in months %}
+                    <option value="{{ month_value }}" {% if current_filters.month == month_value|stringformat:"s" %}selected{% endif %}>
+                        {{ month_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="year" class="form-label">Year</label>
+                <select name="year" id="year" class="form-select">
+                    <option value="">All Years</option>
+                    {% for year in years %}
+                    <option value="{{ year }}" {% if current_filters.year == year|stringformat:"s" %}selected{% endif %}>
+                        {{ year }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="staff" class="form-label">Staff Member</label>
+                <select name="staff" id="staff" class="form-select">
+                    <option value="">All Staff</option>
+                    {% for staff in staff_list %}
+                    <option value="{{ staff.id }}" {% if current_filters.staff == staff.id|stringformat:"s" %}selected{% endif %}>
+                        {{ staff.get_full_name|default:staff.username }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="status" class="form-label">Status</label>
+                <select name="status" id="status" class="form-select">
+                    <option value="">All Status</option>
+                    <option value="pending" {% if current_filters.status == 'pending' %}selected{% endif %}>Pending</option>
+                    <option value="approved" {% if current_filters.status == 'approved' %}selected{% endif %}>Approved</option>
+                    <option value="paid" {% if current_filters.status == 'paid' %}selected{% endif %}>Paid</option>
+                    <option value="cancelled" {% if current_filters.status == 'cancelled' %}selected{% endif %}>Cancelled</option>
+                </select>
+            </div>
+            <div class="col-md-12">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-search me-2"></i>Apply Filters
+                </button>
+                <a href="{% url 'finance:salary_list' %}" class="btn btn-secondary">
+                    <i class="fas fa-undo me-2"></i>Clear Filters
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="stat-card" style="border-left: 5px solid #f59e0b;">
+            <div class="stat-value">KES {{ total_pending|default:"0"|floatformat:0 }}</div>
+            <div class="stat-label">Pending Amount</div>
+            <i class="fas fa-clock stat-icon" style="color: #f59e0b;"></i>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card" style="border-left: 5px solid #10b981;">
+            <div class="stat-value">KES {{ total_approved|default:"0"|floatformat:0 }}</div>
+            <div class="stat-label">Approved Amount</div>
+            <i class="fas fa-check-circle stat-icon" style="color: #10b981;"></i>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card" style="border-left: 5px solid #3b82f6;">
+            <div class="stat-value">KES {{ total_paid|default:"0"|floatformat:0 }}</div>
+            <div class="stat-label">Paid Amount</div>
+            <i class="fas fa-money-bill-wave stat-icon" style="color: #3b82f6;"></i>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card" style="border-left: 5px solid #ef4444;">
+            <div class="stat-value">{{ total_records|default:"0" }}</div>
+            <div class="stat-label">Total Records</div>
+            <i class="fas fa-list stat-icon" style="color: #ef4444;"></i>
+        </div>
+    </div>
+</div>
+
+<!-- Salary Table -->
+<div class="card">
+    <div class="card-header bg-white">
+        <div class="d-flex justify-content-between align-items-center">
+            <h6 class="mb-0">
+                <i class="fas fa-table me-2"></i>Salary Records
+            </h6>
+            <div class="text-muted small">
+                Showing {{ salaries.start_index }} to {{ salaries.end_index }} of {{ salaries.paginator.count }} entries
+            </div>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Staff Member</th>
+                        <th>Month/Year</th>
+                        <th>Base Salary</th>
+                        <th>Bonus</th>
+                        <th>Deductions</th>
+                        <th>Total Amount</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                     </thead>
+                <tbody>
+                    {% for salary in salaries %}
+                     <tr>
+                        <td>
+                            <div class="fw-bold">{{ salary.staff.get_full_name|default:salary.staff.username }}</div>
+                            <small class="text-muted">{{ salary.staff.email|default:"No email" }}</small>
+                        </td>
+                        <td>
+                            {{ salary.get_month_display }} {{ salary.year }}
+                        </td>
+                        <td class="fw-bold">KES {{ salary.base_salary|floatformat:0 }}</td>
+                        <td class="text-success">
+                            {% if salary.bonus > 0 %}
+                            <i class="fas fa-gift me-1"></i> KES {{ salary.bonus|floatformat:0 }}
+                            {% else %}
+                            <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-danger">
+                            {% if salary.deductions > 0 %}
+                            <i class="fas fa-minus-circle me-1"></i> KES {{ salary.deductions|floatformat:0 }}
+                            {% else %}
+                            <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="fw-bold text-primary">KES {{ salary.total_amount|floatformat:0 }}</td>
+                        <td>
+                            {% if salary.status == 'pending' %}
+                                <span class="badge bg-warning">Pending</span>
+                            {% elif salary.status == 'approved' %}
+                                <span class="badge bg-info">Approved</span>
+                            {% elif salary.status == 'paid' %}
+                                <span class="badge bg-success">Paid</span>
+                            {% elif salary.status == 'cancelled' %}
+                                <span class="badge bg-danger">Cancelled</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <!-- View Details - Direct link to detail page -->
+                                <a href="{% url 'finance:salary_detail' salary.id %}" class="btn btn-outline-info" title="View Details">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                {% if salary.status == 'pending' %}
+                                <a href="{% url 'finance:salary_approve' salary.id %}" class="btn btn-outline-warning" title="Approve">
+                                    <i class="fas fa-check-circle"></i>
+                                </a>
+                                {% endif %}
+                                {% if salary.status == 'approved' %}
+                                <a href="{% url 'finance:salary_pay' salary.id %}" class="btn btn-outline-success" title="Pay">
+                                    <i class="fas fa-money-bill-wave"></i>
+                                </a>
+                                {% endif %}
+                                {% if salary.status == 'paid' %}
+                                <a href="{% url 'finance:salary_receipt' salary.id %}" target="_blank" class="btn btn-outline-secondary" title="Receipt">
+                                    <i class="fas fa-print"></i>
+                                </a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="text-center py-5">
+                            <i class="fas fa-receipt fa-3x text-muted mb-3"></i>
+                            <h6 class="text-muted">No salary records found</h6>
+                            <p class="text-muted small">Click "Create Salary" to add new salary records</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="table-light">
+                    <tr class="fw-bold">
+                        <td colspan="2">TOTALS</td>
+                        <td>KES {{ total_base_salary|default:"0"|floatformat:0 }}</td>
+                        <td class="text-success">KES {{ total_bonus|default:"0"|floatformat:0 }}</td>
+                        <td class="text-danger">KES {{ total_deductions|default:"0"|floatformat:0 }}</td>
+                        <td class="text-primary">KES {{ total_amount|default:"0"|floatformat:0 }}</td>
+                        <td colspan="2"></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+    
+    <!-- Pagination -->
+    {% if salaries.has_other_pages %}
+    <div class="card-footer bg-white">
+        <nav aria-label="Page navigation">
+            <ul class="pagination justify-content-center mb-0">
+                {% if salaries.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page=1{% if current_filters.month %}&month={{ current_filters.month }}{% endif %}{% if current_filters.year %}&year={{ current_filters.year }}{% endif %}{% if current_filters.staff %}&staff={{ current_filters.staff }}{% endif %}{% if current_filters.status %}&status={{ current_filters.status }}{% endif %}">
+                        <i class="fas fa-angle-double-left"></i>
+                    </a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ salaries.previous_page_number }}{% if current_filters.month %}&month={{ current_filters.month }}{% endif %}{% if current_filters.year %}&year={{ current_filters.year }}{% endif %}{% if current_filters.staff %}&staff={{ current_filters.staff }}{% endif %}{% if current_filters.status %}&status={{ current_filters.status }}{% endif %}">
+                        <i class="fas fa-angle-left"></i>
+                    </a>
+                </li>
+                {% endif %}
+                
+                {% for num in salaries.paginator.page_range %}
+                    {% if salaries.number == num %}
+                    <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                    {% elif num > salaries.number|add:'-3' and num < salaries.number|add:'3' %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ num }}{% if current_filters.month %}&month={{ current_filters.month }}{% endif %}{% if current_filters.year %}&year={{ current_filters.year }}{% endif %}{% if current_filters.staff %}&staff={{ current_filters.staff }}{% endif %}{% if current_filters.status %}&status={{ current_filters.status }}{% endif %}">
+                            {{ num }}
+                        </a>
+                    </li>
+                    {% endif %}
+                {% endfor %}
+                
+                {% if salaries.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ salaries.next_page_number }}{% if current_filters.month %}&month={{ current_filters.month }}{% endif %}{% if current_filters.year %}&year={{ current_filters.year }}{% endif %}{% if current_filters.staff %}&staff={{ current_filters.staff }}{% endif %}{% if current_filters.status %}&status={{ current_filters.status }}{% endif %}">
+                        <i class="fas fa-angle-right"></i>
+                    </a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ salaries.paginator.num_pages }}{% if current_filters.month %}&month={{ current_filters.month }}{% endif %}{% if current_filters.year %}&year={{ current_filters.year }}{% endif %}{% if current_filters.staff %}&staff={{ current_filters.staff }}{% endif %}{% if current_filters.status %}&status={{ current_filters.status }}{% endif %}">
+                        <i class="fas fa-angle-double-right"></i>
+                    </a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+    .stat-card {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        position: relative;
+        overflow: hidden;
+        transition: transform 0.2s;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+    }
+    
+    .stat-value {
+        font-size: 28px;
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+    
+    .stat-label {
+        color: #6c757d;
+        font-size: 14px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .stat-icon {
+        position: absolute;
+        right: 20px;
+        bottom: 20px;
+        font-size: 48px;
+        opacity: 0.2;
+    }
+    
+    .table td, .table th {
+        vertical-align: middle;
+    }
+    
+    .btn-group-sm .btn {
+        padding: 0.25rem 0.5rem;
+    }
+    
+    /* Info group styling for detail page */
+    .info-group {
+        background: #f8f9fa;
+        padding: 12px;
+        border-radius: 8px;
+        margin-bottom: 15px;
+    }
+    
+    .info-group label {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #6c757d;
+    }
+    
+    .info-group .h5 {
+        font-size: 1.1rem;
+        margin-bottom: 0;
+    }
+</style>
+
+<script>
+// Auto-submit when filters change
+document.getElementById('month').addEventListener('change', function() {
+    this.form.submit();
+});
+
+document.getElementById('year').addEventListener('change', function() {
+    this.form.submit();
+});
+
+document.getElementById('staff').addEventListener('change', function() {
+    this.form.submit();
+});
+
+document.getElementById('status').addEventListener('change', function() {
+    this.form.submit();
+});
+</script>
+{% endblock %}

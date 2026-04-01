@@ -1,0 +1,409 @@
+{% extends 'finance/base.html' %}
+{% load humanize %}
+{% load static %}
+
+{% block title %}Commission Details - FieldMax Finance{% endblock %}
+
+{% block page_icon %}fas fa-hand-holding-usd{% endblock %}
+{% block page_title %}Commission Details{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'finance:dashboard' %}">Dashboard</a></li>
+<li class="breadcrumb-item"><a href="{% url 'finance:commission_list' %}">All Commissions</a></li>
+<li class="breadcrumb-item active">Commission #{{ commission.id }}</li>
+{% endblock %}
+
+{% block content %}
+<div class="commission-detail">
+    
+    <!-- Header Card -->
+    <div class="card-custom mb-4">
+        <div class="card-header-custom d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <i class="fas fa-receipt me-2"></i>
+                Commission Details
+            </h5>
+            <div>
+                {% if commission.status == 'pending' %}
+                <span class="badge bg-warning text-dark px-3 py-2">Pending</span>
+                {% elif commission.status == 'paid' %}
+                <span class="badge bg-success px-3 py-2">Paid</span>
+                {% else %}
+                <span class="badge bg-secondary px-3 py-2">{{ commission.get_status_display }}</span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="card-body-custom">
+            <div class="row">
+                <div class="col-md-6">
+                    <table class="table table-borderless">
+                        <tr>
+                            <th width="150">Commission ID:</th>
+                            <td><strong>#{{ commission.id }}</strong></td>
+                        </tr>
+                        <tr>
+                            <th>Date Created:</th>
+                            <td>{{ commission.created_at|date:"d M Y, H:i" }}</td>
+                        </tr>
+                        <tr>
+                            <th>Last Updated:</th>
+                            <td>{{ commission.updated_at|date:"d M Y, H:i" }}</td>
+                        </tr>
+                        <tr>
+                            <th>Status:</th>
+                            <td>
+                                {% if commission.status == 'pending' %}
+                                <span class="badge bg-warning text-dark">Pending Approval</span>
+                                {% elif commission.status == 'paid' %}
+                                <span class="badge bg-success">Paid</span>
+                                {% else %}
+                                <span class="badge bg-secondary">{{ commission.get_status_display }}</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+                <div class="col-md-6">
+                    <table class="table table-borderless">
+                        <tr>
+                            <th width="150">Commission Amount:</th>
+                            <td>
+                                <span class="h4 text-success">KES {{ commission.amount|floatformat:2|intcomma }}</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Payment Method:</th>
+                            <td>
+                                {% if commission.payment_method %}
+                                <span class="badge bg-info">{{ commission.payment_method|upper }}</span>
+                                {% else %}
+                                <span class="text-muted">Not specified</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Payment Reference:</th>
+                            <td>
+                                {% if commission.payment_reference %}
+                                <code>{{ commission.payment_reference }}</code>
+                                {% else %}
+                                <span class="text-muted">Not specified</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Paid Date:</th>
+                            <td>
+                                {% if commission.paid_date %}
+                                {{ commission.paid_date|date:"d M Y, H:i" }}
+                                {% else %}
+                                <span class="text-muted">Not paid yet</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Transaction Details Card -->
+    <div class="card-custom mb-4">
+        <div class="card-header-custom">
+            <h5 class="mb-0"><i class="fas fa-shopping-cart me-2"></i>Transaction Details</h5>
+        </div>
+        <div class="card-body-custom">
+            <div class="row">
+                <div class="col-md-6">
+                    <table class="table table-borderless">
+                        <tr>
+                            <th width="150">Transaction ID:</th>
+                            <td>
+                                <a href="{% url 'credit:transaction_detail' commission.transaction.id %}" target="_blank">
+                                    <strong>{{ commission.transaction.transaction_id }}</strong>
+                                    <i class="fas fa-external-link-alt ms-1 small"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Transaction Date:</th>
+                            <td>{{ commission.transaction.transaction_date|date:"d M Y, H:i" }}</td>
+                        </tr>
+                        <tr>
+                            <th>Credit Company:</th>
+                            <td>{{ commission.transaction.credit_company.name }}</td>
+                        </tr>
+                        <tr>
+                            <th>Company Payment Status:</th>
+                            <td>
+                                {% if commission.transaction.payment_status == 'paid' %}
+                                <span class="badge bg-success">Paid</span>
+                                {% else %}
+                                <span class="badge bg-warning text-dark">Pending</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+                <div class="col-md-6">
+                    <table class="table table-borderless">
+                        <tr>
+                            <th width="150">Seller:</th>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <div class="user-avatar me-2">
+                                        {{ commission.seller.first_name|first|default:commission.seller.username|first|upper }}
+                                    </div>
+                                    {{ commission.seller.get_full_name|default:commission.seller.username }}
+                                </div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Customer:</th>
+                            <td>{{ commission.transaction.customer.full_name }}</td>
+                        </tr>
+                        <tr>
+                            <th>Customer Phone:</th>
+                            <td>{{ commission.transaction.customer.phone_number }}</td>
+                        </tr>
+                        <tr>
+                            <th>Product:</th>
+                            <td>
+                                {{ commission.transaction.product.name }}
+                                {% if commission.transaction.product.product_code %}
+                                <small class="text-muted">({{ commission.transaction.product.product_code }})</small>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+            
+            <hr>
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <h6 class="mb-3">Financial Details</h6>
+                    <table class="table table-sm table-borderless">
+                        <tr>
+                            <th width="180">Sale Amount (Ceiling Price):</th>
+                            <td class="text-end">KES {{ commission.transaction.ceiling_price|floatformat:2|intcomma }}</td>
+                        </tr>
+                        <tr>
+                            <th>Commission Type:</th>
+                            <td class="text-end">
+                                {% if commission.transaction.commission_type == 'percentage' %}
+                                {{ commission.transaction.commission_value }}% of sale
+                                {% else %}
+                                Fixed Amount
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr class="table-active">
+                            <th class="fw-bold">Commission Amount:</th>
+                            <td class="text-end fw-bold text-success">
+                                KES {{ commission.amount|floatformat:2|intcomma }}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Commission Status:</th>
+                            <td class="text-end">
+                                {% if commission.status == 'paid' %}
+                                <span class="badge bg-success">Paid to Seller</span>
+                                {% else %}
+                                <span class="badge bg-warning text-dark">Pending Payment</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+                <div class="col-md-6">
+                    <h6 class="mb-3">Payment Information</h6>
+                    <table class="table table-sm table-borderless">
+                        <tr>
+                            <th width="180">Paid By:</th>
+                            <td class="text-end">
+                                {% if commission.paid_by %}
+                                {{ commission.paid_by.get_full_name|default:commission.paid_by.username }}
+                                {% else %}
+                                <span class="text-muted">Not paid yet</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Payment Date:</th>
+                            <td class="text-end">
+                                {% if commission.paid_date %}
+                                {{ commission.paid_date|date:"d M Y, H:i" }}
+                                {% else %}
+                                <span class="text-muted">Not paid yet</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Payment Method:</th>
+                            <td class="text-end">
+                                {% if commission.payment_method %}
+                                <span class="badge bg-info">{{ commission.payment_method|upper }}</span>
+                                {% else %}
+                                <span class="text-muted">Not specified</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Payment Reference:</th>
+                            <td class="text-end">
+                                {% if commission.payment_reference %}
+                                <code>{{ commission.payment_reference }}</code>
+                                {% else %}
+                                <span class="text-muted">Not specified</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+            
+            {% if commission.notes %}
+            <hr>
+            <div class="row">
+                <div class="col-12">
+                    <h6 class="mb-3">Notes</h6>
+                    <div class="alert alert-info mb-0">
+                        <i class="fas fa-sticky-note me-2"></i>
+                        {{ commission.notes|linebreaks }}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    
+</div>
+
+         
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Approve button click
+    $('.approve-btn').click(function() {
+        const commissionId = $(this).data('id');
+        $('#approveCommissionId').val(commissionId);
+        $('#approveModal').modal('show');
+    });
+    
+    // Handle approve form submission
+    $('#approveForm').on('submit', function(e) {
+        e.preventDefault();
+        const commissionId = $('#approveCommissionId').val();
+        const paymentMethod = $('#paymentMethod').val();
+        const paymentReference = $('#paymentReference').val();
+        const notes = $('#approveNotes').val();
+        
+        if (!paymentMethod) {
+            alert('Please select a payment method');
+            return;
+        }
+        
+        // Show loading state
+        const submitBtn = $(this).find('button[type="submit"]');
+        const originalText = submitBtn.html();
+        submitBtn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-2"></span>Processing...');
+        
+        $.ajax({
+            url: '{% url "finance:commission_approve" commission.id %}',
+            method: 'POST',
+            data: {
+                payment_method: paymentMethod,
+                payment_reference: paymentReference,
+                notes: notes,
+                csrfmiddlewaretoken: '{{ csrf_token }}'
+            },
+            success: function(response) {
+                if (response.success) {
+                    // Show success message
+                    alert('Commission approved and paid successfully!');
+                    // Redirect to commission list
+                    window.location.href = '{% url "finance:commission_list" %}';
+                } else {
+                    alert(response.error || 'An error occurred');
+                    submitBtn.prop('disabled', false).html(originalText);
+                }
+            },
+            error: function(xhr) {
+                let errorMsg = 'An error occurred';
+                if (xhr.responseJSON && xhr.responseJSON.error) {
+                    errorMsg = xhr.responseJSON.error;
+                }
+                alert(errorMsg);
+                submitBtn.prop('disabled', false).html(originalText);
+            }
+        });
+    });
+});
+</script>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .commission-detail .card-custom {
+        margin-bottom: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .user-avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: 600;
+        font-size: 0.9rem;
+    }
+    
+    .table-borderless th {
+        font-weight: 600;
+        color: #666;
+    }
+    
+    .table-borderless td {
+        font-weight: 500;
+    }
+    
+    .badge {
+        padding: 5px 10px;
+        font-size: 0.75rem;
+        border-radius: 5px;
+    }
+    
+    @media print {
+        .btn, .modal, .breadcrumb, .sidebar, .navbar {
+            display: none !important;
+        }
+        
+        .card-custom {
+            box-shadow: none !important;
+            border: 1px solid #ddd !important;
+        }
+        
+        body {
+            background: white !important;
+        }
+    }
+    
+    [data-theme="dark"] .table-borderless th {
+        color: #adb5bd;
+    }
+    
+    [data-theme="dark"] .card-custom {
+        background: var(--sidebar-solid);
+        border-color: #495057;
+    }
+</style>
+{% endblock %}
