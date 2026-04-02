@@ -61,6 +61,12 @@ urlpatterns = [
     path('transactions/', views.financial_transactions, name='transactions'),  # Alias for backward compatibility
     
     # ============================================
+    # INCOME AND EXPENSE
+    # ============================================
+    path('income/', views.financial_income, name='financial_income'),
+    path('expenses/', views.financial_expenses, name='financial_expenses'),
+    
+    # ============================================
     # FINANCE ACCOUNTS
     # ============================================
     path('accounts/cash/', views.cash_account, name='cash_account'),

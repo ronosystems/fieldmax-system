@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 @login_required
 def finance_dashboard(request):
-    """Finance dashboard overview"""
+    """Finance dashboard overview - Salaries are for previous month (paid at start of current month)"""
     from decimal import Decimal
     from django.db.models import Sum, Q
     from datetime import datetime, timedelta
@@ -45,7 +45,17 @@ def finance_dashboard(request):
     current_month = today.month
     current_year = today.year
     
-    # Get month start and end dates
+    # Calculate previous month (the month salaries are FOR)
+    if current_month == 1:
+        previous_month = 12
+        previous_year = current_year - 1
+        previous_month_name = calendar.month_name[previous_month]
+    else:
+        previous_month = current_month - 1
+        previous_year = current_year
+        previous_month_name = calendar.month_name[previous_month]
+    
+    # Get month start and end dates for the MONTH WE ARE REPORTING ON (not payment date)
     month_start = datetime(current_year, current_month, 1)
     if current_month == 12:
         month_end = datetime(current_year + 1, 1, 1) - timedelta(seconds=1)
@@ -55,77 +65,265 @@ def finance_dashboard(request):
     month_start_aware = timezone.make_aware(month_start)
     month_end_aware = timezone.make_aware(month_end)
     
+    # Get year start and end dates
+    year_start = datetime(current_year, 1, 1)
+    year_end = datetime(current_year + 1, 1, 1) - timedelta(seconds=1)
+    year_start_aware = timezone.make_aware(year_start)
+    year_end_aware = timezone.make_aware(year_end)
+    
+    # Get last 7 days for weekly stats
+    week_start = today - timedelta(days=7)
+    week_start_aware = timezone.make_aware(datetime.combine(week_start, datetime.min.time()))
+    
+    # Get today's start for daily stats
+    today_start = timezone.make_aware(datetime.combine(today, datetime.min.time()))
+    today_end = timezone.make_aware(datetime.combine(today, datetime.max.time()))
+    
     # ============================================
-    # INCOME (Money coming IN)
+    # MONTHLY INCOME
     # ============================================
     
-    # 1. Sales Income (from sales app)
-    sales_income = Sale.objects.filter(
+    monthly_sales_income = Sale.objects.filter(
         sale_date__range=[month_start_aware, month_end_aware],
         is_reversed=False
     ).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
     
-    # 2. Credit Sales Income (from credit app)
-    credit_income = CreditTransaction.objects.filter(
+    monthly_credit_income = CreditTransaction.objects.filter(
         paid_date__range=[month_start_aware, month_end_aware],
         payment_status='paid'
     ).aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
     
-    # 3. Account Income (from cash/bank/credit accounts - manual entries)
-    account_income = AccountTransaction.objects.filter(
+    monthly_account_income = AccountTransaction.objects.filter(
         transaction_date__range=[month_start_aware, month_end_aware],
         transaction_type='income'
     ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
     
-    total_income = sales_income + credit_income + account_income
+    monthly_total_income = monthly_sales_income + monthly_credit_income + monthly_account_income
     
     # ============================================
-    # EXPENSES (Money going OUT)
+    # ANNUAL INCOME
     # ============================================
     
-    # 1. Salary Expenses (paid salaries)
-    salary_expenses = Salary.objects.filter(
-        paid_date__range=[month_start_aware, month_end_aware],
+    annual_sales_income = Sale.objects.filter(
+        sale_date__range=[year_start_aware, year_end_aware],
+        is_reversed=False
+    ).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+    
+    annual_credit_income = CreditTransaction.objects.filter(
+        paid_date__range=[year_start_aware, year_end_aware],
+        payment_status='paid'
+    ).aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
+    
+    annual_account_income = AccountTransaction.objects.filter(
+        transaction_date__range=[year_start_aware, year_end_aware],
+        transaction_type='income'
+    ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+    
+    annual_total_income = annual_sales_income + annual_credit_income + annual_account_income
+    
+    # ============================================
+    # WEEKLY INCOME (Last 7 days)
+    # ============================================
+    
+    weekly_sales_income = Sale.objects.filter(
+        sale_date__gte=week_start_aware,
+        is_reversed=False
+    ).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+    
+    weekly_credit_income = CreditTransaction.objects.filter(
+        paid_date__gte=week_start_aware,
+        payment_status='paid'
+    ).aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
+    
+    weekly_account_income = AccountTransaction.objects.filter(
+        transaction_date__gte=week_start_aware,
+        transaction_type='income'
+    ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+    
+    weekly_total_income = weekly_sales_income + weekly_credit_income + weekly_account_income
+    
+    # ============================================
+    # DAILY INCOME (Today)
+    # ============================================
+    
+    daily_sales_income = Sale.objects.filter(
+        sale_date__range=[today_start, today_end],
+        is_reversed=False
+    ).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+    
+    daily_credit_income = CreditTransaction.objects.filter(
+        paid_date__range=[today_start, today_end],
+        payment_status='paid'
+    ).aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
+    
+    daily_account_income = AccountTransaction.objects.filter(
+        transaction_date__range=[today_start, today_end],
+        transaction_type='income'
+    ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+    
+    daily_total_income = daily_sales_income + daily_credit_income + daily_account_income
+    
+    # ============================================
+    # MONTHLY EXPENSES - SALARIES FOR PREVIOUS MONTH
+    # ============================================
+    
+    # Salaries are FOR previous month (paid at start of current month)
+    monthly_salary_expenses = Salary.objects.filter(
+        month=previous_month,
+        year=previous_year,
         status='paid'
     ).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
     
-    # 2. Commission Expenses (paid commissions)
-    commission_expenses = SellerCommission.objects.filter(
-        paid_date__range=[month_start_aware, month_end_aware],
-        status='paid'
+    # Commission Expenses
+    monthly_commission_expenses = SellerCommission.objects.filter(
+        status='paid',
+        paid_date__range=[month_start_aware, month_end_aware]
     ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
     
-    # 3. Account Expenses (manual expense entries)
-    account_expenses = AccountTransaction.objects.filter(
+    # Account Expenses
+    monthly_account_expenses = AccountTransaction.objects.filter(
         transaction_date__range=[month_start_aware, month_end_aware],
         transaction_type='expense'
     ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
     
-    total_expenses = salary_expenses + commission_expenses + account_expenses
+    monthly_total_expenses = monthly_salary_expenses + monthly_commission_expenses + monthly_account_expenses
     
     # ============================================
-    # NET PROFIT
+    # ANNUAL EXPENSES
     # ============================================
-    net_profit = total_income - total_expenses
-    profit_margin = (net_profit / total_income * 100) if total_income > 0 else 0
+    
+    annual_salary_expenses = Salary.objects.filter(
+        year=previous_year,
+        status='paid'
+    ).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+    
+    annual_commission_expenses = SellerCommission.objects.filter(
+        status='paid',
+        paid_date__range=[year_start_aware, year_end_aware]
+    ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+    
+    annual_account_expenses = AccountTransaction.objects.filter(
+        transaction_date__range=[year_start_aware, year_end_aware],
+        transaction_type='expense'
+    ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+    
+    annual_total_expenses = annual_salary_expenses + annual_commission_expenses + annual_account_expenses
     
     # ============================================
-    # SALARY SUMMARY
+    # WEEKLY EXPENSES (Last 7 days)
     # ============================================
+    
+    weekly_salary_expenses = Salary.objects.filter(
+        paid_date__gte=week_start_aware,
+        status='paid'
+    ).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+    
+    weekly_commission_expenses = SellerCommission.objects.filter(
+        status='paid',
+        paid_date__gte=week_start_aware
+    ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+    
+    weekly_account_expenses = AccountTransaction.objects.filter(
+        transaction_date__gte=week_start_aware,
+        transaction_type='expense'
+    ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+    
+    weekly_total_expenses = weekly_salary_expenses + weekly_commission_expenses + weekly_account_expenses
+    
+    # ============================================
+    # DAILY EXPENSES (Today)
+    # ============================================
+    
+    daily_salary_expenses = Salary.objects.filter(
+        paid_date__range=[today_start, today_end],
+        status='paid'
+    ).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+    
+    daily_commission_expenses = SellerCommission.objects.filter(
+        status='paid',
+        paid_date__range=[today_start, today_end]
+    ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+    
+    daily_account_expenses = AccountTransaction.objects.filter(
+        transaction_date__range=[today_start, today_end],
+        transaction_type='expense'
+    ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+    
+    daily_total_expenses = daily_salary_expenses + daily_commission_expenses + daily_account_expenses
+    
+    # ============================================
+    # NET PROFIT CALCULATIONS
+    # ============================================
+    
+    monthly_net_profit = monthly_total_income - monthly_total_expenses
+    monthly_profit_margin = (monthly_net_profit / monthly_total_income * 100) if monthly_total_income > 0 else 0
+    
+    annual_net_profit = annual_total_income - annual_total_expenses
+    annual_profit_margin = (annual_net_profit / annual_total_income * 100) if annual_total_income > 0 else 0
+    
+    weekly_net_profit = weekly_total_income - weekly_total_expenses
+    weekly_profit_margin = (weekly_net_profit / weekly_total_income * 100) if weekly_total_income > 0 else 0
+    
+    daily_net_profit = daily_total_income - daily_total_expenses
+    
+    # Average daily profit (last 30 days)
+    thirty_days_ago = today - timedelta(days=30)
+    thirty_days_ago_aware = timezone.make_aware(datetime.combine(thirty_days_ago, datetime.min.time()))
+    
+    last_30_days_profit = 0
+    days_with_data = 0
+    for i in range(30):
+        day = thirty_days_ago + timedelta(days=i)
+        day_start = timezone.make_aware(datetime.combine(day, datetime.min.time()))
+        day_end = timezone.make_aware(datetime.combine(day, datetime.max.time()))
+        
+        day_income = (
+            Sale.objects.filter(sale_date__range=[day_start, day_end], is_reversed=False).aggregate(total=Sum('total_amount'))['total'] or 0
+        ) + (
+            CreditTransaction.objects.filter(paid_date__range=[day_start, day_end], payment_status='paid').aggregate(total=Sum('ceiling_price'))['total'] or 0
+        ) + (
+            AccountTransaction.objects.filter(transaction_date__range=[day_start, day_end], transaction_type='income').aggregate(total=Sum('amount'))['total'] or 0
+        )
+        
+        day_expenses = (
+            Salary.objects.filter(paid_date__range=[day_start, day_end], status='paid').aggregate(total=Sum('total_amount'))['total'] or 0
+        ) + (
+            SellerCommission.objects.filter(paid_date__range=[day_start, day_end], status='paid').aggregate(total=Sum('amount'))['total'] or 0
+        ) + (
+            AccountTransaction.objects.filter(transaction_date__range=[day_start, day_end], transaction_type='expense').aggregate(total=Sum('amount'))['total'] or 0
+        )
+        
+        if day_income > 0 or day_expenses > 0:
+            days_with_data += 1
+            last_30_days_profit += (day_income - day_expenses)
+    
+    avg_daily_profit = last_30_days_profit / days_with_data if days_with_data > 0 else 0
+    
+    # ============================================
+    # SALARY SUMMARY - FOR PREVIOUS MONTH
+    # ============================================
+    previous_month_salaries = Salary.objects.filter(
+        month=previous_month,
+        year=previous_year
+    ).select_related('staff')
+    
+    total_base_salary = previous_month_salaries.aggregate(total=Sum('base_salary'))['total'] or 0
+    total_bonus = previous_month_salaries.aggregate(total=Sum('bonus'))['total'] or 0
+    total_deductions = previous_month_salaries.aggregate(total=Sum('deductions'))['total'] or 0
+    total_salary_amount = previous_month_salaries.aggregate(total=Sum('total_amount'))['total'] or 0
+    
+    salaries_pending = previous_month_salaries.filter(status='pending').aggregate(total=Sum('total_amount'))['total'] or 0
+    salaries_approved = previous_month_salaries.filter(status='approved').aggregate(total=Sum('total_amount'))['total'] or 0
+    salaries_paid = previous_month_salaries.filter(status='paid').aggregate(total=Sum('total_amount'))['total'] or 0
+    salaries_paid_count = previous_month_salaries.filter(status='paid').count()
+    previous_month_salaries_count = previous_month_salaries.count()
+    previous_month_salaries_paid = salaries_paid
+    
+    # Current month salaries (for display in table - being prepared)
     current_month_salaries = Salary.objects.filter(
         month=current_month,
         year=current_year
     ).select_related('staff')
-    
-    total_base_salary = current_month_salaries.aggregate(total=Sum('base_salary'))['total'] or 0
-    total_bonus = current_month_salaries.aggregate(total=Sum('bonus'))['total'] or 0
-    total_deductions = current_month_salaries.aggregate(total=Sum('deductions'))['total'] or 0
-    total_salary_amount = current_month_salaries.aggregate(total=Sum('total_amount'))['total'] or 0
-    
-    salaries_pending = current_month_salaries.filter(status='pending').aggregate(total=Sum('total_amount'))['total'] or 0
-    salaries_approved = current_month_salaries.filter(status='approved').aggregate(total=Sum('total_amount'))['total'] or 0
-    salaries_paid = current_month_salaries.filter(status='paid').aggregate(total=Sum('total_amount'))['total'] or 0
-    salaries_paid_count = current_month_salaries.filter(status='paid').count()
     
     # ============================================
     # COMMISSION SUMMARY
@@ -133,10 +331,12 @@ def finance_dashboard(request):
     commissions_pending = SellerCommission.objects.filter(
         status='pending'
     ).aggregate(total=Sum('amount'))['total'] or 0
+    commissions_pending_count = SellerCommission.objects.filter(status='pending').count()
     
     commissions_approved = SellerCommission.objects.filter(
         status='approved'
     ).aggregate(total=Sum('amount'))['total'] or 0
+    commissions_approved_count = SellerCommission.objects.filter(status='approved').count()
     
     commissions_paid = SellerCommission.objects.filter(
         status='paid',
@@ -154,9 +354,21 @@ def finance_dashboard(request):
     total_pending_commissions = commissions_pending
     
     # ============================================
-    # CHART DATA (Last 30 days)
+    # EXPENSE DISTRIBUTION (for pie chart)
     # ============================================
-    thirty_days_ago = today - timedelta(days=30)
+    salary_expenses_total = monthly_salary_expenses
+    commission_expenses_total = monthly_commission_expenses
+    operational_expenses = monthly_account_expenses
+    other_expenses = Decimal('0.00')
+    
+    # ============================================
+    # RECENT TRANSACTIONS (Last 10)
+    # ============================================
+    recent_transactions = FinancialTransaction.objects.select_related('created_by').order_by('-transaction_date')[:10]
+    
+    # ============================================
+    # CHART DATA (Last 30 days by transaction/payment date)
+    # ============================================
     chart_labels = []
     income_data = []
     expense_data = []
@@ -186,11 +398,6 @@ def finance_dashboard(request):
         daily_income = day_sales + day_credit + day_account_income
         
         # Daily expenses
-        day_salaries = Salary.objects.filter(
-            paid_date__range=[day_start, day_end],
-            status='paid'
-        ).aggregate(total=Sum('total_amount'))['total'] or 0
-        
         day_commissions = SellerCommission.objects.filter(
             paid_date__range=[day_start, day_end],
             status='paid'
@@ -201,6 +408,11 @@ def finance_dashboard(request):
             transaction_type='expense'
         ).aggregate(total=Sum('amount'))['total'] or 0
         
+        day_salaries = Salary.objects.filter(
+            paid_date__range=[day_start, day_end],
+            status='paid'
+        ).aggregate(total=Sum('total_amount'))['total'] or 0
+        
         daily_expense = day_salaries + day_commissions + day_account_expenses
         
         chart_labels.append(day.strftime('%d %b'))
@@ -209,53 +421,62 @@ def finance_dashboard(request):
         profit_data.append(float(daily_income - daily_expense))
     
     # ============================================
-    # EXPENSE DISTRIBUTION (for pie chart)
-    # ============================================
-    salary_expenses_total = salary_expenses
-    commission_expenses_total = commission_expenses
-    operational_expenses = account_expenses
-    other_expenses = Decimal('0.00')
-    
-    # ============================================
-    # RECENT TRANSACTIONS (Last 10)
-    # ============================================
-    recent_transactions = FinancialTransaction.objects.select_related('created_by').order_by('-transaction_date')[:10]
-    
-    # ============================================
-    # DEBUG PRINT - To verify values
+    # DEBUG PRINT
     # ============================================
     print("=" * 60)
     print("FINANCE DASHBOARD SUMMARY")
-    print(f"Month: {calendar.month_name[current_month]} {current_year}")
-    print(f"Sales Income: KSH {sales_income:,.2f}")
-    print(f"Credit Income: KSH {credit_income:,.2f}")
-    print(f"Account Income: KSH {account_income:,.2f}")
-    print(f"TOTAL INCOME: KSH {total_income:,.2f}")
+    print(f"Current Month: {calendar.month_name[current_month]} {current_year}")
+    print(f"Salaries are FOR: {calendar.month_name[previous_month]} {previous_year}")
     print("-" * 40)
-    print(f"Salary Expenses: KSH {salary_expenses:,.2f}")
-    print(f"Commission Expenses: KSH {commission_expenses:,.2f}")
-    print(f"Account Expenses: KSH {account_expenses:,.2f}")
-    print(f"TOTAL EXPENSES: KSH {total_expenses:,.2f}")
+    print(f"MONTHLY Income: KSH {monthly_total_income:,.2f}")
+    print(f"MONTHLY Expenses (Salaries for {calendar.month_name[previous_month]}): KSH {monthly_salary_expenses:,.2f}")
+    print(f"MONTHLY Net Profit: KSH {monthly_net_profit:,.2f}")
     print("-" * 40)
-    print(f"NET PROFIT: KSH {net_profit:,.2f}")
-    print(f"PROFIT MARGIN: {profit_margin:.1f}%")
+    print(f"WEEKLY Income: KSH {weekly_total_income:,.2f}")
+    print(f"WEEKLY Expenses: KSH {weekly_total_expenses:,.2f}")
+    print(f"WEEKLY Net Profit: KSH {weekly_net_profit:,.2f}")
+    print("-" * 40)
+    print(f"DAILY Income: KSH {daily_total_income:,.2f}")
+    print(f"DAILY Expenses: KSH {daily_total_expenses:,.2f}")
+    print(f"DAILY Net Profit: KSH {daily_net_profit:,.2f}")
     print("=" * 60)
     
     # ============================================
     # CONTEXT
     # ============================================
     context = {
-        # Summary cards
-        'total_income': total_income,
-        'total_expenses': total_expenses,
-        'net_profit': net_profit,
-        'profit_margin': profit_margin,
+        # Monthly Summary
+        'total_income': monthly_total_income,
+        'total_expenses': monthly_total_expenses,
+        'net_profit': monthly_net_profit,
+        'profit_margin': monthly_profit_margin,
         
-        # Salaries
+        # Annual Summary
+        'annual_total_income': annual_total_income,
+        'annual_total_expenses': annual_total_expenses,
+        'annual_net_profit': annual_net_profit,
+        'annual_profit_margin': annual_profit_margin,
+        
+        # Weekly Summary
+        'weekly_total_income': weekly_total_income,
+        'weekly_total_expenses': weekly_total_expenses,
+        'weekly_net_profit': weekly_net_profit,
+        'weekly_profit_margin': weekly_profit_margin,
+        
+        # Daily Summary
+        'daily_income': daily_total_income,
+        'daily_expenses': daily_total_expenses,
+        'daily_profit': daily_net_profit,
+        'avg_daily_profit': avg_daily_profit,
+        
+        # Salaries (Previous Month)
         'salaries_pending': salaries_pending,
         'salaries_approved': salaries_approved,
         'salaries_paid': salaries_paid,
         'salaries_paid_count': salaries_paid_count,
+        'previous_month_salaries': previous_month_salaries,
+        'previous_month_salaries_paid': previous_month_salaries_paid,
+        'previous_month_salaries_count': previous_month_salaries_count,
         'current_month_salaries': current_month_salaries,
         'total_base_salary': total_base_salary,
         'total_bonus': total_bonus,
@@ -264,7 +485,9 @@ def finance_dashboard(request):
         
         # Commissions
         'commissions_pending': commissions_pending,
+        'commissions_pending_count': commissions_pending_count,
         'commissions_approved': commissions_approved,
+        'commissions_approved_count': commissions_approved_count,
         'commissions_paid': commissions_paid,
         'sellers_with_pending': sellers_with_pending,
         'pending_commissions': pending_commissions,
@@ -285,8 +508,11 @@ def finance_dashboard(request):
         # Recent transactions
         'recent_transactions': recent_transactions,
         
+        # Date info
         'current_month': calendar.month_name[current_month],
         'current_year': current_year,
+        'previous_month': calendar.month_name[previous_month],
+        'previous_year': previous_year,
         'today': today,
     }
     
@@ -299,7 +525,7 @@ def finance_dashboard(request):
 
 @login_required
 def salary_list(request):
-    """List all staff salaries"""
+    """List all staff salaries with filtering"""
     salaries = Salary.objects.select_related('staff', 'created_by', 'paid_by').all()
     
     # Filters
@@ -319,6 +545,18 @@ def salary_list(request):
     if year:
         salaries = salaries.filter(year=year)
     
+    # Calculate totals for summary cards
+    total_pending = salaries.filter(status='pending').aggregate(total=Sum('total_amount'))['total'] or 0
+    total_approved = salaries.filter(status='approved').aggregate(total=Sum('total_amount'))['total'] or 0
+    total_paid = salaries.filter(status='paid').aggregate(total=Sum('total_amount'))['total'] or 0
+    total_records = salaries.count()
+    
+    # Calculate totals for table footer
+    total_base_salary = salaries.aggregate(total=Sum('base_salary'))['total'] or 0
+    total_bonus = salaries.aggregate(total=Sum('bonus'))['total'] or 0
+    total_deductions = salaries.aggregate(total=Sum('deductions'))['total'] or 0
+    total_amount = salaries.aggregate(total=Sum('total_amount'))['total'] or 0
+    
     # Pagination
     paginator = Paginator(salaries, 20)
     page_number = request.GET.get('page')
@@ -326,6 +564,11 @@ def salary_list(request):
     
     # Get staff list for filter
     staff_list = User.objects.filter(is_active=True)
+    
+    # Get unique years for filter
+    years = Salary.objects.dates('created_at', 'year').values_list('year', flat=True).distinct()
+    if not years:
+        years = range(2020, timezone.now().year + 1)
     
     context = {
         'salaries': page_obj,
@@ -338,6 +581,18 @@ def salary_list(request):
         },
         'months': Salary.MONTH_CHOICES,
         'years': range(2020, timezone.now().year + 1),
+        
+        # Summary card totals
+        'total_pending': total_pending,
+        'total_approved': total_approved,
+        'total_paid': total_paid,
+        'total_records': total_records,
+        
+        # Table footer totals
+        'total_base_salary': total_base_salary,
+        'total_bonus': total_bonus,
+        'total_deductions': total_deductions,
+        'total_amount': total_amount,
     }
     
     return render(request, 'finance/salary_list.html', context)
@@ -1795,6 +2050,251 @@ def financial_transactions(request):
     }
     
     return render(request, 'finance/transactions.html', context)
+
+
+
+
+# ============================================
+# INCOME AND EXPENSE VIEWS
+# ============================================
+
+@login_required
+def financial_income(request):
+    """List all income transactions only"""
+    from decimal import Decimal
+    from django.core.paginator import Paginator
+    from datetime import datetime, timedelta
+    
+    transactions = []
+    
+    # Sales Income
+    sales = Sale.objects.filter(is_reversed=False).select_related('seller')
+    for sale in sales:
+        transactions.append({
+            'id': f'sale_{sale.sale_id}',
+            'date': sale.sale_date,
+            'source': 'sales',
+            'description': f"Sale {sale.sale_id} - {sale.buyer_name or 'Walk-in Customer'}",
+            'amount': sale.total_amount,
+            'reference': sale.sale_id,
+            'created_by': sale.seller,
+            'payment_method': sale.payment_method,
+            'category': 'Sales Income'
+        })
+    
+    # Credit Sales Income
+    credit_sales = CreditTransaction.objects.filter(payment_status='paid').select_related('dealer', 'customer')
+    for credit in credit_sales:
+        transactions.append({
+            'id': f'credit_{credit.transaction_id}',
+            'date': credit.paid_date or credit.transaction_date,
+            'source': 'credit_sales',
+            'description': f"Credit Sale {credit.transaction_id} - {credit.customer.full_name} ({credit.credit_company.name})",
+            'amount': credit.ceiling_price,
+            'reference': credit.transaction_id,
+            'created_by': credit.dealer,
+            'payment_method': 'Credit',
+            'category': 'Credit Income'
+        })
+    
+    # Account Income (manual entries)
+    account_income = AccountTransaction.objects.filter(
+        transaction_type='income'
+    ).select_related('created_by')
+    
+    for acc_trans in account_income:
+        transactions.append({
+            'id': f'account_{acc_trans.id}',
+            'date': acc_trans.transaction_date,
+            'source': f"{acc_trans.account_type}_account",
+            'description': acc_trans.description,
+            'amount': acc_trans.amount,
+            'reference': acc_trans.reference or f"ACC-{acc_trans.id}",
+            'created_by': acc_trans.created_by,
+            'payment_method': acc_trans.account_type,
+            'category': 'Manual Entry',
+            'notes': acc_trans.notes
+        })
+    
+    # Sort by date (newest first)
+    transactions.sort(key=lambda x: x['date'], reverse=True)
+    
+    # Apply filters
+    date_from = request.GET.get('date_from')
+    if date_from:
+        try:
+            date_from_aware = timezone.make_aware(datetime.strptime(date_from, '%Y-%m-%d'))
+            transactions = [t for t in transactions if t['date'] >= date_from_aware]
+        except:
+            pass
+    
+    date_to = request.GET.get('date_to')
+    if date_to:
+        try:
+            date_to_aware = timezone.make_aware(datetime.strptime(date_to, '%Y-%m-%d') + timedelta(days=1))
+            transactions = [t for t in transactions if t['date'] <= date_to_aware]
+        except:
+            pass
+    
+    source_filter = request.GET.get('source')
+    if source_filter:
+        transactions = [t for t in transactions if t['source'] == source_filter]
+    
+    # Pagination
+    paginator = Paginator(transactions, 50)
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+    
+    # Calculate totals
+    total_income = sum(t['amount'] for t in transactions)
+    
+    # Source types for filter
+    source_types = [
+        ('sales', 'Sales Income'),
+        ('credit_sales', 'Credit Sales'),
+        ('cash_account', 'Cash Account'),
+        ('bank_account', 'Bank Account'),
+        ('credit_account', 'Credit Account'),
+    ]
+    
+    context = {
+        'transactions': page_obj,
+        'total_income': total_income,
+        'source_types': source_types,
+        'current_filters': {
+            'date_from': date_from,
+            'date_to': date_to,
+            'source': source_filter,
+        },
+        'page_title': 'Income Transactions',
+        'page_icon': 'fa-money-bill-wave',
+        'transaction_type': 'income',
+    }
+    
+    return render(request, 'finance/financial_income.html', context)
+
+
+@login_required
+def financial_expenses(request):
+    """List all expense transactions only"""
+    from decimal import Decimal
+    from django.core.paginator import Paginator
+    from datetime import datetime, timedelta
+    
+    transactions = []
+    
+    # Salary expenses
+    salaries = Salary.objects.filter(status='paid').select_related('staff', 'paid_by')
+    for salary in salaries:
+        transactions.append({
+            'id': f'salary_{salary.id}',
+            'date': salary.paid_date or salary.created_at,
+            'source': 'salary',
+            'description': f"Salary payment - {salary.staff.get_full_name() or salary.staff.username} - {salary.get_month_display()} {salary.year}",
+            'amount': salary.total_amount,
+            'reference': salary.payment_reference or f"SAL-{salary.id}",
+            'created_by': salary.paid_by or salary.created_by,
+            'payment_method': 'Bank/Cash',
+            'category': 'Salary',
+            'notes': salary.notes
+        })
+    
+    # Commission expenses
+    commissions = SellerCommission.objects.filter(status='paid').select_related('seller', 'paid_by')
+    for commission in commissions:
+        transactions.append({
+            'id': f'commission_{commission.id}',
+            'date': commission.paid_date or commission.created_at,
+            'source': 'commission',
+            'description': f"Commission payment - {commission.seller.get_full_name() or commission.seller.username} - {commission.transaction.transaction_id}",
+            'amount': commission.amount,
+            'reference': f"COMM-{commission.id}",
+            'created_by': commission.paid_by,
+            'payment_method': commission.payment_method or 'Bank/Cash',
+            'category': 'Commission',
+            'notes': commission.notes
+        })
+    
+    # Account Expenses (manual entries)
+    account_expenses = AccountTransaction.objects.filter(
+        transaction_type='expense'
+    ).select_related('created_by')
+    
+    for acc_trans in account_expenses:
+        transactions.append({
+            'id': f'account_{acc_trans.id}',
+            'date': acc_trans.transaction_date,
+            'source': f"{acc_trans.account_type}_account",
+            'description': acc_trans.description,
+            'amount': acc_trans.amount,
+            'reference': acc_trans.reference or f"ACC-{acc_trans.id}",
+            'created_by': acc_trans.created_by,
+            'payment_method': acc_trans.account_type,
+            'category': 'Manual Expense',
+            'notes': acc_trans.notes
+        })
+    
+    # Sort by date (newest first)
+    transactions.sort(key=lambda x: x['date'], reverse=True)
+    
+    # Apply filters
+    date_from = request.GET.get('date_from')
+    if date_from:
+        try:
+            date_from_aware = timezone.make_aware(datetime.strptime(date_from, '%Y-%m-%d'))
+            transactions = [t for t in transactions if t['date'] >= date_from_aware]
+        except:
+            pass
+    
+    date_to = request.GET.get('date_to')
+    if date_to:
+        try:
+            date_to_aware = timezone.make_aware(datetime.strptime(date_to, '%Y-%m-%d') + timedelta(days=1))
+            transactions = [t for t in transactions if t['date'] <= date_to_aware]
+        except:
+            pass
+    
+    source_filter = request.GET.get('source')
+    if source_filter:
+        transactions = [t for t in transactions if t['source'] == source_filter]
+    
+    # Pagination
+    paginator = Paginator(transactions, 50)
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+    
+    # Calculate totals
+    total_expenses = sum(t['amount'] for t in transactions)
+    
+    # Source types for filter
+    source_types = [
+        ('salary', 'Salary Payments'),
+        ('commission', 'Commission Payments'),
+        ('cash_account', 'Cash Account'),
+        ('bank_account', 'Bank Account'),
+        ('credit_account', 'Credit Account'),
+    ]
+    
+    context = {
+        'transactions': page_obj,
+        'total_expenses': total_expenses,
+        'source_types': source_types,
+        'current_filters': {
+            'date_from': date_from,
+            'date_to': date_to,
+            'source': source_filter,
+        },
+        'page_title': 'Expense Transactions',
+        'page_icon': 'fa-receipt',
+        'transaction_type': 'expense',
+    }
+    
+    return render(request, 'finance/financial_expenses.html', context)
+
+
+
+
+
 
 
 # ============================================
