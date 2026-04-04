@@ -2887,21 +2887,21 @@ def customer_service_dashboard(request):
 
 
 
-
 # ============================================
-# FINNANCE DASHBOARD
+# FINANCE MANAGER DASHBOARD - Management & Approvals Focus
 # ============================================
 @login_required
 @dashboard_for_role('Finance Manager')
 def finance_manager_dashboard(request):
-    """Finance Manager Dashboard - Complete overview of all financial data"""
-    from finance.models import Salary, FinancialTransaction, AccountTransaction, CashAccount, BankAccount, CreditAccount
-    from credit.models import SellerCommission, CreditTransaction
+    """Finance Manager Dashboard - Focus on approvals, team management, and tasks"""
+    from finance.models import Salary, FinancialTransaction
+    from credit.models import SellerCommission
+    from staff.models import StaffApplication, Staff, UserProfile
+    from django.contrib.auth.models import User
     from decimal import Decimal
-    from django.db.models import Sum, Q
+    from django.db.models import Sum, Q, Count
     from django.utils import timezone
     from datetime import datetime, timedelta
-    import calendar
     
     today = timezone.now().date()
     current_month = today.month
@@ -2915,221 +2915,180 @@ def finance_manager_dashboard(request):
         month_end = timezone.make_aware(datetime(current_year, current_month + 1, 1)) - timedelta(seconds=1)
     
     # ============================================
-    # ACCOUNT BALANCES
+    # PENDING APPROVALS COUNTS
     # ============================================
-    cash_account, _ = CashAccount.objects.get_or_create(id=1)
-    bank_account, _ = BankAccount.objects.get_or_create(id=1)
-    credit_account, _ = CreditAccount.objects.get_or_create(id=1)
     
-    # ============================================
-    # INCOME & EXPENSES (This Month)
-    # ============================================
-    # Income from manual account transactions
-    manual_income = AccountTransaction.objects.filter(
-        account_type__in=['cash', 'bank'],
-        transaction_type='income',
-        transaction_date__range=[month_start, month_end]
-    ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-    
-    # Income from credit company payments
-    credit_payments = CompanyPayment.objects.filter(
-        payment_date__range=[month_start.date(), month_end.date()]
-    ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-    
-    # Income from credit sales paid
-    credit_sales_income = CreditTransaction.objects.filter(
-        payment_status='paid',
-        paid_date__range=[month_start, month_end]
-    ).aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
-    
-    total_income = manual_income + credit_payments + credit_sales_income
-    
-    # Expenses
-    salary_expenses = Salary.objects.filter(
-        status='paid',
-        paid_date__range=[month_start, month_end]
-    ).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-    
-    commission_expenses = SellerCommission.objects.filter(
-        status='paid',
-        paid_date__range=[month_start, month_end]
-    ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-    
-    manual_expenses = AccountTransaction.objects.filter(
-        account_type__in=['cash', 'bank'],
-        transaction_type='expense',
-        transaction_date__range=[month_start, month_end]
-    ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-    
-    total_expenses = salary_expenses + commission_expenses + manual_expenses
-    net_profit = total_income - total_expenses
-    profit_margin = (net_profit / total_income * 100) if total_income > 0 else 0
-    
-    # ============================================
-    # SALARY STATISTICS
-    # ============================================
-    current_month_salaries = Salary.objects.filter(
-        month=current_month,
-        year=current_year
-    ).select_related('staff')
-    
-    total_base_salary = current_month_salaries.aggregate(total=Sum('base_salary'))['total'] or 0
-    total_bonus = current_month_salaries.aggregate(total=Sum('bonus'))['total'] or 0
-    total_deductions = current_month_salaries.aggregate(total=Sum('deductions'))['total'] or 0
-    total_salary_amount = current_month_salaries.aggregate(total=Sum('total_amount'))['total'] or 0
-    
-    salaries_pending = current_month_salaries.filter(status='pending').aggregate(total=Sum('total_amount'))['total'] or 0
-    salaries_paid = current_month_salaries.filter(status='paid').aggregate(total=Sum('total_amount'))['total'] or 0
-    salaries_paid_count = current_month_salaries.filter(status='paid').count()
-    
-    # ============================================
-    # COMMISSION STATISTICS
-    # ============================================
-    commissions_pending = SellerCommission.objects.filter(
+    # Pending Salary Approvals
+    pending_salary_approvals = Salary.objects.filter(
         status='pending'
-    ).aggregate(total=Sum('amount'))['total'] or 0
+    ).count()
     
-    commissions_paid = SellerCommission.objects.filter(
-        status='paid'
-    ).aggregate(total=Sum('amount'))['total'] or 0
-    
-    sellers_with_pending = SellerCommission.objects.filter(
+    # Pending Commission Approvals
+    pending_commission_approvals = SellerCommission.objects.filter(
         status='pending'
-    ).values('seller').distinct().count()
+    ).count()
     
-    # Pending commissions for table
+    # Pending Staff Applications (using application_date instead of created_at)
+    pending_applications = StaffApplication.objects.filter(
+        status='pending'
+    ).count()
+    
+    # Pending Identity Verifications (staff not verified)
+    # Check if Staff model has verification field
+    pending_verifications = Staff.objects.filter(
+        is_verified=False
+    ).count() if hasattr(Staff, 'is_verified') else 0
+    
+    # Pending Commission Requests
+    pending_commission_requests = SellerCommission.objects.filter(
+        status='pending'
+    ).count()
+    
+    # ============================================
+    # PENDING SALARIES TABLE DATA
+    # ============================================
+    pending_salaries = Salary.objects.filter(
+        status='pending'
+    ).select_related('staff').order_by('-created_at')[:10]
+    
+    # ============================================
+    # PENDING COMMISSIONS TABLE DATA
+    # ============================================
     pending_commissions = SellerCommission.objects.filter(
         status='pending'
-    ).select_related('seller', 'transaction')[:10]
-    
-    total_pending_commissions = commissions_pending
+    ).select_related('seller', 'transaction').order_by('-created_at')[:10]
     
     # ============================================
-    # CHART DATA (Last 30 days)
+    # RECENT STAFF APPLICATIONS
     # ============================================
-    thirty_days_ago = today - timedelta(days=30)
-    chart_labels = []
-    income_data = []
-    expense_data = []
-    profit_data = []
-    
-    for i in range(30):
-        day = thirty_days_ago + timedelta(days=i)
-        day_start = timezone.make_aware(datetime.combine(day, datetime.min.time()))
-        day_end = timezone.make_aware(datetime.combine(day, datetime.max.time()))
-        
-        # Daily income
-        day_manual_income = AccountTransaction.objects.filter(
-            account_type__in=['cash', 'bank'],
-            transaction_type='income',
-            transaction_date__range=[day_start, day_end]
-        ).aggregate(total=Sum('amount'))['total'] or 0
-        
-        day_credit_payments = CompanyPayment.objects.filter(
-            payment_date=day
-        ).aggregate(total=Sum('amount'))['total'] or 0
-        
-        day_credit_sales = CreditTransaction.objects.filter(
-            payment_status='paid',
-            paid_date__range=[day_start, day_end]
-        ).aggregate(total=Sum('ceiling_price'))['total'] or 0
-        
-        daily_income = day_manual_income + day_credit_payments + day_credit_sales
-        
-        # Daily expenses
-        day_salaries = Salary.objects.filter(
-            status='paid',
-            paid_date__range=[day_start, day_end]
-        ).aggregate(total=Sum('total_amount'))['total'] or 0
-        
-        day_commissions = SellerCommission.objects.filter(
-            status='paid',
-            paid_date__range=[day_start, day_end]
-        ).aggregate(total=Sum('amount'))['total'] or 0
-        
-        day_manual_expenses = AccountTransaction.objects.filter(
-            account_type__in=['cash', 'bank'],
-            transaction_type='expense',
-            transaction_date__range=[day_start, day_end]
-        ).aggregate(total=Sum('amount'))['total'] or 0
-        
-        daily_expense = day_salaries + day_commissions + day_manual_expenses
-        
-        chart_labels.append(day.strftime('%d %b'))
-        income_data.append(float(daily_income))
-        expense_data.append(float(daily_expense))
-        profit_data.append(float(daily_income - daily_expense))
+    # Use application_date instead of created_at
+    recent_applications = StaffApplication.objects.filter(
+        status='pending'
+    ).order_by('-application_date')[:5]
     
     # ============================================
-    # EXPENSE DISTRIBUTION (for pie chart)
+    # UNVERIFIED STAFF MEMBERS
     # ============================================
-    salary_expenses_total = salary_expenses
-    commission_expenses_total = commission_expenses
-    operational_expenses = manual_expenses
-    other_expenses = Decimal('0.00')
+    # Get staff members who are not verified
+    if hasattr(Staff, 'is_verified'):
+        unverified_staff = Staff.objects.filter(
+            is_verified=False
+        ).select_related('user').order_by('-id')[:5]
+    else:
+        # Fallback: get recent staff members
+        unverified_staff = Staff.objects.select_related('user').order_by('-id')[:5]
     
     # ============================================
-    # RECENT TRANSACTIONS (Last 10)
+    # TEAM PERFORMANCE DATA
     # ============================================
-    recent_transactions = FinancialTransaction.objects.select_related('created_by').order_by('-transaction_date')[:10]
+    
+    # Team members by department/role
+    departments = ['Sales', 'Finance', 'Credit', 'Customer Service', 'Management']
+    team_members_data = []
+    team_tasks_data = []
+    
+    # Count staff by position/department
+    for dept in departments:
+        # Count active staff members in this department
+        # Adjust based on your Staff model fields (position, department, role)
+        if hasattr(Staff, 'position'):
+            member_count = Staff.objects.filter(
+                position__icontains=dept
+            ).count()
+        else:
+            # Fallback: count all staff and distribute
+            total_staff = Staff.objects.count()
+            member_count = total_staff // len(departments) if total_staff > 0 else 0
+        team_members_data.append(member_count)
+        
+        # Count pending tasks for this department
+        if dept == 'Sales':
+            tasks = SellerCommission.objects.filter(status='pending').count()
+        elif dept == 'Finance':
+            tasks = Salary.objects.filter(status='pending').count()
+        elif dept == 'Credit':
+            tasks = SellerCommission.objects.filter(status='pending').count()
+        else:
+            tasks = 0
+        team_tasks_data.append(tasks)
     
     # ============================================
-    # TOTAL BALANCE
+    # NOTIFICATION COUNT
     # ============================================
-    total_balance = cash_account.balance + bank_account.balance + (credit_account.credit_limit - credit_account.balance)
+    notification_count = (
+        pending_salary_approvals + 
+        pending_commission_approvals + 
+        pending_applications + 
+        pending_verifications
+    )
+    
+    # ============================================
+    # FINANCIAL SUMMARY (Quick Overview Cards)
+    # ============================================
+    
+    # Salary totals for current month
+    current_month_salaries_total = Salary.objects.filter(
+        month=current_month,
+        year=current_year
+    ).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+    
+    # Commission totals for current month
+    current_month_commissions_total = SellerCommission.objects.filter(
+        status='approved',
+        created_at__range=[month_start, month_end]
+    ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+    
+    # Total financial outflow (salaries + commissions)
+    total_financial_outflow = current_month_salaries_total + current_month_commissions_total
+    
+    # ============================================
+    # RECENT FINANCIAL TRANSACTIONS
+    # ============================================
+    recent_transactions = FinancialTransaction.objects.select_related(
+        'created_by'
+    ).order_by('-transaction_date')[:5]
+    
+    # ============================================
+    # CONTEXT FOR TEMPLATE
+    # ============================================
     
     context = {
-        # Summary cards
-        'total_income': total_income,
-        'total_expenses': total_expenses,
-        'net_profit': net_profit,
-        'profit_margin': profit_margin,
-        'total_balance': total_balance,
+        # Pending approvals (cards)
+        'pending_salary_approvals': pending_salary_approvals,
+        'pending_commission_approvals': pending_commission_approvals,
+        'pending_applications': pending_applications,
+        'pending_verifications': pending_verifications,
+        'pending_commission_requests': pending_commission_requests,
         
-        # Account balances
-        'cash_balance': cash_account.balance,
-        'bank_balance': bank_account.balance,
-        'credit_balance': credit_account.balance,
-        'credit_available': credit_account.credit_limit - credit_account.balance,
-        
-        # Salaries
-        'salaries_pending': salaries_pending,
-        'salaries_paid': salaries_paid,
-        'salaries_paid_count': salaries_paid_count,
-        'current_month_salaries': current_month_salaries,
-        'total_base_salary': total_base_salary,
-        'total_bonus': total_bonus,
-        'total_deductions': total_deductions,
-        'total_salary_amount': total_salary_amount,
-        
-        # Commissions
-        'commissions_pending': commissions_pending,
-        'commissions_paid': commissions_paid,
-        'sellers_with_pending': sellers_with_pending,
+        # Table data
+        'pending_salaries': pending_salaries,
         'pending_commissions': pending_commissions,
-        'total_pending_commissions': total_pending_commissions,
+        'recent_applications': recent_applications,
+        'unverified_staff': unverified_staff,
         
-        # Chart data
-        'chart_labels': chart_labels,
-        'income_data': income_data,
-        'expense_data': expense_data,
-        'profit_data': profit_data,
+        # Team performance chart data
+        'team_labels': departments,
+        'team_members_data': team_members_data,
+        'team_tasks_data': team_tasks_data,
         
-        # Expense distribution
-        'salary_expenses': salary_expenses_total,
-        'commission_expenses': commission_expenses_total,
-        'operational_expenses': operational_expenses,
-        'other_expenses': other_expenses,
+        # Notifications
+        'notification_count': notification_count,
+        
+        # Financial summary (optional quick stats)
+        'current_month_salaries_total': current_month_salaries_total,
+        'current_month_commissions_total': current_month_commissions_total,
+        'total_financial_outflow': total_financial_outflow,
         
         # Recent transactions
         'recent_transactions': recent_transactions,
         
-        'current_month': calendar.month_name[current_month],
+        # Date info
+        'current_month_name': datetime(current_year, current_month, 1).strftime('%B'),
         'current_year': current_year,
         'today': today,
     }
+    
     return render(request, 'staff/dashboards/finance_manager_dashboard.html', context)
-
 
 
 
