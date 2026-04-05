@@ -4964,9 +4964,6 @@ def user_unsuspend_process(request, pk):  # Changed from user_id to pk
 
 
 
-
-
-@login_required
 def powered_by_page(request):
     """Page showing information about FieldMax"""
     return render(request, 'staff/powered_by.html')
