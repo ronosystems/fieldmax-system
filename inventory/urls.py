@@ -20,6 +20,11 @@ urlpatterns = [
     path('product-transfer/', views.product_transfer, name='product_transfer'),
     path('transfer/', views.product_transfer_page, name='product_transfer_page'),
 
+    # Bulk Edit Products by Model
+    path('bulk-edit/', views.product_bulk_edit, name='product_bulk_edit'),
+    path('bulk-edit/update/', views.product_bulk_update, name='product_bulk_update'),
+    path('bulk-edit/search/', views.product_bulk_search, name='product_bulk_search'),
+    
     # Restocking
     path('restock/search/', views.search_product_for_restock, name='restock-search'),
     path('restock/process/', views.process_restock, name='restock-process'),

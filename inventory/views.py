@@ -1150,6 +1150,208 @@ def product_delete(request, pk):
 
 
 
+@login_required
+@user_passes_test(lambda u: u.is_staff or u.is_superuser)
+def product_bulk_edit(request):
+    """
+    Bulk edit products by model - search and update selling prices
+    """
+    context = {
+        'products': [],
+        'search_performed': False,
+        'model_searched': '',
+        'total_products': 0,
+        'current_prices': {},
+    }
+    
+    # If there were recently updated products, fetch them for display
+    if request.session.get('bulk_updated_products'):
+        from .models import Product
+        updated_ids = request.session.get('bulk_updated_products', [])
+        context['products_updated'] = Product.objects.filter(id__in=updated_ids)
+    
+    # Use the correct template path
+    return render(request, 'inventory/products/bulk_edit.html', context)
+
+
+
+
+@login_required
+@user_passes_test(lambda u: u.is_staff or u.is_superuser)
+def product_bulk_search(request):
+    """
+    AJAX endpoint to search products by model - ONLY AVAILABLE PRODUCTS
+    """
+    if request.method == 'GET' and request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        model_search = request.GET.get('model', '').strip()
+        
+        if not model_search:
+            return JsonResponse({'error': 'Please enter a product model'}, status=400)
+        
+        # Search for products with matching model - ONLY AVAILABLE products
+        products = Product.objects.filter(
+            Q(model__icontains=model_search) |
+            Q(name__icontains=model_search) |
+            Q(brand__icontains=model_search)
+        ).filter(
+            is_active=True,
+            status='available'  # ONLY show available products
+        ).exclude(
+            status='sold'  # Exclude sold products
+        ).order_by('brand', 'model', 'product_code')
+        
+        # Prepare product data
+        products_data = []
+        for product in products:
+            products_data.append({
+                'id': product.id,
+                'name': product.display_name or product.name,
+                'product_code': product.product_code,
+                'brand': product.brand or '-',
+                'model': product.model or '-',
+                'selling_price': float(product.selling_price),
+                'current_price': float(product.selling_price),
+                'status': product.status,
+                'quantity': product.quantity,
+                'category': product.category.name if product.category else '-',
+                'sku_value': product.sku_value or '-',
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'products': products_data,
+            'total_count': len(products_data),
+            'model_searched': model_search,
+            'message': f'Found {len(products_data)} available product(s) matching "{model_search}"'
+        })
+    
+    return JsonResponse({'error': 'Invalid request'}, status=400)
+
+
+
+
+@login_required
+@user_passes_test(lambda u: u.is_staff or u.is_superuser)
+def product_bulk_update(request):
+    """
+    Update selling prices for all AVAILABLE products of a specific model
+    """
+    from django.contrib import messages
+    from django.shortcuts import redirect
+    from decimal import Decimal
+    from django.db.models import Q
+    from django.utils import timezone
+    from django.http import JsonResponse
+    
+    if request.method == 'POST':
+        model_search = request.POST.get('model_search', '').strip()
+        new_price = request.POST.get('new_price', '').strip()
+        update_all = request.POST.get('update_all', 'false') == 'true'
+        
+        # Validation
+        if not model_search:
+            return JsonResponse({'error': 'Please enter a product model'}, status=400)
+        
+        if not new_price:
+            return JsonResponse({'error': 'Please enter a new selling price'}, status=400)
+        
+        try:
+            new_price_decimal = Decimal(new_price)
+            if new_price_decimal < 0:
+                return JsonResponse({'error': 'Price cannot be negative'}, status=400)
+        except:
+            return JsonResponse({'error': 'Please enter a valid price'}, status=400)
+        
+        # Get products to update (only available)
+        base_queryset = Product.objects.filter(
+            Q(model__icontains=model_search) |
+            Q(name__icontains=model_search) |
+            Q(brand__icontains=model_search)
+        ).filter(
+            is_active=True,
+            status='available'
+        )
+        
+        if update_all:
+            products_to_update = base_queryset
+        else:
+            selected_product_ids = request.POST.getlist('selected_products')
+            if not selected_product_ids:
+                return JsonResponse({'error': 'Please select at least one product'}, status=400)
+            products_to_update = base_queryset.filter(id__in=selected_product_ids)
+        
+        if not products_to_update.exists():
+            return JsonResponse({'error': f'No available products found matching "{model_search}"'}, status=404)
+        
+        # Get old price for message
+        first_product = products_to_update.first()
+        old_price = float(first_product.selling_price)
+        
+        # Update prices - handle best_price validation
+        updated_count = 0
+        skipped_count = 0
+        skipped_products = []
+        
+        for product in products_to_update:
+            try:
+                # Temporarily set best_price to None if it would cause validation error
+                old_best_price = product.best_price
+                
+                # If best_price exists and is greater than new selling price, set it to None
+                if product.best_price and product.best_price > new_price_decimal:
+                    product.best_price = None
+                    logger.info(f"Reset best_price for {product.product_code} from {old_best_price} to None (was > new price)")
+                
+                product.selling_price = new_price_decimal
+                product.updated_at = timezone.now()
+                product.save()
+                updated_count += 1
+                
+            except ValidationError as e:
+                skipped_count += 1
+                skipped_products.append({
+                    'code': product.product_code,
+                    'error': str(e)
+                })
+                logger.warning(f"Failed to update {product.product_code}: {str(e)}")
+            except Exception as e:
+                skipped_count += 1
+                skipped_products.append({
+                    'code': product.product_code,
+                    'error': str(e)
+                })
+                logger.error(f"Error updating {product.product_code}: {str(e)}")
+        
+        # Store in session for feedback
+        if updated_count > 0:
+            updated_ids = list(products_to_update.filter(selling_price=new_price_decimal).values_list('id', flat=True))
+            request.session['bulk_updated_products'] = updated_ids
+            request.session['bulk_updated_model'] = model_search
+            request.session['bulk_updated_price'] = float(new_price_decimal)
+            request.session['bulk_updated_old_price'] = old_price
+        
+        # Prepare response message
+        if updated_count > 0 and skipped_count == 0:
+            message = f'Successfully updated {updated_count} product(s) from KES {old_price:,.2f} to KES {new_price_decimal:,.2f}'
+        elif updated_count > 0 and skipped_count > 0:
+            message = f'Updated {updated_count} product(s). Skipped {skipped_count} product(s) due to validation errors.'
+        else:
+            message = f'Failed to update products. Validation errors occurred.'
+        
+        # Return JSON response
+        return JsonResponse({
+            'success': updated_count > 0,
+            'updated_count': updated_count,
+            'skipped_count': skipped_count,
+            'old_price': old_price,
+            'new_price': float(new_price_decimal),
+            'message': message,
+            'skipped_products': skipped_products[:5]  # First 5 skipped products
+        })
+    
+    return JsonResponse({'error': 'Invalid request method'}, status=400)
+
+
 
 # ===========================================
 # PRODUCT RESTOCT VIEW
