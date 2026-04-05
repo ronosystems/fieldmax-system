@@ -1045,6 +1045,76 @@ def product_bulk_add(request):
 
 
 
+@login_required
+def search_existing_models(request):
+    """API endpoint to search for existing product models"""
+    query = request.GET.get('q', '').strip()
+    
+    if not query or len(query) < 2:
+        return JsonResponse({'success': True, 'models': []})
+    
+    # Search for unique models
+    products = Product.objects.filter(
+        Q(model__icontains=query) |
+        Q(brand__icontains=query) |
+        Q(name__icontains=query)
+    ).filter(
+        is_active=True
+    ).values('id', 'name', 'brand', 'model', 'product_code', 'category_id').distinct()[:20]
+    
+    models_list = []
+    seen = set()
+    
+    for product in products:
+        # Create a unique key for brand+model
+        key = f"{product['brand']}|{product['model']}"
+        if key not in seen:
+            seen.add(key)
+            models_list.append({
+                'id': product['id'],
+                'name': product['name'],
+                'brand': product['brand'] or '',
+                'model': product['model'] or '',
+                'product_code': product['product_code'],
+                'category_id': product['category_id']
+            })
+    
+    return JsonResponse({
+        'success': True,
+        'models': models_list
+    })
+
+
+@login_required
+def get_product_details(request, product_id):
+    """Get full product details for auto-fill"""
+    try:
+        product = Product.objects.get(id=product_id, is_active=True)
+        
+        return JsonResponse({
+            'success': True,
+            'product': {
+                'id': product.id,
+                'name': product.name,
+                'brand': product.brand,
+                'model': product.model,
+                'description': product.description,
+                'category_id': product.category_id,
+                'specifications': product.specifications,
+                'condition': product.condition,
+                'warranty_months': product.warranty_months,
+                'buying_price': float(product.buying_price) if product.buying_price else 0,
+                'selling_price': float(product.selling_price) if product.selling_price else 0,
+                'best_price': float(product.best_price) if product.best_price else None,
+            }
+        })
+    except Product.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Product not found'}, status=404)
+
+
+
+
+
 
 
 
@@ -1195,9 +1265,9 @@ def product_bulk_search(request):
             Q(brand__icontains=model_search)
         ).filter(
             is_active=True,
-            status='available'  # ONLY show available products
+            status='available'
         ).exclude(
-            status='sold'  # Exclude sold products
+            status='sold'
         ).order_by('brand', 'model', 'product_code')
         
         # Prepare product data
@@ -1205,7 +1275,7 @@ def product_bulk_search(request):
         for product in products:
             products_data.append({
                 'id': product.id,
-                'name': product.display_name or product.name,
+                'name': product.name,  # CHANGED: use actual name, not display_name
                 'product_code': product.product_code,
                 'brand': product.brand or '-',
                 'model': product.model or '-',
@@ -1226,6 +1296,9 @@ def product_bulk_search(request):
         })
     
     return JsonResponse({'error': 'Invalid request'}, status=400)
+
+
+
 
 
 
@@ -1350,6 +1423,93 @@ def product_bulk_update(request):
         })
     
     return JsonResponse({'error': 'Invalid request method'}, status=400)
+
+
+
+
+
+@login_required
+@user_passes_test(lambda u: u.is_staff or u.is_superuser)
+def product_bulk_update_single(request):
+    """Update a single product's name or price using direct database update"""
+    from decimal import Decimal
+    from django.http import JsonResponse
+    from django.utils import timezone
+    
+    if request.method == 'POST':
+        product_id = request.POST.get('product_id')
+        new_name = request.POST.get('name', '').strip()
+        new_price = request.POST.get('selling_price', '').strip()
+        
+        print("=" * 50)
+        print(f"📝 UPDATE REQUEST")
+        print(f"   Product ID: {product_id}")
+        print(f"   New Name: '{new_name}'")
+        print(f"   New Price: '{new_price}'")
+        print("=" * 50)
+        
+        if not product_id:
+            return JsonResponse({'error': 'Product ID required'}, status=400)
+        
+        try:
+            # First check if product exists
+            product = Product.objects.get(id=product_id, is_active=True)
+            
+            updates = {}
+            
+            # Update name if provided
+            if new_name:
+                print(f"   Updating name from '{product.name}' to '{new_name}'")
+                updates['name'] = new_name
+            
+            # Update price if provided
+            if new_price:
+                try:
+                    price_decimal = Decimal(new_price)
+                    if price_decimal < 0:
+                        return JsonResponse({'error': 'Price cannot be negative'}, status=400)
+                    
+                    print(f"   Updating price from {product.selling_price} to {price_decimal}")
+                    updates['selling_price'] = price_decimal
+                    
+                    # Handle best_price validation
+                    if product.best_price and product.best_price > price_decimal:
+                        print(f"   Clearing best_price (was {product.best_price})")
+                        updates['best_price'] = None
+                        
+                except Exception as e:
+                    return JsonResponse({'error': f'Invalid price: {str(e)}'}, status=400)
+            
+            if updates:
+                # DIRECT DATABASE UPDATE - Bypasses the model's save() method
+                updated_count = Product.objects.filter(id=product_id).update(**updates, updated_at=timezone.now())
+                print(f"✅ Direct update completed! Rows affected: {updated_count}")
+                
+                # Verify the update worked
+                product.refresh_from_db()
+                print(f"   Verification - Name: '{product.name}', Price: {product.selling_price}")
+                print("=" * 50)
+                
+                return JsonResponse({
+                    'success': True,
+                    'message': 'Product updated successfully',
+                    'verified_name': product.name,
+                    'verified_price': float(product.selling_price)
+                })
+            else:
+                return JsonResponse({'error': 'No changes provided'}, status=400)
+                
+        except Product.DoesNotExist:
+            print(f"❌ Product not found: {product_id}")
+            return JsonResponse({'error': 'Product not found'}, status=404)
+        except Exception as e:
+            print(f"❌ Error: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return JsonResponse({'error': str(e)}, status=500)
+    
+    return JsonResponse({'error': 'Invalid request method'}, status=400)
+
 
 
 

@@ -33,6 +33,38 @@
                     <form method="post" id="bulkAddForm">
                         {% csrf_token %}
                         
+                        <!-- Model Selection Section - NEW -->
+                        <div class="card mb-3 border-primary">
+                            <div class="card-header bg-primary text-white">
+                                <h6 class="mb-0"><i class="fas fa-search me-2"></i>Select Existing Model (Optional)</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-12 mb-3">
+                                        <label class="form-label">Search Existing Model</label>
+                                        <div class="input-group">
+                                            <input type="text" class="form-control" id="modelSearchInput" 
+                                                   placeholder="Type model name (e.g., A17, iPhone 13) or brand name">
+                                            <button type="button" class="btn btn-primary" id="searchModelBtn">
+                                                <i class="fas fa-search me-1"></i>Search
+                                            </button>
+                                            <button type="button" class="btn btn-secondary" id="clearModelBtn">
+                                                <i class="fas fa-eraser me-1"></i>Clear
+                                            </button>
+                                        </div>
+                                        <small class="text-muted">Search for an existing product model to auto-fill details</small>
+                                    </div>
+                                    
+                                    <div id="modelSearchResults" class="col-md-12" style="display: none;">
+                                        <div class="alert alert-info">
+                                            <strong>Select a model to auto-fill:</strong>
+                                            <div id="modelList" class="mt-2"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
                         <!-- Common Product Details -->
                         <div class="card mb-3">
                             <div class="card-header bg-light">
@@ -42,13 +74,13 @@
                                 <div class="row">
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label required">Product Name</label>
-                                        <input type="text" name="name" class="form-control" required 
+                                        <input type="text" name="name" id="productName" class="form-control" required 
                                                placeholder="Enter product name">
                                     </div>
                                     
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label required">Category</label>
-                                        <select name="category" class="form-select" required>
+                                        <select name="category" id="categorySelect" class="form-select" required>
                                             <option value="">Select Category</option>
                                             {% for category in categories %}
                                             <option value="{{ category.id }}">
@@ -60,20 +92,27 @@
                                     
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label">Brand</label>
-                                        <input type="text" name="brand" class="form-control" 
+                                        <input type="text" name="brand" id="brandInput" class="form-control" 
                                                placeholder="Enter brand name">
                                     </div>
                                     
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label">Model</label>
-                                        <input type="text" name="model" class="form-control" 
+                                        <input type="text" name="model" id="modelInput" class="form-control" 
                                                placeholder="Enter model number">
                                     </div>
                                     
                                     <div class="col-12 mb-3">
                                         <label class="form-label">Description</label>
-                                        <textarea name="description" class="form-control" rows="2" 
+                                        <textarea name="description" id="descriptionInput" class="form-control" rows="2" 
                                                   placeholder="Enter product description"></textarea>
+                                    </div>
+                                    
+                                    <div class="col-12 mb-3">
+                                        <label class="form-label">Specifications</label>
+                                        <textarea name="specifications" id="specificationsInput" class="form-control" rows="2" 
+                                                  placeholder='{"ram": "8GB", "storage": "256GB", "color": "Black"}'></textarea>
+                                        <small class="text-muted">JSON format - Example: {"ram": "8GB", "storage": "256GB"}</small>
                                     </div>
                                 </div>
                             </div>
@@ -88,19 +127,19 @@
                                 <div class="row">
                                     <div class="col-md-4 mb-3">
                                         <label class="form-label required">Buying Price (KSH)</label>
-                                        <input type="number" name="buying_price" class="form-control" 
+                                        <input type="number" name="buying_price" id="buyingPrice" class="form-control" 
                                                step="0.01" min="0" required value="0">
                                     </div>
                                     
                                     <div class="col-md-4 mb-3">
                                         <label class="form-label required">Selling Price (KSH)</label>
-                                        <input type="number" name="selling_price" class="form-control" 
+                                        <input type="number" name="selling_price" id="sellingPrice" class="form-control" 
                                                step="0.01" min="0" required value="0">
                                     </div>
                                     
                                     <div class="col-md-4 mb-3">
                                         <label class="form-label">Best Price (KSH)</label>
-                                        <input type="number" name="best_price" class="form-control" 
+                                        <input type="number" name="best_price" id="bestPrice" class="form-control" 
                                                step="0.01" min="0" placeholder="Optional">
                                     </div>
                                 </div>
@@ -116,7 +155,7 @@
                                 <div class="row">
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label">Condition</label>
-                                        <select name="condition" class="form-select">
+                                        <select name="condition" id="conditionSelect" class="form-select">
                                             <option value="new">Brand New</option>
                                             <option value="refurbished">Refurbished</option>
                                             <option value="used">Used - Excellent</option>
@@ -127,7 +166,7 @@
                                     
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label">Warranty (months)</label>
-                                        <input type="number" name="warranty_months" class="form-control" 
+                                        <input type="number" name="warranty_months" id="warrantyMonths" class="form-control" 
                                                value="12" min="0">
                                     </div>
                                     
@@ -139,12 +178,6 @@
                                             <option value="{{ supplier.id }}">{{ supplier.name }}</option>
                                             {% endfor %}
                                         </select>
-                                    </div>
-                                    
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label">Specifications (JSON)</label>
-                                        <input type="text" name="specifications" class="form-control" 
-                                               value="{}" placeholder='{"key":"value"}'>
                                     </div>
                                 </div>
                             </div>
@@ -194,7 +227,8 @@
                 <div class="card-body">
                     <h6>How to use:</h6>
                     <ol class="small">
-                        <li>Fill in the common product details (name, brand, model, prices)</li>
+                        <li><strong>Quick Fill:</strong> Search for an existing model to auto-fill all details</li>
+                        <li>Or fill in the common product details manually (name, brand, model, prices)</li>
                         <li>Enter all SKU/IMEI numbers in the text area - one per line</li>
                         <li>Each SKU will create a separate product with quantity = 1</li>
                         <li>SKUs must be unique - duplicates will be skipped</li>
@@ -208,7 +242,7 @@
                 </div>
             </div>
             
-            <!-- SKU List Card - Moved to bottom of right column -->
+            <!-- SKU List Card -->
             <div class="card">
                 <div class="card-header bg-warning">
                     <h6 class="mb-0"><i class="fas fa-barcode me-2"></i>SKU/IMEI Numbers</h6>
@@ -243,9 +277,37 @@
         color: #dc3545;
     }
     
-    /* Make textarea taller to fill column */
     textarea[name="skus"] {
         min-height: 200px;
+    }
+    
+    .model-item {
+        padding: 8px 12px;
+        margin: 5px 0;
+        background: #f8f9fa;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    
+    .model-item:hover {
+        background: #e9ecef;
+        transform: translateX(5px);
+    }
+    
+    .model-item.selected {
+        background: #d1e7dd;
+        border-left: 3px solid #10b981;
+    }
+    
+    .model-name {
+        font-weight: bold;
+        color: #0d6efd;
+    }
+    
+    .model-details {
+        font-size: 0.85rem;
+        color: #6c757d;
     }
 </style>
 {% endblock %}
@@ -257,6 +319,177 @@ document.addEventListener('DOMContentLoaded', function() {
     const skuCount = document.getElementById('skuCount');
     const form = document.getElementById('bulkAddForm');
     
+    // ============================================
+    // MODEL SEARCH FUNCTIONALITY
+    // ============================================
+    const modelSearchInput = document.getElementById('modelSearchInput');
+    const searchModelBtn = document.getElementById('searchModelBtn');
+    const clearModelBtn = document.getElementById('clearModelBtn');
+    const modelSearchResults = document.getElementById('modelSearchResults');
+    const modelList = document.getElementById('modelList');
+    
+    // Search for existing models
+    searchModelBtn.addEventListener('click', function() {
+        const searchTerm = modelSearchInput.value.trim();
+        if (!searchTerm) {
+            alert('Please enter a model name or brand to search');
+            return;
+        }
+        
+        // Show loading
+        modelList.innerHTML = '<div class="text-center"><i class="fas fa-spinner fa-spin"></i> Searching...</div>';
+        modelSearchResults.style.display = 'block';
+        
+        // AJAX search
+        fetch(`/inventory/api/search-models/?q=${encodeURIComponent(searchTerm)}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.models.length > 0) {
+                    displayModelResults(data.models);
+                } else {
+                    modelList.innerHTML = '<div class="text-muted">No existing models found. You can add new product details manually.</div>';
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                modelList.innerHTML = '<div class="text-danger">Error searching models. Please try again.</div>';
+            });
+    });
+    
+    // Clear model selection
+    clearModelBtn.addEventListener('click', function() {
+        clearAutoFill();
+        modelSearchResults.style.display = 'none';
+        modelSearchInput.value = '';
+    });
+    
+    function displayModelResults(models) {
+        let html = '';
+        models.forEach(model => {
+            html += `
+                <div class="model-item" onclick="selectModel(${model.id})">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="model-name">${escapeHtml(model.brand)} ${escapeHtml(model.model)}</span>
+                            <div class="model-details">
+                                ${escapeHtml(model.name)} | Code: ${model.product_code}
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-success" onclick="event.stopPropagation(); selectModel(${model.id})">
+                            <i class="fas fa-check"></i> Select
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+        modelList.innerHTML = html;
+    }
+    
+    // Global function for model selection
+    window.selectModel = function(productId) {
+        fetch(`/inventory/api/get-product-details/${productId}/`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    autoFillForm(data.product);
+                    modelSearchResults.style.display = 'none';
+                    
+                    // Highlight selected in results
+                    document.querySelectorAll('.model-item').forEach(item => {
+                        item.classList.remove('selected');
+                    });
+                    
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Product Details Loaded',
+                        text: `Loaded details for ${data.product.brand} ${data.product.model}`,
+                        timer: 1500,
+                        showConfirmButton: false
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                Swal.fire('Error', 'Failed to load product details', 'error');
+            });
+    };
+    
+    function autoFillForm(product) {
+        document.getElementById('productName').value = product.name || '';
+        document.getElementById('brandInput').value = product.brand || '';
+        document.getElementById('modelInput').value = product.model || '';
+        document.getElementById('descriptionInput').value = product.description || '';
+        
+        // Set category
+        if (product.category_id) {
+            const categorySelect = document.getElementById('categorySelect');
+            for (let i = 0; i < categorySelect.options.length; i++) {
+                if (categorySelect.options[i].value == product.category_id) {
+                    categorySelect.selectedIndex = i;
+                    break;
+                }
+            }
+        }
+        
+        // Set specifications
+        if (product.specifications) {
+            if (typeof product.specifications === 'object') {
+                document.getElementById('specificationsInput').value = JSON.stringify(product.specifications, null, 2);
+            } else {
+                document.getElementById('specificationsInput').value = product.specifications || '{}';
+            }
+        }
+        
+        // Set condition
+        if (product.condition) {
+            const conditionSelect = document.getElementById('conditionSelect');
+            for (let i = 0; i < conditionSelect.options.length; i++) {
+                if (conditionSelect.options[i].value === product.condition) {
+                    conditionSelect.selectedIndex = i;
+                    break;
+                }
+            }
+        }
+        
+        // Set warranty
+        if (product.warranty_months) {
+            document.getElementById('warrantyMonths').value = product.warranty_months;
+        }
+        
+        // Optionally set prices (but allow user to override)
+        if (product.buying_price) {
+            document.getElementById('buyingPrice').value = product.buying_price;
+        }
+        if (product.selling_price) {
+            document.getElementById('sellingPrice').value = product.selling_price;
+        }
+        if (product.best_price) {
+            document.getElementById('bestPrice').value = product.best_price;
+        }
+        
+        updateSummary();
+    }
+    
+    function clearAutoFill() {
+        document.getElementById('productName').value = '';
+        document.getElementById('brandInput').value = '';
+        document.getElementById('modelInput').value = '';
+        document.getElementById('descriptionInput').value = '';
+        document.getElementById('specificationsInput').value = '{}';
+        document.getElementById('categorySelect').selectedIndex = 0;
+        document.getElementById('conditionSelect').selectedIndex = 0;
+        document.getElementById('warrantyMonths').value = '12';
+        // Don't clear prices as they might be entered manually
+        updateSummary();
+    }
+    
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
     // Update SKU count
     function updateSkuCount() {
         const skus = skuTextarea.value.split('\n').filter(s => s.trim() !== '');
@@ -266,18 +499,18 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Update summary
     function updateSummary() {
-        document.getElementById('summaryName').textContent = document.querySelector('input[name="name"]').value || '-';
+        document.getElementById('summaryName').textContent = document.getElementById('productName').value || '-';
         
-        const brand = document.querySelector('input[name="brand"]').value;
-        const model = document.querySelector('input[name="model"]').value;
+        const brand = document.getElementById('brandInput').value;
+        const model = document.getElementById('modelInput').value;
         document.getElementById('summaryBrandModel').textContent = (brand || model) ? `${brand} ${model}`.trim() : '-';
         
-        const categorySelect = document.querySelector('select[name="category"]');
+        const categorySelect = document.getElementById('categorySelect');
         const categoryText = categorySelect.options[categorySelect.selectedIndex]?.text.split('(')[0] || '-';
         document.getElementById('summaryCategory').textContent = categoryText;
         
-        document.getElementById('summaryBuying').textContent = document.querySelector('input[name="buying_price"]').value || '0';
-        document.getElementById('summarySelling').textContent = document.querySelector('input[name="selling_price"]').value || '0';
+        document.getElementById('summaryBuying').textContent = document.getElementById('buyingPrice').value || '0';
+        document.getElementById('summarySelling').textContent = document.getElementById('sellingPrice').value || '0';
         
         const skus = skuTextarea.value.split('\n').filter(s => s.trim() !== '');
         document.getElementById('summaryCount').textContent = skus.length;
@@ -302,20 +535,38 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (skus.length === 0) {
             e.preventDefault();
-            alert('Please enter at least one SKU.');
+            Swal.fire('Error', 'Please enter at least one SKU.', 'error');
             return;
         }
         
-        if (!confirm(`Are you sure you want to create ${skus.length} products?`)) {
-            e.preventDefault();
-        }
+        Swal.fire({
+            title: 'Confirm Creation',
+            text: `Are you sure you want to create ${skus.length} products?`,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#10b981',
+            confirmButtonText: 'Yes, Create',
+            cancelButtonText: 'Cancel'
+        }).then((result) => {
+            if (!result.isConfirmed) {
+                e.preventDefault();
+            }
+        });
     });
     
     // Update on input
     skuTextarea.addEventListener('input', updateSkuCount);
-    document.querySelectorAll('input, select').forEach(el => {
+    document.querySelectorAll('input, select, textarea').forEach(el => {
         el.addEventListener('input', updateSummary);
         el.addEventListener('change', updateSummary);
+    });
+    
+    // Enter key in search
+    modelSearchInput.addEventListener('keypress', function(e) {
+        if (e.which === 13) {
+            e.preventDefault();
+            searchModelBtn.click();
+        }
     });
     
     // Initial update

@@ -17,7 +17,7 @@
         <i class="fas fa-info-circle me-2"></i>
         <strong>Note:</strong> Only <span class="badge bg-success">AVAILABLE</span> products are shown here. 
         Sold products are excluded from bulk editing to preserve historical sales records.
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
 
     <!-- Search Section -->
@@ -32,18 +32,11 @@
                         <span class="input-group-text"><i class="fas fa-mobile-alt"></i></span>
                         <input type="text" class="form-control form-control-lg" 
                                id="modelSearch" 
-                               placeholder="Enter product model (e.g., A17, iPhone 13, Samsung Galaxy, etc.)"
+                               placeholder="Enter product model (e.g., A17, iPhone 13)"
                                autocomplete="off">
                         <button class="btn btn-primary btn-lg" id="searchBtn" type="button">
-                            <i class="fas fa-search me-2"></i>Search Available Products
+                            <i class="fas fa-search me-2"></i>Search
                         </button>
-                    </div>
-                    <div class="mt-2">
-                        <small class="text-muted">
-                            <i class="fas fa-lightbulb me-1"></i>
-                            <strong>Tip:</strong> Search by model name, brand, or product name. Only products with status 
-                            <span class="badge bg-success">Available</span> will be displayed.
-                        </small>
                     </div>
                 </div>
                 <div class="col-md-4">
@@ -58,10 +51,10 @@
 
     <!-- Loading Indicator -->
     <div id="loadingIndicator" class="text-center py-5" style="display: none;">
-        <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+        <div class="spinner-border text-primary" role="status">
             <span class="visually-hidden">Loading...</span>
         </div>
-        <p class="mt-3 text-muted">Searching for available products...</p>
+        <p class="mt-2">Searching for available products...</p>
     </div>
 
     <!-- No Results Message -->
@@ -69,7 +62,7 @@
         <div class="card-body text-center py-5">
             <i class="fas fa-box-open fa-4x text-warning mb-3"></i>
             <h4 class="text-warning">No Available Products Found</h4>
-            <p class="text-muted">No available products match your search criteria. Only products with status "Available" can be bulk edited.</p>
+            <p class="text-muted">No available products match your search criteria.</p>
             <button class="btn btn-primary" onclick="$('#modelSearch').focus();">
                 <i class="fas fa-search me-2"></i>Try Another Search
             </button>
@@ -92,100 +85,92 @@
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
-                    <form id="bulkUpdateForm">
-                        {% csrf_token %}
-                        <input type="hidden" name="model_search" id="modelSearchHidden">
-                        <input type="hidden" name="update_all" id="updateAllHidden" value="false">
-                        
-                        <table class="table table-hover mb-0" id="productsTable">
-                            <thead class="table-light">
-                                <tr>
-                                    <th width="50">
-                                        <input type="checkbox" id="headerCheckbox">
-                                    </th>
-                                    <th>Product Name</th>
-                                    <th>Product Code</th>
-                                    <th>Brand</th>
-                                    <th>Model</th>
-                                    <th>Current Price (KES)</th>
-                                    <th>Status</th>
-                                    <th>Stock</th>
-                                    <th>SKU/IMEI</th>
-                                </tr>
-                            </thead>
-                            <tbody id="productsTableBody">
-                                <!-- Products will be populated here via JavaScript -->
-                            </tbody>
-                        </table>
-                        
-                        <!-- Bulk Update Controls -->
-                        <div id="updateControls" class="p-3 bg-light border-top" style="display: none;">
-                            <div class="row align-items-end">
-                                <div class="col-md-4">
-                                    <label class="form-label fw-bold">
-                                        <i class="fas fa-tag me-1"></i>New Selling Price (KES)
-                                    </label>
-                                    <div class="input-group">
-                                        <span class="input-group-text">KES</span>
-                                        <input type="number" class="form-control" id="newPrice" 
-                                               step="100" min="0" placeholder="Enter new price">
-                                    </div>
-                                </div>
-                                <div class="col-md-3">
-                                    <label class="form-label fw-bold">
-                                        <i class="fas fa-calculator me-1"></i>Preview
-                                    </label>
-                                    <div>
-                                        <span class="badge bg-info p-2" id="pricePreview">
-                                            Select products to see preview
-                                        </span>
-                                    </div>
-                                </div>
-                                <div class="col-md-3">
-                                    <div class="form-check mt-4">
-                                        <input class="form-check-input" type="checkbox" id="updateAllCheckbox">
-                                        <label class="form-check-label" for="updateAllCheckbox">
-                                            <i class="fas fa-globe me-1"></i>Update ALL available products
-                                        </label>
-                                    </div>
-                                </div>
-                                <div class="col-md-2">
-                                    <button type="button" class="btn btn-success w-100" id="updateBtn">
-                                        <i class="fas fa-save me-2"></i>Update Prices
+                    <table class="table table-hover mb-0" id="productsTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th width="50"><input type="checkbox" id="headerCheckbox"></th>
+                                <th width="25%">Product Name</th>
+                                <th width="15%">Product Code</th>
+                                <th width="10%">Brand</th>
+                                <th width="10%">Model</th>
+                                <th width="15%">Selling Price (KES)</th>
+                                <th width="8%">Status</th>
+                                <th width="7%">Stock</th>
+                                <th width="10%">SKU/IMEI</th>
+                            </tr>
+                        </thead>
+                        <tbody id="productsTableBody"></tbody>
+                    </table>
+                    
+                    <!-- Bulk Update Controls - Equal Width Columns -->
+                    <div id="updateControls" class="p-3 bg-light border-top" style="display: none;">
+                        <!-- NAME UPDATE SECTION -->
+                        <div class="row mb-3 pb-3 border-bottom">
+                            <div class="col-md-5">
+                                <label class="form-label fw-bold">
+                                    <i class="fas fa-i-cursor me-1 text-primary"></i>Bulk Update Name
+                                </label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="bulkNewName" 
+                                           placeholder="Enter new product name">
+                                    <button type="button" class="btn btn-warning" id="updateNameBtn">
+                                        <i class="fas fa-tag me-1"></i>Apply Name
                                     </button>
                                 </div>
                             </div>
+                            <div class="col-md-3">
+                                <label class="form-label fw-bold">&nbsp;</label>
+                                <div class="form-check mt-2">
+                                    <input class="form-check-input" type="checkbox" id="updateAllForName">
+                                    <label class="form-check-label" for="updateAllForName">
+                                        Update ALL products
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">&nbsp;</label>
+                                <div class="alert alert-info mb-0 py-2" id="namePreview">
+                                    <small><i class="fas fa-info-circle me-1"></i> Select products, enter name, click Apply Name</small>
+                                </div>
+                            </div>
                         </div>
-                    </form>
+                        
+                        <!-- PRICE UPDATE SECTION -->
+                        <div class="row">
+                            <div class="col-md-5">
+                                <label class="form-label fw-bold">
+                                    <i class="fas fa-tag me-1 text-success"></i>Bulk Update Price
+                                </label>
+                                <div class="input-group">
+                                    <span class="input-group-text">KES</span>
+                                    <input type="number" class="form-control" id="bulkNewPrice" 
+                                           step="100" min="0" placeholder="Enter new price">
+                                    <button type="button" class="btn btn-success" id="updatePriceBtn">
+                                        <i class="fas fa-save me-1"></i>Apply Price
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label fw-bold">&nbsp;</label>
+                                <div class="form-check mt-2">
+                                    <input class="form-check-input" type="checkbox" id="updateAllForPrice">
+                                    <label class="form-check-label" for="updateAllForPrice">
+                                        Update ALL products
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">&nbsp;</label>
+                                <div class="alert alert-info mb-0 py-2" id="pricePreview">
+                                    <small><i class="fas fa-info-circle me-1"></i> Select products, enter price, click Apply Price</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
-
-    <!-- Recently Updated Products Section -->
-    {% if request.session.bulk_updated_products %}
-    <div class="card mt-4 border-success shadow-sm">
-        <div class="card-header bg-success text-white">
-            <h5 class="mb-0">
-                <i class="fas fa-check-circle me-2"></i>
-                Recently Updated: {{ request.session.bulk_updated_model }}
-            </h5>
-        </div>
-        <div class="card-body">
-            <div class="alert alert-success mb-3">
-                <i class="fas fa-chart-line me-2"></i>
-                Successfully updated <strong>{{ request.session.bulk_updated_products|length }}</strong> product(s)
-                from <strong>KES {{ request.session.bulk_updated_old_price|default:0|floatformat:0 }}</strong> 
-                to <strong>KES {{ request.session.bulk_updated_price|default:0|floatformat:0 }}</strong>
-            </div>
-            <div class="text-center">
-                <a href="{% url 'inventory:product_bulk_edit' %}" class="btn btn-outline-success">
-                    <i class="fas fa-sync-alt me-2"></i>Clear & Start New Bulk Edit
-                </a>
-            </div>
-        </div>
-    </div>
-    {% endif %}
 </div>
 
 <style>
@@ -197,6 +182,44 @@
     .product-row.selected {
         background-color: rgba(16, 185, 129, 0.1);
     }
+    
+    .editable-name {
+        cursor: pointer;
+        padding: 4px 8px;
+        border-radius: 4px;
+        transition: all 0.2s;
+        display: inline-block;
+        width: 100%;
+    }
+    
+    .editable-name:hover {
+        background-color: #e9ecef;
+    }
+    
+    .name-input {
+        width: 100%;
+        padding: 4px 8px;
+        border: 1px solid #10b981;
+        border-radius: 4px;
+    }
+    
+    .price-input {
+        width: 100%;
+        min-width: 100px;
+    }
+    
+    .product-name-cell, .price-cell {
+        vertical-align: middle;
+    }
+    
+    @keyframes saveFlash {
+        0% { background-color: rgba(16, 185, 129, 0.3); }
+        100% { background-color: transparent; }
+    }
+    
+    .saved-flash {
+        animation: saveFlash 0.5s ease-in-out;
+    }
 </style>
 
 {% endblock %}
@@ -204,39 +227,29 @@
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
-// Make sure jQuery is loaded
-if (typeof jQuery === 'undefined') {
-    console.error('jQuery is not loaded!');
-} else {
-    console.log('jQuery version:', jQuery.fn.jversion);
-}
-
 $(document).ready(function() {
-    console.log("✅ Document ready - Starting bulk edit");
+    console.log("✅ Document ready");
     
     let productsData = [];
     
     // ============================================
     // SEARCH FUNCTION
     // ============================================
-    window.performSearch = function() {
+    function performSearch() {
         const model = $('#modelSearch').val().trim();
-        console.log("🔍 Search clicked for:", model);
-        
         if (!model) {
             Swal.fire('Warning', 'Please enter a product model', 'warning');
             return;
         }
         
         $('#loadingIndicator').show();
-        $('#resultsSection').hide();
+        $('#resultsSection, #noResultsSection').hide();
         
         $.ajax({
             url: "{% url 'inventory:product_bulk_search' %}",
             method: 'GET',
             data: { model: model },
             success: function(response) {
-                console.log("✅ Search response:", response);
                 $('#loadingIndicator').hide();
                 
                 if (response.success && response.products.length > 0) {
@@ -244,19 +257,18 @@ $(document).ready(function() {
                     displayProducts(productsData);
                     $('#resultsSection').show();
                     $('#modelSearchHidden').val(model);
-                    $('#resultCount').html(`Found ${response.products.length} products`);
+                    $('#resultCount').html(`Found ${response.products.length} product(s)`);
                     $('#searchInfo').show();
                 } else {
-                    Swal.fire('Info', 'No products found', 'info');
+                    $('#noResultsSection').show();
                 }
             },
-            error: function(xhr) {
-                console.error("❌ Search error:", xhr);
+            error: function() {
                 $('#loadingIndicator').hide();
-                Swal.fire('Error', 'Search failed: ' + (xhr.responseJSON?.error || 'Unknown error'), 'error');
+                Swal.fire('Error', 'Search failed', 'error');
             }
         });
-    };
+    }
     
     // ============================================
     // DISPLAY PRODUCTS
@@ -265,99 +277,195 @@ $(document).ready(function() {
         const tbody = $('#productsTableBody');
         tbody.empty();
         
-        products.forEach(function(product) {
-            tbody.append(`
-                <tr class="product-row" data-id="${product.id}" data-price="${product.selling_price}">
-                    <td><input type="checkbox" class="product-checkbox" value="${product.id}"></td>
-                    <td><strong>${escapeHtml(product.name)}</strong></td>
+        products.forEach(function(product, index) {
+            const row = `
+                <tr class="product-row" data-id="${product.id}" data-index="${index}">
+                    <td class="text-center">
+                        <input type="checkbox" class="product-checkbox" value="${product.id}">
+                    </td>
+                    <td class="product-name-cell">
+                        <div class="editable-name" onclick="editProductName(${product.id}, ${index})">
+                            <i class="fas fa-pencil-alt text-muted me-1" style="font-size: 0.7rem;"></i>
+                            <strong id="name-display-${product.id}">${escapeHtml(product.name)}</strong>
+                        </div>
+                    </td>
                     <td><code>${product.product_code}</code></td>
                     <td>${escapeHtml(product.brand)}</td>
                     <td><span class="badge bg-info">${escapeHtml(product.model)}</span></td>
-                    <td class="text-success fw-bold">KES ${formatNumber(product.selling_price)}</td>
+                    <td>
+                        <input type="number" class="form-control form-control-sm price-input" 
+                               id="price-input-${product.id}"
+                               value="${product.selling_price}" step="100" min="0"
+                               data-id="${product.id}" data-original="${product.selling_price}">
+                    </td>
                     <td><span class="badge bg-success">Available</span></td>
                     <td><span class="badge bg-success">${product.quantity}</span></td>
                     <td><small>${escapeHtml(product.sku_value)}</small></td>
-                 </tr>
-            `);
+                </tr>
+            `;
+            tbody.append(row);
         });
         
         $('#updateControls').show();
-        updatePreview();
+        updatePreviews();
         
-        // Bind checkbox events
-        $('.product-checkbox').on('change', updatePreview);
+        // Bind events
+        $('.product-checkbox').on('change', function() {
+            updatePreviews();
+            $(this).closest('tr').toggleClass('selected', $(this).prop('checked'));
+        });
+        
+        $('.price-input').on('change', function() {
+            const productId = $(this).data('id');
+            const newPrice = $(this).val();
+            const oldPrice = $(this).data('original');
+            if (newPrice != oldPrice) {
+                savePrice(productId, newPrice);
+            }
+        });
+        
         $('#selectAllBtn').off('click').on('click', function() {
             $('.product-checkbox').prop('checked', true).trigger('change');
+            $('.product-row').addClass('selected');
+            updatePreviews();
         });
+        
         $('#deselectAllBtn').off('click').on('click', function() {
             $('.product-checkbox').prop('checked', false).trigger('change');
+            $('.product-row').removeClass('selected');
+            updatePreviews();
+        });
+        
+        $('#headerCheckbox').off('change').on('change', function() {
+            $('.product-checkbox').prop('checked', $(this).prop('checked')).trigger('change');
         });
     }
     
-    function updatePreview() {
-        const updateAll = $('#updateAllCheckbox').prop('checked');
-        const selectedCount = $('.product-checkbox:checked').length;
-        if (updateAll) {
-            $('#pricePreview').text(`Will update ALL ${productsData.length} products`);
-        } else {
-            $('#pricePreview').text(`${selectedCount} product(s) selected`);
-        }
-    }
-    
-    function formatNumber(num) {
-        return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-    }
-    
-    function escapeHtml(text) {
-        if (!text) return '-';
-        return $('<div>').text(text).html();
-    }
-    
     // ============================================
-    // UPDATE BUTTON - SIMPLE VERSION
+    // SAVE SINGLE NAME (Inline Edit)
     // ============================================
-    $('#updateBtn').on('click', function() {
-        console.log("🟢 UPDATE BUTTON CLICKED!");
+    window.editProductName = function(productId, index) {
+        const currentName = productsData[index].name;
+        const nameSpan = $(`#name-display-${productId}`);
+        const cell = nameSpan.closest('.product-name-cell');
         
-        const updateAll = $('#updateAllCheckbox').prop('checked');
-        const selectedCount = $('.product-checkbox:checked').length;
-        const newPrice = $('#newPrice').val();
+        const input = $(`<input type="text" class="name-input" value="${escapeHtml(currentName)}">`);
+        nameSpan.hide();
+        cell.append(input);
+        input.focus();
         
-        console.log("Update All:", updateAll);
-        console.log("Selected Count:", selectedCount);
-        console.log("New Price:", newPrice);
+        input.on('keypress', function(e) {
+            if (e.which === 13) {
+                e.preventDefault();
+                saveSingleName(productId, input.val().trim(), index, input);
+            }
+        });
         
-        // Validation
-        if (!updateAll && selectedCount === 0) {
-            Swal.fire('Error', 'Please select products to update', 'error');
+        input.on('blur', function() {
+            saveSingleName(productId, input.val().trim(), index, input);
+        });
+    };
+    
+    function saveSingleName(productId, newName, index, inputElement) {
+        if (!newName || newName === productsData[index].name) {
+            if (inputElement) inputElement.remove();
+            $(`#name-display-${productId}`).show();
             return;
         }
         
-        if (!newPrice || parseFloat(newPrice) <= 0) {
-            Swal.fire('Error', 'Please enter a valid price', 'error');
-            return;
-        }
-        
-        // Get CSRF token
         const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
         
-        // Build data
-        const formData = new FormData();
-        formData.append('model_search', $('#modelSearchHidden').val());
-        formData.append('new_price', newPrice);
-        formData.append('update_all', updateAll ? 'true' : 'false');
+        $.ajax({
+            url: "{% url 'inventory:product_bulk_update_single' %}",
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrftoken },
+            data: { product_id: productId, name: newName },
+            success: function(response) {
+                if (response.success) {
+                    productsData[index].name = newName;
+                    $(`#name-display-${productId}`).text(newName).show();
+                    if (inputElement) inputElement.remove();
+                    
+                    // Flash effect
+                    $(`#name-display-${productId}`).closest('tr').addClass('saved-flash');
+                    setTimeout(() => $('.saved-flash').removeClass('saved-flash'), 500);
+                    
+                    Swal.fire({ icon: 'success', title: 'Updated!', text: 'Name saved successfully', timer: 1500, showConfirmButton: false });
+                }
+            },
+            error: function() {
+                $(`#name-display-${productId}`).show();
+                if (inputElement) inputElement.remove();
+                Swal.fire('Error', 'Failed to save name', 'error');
+            }
+        });
+    }
+    
+    // ============================================
+    // SAVE SINGLE PRICE (Inline Price Change)
+    // ============================================
+    function savePrice(productId, newPrice) {
+        const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        const priceInput = $(`#price-input-${productId}`);
         
-        if (!updateAll) {
+        $.ajax({
+            url: "{% url 'inventory:product_bulk_update_single' %}",
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrftoken },
+            data: { product_id: productId, selling_price: newPrice },
+            success: function(response) {
+                if (response.success) {
+                    priceInput.data('original', newPrice);
+                    
+                    // Update local data
+                    const index = productsData.findIndex(p => p.id == productId);
+                    if (index !== -1) productsData[index].selling_price = parseFloat(newPrice);
+                    
+                    // Flash effect
+                    priceInput.closest('tr').addClass('saved-flash');
+                    setTimeout(() => $('.saved-flash').removeClass('saved-flash'), 500);
+                    
+                    Swal.fire({ icon: 'success', title: 'Updated!', text: 'Price saved successfully', timer: 1500, showConfirmButton: false });
+                }
+            },
+            error: function(xhr) {
+                priceInput.val(priceInput.data('original'));
+                Swal.fire('Error', xhr.responseJSON?.error || 'Failed to save price', 'error');
+            }
+        });
+    }
+    
+    // ============================================
+    // BULK NAME UPDATE
+    // ============================================
+    $('#updateNameBtn').on('click', function() {
+        const updateAll = $('#updateAllForName').prop('checked');
+        const newName = $('#bulkNewName').val().trim();
+        
+        let productsToUpdate = [];
+        if (updateAll) {
+            productsToUpdate = [...productsData];
+        } else {
             $('.product-checkbox:checked').each(function() {
-                formData.append('selected_products', $(this).val());
+                const productId = parseInt($(this).val());
+                const product = productsData.find(p => p.id === productId);
+                if (product) productsToUpdate.push(product);
             });
         }
         
-        console.log("Sending data...");
+        if (productsToUpdate.length === 0) {
+            Swal.fire('Error', 'No products selected', 'error');
+            return;
+        }
+        
+        if (!newName) {
+            Swal.fire('Error', 'Please enter a product name', 'error');
+            return;
+        }
         
         Swal.fire({
-            title: 'Confirm Update',
-            text: `Update ${updateAll ? 'ALL ' + productsData.length : selectedCount} product(s) to KES ${parseFloat(newPrice).toLocaleString()}?`,
+            title: 'Confirm Name Update',
+            text: `Apply "${newName}" to ${productsToUpdate.length} product(s)?`,
             icon: 'question',
             showCancelButton: true,
             confirmButtonColor: '#10b981',
@@ -366,64 +474,137 @@ $(document).ready(function() {
             if (result.isConfirmed) {
                 Swal.fire({ title: 'Updating...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
                 
-                $.ajax({
-                    url: "{% url 'inventory:product_bulk_update' %}",
-                    method: 'POST',
-                    headers: { 'X-CSRFToken': csrftoken },
-                    data: formData,
-                    processData: false,
-                    contentType: false,
-                    success: function(response) {
-                        console.log("✅ Update success:", response);
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Updated!',
-                            text: response.message || 'Prices updated successfully',
-                            confirmButtonColor: '#10b981'
-                        }).then(() => {
-                            location.reload();
-                        });
-                    },
-                    error: function(xhr) {
-                        console.error("❌ Update error:", xhr);
-                        let errorMsg = 'Update failed';
-                        if (xhr.responseJSON && xhr.responseJSON.error) {
-                            errorMsg = xhr.responseJSON.error;
+                const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+                const promises = productsToUpdate.map(product => {
+                    return $.ajax({
+                        url: "{% url 'inventory:product_bulk_update_single' %}",
+                        method: 'POST',
+                        headers: { 'X-CSRFToken': csrftoken },
+                        data: { product_id: product.id, name: newName }
+                    });
+                });
+                
+                Promise.all(promises).then(() => {
+                    productsToUpdate.forEach(product => {
+                        const index = productsData.findIndex(p => p.id === product.id);
+                        if (index !== -1) {
+                            productsData[index].name = newName;
+                            $(`#name-display-${product.id}`).text(newName);
                         }
-                        Swal.fire('Error', errorMsg, 'error');
-                    }
+                    });
+                    Swal.fire({ icon: 'success', title: 'Updated!', text: `${productsToUpdate.length} product(s) updated` });
+                }).catch(() => {
+                    Swal.fire('Error', 'Some updates failed', 'error');
                 });
             }
         });
     });
     
-    // Bind search button
-    $('#searchBtn').on('click', function() {
-        console.log("🔍 Search button clicked");
-        performSearch();
-    });
-    
-    // Enter key search
-    $('#modelSearch').on('keypress', function(e) {
-        if (e.which === 13) {
-            e.preventDefault();
-            performSearch();
-        }
-    });
-    
-    // Update All checkbox
-    $('#updateAllCheckbox').on('change', function() {
-        if ($(this).prop('checked')) {
-            $('.product-checkbox').prop('disabled', true);
-            $('#selectAllBtn, #deselectAllBtn').prop('disabled', true);
+    // ============================================
+    // BULK PRICE UPDATE
+    // ============================================
+    $('#updatePriceBtn').on('click', function() {
+        const updateAll = $('#updateAllForPrice').prop('checked');
+        const newPrice = $('#bulkNewPrice').val();
+        
+        let productsToUpdate = [];
+        if (updateAll) {
+            productsToUpdate = [...productsData];
         } else {
-            $('.product-checkbox').prop('disabled', false);
-            $('#selectAllBtn, #deselectAllBtn').prop('disabled', false);
+            $('.product-checkbox:checked').each(function() {
+                const productId = parseInt($(this).val());
+                const product = productsData.find(p => p.id === productId);
+                if (product) productsToUpdate.push(product);
+            });
         }
-        updatePreview();
+        
+        if (productsToUpdate.length === 0) {
+            Swal.fire('Error', 'No products selected', 'error');
+            return;
+        }
+        
+        if (!newPrice || parseFloat(newPrice) <= 0) {
+            Swal.fire('Error', 'Please enter a valid price', 'error');
+            return;
+        }
+        
+        Swal.fire({
+            title: 'Confirm Price Update',
+            text: `Update ${productsToUpdate.length} product(s) to KES ${parseFloat(newPrice).toLocaleString()}?`,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#10b981',
+            confirmButtonText: 'Yes, Update'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                Swal.fire({ title: 'Updating...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
+                
+                const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+                const promises = productsToUpdate.map(product => {
+                    return $.ajax({
+                        url: "{% url 'inventory:product_bulk_update_single' %}",
+                        method: 'POST',
+                        headers: { 'X-CSRFToken': csrftoken },
+                        data: { product_id: product.id, selling_price: newPrice }
+                    });
+                });
+                
+                Promise.all(promises).then(() => {
+                    productsToUpdate.forEach(product => {
+                        const index = productsData.findIndex(p => p.id === product.id);
+                        if (index !== -1) {
+                            productsData[index].selling_price = parseFloat(newPrice);
+                            $(`#price-input-${product.id}`).val(newPrice).data('original', newPrice);
+                        }
+                    });
+                    Swal.fire({ icon: 'success', title: 'Updated!', text: `${productsToUpdate.length} product(s) updated to KES ${parseFloat(newPrice).toLocaleString()}` });
+                }).catch(() => {
+                    Swal.fire('Error', 'Some updates failed', 'error');
+                });
+            }
+        });
     });
     
-    console.log("✅ All event handlers registered");
+    // ============================================
+    // UPDATE PREVIEWS
+    // ============================================
+    function updatePreviews() {
+        const updateAllName = $('#updateAllForName').prop('checked');
+        const updateAllPrice = $('#updateAllForPrice').prop('checked');
+        const selectedCount = $('.product-checkbox:checked').length;
+        const totalCount = productsData.length;
+        
+        if (updateAllName) {
+            $('#namePreview').html(`<small><i class="fas fa-globe me-1"></i> Will update ALL ${totalCount} products</small>`);
+        } else {
+            $('#namePreview').html(`<small><i class="fas fa-check-square me-1"></i> ${selectedCount} product(s) selected</small>`);
+        }
+        
+        if (updateAllPrice) {
+            $('#pricePreview').html(`<small><i class="fas fa-globe me-1"></i> Will update ALL ${totalCount} products</small>`);
+        } else {
+            $('#pricePreview').html(`<small><i class="fas fa-check-square me-1"></i> ${selectedCount} product(s) selected</small>`);
+        }
+    }
+    
+    // ============================================
+    // UTILITY FUNCTIONS
+    // ============================================
+    function escapeHtml(text) {
+        if (!text) return '-';
+        return $('<div>').text(text).html();
+    }
+    
+    // Bind search
+    $('#searchBtn').on('click', performSearch);
+    $('#modelSearch').on('keypress', function(e) {
+        if (e.which === 13) performSearch();
+    });
+    
+    // Update All checkboxes
+    $('#updateAllForName, #updateAllForPrice').on('change', updatePreviews);
+    
+    console.log("✅ All handlers registered");
 });
 </script>
 {% endblock %}

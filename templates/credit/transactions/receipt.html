@@ -1,13 +1,16 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FIELDMAX - Sales Receipt</title>
 <style>
     /* ============================================
        THERMAL RECEIPT PRINTER STYLES - ETR FISCAL
        ============================================ */
     
     .receipt-container {
-        max-width: 500px; /* 80mm = ~302px at 96dpi */
+        max-width: 500px;
         margin: 40px auto;
         background: rgb(255, 255, 255);
         border-radius: 8px;
@@ -101,14 +104,7 @@
         margin-bottom: 2px;
     }
 
-    .nok-grid {
-        display: grid;
-        grid-template-columns: auto 1fr;
-        gap: 2px 8px;
-        margin-bottom: 2px;
-    }
-
-    /* Items Table */
+    /* Items Table - 4 Columns with Grand Total inside */
     .items-table {
         margin-bottom: 8px;
         border: 1px solid #000000;
@@ -118,7 +114,7 @@
 
     .items-header {
         display: grid;
-        grid-template-columns: 40% 12% 18% 15% 15%;
+        grid-template-columns: 10% 50% 20% 20%;
         background: #b2bdc0;
         color: #000;
         font-weight: bold;
@@ -133,12 +129,16 @@
     }
 
     .items-header > div:first-child {
+        text-align: center;
+    }
+
+    .items-header > div:nth-child(2) {
         text-align: left;
     }
 
     .item-row {
         display: grid;
-        grid-template-columns: 40% 12% 18% 15% 15%;
+        grid-template-columns: 10% 50% 20% 20%;
         font-size: 15px;
         border-bottom: 1px dashed #000000;
         padding: 4px 3px;
@@ -155,84 +155,64 @@
     }
 
     .item-row > div:first-child {
+        text-align: center;
+        font-weight: bold;
+    }
+
+    .item-row > div:nth-child(2) {
         text-align: left;
     }
 
     .item-description {
         font-weight: 600;
         display: block;
+        font-size: 15px;
     }
 
     .item-sku {
-        font-size: 15px;
+        font-size: 12px;
         color: #000000;
         display: block;
-        margin-top: 1px;
+        margin-top: 2px;
     }
 
-    /* Totals Card */
-    .totals-card {
+    /* Grand Total Row inside Items Table */
+    .grand-total-row {
+        display: grid;
+        grid-template-columns: 10% 50% 20% 20%;
         background: #f8f9fa;
-        border-radius: 4px;
-        padding: 8px;
-        margin-bottom: 8px;
-        border: 1px solid #000000;
-    }
-
-    .total-line {
-        display: flex;
-        justify-content: space-between;
-        margin-bottom: 3px;
-        font-size: 15px;
-    }
-
-    .total-line.grand-total {
-        font-size: 15px;
         font-weight: bold;
-        border-top: 2px dashed #000000;
-        padding-top: 6px;
-        margin-top: 6px;
-        color: #05bbf3;
+        font-size: 18px;
+        padding: 6px 3px;
+        border-top: 2px solid #000000;
+        margin-top: 0;
     }
 
-    /* Payment Card - Credit Specific */
-    .payment-card {
-        background: #f8f9fa;
-        border-radius: 4px;
-        padding: 8px;
-        margin-bottom: 8px;
-        border: 1px dashed #05eaf1;
-        font-size: 15px;
+    .grand-total-row > div {
+        padding: 0 2px;
     }
 
-    .payment-line {
-        display: flex;
-        justify-content: space-between;
-        margin-bottom: 3px;
+    .grand-total-row > div:first-child {
+        text-align: center;
     }
 
-    .payment-status {
-        display: inline-block;
-        padding: 2px 6px;
-        border-radius: 10px;
-        font-size: 7px;
+    .grand-total-row > div:nth-child(2) {
+        text-align: left;
+    }
+
+    .grand-total-row > div:nth-child(3) {
+        text-align: right;
+    }
+
+    .grand-total-row > div:last-child {
+        text-align: right;
+        color: #000000;
+        font-size: 18px;
+    }
+
+    .grand-total-label {
         font-weight: bold;
         text-transform: uppercase;
-    }
-
-    .status-pending {
-        background: #dc3545;
-        color: white;
-    }
-
-    .status-partial {
-        background: #0126f8;
-        color: #000;
-    }
-
-    .status-paid {
-        background: #28a745;
-        color: white;
     }
 
     /* Credit Info */
@@ -250,16 +230,10 @@
         color: #043df8;
     }
 
-    /* Fiscal Info */
-    .fiscal-info {
+    .payment-line {
         display: flex;
         justify-content: space-between;
-        background: #e9ecef;
-        border-radius: 4px;
-        padding: 4px 8px;
-        margin-bottom: 8px;
-        font-size: 15px;
-        text-transform: uppercase;
+        margin-bottom: 3px;
     }
 
     /* Footer */
@@ -287,7 +261,7 @@
         right: 20px;
         padding: 10px 20px;
         background: #043bf3;
-        color: #000;
+        color: white;
         border: none;
         border-radius: 6px;
         cursor: pointer;
@@ -304,7 +278,7 @@
         box-shadow: 0 4px 8px rgba(0,0,0,0.2);
     }
 
-    /* Print Styles - Thermal Optimized */
+    /* Print Styles */
     @media print {
         @page {
             size: 80mm auto;
@@ -318,14 +292,8 @@
             font-family: 'Courier New', monospace;
         }
 
-        .no-print, .print-button, .sidebar, .footer, .main-content > .footer {
+        .no-print, .print-button {
             display: none !important;
-        }
-
-        .main-content {
-            padding: 0 !important;
-            margin: 0 !important;
-            max-width: 100% !important;
         }
 
         .receipt-container {
@@ -351,12 +319,15 @@
             color: #000 !important;
         }
 
-        .total-line.grand-total {
+        .grand-total-row > div:last-child {
             color: #000 !important;
+        }
+        
+        .item-sku {
+            font-size: 8px !important;
         }
     }
 
-    /* Responsive */
     @media (max-width: 768px) {
         .receipt-container {
             margin: 10px;
@@ -372,17 +343,15 @@
     }
 </style>
 
-
-<!-- Print Button (Hidden when printing) -->
+</head>
+<body>
 <button class="print-button no-print" onclick="window.print()">
     <i class="fas fa-print me-2"></i>Print Receipt
 </button>
 
 <div class="receipt-container">
     <div class="receipt">
-        <!-- ============================================
-             HEADER SECTION - ETR STYLE
-             ============================================ -->
+        <!-- HEADER SECTION -->
         <div class="receipt-header">
             <div class="company-name">FIELDMAX SUPPLIERS LTD</div>
             <div class="company-details">
@@ -393,9 +362,7 @@
             </div>
         </div>
 
-        <!-- ============================================
-             ETR INFORMATION - TWO COLUMN
-             ============================================ -->
+        <!-- ETR INFORMATION -->
         <div class="etr-info-grid">
             <div class="etr-row">
                 <div><span class="etr-label">RCPT No:</span> {{ transaction.transaction_id }}</div>
@@ -413,9 +380,7 @@
             </div>
         </div>
 
-        <!-- ============================================
-             CUSTOMER DETAILS - COMPACT
-             ============================================ -->
+        <!-- CUSTOMER DETAILS -->
         <div class="customer-card">
             <div class="customer-title">CUSTOMER DETAILS</div>
             <div class="customer-grid">
@@ -432,74 +397,58 @@
             {% endif %}
         </div>
 
-        <!-- ============================================
-             ITEMS TABLE - FISCAL STYLE
-             ============================================ -->
+        <!-- ITEMS TABLE WITH GRAND TOTAL INSIDE -->
         <div class="items-table">
             <div class="items-header">
-                <div>ITEM</div>
                 <div>QTY</div>
+                <div>DESCRIPTION</div>
                 <div>PRICE</div>
-                <div>DISC</div>
                 <div>TOTAL</div>
             </div>
             
             {% if transaction.items.exists %}
                 {% for item in transaction.items.all %}
                 <div class="item-row">
+                    <div>{{ item.quantity }}</div>
                     <div>
-                        <span class="item-description">{{ item.product.display_name }}, {{ item.product.specifications }}</span>
+                        <span class="item-description">{{ item.product.name }} ({{ item.product.model }})</span>
                         {% if item.product.sku_value %}
-                        <span class="item-sku">{{ item.product.sku_value }}</span>
+                        <span class="item-sku"><strong>{{ item.product.sku_value }}</strong></span>
                         {% endif %}
                     </div>
-                    <div>{{ item.quantity }}</div>
-                    <div>{{ item.price|floatformat:0 }}</div>
-                    <div>0</div>
-                    <div><strong>{{ item.total|floatformat:0 }}</strong></div>
+                    <div>KSH {{ item.price|floatformat:0 }}</div>
+                    <div><strong>KSH {{ item.total|floatformat:0 }}</strong></div>
                 </div>
                 {% endfor %}
             {% else %}
-                <!-- Single item transaction -->
                 <div class="item-row">
+                    <div>1</div>
                     <div>
-                        <span class="item-description">{{ transaction.product.display_name }}, {{ transaction.product.specifications }}</span>
+                        <span class="item-description">{{ transaction.product.name }} ({{ transaction.product.model }})</span>
                         {% if transaction.imei %}
-                        <span class="item-sku">IMEI: {{ transaction.imei }}</span>
+                        <span class="item-sku"><strong>IMEI: {{ transaction.imei }}</strong></span>
                         {% elif transaction.product.sku_value %}
-                        <span class="item-sku">{{ transaction.product.sku_value }}</span>
+                        <span class="item-sku"><strong>{{ transaction.product.sku_value }}</strong></span>
                         {% endif %}
                     </div>
-                    <div>1</div>
-                    <div>{{ transaction.ceiling_price|floatformat:0 }}</div>
-                    <div>0</div>
-                    <div><strong>{{ transaction.ceiling_price|floatformat:0 }}</strong></div>
+                    <div>KSH {{ transaction.ceiling_price|floatformat:0 }}</div>
+                    <div><strong>KSH {{ transaction.ceiling_price|floatformat:0 }}</strong></div>
                 </div>
             {% endif %}
-        </div>
-
-        <!-- ============================================
-             TOTALS SECTION
-             ============================================ -->
-        <div class="totals-card">
-            <div class="total-line">
-                <span>SUBTOTAL:</span>
-                <span>KSH {{ transaction.subtotal|default:transaction.ceiling_price|floatformat:0 }}</span>
-            </div>
-
-            <div class="total-line grand-total">
-                <span>GRAND TOTALS:</span>
-                <span><strong>KSH {{ transaction.total_amount|default:transaction.ceiling_price|floatformat:0 }}</strong></span>
+            
+            <!-- GRAND TOTAL ROW - INSIDE ITEMS TABLE -->
+            <div class="grand-total-row">
+                <div></div>
+                <div class="grand-total-label">GRAND TOTAL:</div>
+                <div></div>
+                <div><strong>KSH {{ transaction.total_amount|default:transaction.ceiling_price|floatformat:0 }}</strong></div>
             </div>
         </div>
 
-
-        <!-- ============================================
-             COMPANY REFERENCE
-             ============================================ -->
+        <!-- COMPANY REFERENCE -->
         <div class="credit-info">
             <div class="payment-line">
-                <span class="credit-label">PHONE FINANCING  COMPANY:</span>
+                <span class="credit-label">PHONE FINANCING COMPANY:</span>
                 <span>{{ transaction.credit_company.name|truncatechars:15 }}</span>
             </div>
             {% if transaction.company_reference %}
@@ -510,10 +459,7 @@
             {% endif %}
         </div>
 
-
-        <!-- ============================================
-             FOOTER - ETR STYLE
-             ============================================ -->
+        <!-- FOOTER -->
         <div class="receipt-footer">
             <div class="thank-you">THANK YOU - FOR YOUR BUSINESS</div>
             <div>Subject to credit terms and conditions</div>
@@ -522,17 +468,14 @@
     </div>
 </div>
 
-
 <script>
 (function() {
     'use strict';
     
-    // Print function
     window.printReceipt = function() {
         window.print();
     };
 
-    // Keyboard shortcut: Ctrl+P
     document.addEventListener('keydown', function(e) {
         if (e.ctrlKey && e.key === 'p') {
             e.preventDefault();
@@ -540,7 +483,6 @@
         }
     });
 
-    // Auto-focus print button for keyboard users
     document.addEventListener('DOMContentLoaded', function() {
         const printBtn = document.querySelector('.print-button');
         if (printBtn) {
@@ -554,4 +496,5 @@
     });
 })();
 </script>
+</body>
 </html>

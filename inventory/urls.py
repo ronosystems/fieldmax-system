@@ -19,11 +19,16 @@ urlpatterns = [
     path('api/search-users/', views.search_users, name='search_users'),
     path('product-transfer/', views.product_transfer, name='product_transfer'),
     path('transfer/', views.product_transfer_page, name='product_transfer_page'),
+    
+    # API endpoints for bulk add
+    path('api/search-models/', views.search_existing_models, name='search_existing_models'),
+    path('api/get-product-details/<int:product_id>/', views.get_product_details, name='get_product_details'),
 
     # Bulk Edit Products by Model
     path('bulk-edit/', views.product_bulk_edit, name='product_bulk_edit'),
     path('bulk-edit/update/', views.product_bulk_update, name='product_bulk_update'),
     path('bulk-edit/search/', views.product_bulk_search, name='product_bulk_search'),
+    path('bulk-edit/update-single/', views.product_bulk_update_single, name='product_bulk_update_single'),
     
     # Restocking
     path('restock/search/', views.search_product_for_restock, name='restock-search'),
