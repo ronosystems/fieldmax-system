@@ -2365,14 +2365,20 @@ def api_add_to_cart(request):
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
 
+
+
+
+
 # ============================================
 # SHOP VIEW
 # ============================================
 def shop_view(request):
     """
     Display all products organized by category
+    Shows ONLY available and low stock products (excludes sold and out of stock)
     """
-    from django.conf import settings  # Ensure this import is at the top of file
+    from django.conf import settings
+    from django.db.models import Q
     
     category_id = request.GET.get('category')
     selected_category = None
@@ -2390,8 +2396,15 @@ def shop_view(request):
     
     categories_with_products = []
     for category in categories:
-        # Only include products that have categories
-        active_products = category.products.filter(is_active=True, category__isnull=False).order_by('-created_at')
+        # ONLY include available and low stock products (exclude sold and out of stock)
+        # Also ensure products have categories
+        active_products = category.products.filter(
+            is_active=True,
+            category__isnull=False
+        ).filter(
+            Q(status='available') | Q(status='lowstock')  # EXCLUDE sold and outofstock
+        ).order_by('-created_at')
+        
         category.filtered_products = active_products
         if active_products.exists():
             categories_with_products.append(category)
@@ -2400,10 +2413,17 @@ def shop_view(request):
         'categories': categories_with_products,
         'all_categories': all_categories,
         'selected_category': selected_category,
-        'debug': settings.DEBUG,  # Now works correctly
+        'debug': settings.DEBUG,
     }
     
     return render(request, 'website/shop.html', context)
+
+
+
+
+
+
+
 
 # ============================================
 # SHOP LIST VIEW (CLASS-BASED)
@@ -2411,12 +2431,15 @@ def shop_view(request):
 class ShopListView(ListView):
     """
     Class-based view for shop page with category filtering
+    Shows ONLY available and low stock products (excludes sold and out of stock)
     """
     model = Category
     template_name = 'website/shop.html'
     context_object_name = 'categories'
     
     def get_queryset(self):
+        from django.db.models import Q
+        
         category_id = self.request.GET.get('category')
         
         if category_id:
@@ -2430,8 +2453,15 @@ class ShopListView(ListView):
         
         filtered_categories = []
         for category in categories:
-            # Only include products that have categories
-            active_products = category.products.filter(is_active=True, category__isnull=False).order_by('-created_at')
+            # ONLY include available and low stock products (exclude sold and out of stock)
+            # Also ensure products have categories
+            active_products = category.products.filter(
+                is_active=True,
+                category__isnull=False
+            ).filter(
+                Q(status='available') | Q(status='lowstock')  # EXCLUDE sold and outofstock
+            ).order_by('-created_at')
+            
             category.filtered_products = active_products
             if active_products.exists():
                 filtered_categories.append(category)
@@ -2454,6 +2484,13 @@ class ShopListView(ListView):
         context['debug'] = settings.DEBUG
         
         return context
+    
+
+
+
+
+
+
 
 # ============================================
 # SALES CHART DATA - FIXED VERSION
