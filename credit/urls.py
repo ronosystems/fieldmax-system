@@ -34,6 +34,7 @@ urlpatterns = [
     path('payments/add/', views.payment_add, name='payment_add'),
     path('payments/<int:pk>/', views.payment_detail, name='payment_detail'),
     path('company/<int:company_id>/payment/', views.credit_company_payment, name='credit_company_payment'),
+    path('api/pending-transactions/<int:company_id>/', views.api_pending_transactions, name='api_pending_transactions'),
 
     # ===== COMMISSION URLS (5 buttons) =====
     

@@ -1895,22 +1895,32 @@ def commission_export(request):
 # ============================================
 # FINANCIAL TRANSACTIONS VIEW
 # ============================================
-
 @login_required
 def financial_transactions(request):
     """List all financial transactions including salary, commission, and account transactions"""
     from decimal import Decimal
     from django.core.paginator import Paginator
     from datetime import datetime, timedelta
+    from django.utils import timezone
+    
+    def to_date(dt):
+        """Convert datetime or date to date object"""
+        if hasattr(dt, 'date'):
+            return dt.date()
+        return dt
     
     transactions = []
     
-    # Salary transactions
+    # ============================================
+    # SALARY TRANSACTIONS (Expenses)
+    # ============================================
     salaries = Salary.objects.filter(status='paid').select_related('staff', 'paid_by').all()
     for salary in salaries:
+        trans_date = salary.paid_date or salary.created_at
         transactions.append({
             'id': f'salary_{salary.id}',
-            'transaction_date': salary.paid_date or salary.created_at,
+            'transaction_date': trans_date,
+            'sort_date': to_date(trans_date),  # Add sort_date for sorting
             'source': 'salary',
             'transaction_type': 'expense',
             'description': f"Salary payment - {salary.staff.get_full_name() or salary.staff.username} - {salary.get_month_display()} {salary.year}",
@@ -1920,12 +1930,16 @@ def financial_transactions(request):
             'created_by': salary.paid_by or salary.created_by,
         })
     
-    # Commission transactions
+    # ============================================
+    # COMMISSION TRANSACTIONS (Expenses)
+    # ============================================
     commissions = SellerCommission.objects.filter(status='paid').select_related('seller', 'paid_by')
     for commission in commissions:
+        trans_date = commission.paid_date or commission.created_at
         transactions.append({
             'id': f'commission_{commission.id}',
-            'transaction_date': commission.paid_date or commission.created_at,
+            'transaction_date': trans_date,
+            'sort_date': to_date(trans_date),
             'source': 'commission',
             'transaction_type': 'expense',
             'description': f"Commission payment - {commission.seller.get_full_name() or commission.seller.username} - {commission.transaction.transaction_id}",
@@ -1935,14 +1949,16 @@ def financial_transactions(request):
             'created_by': commission.paid_by,
         })
     
-    # Account transactions
+    # ============================================
+    # ACCOUNT TRANSACTIONS (Manual entries)
+    # ============================================
     account_transactions = AccountTransaction.objects.select_related('created_by').all()
     for acc_trans in account_transactions:
-        source = f"{acc_trans.account_type}_account"
         transactions.append({
             'id': f'account_{acc_trans.id}',
             'transaction_date': acc_trans.transaction_date,
-            'source': source,
+            'sort_date': to_date(acc_trans.transaction_date),
+            'source': f"{acc_trans.account_type}_account",
             'transaction_type': acc_trans.transaction_type,
             'description': acc_trans.description,
             'amount': acc_trans.amount,
@@ -1951,12 +1967,15 @@ def financial_transactions(request):
             'created_by': acc_trans.created_by,
         })
     
-    # Sales Income
+    # ============================================
+    # SALES INCOME (Direct sales)
+    # ============================================
     sales = Sale.objects.filter(is_reversed=False).select_related('seller')
     for sale in sales:
         transactions.append({
             'id': f'sale_{sale.sale_id}',
             'transaction_date': sale.sale_date,
+            'sort_date': to_date(sale.sale_date),
             'source': 'sales',
             'transaction_type': 'income',
             'description': f"Sale {sale.sale_id} - {sale.buyer_name or 'Walk-in Customer'}",
@@ -1966,23 +1985,37 @@ def financial_transactions(request):
             'created_by': sale.seller,
         })
     
-    # Credit Sales Income
-    credit_sales = CreditTransaction.objects.filter(payment_status='paid').select_related('dealer', 'customer')
-    for credit in credit_sales:
+    # ============================================
+    # CREDIT PAYMENTS (From CompanyPayment)
+    # ============================================
+    from credit.models import CompanyPayment
+    
+    credit_payments = CompanyPayment.objects.filter(
+        payment_method__in=['bank', 'mpesa', 'cash']
+    ).select_related('credit_company', 'created_by')
+    
+    for payment in credit_payments:
         transactions.append({
-            'id': f'credit_{credit.transaction_id}',
-            'transaction_date': credit.paid_date or credit.transaction_date,
-            'source': 'credit_sales',
+            'id': f'credit_payment_{payment.id}',
+            'transaction_date': payment.payment_date,
+            'sort_date': payment.payment_date,  # Already a date
+            'source': 'credit_payment',
             'transaction_type': 'income',
-            'description': f"Credit Sale {credit.transaction_id} - {credit.customer.full_name} ({credit.credit_company.name})",
-            'amount': credit.ceiling_price,
-            'reference': credit.transaction_id,
-            'notes': f"Product: {credit.product_name} | Commission: KSH {credit.commission_amount}",
-            'created_by': credit.dealer,
+            'description': f"Credit payment from {payment.credit_company.name} - {payment.payment_id}",
+            'amount': payment.amount,
+            'reference': payment.payment_reference,
+            'notes': f"Payment for {payment.transactions.count()} transactions. {payment.notes}",
+            'created_by': payment.created_by,
         })
     
-    transactions.sort(key=lambda x: x['transaction_date'], reverse=True)
+    # ============================================
+    # SORT TRANSACTIONS (Newest first using sort_date)
+    # ============================================
+    transactions.sort(key=lambda x: x['sort_date'], reverse=True)
     
+    # ============================================
+    # APPLY FILTERS
+    # ============================================
     transaction_type = request.GET.get('type')
     if transaction_type:
         transactions = [t for t in transactions if t['transaction_type'] == transaction_type]
@@ -1994,23 +2027,29 @@ def financial_transactions(request):
     date_from = request.GET.get('date_from')
     if date_from:
         try:
-            date_from_aware = timezone.make_aware(datetime.strptime(date_from, '%Y-%m-%d'))
-            transactions = [t for t in transactions if t['transaction_date'] >= date_from_aware]
+            date_from_obj = datetime.strptime(date_from, '%Y-%m-%d').date()
+            transactions = [t for t in transactions if t['sort_date'] >= date_from_obj]
         except:
             pass
     
     date_to = request.GET.get('date_to')
     if date_to:
         try:
-            date_to_aware = timezone.make_aware(datetime.strptime(date_to, '%Y-%m-%d') + timedelta(days=1))
-            transactions = [t for t in transactions if t['transaction_date'] <= date_to_aware]
+            date_to_obj = datetime.strptime(date_to, '%Y-%m-%d').date()
+            transactions = [t for t in transactions if t['sort_date'] <= date_to_obj]
         except:
             pass
     
+    # ============================================
+    # PAGINATION
+    # ============================================
     paginator = Paginator(transactions, 50)
     page_number = request.GET.get('page', 1)
     page_obj = paginator.get_page(page_number)
     
+    # ============================================
+    # CALCULATE TOTALS
+    # ============================================
     total_income = sum(t['amount'] for t in transactions if t['transaction_type'] == 'income')
     total_expenses = sum(t['amount'] for t in transactions if t['transaction_type'] == 'expense')
     net_balance = total_income - total_expenses
@@ -2022,12 +2061,15 @@ def financial_transactions(request):
                 profit = (item.unit_price - item.product.buying_price) * item.quantity
                 total_sales_profit += profit
     
-    total_credit_profit = CreditTransaction.objects.filter(
-        payment_status='paid'
-    ).aggregate(total=Sum('commission_amount'))['total'] or Decimal('0.00')
+    total_credit_profit = Decimal('0.00')
+    for payment in credit_payments:
+        total_credit_profit += payment.amount
     
     total_profit = total_sales_profit + total_credit_profit
     
+    # ============================================
+    # CONTEXT
+    # ============================================
     context = {
         'transactions': page_obj,
         'total_income': total_income,
@@ -2041,11 +2083,11 @@ def financial_transactions(request):
         'account_types': [
             ('salary', 'Salary'),
             ('commission', 'Commission'),
-            ('cash', 'Cash Account'),
-            ('bank', 'Bank Account'),
-            ('credit', 'Credit Account'),
+            ('cash_account', 'Cash Account'),
+            ('bank_account', 'Bank Account'),
+            ('credit_account', 'Credit Account'),
             ('sales', 'Sales Income'),
-            ('credit_sales', 'Credit Sales'),
+            ('credit_payment', 'Credit Payment'),
         ],
     }
     
@@ -2300,14 +2342,13 @@ def financial_expenses(request):
 # ============================================
 # FINANCE ACCOUNTS VIEWS
 # ============================================
-
 @login_required
 def bank_account(request):
-    """Bank account dashboard with integrated credit payments"""
+    """Bank account dashboard with bank sales and credit payments"""
     from .models import BankAccount, AccountTransaction
-    from credit.models import CompanyPayment, CreditTransaction
+    from credit.models import CompanyPayment
+    from sales.models import Sale  # Add this import
     from decimal import Decimal
-    from django.db.models import Sum, Q
     from datetime import datetime, timedelta
     from django.utils import timezone
     
@@ -2315,6 +2356,31 @@ def bank_account(request):
     
     transactions = []
     
+    # ============================================
+    # BANK/MPESA SALES (from Sales App)
+    # ============================================
+    bank_sales = Sale.objects.filter(
+        payment_method__in=['M-Pesa', 'Card', 'Bank'],
+        is_reversed=False
+    ).select_related('seller')
+    
+    for sale in bank_sales:
+        transactions.append({
+            'id': f'sale_{sale.sale_id}',
+            'date': sale.sale_date,
+            'type': 'income',
+            'description': f"{sale.payment_method} Sale - {sale.sale_id} - {sale.buyer_name or 'Walk-in Customer'}",
+            'amount': sale.total_amount,
+            'reference': sale.sale_id,
+            'created_by': sale.seller,
+            'source': 'bank_sale',
+            'items_count': sale.items.count(),
+            'payment_method': sale.payment_method
+        })
+    
+    # ============================================
+    # MANUAL TRANSACTIONS
+    # ============================================
     manual_trans = AccountTransaction.objects.filter(
         account_type='bank'
     ).select_related('created_by')
@@ -2331,8 +2397,11 @@ def bank_account(request):
             'source': 'manual'
         })
     
+    # ============================================
+    # CREDIT COMPANY PAYMENTS (Bank/MPesa payments)
+    # ============================================
     credit_payments = CompanyPayment.objects.filter(
-        payment_method__in=['bank', 'mpesa', 'cash']
+        payment_method__in=['bank', 'mpesa']
     ).select_related('credit_company', 'created_by')
     
     for payment in credit_payments:
@@ -2348,35 +2417,12 @@ def bank_account(request):
             'amount': payment.amount,
             'reference': payment.payment_reference,
             'created_by': payment.created_by,
-            'source': 'credit',
-            'payment_id': payment.payment_id,
-            'company': payment.credit_company.name
+            'source': 'credit'
         })
     
-    paid_credits = CreditTransaction.objects.filter(
-        payment_status='paid'
-    ).select_related('credit_company', 'customer', 'dealer')
-    
-    for credit in paid_credits:
-        credit_date = credit.paid_date or credit.transaction_date
-        if isinstance(credit_date, date) and not isinstance(credit_date, datetime):
-            credit_date = datetime.combine(credit_date, datetime.min.time())
-            if timezone.is_naive(credit_date):
-                credit_date = timezone.make_aware(credit_date)
-        
-        transactions.append({
-            'id': f'credit_trans_{credit.id}',
-            'date': credit_date,
-            'type': 'income',
-            'description': f'Credit sale payment - {credit.transaction_id} - {credit.customer.full_name} ({credit.credit_company.name})',
-            'amount': credit.ceiling_price,
-            'reference': credit.transaction_id,
-            'created_by': credit.dealer,
-            'source': 'credit_sale',
-            'commission': credit.commission_amount,
-            'company': credit.credit_company.name
-        })
-    
+    # ============================================
+    # SORT AND DISPLAY
+    # ============================================
     transactions.sort(key=lambda x: x['date'], reverse=True)
     recent_transactions = transactions[:50]
     
@@ -2398,11 +2444,18 @@ def bank_account(request):
     return render(request, 'finance/account_detail.html', context)
 
 
+
+
+
+
+
+
 @login_required
 def cash_account(request):
-    """Cash account dashboard with integrated credit payments"""
+    """Cash account dashboard with cash sales and credit payments"""
     from .models import CashAccount, AccountTransaction
-    from credit.models import CompanyPayment, CreditTransaction
+    from credit.models import CompanyPayment
+    from sales.models import Sale  # Add this import
     from decimal import Decimal
     from datetime import datetime
     from django.utils import timezone
@@ -2411,6 +2464,31 @@ def cash_account(request):
     
     transactions = []
     
+    # ============================================
+    # CASH SALES (from Sales App)
+    # ============================================
+    cash_sales = Sale.objects.filter(
+        payment_method='Cash',
+        is_reversed=False
+    ).select_related('seller')
+    
+    for sale in cash_sales:
+        transactions.append({
+            'id': f'sale_{sale.sale_id}',
+            'date': sale.sale_date,
+            'type': 'income',
+            'description': f"Cash Sale - {sale.sale_id} - {sale.buyer_name or 'Walk-in Customer'}",
+            'amount': sale.total_amount,
+            'reference': sale.sale_id,
+            'created_by': sale.seller,
+            'source': 'cash_sale',
+            'items_count': sale.items.count(),
+            'payment_method': sale.payment_method
+        })
+    
+    # ============================================
+    # MANUAL TRANSACTIONS
+    # ============================================
     manual_trans = AccountTransaction.objects.filter(
         account_type='cash'
     ).select_related('created_by')
@@ -2427,6 +2505,9 @@ def cash_account(request):
             'source': 'manual'
         })
     
+    # ============================================
+    # CREDIT COMPANY PAYMENTS (Cash payments from companies)
+    # ============================================
     cash_payments = CompanyPayment.objects.filter(
         payment_method='cash'
     ).select_related('credit_company', 'created_by')
@@ -2447,12 +2528,20 @@ def cash_account(request):
             'source': 'credit'
         })
     
+    # ============================================
+    # SORT AND DISPLAY
+    # ============================================
     transactions.sort(key=lambda x: x['date'], reverse=True)
     recent_transactions = transactions[:50]
     
     total_income = sum(t['amount'] for t in transactions if t['type'] == 'income')
     total_expenses = sum(t['amount'] for t in transactions if t['type'] == 'expense')
     net_balance = total_income - total_expenses
+
+    # Update cash account balance
+    cash_account.balance = total_income - total_expenses
+    cash_account.last_updated = timezone.now()
+    cash_account.save(update_fields=['balance', 'last_updated'])
     
     context = {
         'account': cash_account,
@@ -2466,6 +2555,10 @@ def cash_account(request):
     }
     
     return render(request, 'finance/account_detail.html', context)
+
+
+
+
 
 
 @login_required
@@ -2570,8 +2663,8 @@ def add_account_transaction(request):
 
 @login_required
 def credit_company_payment(request, company_id):
-    """Record a payment from a credit company and update finance accounts"""
-    from credit.models import CreditCompany, CreditTransaction
+    """Record a payment from a credit company - NO finance creation here"""
+    from credit.models import CreditCompany, CreditTransaction, CompanyPayment
     
     company = get_object_or_404(CreditCompany, id=company_id)
     pending_transactions = CreditTransaction.objects.filter(
@@ -2586,13 +2679,14 @@ def credit_company_payment(request, company_id):
             payment_reference = request.POST.get('payment_reference', '')
             notes = request.POST.get('notes', '')
             
+            # Mark transactions as paid
             for transaction in pending_transactions:
                 transaction.mark_as_paid(
                     payment_ref=payment_reference,
                     paid_by=request.user
                 )
             
-            from credit.models import CompanyPayment
+            # Create company payment record
             payment = CompanyPayment.objects.create(
                 credit_company=company,
                 amount=payment_amount,
@@ -2604,18 +2698,9 @@ def credit_company_payment(request, company_id):
             )
             payment.transactions.set(pending_transactions)
             
-            from finance.models import CashAccount, BankAccount
-            
-            if payment_method == 'cash':
-                cash_account, _ = CashAccount.objects.get_or_create(id=1)
-                cash_account.update_balance(payment_amount, 'income', request.user)
-            else:
-                bank_account, _ = BankAccount.objects.get_or_create(id=1)
-                bank_account.update_balance(payment_amount, 'income', request.user)
-            
             messages.success(
                 request,
-                f'Payment of KES {payment_amount:,.2f} recorded from {company.name}. '
+                f'✅ Payment of KES {payment_amount:,.2f} recorded from {company.name}. '
                 f'{pending_transactions.count()} transactions marked as paid.'
             )
             

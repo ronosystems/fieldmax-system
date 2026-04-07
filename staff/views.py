@@ -1197,7 +1197,6 @@ def prepare_dashboard_messages(request, dashboard_name=None):
 
 
 
-
 #==========================================
 # ADMIN DASHBOARD - COMPREHENSIVE STATISTICS
 #==========================================
@@ -1398,18 +1397,48 @@ def admin_dashboard(request):
     )['total'] or 0
     
     # ============================================
-    # CREDIT STATS
+    # CREDIT STATS (UPDATED WITH PENDING VALUE LOGIC)
     # ============================================
+    # Total credit value (all transactions)
     total_credit = CreditTransaction.objects.aggregate(
         total=Sum('ceiling_price')
     )['total'] or 0
     
+    # Total pending credit value (unpaid)
+    total_pending_credit_value = CreditTransaction.objects.filter(
+        payment_status='pending'
+    ).aggregate(
+        total=Sum('ceiling_price')
+    )['total'] or 0
+    
+    # Total paid credit value
+    total_paid_credit_value = CreditTransaction.objects.filter(
+        payment_status='paid'
+    ).aggregate(
+        total=Sum('ceiling_price')
+    )['total'] or 0
+    
+    # Count statistics
     pending_credit = CreditTransaction.objects.filter(payment_status='pending').count()
     paid_credit = CreditTransaction.objects.filter(payment_status='paid').count()
     overdue_credit = CreditTransaction.objects.filter(
         payment_status='pending',
         transaction_date__date__lte=month_ago
     ).count()
+    
+    # Calculate payment completion percentage
+    if total_credit > 0:
+        payment_completion_percentage = (total_paid_credit_value / total_credit) * 100
+    else:
+        payment_completion_percentage = 0
+    
+    # Calculate overdue amount
+    overdue_credit_amount = CreditTransaction.objects.filter(
+        payment_status='pending',
+        transaction_date__date__lte=month_ago
+    ).aggregate(
+        total=Sum('ceiling_price')
+    )['total'] or 0
     
     # ============================================
     # CUSTOMER STATS
@@ -1599,11 +1628,15 @@ def admin_dashboard(request):
         'damaged_returns': damaged_returns,
         'damaged_loss': damaged_loss,
         
-        # Credit Stats
+        # Credit Stats (UPDATED)
         'total_credit': total_credit,
+        'total_pending_credit_value': total_pending_credit_value,
+        'total_paid_credit_value': total_paid_credit_value,
         'pending_credit': pending_credit,
         'paid_credit': paid_credit,
         'overdue_credit': overdue_credit,
+        'overdue_credit_amount': overdue_credit_amount,
+        'payment_completion_percentage': payment_completion_percentage,
         
         # Customer Stats
         'total_customers': total_customers,

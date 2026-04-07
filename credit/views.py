@@ -18,6 +18,7 @@ from django.core.mail import send_mail
 from django.template.loader import render_to_string
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
+from django.db import transaction as db_transaction
 
 from .models import (
     CreditCompany, CreditCustomer, CreditTransaction, 
@@ -1248,19 +1249,23 @@ def payment_list(request):
     return render(request, 'credit/payments/list.html', context)
 
 
+
+
+
+
+
+
 @login_required
 def payment_add(request):
-    """Add a new company payment (general payment page)"""
+    """Add a new company payment - AUTOMATIC FIFO (no manual selection needed)"""
     from .models import CreditCompany, CompanyPayment, CreditTransaction
     from decimal import Decimal
     from django.db.models import Sum
     
-    # Get all active companies for dropdown
     companies = CreditCompany.objects.filter(is_active=True)
     
     if request.method == 'POST':
         try:
-            # Get form data
             company_id = request.POST.get('company')
             if not company_id:
                 messages.error(request, 'Please select a credit company')
@@ -1274,245 +1279,151 @@ def payment_add(request):
             bank_name = request.POST.get('bank_name', '')
             account_number = request.POST.get('account_number', '')
             notes = request.POST.get('notes', '')
-            selected_transactions = request.POST.getlist('transactions')
             
             # Validate
             if amount <= 0:
                 messages.error(request, 'Payment amount must be greater than 0')
                 return redirect('credit:payment_add')
             
-            if not selected_transactions:
-                messages.error(request, 'Please select at least one transaction to include')
+            # Get pending transactions for this company (FIFO order - oldest first)
+            pending_transactions = CreditTransaction.objects.filter(
+                credit_company=company,
+                payment_status__in=['pending', 'partially_paid']
+            ).order_by('transaction_date')
+            
+            if not pending_transactions.exists():
+                messages.error(request, f'No pending transactions for {company.name}')
                 return redirect('credit:payment_add')
             
-            # Get selected transactions
-            transactions = CreditTransaction.objects.filter(
-                id__in=selected_transactions,
-                credit_company=company,
-                payment_status='pending'
-            )
+            total_pending = pending_transactions.aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
             
-            if not transactions.exists():
-                messages.error(request, 'No valid pending transactions selected')
-                return redirect('credit:payment_add')
+            if amount > total_pending:
+                messages.warning(request, f'Payment amount KES {amount:,.2f} exceeds total pending KES {total_pending:,.2f}')
             
-            # Mark transactions as paid
-            for transaction in transactions:
-                transaction.mark_as_paid(
-                    payment_ref=payment_reference,
-                    paid_by=request.user
-                )
+            # ============================================
+            # FIFO PAYMENT ALLOCATION (AUTOMATIC)
+            # ============================================
+            remaining_amount = amount
+            payment_allocations = []
+            fully_paid_count = 0
+            partially_paid_count = 0
             
-            # Create company payment record
-            payment = CompanyPayment.objects.create(
-                credit_company=company,
-                amount=amount,
-                payment_method=payment_method,
-                payment_reference=payment_reference,
-                payment_date=payment_date,
-                bank_name=bank_name,
-                account_number=account_number,
-                notes=notes,
-                created_by=request.user
-            )
-            payment.transactions.set(transactions)
-            
-            # Try to update finance accounts if finance app exists
-            try:
-                from finance.models import CashAccount, BankAccount, FinancialTransaction
+            for trans in pending_transactions:
+                if remaining_amount <= 0:
+                    break
                 
-                # Calculate total commission from paid transactions
-                paid_commission = transactions.aggregate(total=Sum('commission_amount'))['total'] or Decimal('0.00')
+                transaction_balance = trans.remaining_balance
                 
-                # Create financial transaction
-                FinancialTransaction.objects.create(
-                    transaction_type='income',
-                    category='commission',
+                if remaining_amount >= transaction_balance:
+                    amount_paid = transaction_balance
+                    remaining_amount -= transaction_balance
+                    fully_paid_count += 1
+                    payment_status = 'paid'
+                else:
+                    amount_paid = remaining_amount
+                    remaining_amount = 0
+                    partially_paid_count += 1
+                    payment_status = 'partially_paid'
+                
+                payment_allocations.append({
+                    'transaction': trans,
+                    'amount_paid': amount_paid,
+                    'payment_status': payment_status
+                })
+            
+            # ============================================
+            # PROCESS THE ALLOCATIONS
+            # ============================================
+            with db_transaction.atomic():
+                # Create company payment record
+                payment = CompanyPayment.objects.create(
+                    credit_company=company,
                     amount=amount,
-                    description=f"Credit payment from {company.name} - {payment.payment_id}",
                     payment_method=payment_method,
                     payment_reference=payment_reference,
-                    recipient_name=company.name,
-                    created_by=request.user,
-                    notes=f"Payment for {transactions.count()} transactions. Total commission: KSH {paid_commission}. {notes}"
+                    payment_date=payment_date,
+                    bank_name=bank_name,
+                    account_number=account_number,
+                    notes=notes,
+                    created_by=request.user
                 )
                 
-                # Update cash/bank account
-                if payment_method == 'cash':
-                    cash_account, _ = CashAccount.objects.get_or_create(id=1)
-                    cash_account.update_balance(amount, 'income', request.user)
+                # Process each allocated transaction
+                for allocation in payment_allocations:
+                    trans_obj = allocation['transaction']
+                    amount_paid = allocation['amount_paid']
+                    
+                    if allocation['payment_status'] == 'paid':
+                        trans_obj.mark_as_paid(
+                            payment_ref=payment_reference,
+                            paid_by=request.user
+                        )
+                        payment.transactions.add(trans_obj)
+                        
+                        logger.info(
+                            f"[PAYMENT ADD] Fully paid: {trans_obj.transaction_id} | "
+                            f"Amount: KES {amount_paid}"
+                        )
+                        
+                    else:  # partially_paid
+                        trans_obj.partial_payment_amount = getattr(trans_obj, 'partial_payment_amount', Decimal('0')) + amount_paid
+                        trans_obj.payment_status = 'partially_paid'
+                        trans_obj.save(update_fields=['partial_payment_amount', 'payment_status'])
+                        
+                        current_notes = trans_obj.notes or ""
+                        new_note = f"Partial payment of KES {amount_paid} received on {payment_date}. Ref: {payment_reference}. Remaining: KES {trans_obj.remaining_balance}"
+                        trans_obj.notes = f"{current_notes}\n{new_note}" if current_notes else new_note
+                        trans_obj.save(update_fields=['notes'])
+                        
+                        logger.info(
+                            f"[PAYMENT ADD] Partially paid: {trans_obj.transaction_id} | "
+                            f"Paid: KES {amount_paid} | Remaining: KES {trans_obj.remaining_balance}"
+                        )
+                
+                # Update payment notes with allocation details
+                allocation_summary = f"Fully paid: {fully_paid_count}, Partially paid: {partially_paid_count}"
+                payment.notes = f"{notes}\n\n{allocation_summary}" if notes else allocation_summary
+                payment.save(update_fields=['notes'])
+                
+                # ============================================
+                # NO FINANCE CREATION HERE - Finance app handles via signal
+                # ============================================
+                
+                # Prepare success message
+                if partially_paid_count > 0:
+                    success_msg = (
+                        f'✅ Payment of KES {amount:,.2f} recorded from {company.name}.\n'
+                        f'✓ {fully_paid_count} transaction(s) fully paid.\n'
+                        f'⚠️ {partially_paid_count} transaction(s) partially paid.'
+                    )
                 else:
-                    bank_account, _ = BankAccount.objects.get_or_create(id=1)
-                    bank_account.update_balance(amount, 'income', request.user)
+                    success_msg = (
+                        f'✅ Payment of KES {amount:,.2f} recorded from {company.name}.\n'
+                        f'✓ {fully_paid_count} transaction(s) marked as paid.'
+                    )
                 
-                logger.info(f"Finance transaction created for payment {payment.payment_id}")
+                messages.success(request, success_msg)
                 
-            except ImportError:
-                logger.warning("Finance app not available - skipping finance update")
-            except Exception as e:
-                logger.error(f"Error updating finance accounts: {str(e)}")
-            
-            messages.success(
-                request,
-                f'✅ Payment of KES {amount:,.2f} recorded from {company.name}. '
-                f'{transactions.count()} transactions marked as paid.'
-            )
-            
-            return redirect('credit:payment_list')
-            
+                if remaining_amount > 0:
+                    messages.info(request, f'💰 Remaining payment amount: KES {remaining_amount:,.2f}')
+                
+                return redirect('credit:payment_list')
+                
         except Exception as e:
-            logger.error(f"Error processing payment: {str(e)}")
+            logger.error(f"Error processing payment: {str(e)}", exc_info=True)
             messages.error(request, f'Error processing payment: {str(e)}')
             return redirect('credit:payment_add')
     
-    # GET request - show form
+    # GET request - show simple form
     context = {
         'companies': companies,
         'payment_methods': CompanyPayment.PAYMENT_METHODS,
-        'pending_transactions': [],  # Empty until company is selected
-        'total_amount': 0,
-        'total_commission': 0,
-        'transaction_count': 0,
-        'company': None,
     }
     
     return render(request, 'credit/company_payment.html', context)
 
 
-@login_required
-def credit_company_payment(request, company_id):
-    """Record a payment from a specific credit company"""
-    from .models import CreditCompany, CompanyPayment, CreditTransaction
-    from decimal import Decimal
-    from django.db.models import Sum
-    
-    company = get_object_or_404(CreditCompany, id=company_id)
-    companies = CreditCompany.objects.filter(is_active=True)
-    
-    # Get pending transactions for this company
-    pending_transactions = CreditTransaction.objects.filter(
-        credit_company=company,
-        payment_status='pending'
-    ).select_related('customer', 'product')
-    
-    # Calculate totals
-    total_amount = pending_transactions.aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
-    total_commission = pending_transactions.aggregate(total=Sum('commission_amount'))['total'] or Decimal('0.00')
-    transaction_count = pending_transactions.count()
-    
-    if request.method == 'POST':
-        try:
-            # Get form data
-            amount = Decimal(request.POST.get('amount', '0'))
-            payment_method = request.POST.get('payment_method')
-            payment_reference = request.POST.get('payment_reference', '')
-            payment_date = request.POST.get('payment_date')
-            bank_name = request.POST.get('bank_name', '')
-            account_number = request.POST.get('account_number', '')
-            notes = request.POST.get('notes', '')
-            selected_transactions = request.POST.getlist('transactions')
-            
-            # Validate
-            if amount <= 0:
-                messages.error(request, 'Payment amount must be greater than 0')
-                return redirect('credit:credit_company_payment', company_id=company.id)
-            
-            if not selected_transactions:
-                messages.error(request, 'Please select at least one transaction to include')
-                return redirect('credit:credit_company_payment', company_id=company.id)
-            
-            # Get selected transactions
-            transactions = CreditTransaction.objects.filter(
-                id__in=selected_transactions,
-                credit_company=company,
-                payment_status='pending'
-            )
-            
-            if not transactions.exists():
-                messages.error(request, 'No valid pending transactions selected')
-                return redirect('credit:credit_company_payment', company_id=company.id)
-            
-            # Mark transactions as paid
-            for transaction in transactions:
-                transaction.mark_as_paid(
-                    payment_ref=payment_reference,
-                    paid_by=request.user
-                )
-            
-            # Create company payment record
-            payment = CompanyPayment.objects.create(
-                credit_company=company,
-                amount=amount,
-                payment_method=payment_method,
-                payment_reference=payment_reference,
-                payment_date=payment_date,
-                bank_name=bank_name,
-                account_number=account_number,
-                notes=notes,
-                created_by=request.user
-            )
-            payment.transactions.set(transactions)
-            
-            # Try to update finance accounts if finance app exists
-            try:
-                from finance.models import CashAccount, BankAccount, FinancialTransaction
-                
-                # Calculate total commission from paid transactions
-                paid_commission = transactions.aggregate(total=Sum('commission_amount'))['total'] or Decimal('0.00')
-                
-                # Create financial transaction
-                FinancialTransaction.objects.create(
-                    transaction_type='income',
-                    category='commission',
-                    amount=amount,
-                    description=f"Credit payment from {company.name} - {payment.payment_id}",
-                    payment_method=payment_method,
-                    payment_reference=payment_reference,
-                    recipient_name=company.name,
-                    created_by=request.user,
-                    notes=f"Payment for {transactions.count()} transactions. Total commission: KSH {paid_commission}. {notes}"
-                )
-                
-                # Update cash/bank account
-                if payment_method == 'cash':
-                    cash_account, _ = CashAccount.objects.get_or_create(id=1)
-                    cash_account.update_balance(amount, 'income', request.user)
-                else:
-                    bank_account, _ = BankAccount.objects.get_or_create(id=1)
-                    bank_account.update_balance(amount, 'income', request.user)
-                
-                logger.info(f"Finance transaction created for payment {payment.payment_id}")
-                
-            except ImportError:
-                logger.warning("Finance app not available - skipping finance update")
-            except Exception as e:
-                logger.error(f"Error updating finance accounts: {str(e)}")
-            
-            messages.success(
-                request,
-                f'✅ Payment of KES {amount:,.2f} recorded from {company.name}. '
-                f'{transactions.count()} transactions marked as paid.'
-            )
-            
-            return redirect('credit:payment_list')
-            
-        except Exception as e:
-            logger.error(f"Error processing payment: {str(e)}")
-            messages.error(request, f'Error processing payment: {str(e)}')
-            return redirect('credit:credit_company_payment', company_id=company.id)
-    
-    # GET request - show form
-    context = {
-        'companies': companies,
-        'company': company,
-        'pending_transactions': pending_transactions,
-        'total_amount': total_amount,
-        'total_commission': total_commission,
-        'transaction_count': transaction_count,
-        'payment_methods': CompanyPayment.PAYMENT_METHODS,
-    }
-    
-    return render(request, 'credit/company_payment.html', context)
+
 
 
 @login_required
@@ -1538,52 +1449,29 @@ def payment_detail(request, pk):
 
 
 
+
 @login_required
 def credit_company_payment(request, company_id):
-    """Record a payment from a specific credit company"""
+    """Record a payment from a specific credit company - SIMPLIFIED FIFO LOGIC"""
     from .models import CreditCompany, CompanyPayment, CreditTransaction
     from decimal import Decimal
     from django.db.models import Sum
     
-    print("=" * 80)
-    print("CREDIT COMPANY PAYMENT VIEW CALLED")
-    print(f"Request Method: {request.method}")
-    print(f"Company ID: {company_id}")
-    print(f"User: {request.user.username}")
-    print("=" * 80)
-    
     company = get_object_or_404(CreditCompany, id=company_id)
     companies = CreditCompany.objects.filter(is_active=True)
     
-    # Get pending transactions for this company
+    # Get pending transactions for this company (ordered by oldest first - FIFO)
     pending_transactions = CreditTransaction.objects.filter(
         credit_company=company,
-        payment_status='pending'
-    ).select_related('customer', 'product')
+        payment_status__in=['pending', 'partially_paid']
+    ).select_related('customer', 'product').order_by('transaction_date')
     
     # Calculate totals
     total_amount = pending_transactions.aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
     total_commission = pending_transactions.aggregate(total=Sum('commission_amount'))['total'] or Decimal('0.00')
     transaction_count = pending_transactions.count()
     
-    print(f"Company: {company.name}")
-    print(f"Pending Transactions: {transaction_count}")
-    print(f"Total Amount Due: {total_amount}")
-    print(f"Total Commission: {total_commission}")
-    
     if request.method == 'POST':
-        print("\n" + "=" * 80)
-        print("POST REQUEST RECEIVED")
-        print("=" * 80)
-        print(f"POST Data: {request.POST}")
-        print(f"POST Keys: {list(request.POST.keys())}")
-        print(f"Selected Transactions: {request.POST.getlist('transactions')}")
-        print(f"Amount: {request.POST.get('amount')}")
-        print(f"Payment Method: {request.POST.get('payment_method')}")
-        print(f"Payment Reference: {request.POST.get('payment_reference')}")
-        print(f"Payment Date: {request.POST.get('payment_date')}")
-        print("=" * 80)
-        
         try:
             # Get form data
             amount = Decimal(request.POST.get('amount', '0'))
@@ -1593,124 +1481,135 @@ def credit_company_payment(request, company_id):
             bank_name = request.POST.get('bank_name', '')
             account_number = request.POST.get('account_number', '')
             notes = request.POST.get('notes', '')
-            selected_transactions = request.POST.getlist('transactions')
-            
-            print(f"\nParsed Data:")
-            print(f"  Amount: {amount}")
-            print(f"  Payment Method: {payment_method}")
-            print(f"  Payment Reference: {payment_reference}")
-            print(f"  Payment Date: {payment_date}")
-            print(f"  Selected Transactions Count: {len(selected_transactions)}")
             
             # Validate
             if amount <= 0:
-                print("ERROR: Amount must be greater than 0")
                 messages.error(request, 'Payment amount must be greater than 0')
                 return redirect('credit:credit_company_payment', company_id=company.id)
             
-            if not selected_transactions:
-                print("ERROR: No transactions selected")
-                messages.error(request, 'Please select at least one transaction to include')
-                return redirect('credit:credit_company_payment', company_id=company.id)
+            if amount > total_amount:
+                messages.warning(request, f'Payment amount KES {amount:,.2f} exceeds total pending amount KES {total_amount:,.2f}. Extra will be recorded as overpayment.')
             
-            # Get selected transactions
-            transactions = CreditTransaction.objects.filter(
-                id__in=selected_transactions,
-                credit_company=company,
-                payment_status='pending'
-            )
+            # ============================================
+            # FIFO PAYMENT ALLOCATION (AUTOMATIC)
+            # ============================================
+            remaining_amount = amount
+            paid_transactions = []
+            payment_allocations = []
+            fully_paid_count = 0
+            partially_paid_count = 0
             
-            print(f"Found {transactions.count()} valid transactions")
-            
-            if not transactions.exists():
-                print("ERROR: No valid pending transactions found")
-                messages.error(request, 'No valid pending transactions selected')
-                return redirect('credit:credit_company_payment', company_id=company.id)
-            
-            # Mark transactions as paid
-            for transaction in transactions:
-                print(f"Marking transaction {transaction.transaction_id} as paid...")
-                transaction.mark_as_paid(
-                    payment_ref=payment_reference,
-                    paid_by=request.user
-                )
-                print(f"  Transaction {transaction.transaction_id} marked as paid")
-            
-            # Create company payment record
-            print("Creating company payment record...")
-            payment = CompanyPayment.objects.create(
-                credit_company=company,
-                amount=amount,
-                payment_method=payment_method,
-                payment_reference=payment_reference,
-                payment_date=payment_date,
-                bank_name=bank_name,
-                account_number=account_number,
-                notes=notes,
-                created_by=request.user
-            )
-            payment.transactions.set(transactions)
-            print(f"Payment created: {payment.payment_id}")
-            
-            # Try to update finance accounts if finance app exists
-            try:
-                from finance.models import CashAccount, BankAccount, FinancialTransaction
+            for trans in pending_transactions:
+                if remaining_amount <= 0:
+                    break
                 
-                # Calculate total commission from paid transactions
-                paid_commission = transactions.aggregate(total=Sum('commission_amount'))['total'] or Decimal('0.00')
-                print(f"Total paid commission: {paid_commission}")
+                transaction_balance = trans.remaining_balance
                 
-                # Create financial transaction
-                print("Creating financial transaction...")
-                financial_trans = FinancialTransaction.objects.create(
-                    transaction_type='income',
-                    category='commission',
+                if remaining_amount >= transaction_balance:
+                    amount_paid = transaction_balance
+                    remaining_amount -= transaction_balance
+                    fully_paid_count += 1
+                    payment_status = 'paid'
+                else:
+                    amount_paid = remaining_amount
+                    remaining_amount = 0
+                    partially_paid_count += 1
+                    payment_status = 'partially_paid'
+                
+                payment_allocations.append({
+                    'transaction': trans,
+                    'amount_paid': amount_paid,
+                    'payment_status': payment_status,
+                    'remaining_balance': transaction_balance - amount_paid
+                })
+                
+                paid_transactions.append(trans)
+            
+            # ============================================
+            # PROCESS THE ALLOCATIONS
+            # ============================================
+            with db_transaction.atomic():
+                # Create company payment record
+                payment = CompanyPayment.objects.create(
+                    credit_company=company,
                     amount=amount,
-                    description=f"Credit payment from {company.name} - {payment.payment_id}",
                     payment_method=payment_method,
                     payment_reference=payment_reference,
-                    recipient_name=company.name,
-                    created_by=request.user,
-                    notes=f"Payment for {transactions.count()} transactions. Total commission: KSH {paid_commission}. {notes}"
+                    payment_date=payment_date,
+                    bank_name=bank_name,
+                    account_number=account_number,
+                    notes=notes,
+                    created_by=request.user
                 )
-                print(f"Financial transaction created: ID {financial_trans.id}")
                 
-                # Update cash/bank account
-                if payment_method == 'cash':
-                    print("Updating cash account...")
-                    cash_account, _ = CashAccount.objects.get_or_create(id=1)
-                    cash_account.update_balance(amount, 'income', request.user)
-                    print(f"Cash account updated. New balance: {cash_account.balance}")
+                # Process each allocated transaction
+                for allocation in payment_allocations:
+                    trans_obj = allocation['transaction']
+                    amount_paid = allocation['amount_paid']
+                    
+                    if allocation['payment_status'] == 'paid':
+                        trans_obj.mark_as_paid(
+                            payment_ref=payment_reference,
+                            paid_by=request.user
+                        )
+                        payment.transactions.add(trans_obj)
+                        
+                        logger.info(
+                            f"[FIFO PAYMENT] Fully paid: {trans_obj.transaction_id} | "
+                            f"Amount: KES {amount_paid}"
+                        )
+                        
+                    else:  # partially_paid
+                        trans_obj.partial_payment_amount = getattr(trans_obj, 'partial_payment_amount', Decimal('0')) + amount_paid
+                        trans_obj.payment_status = 'partially_paid'
+                        trans_obj.save(update_fields=['partial_payment_amount', 'payment_status'])
+                        
+                        current_notes = trans_obj.notes or ""
+                        new_note = f"Partial payment of KES {amount_paid} received on {payment_date}. Ref: {payment_reference}. Remaining: KES {trans_obj.remaining_balance}"
+                        trans_obj.notes = f"{current_notes}\n{new_note}" if current_notes else new_note
+                        trans_obj.save(update_fields=['notes'])
+                        
+                        logger.info(
+                            f"[FIFO PAYMENT] Partially paid: {trans_obj.transaction_id} | "
+                            f"Paid: KES {amount_paid} | Remaining: KES {trans_obj.remaining_balance}"
+                        )
+                
+                # Update payment notes with allocation details
+                allocation_summary = f"Fully paid: {fully_paid_count}, Partially paid: {partially_paid_count}"
+                payment.notes = f"{notes}\n\n{allocation_summary}" if notes else allocation_summary
+                payment.save(update_fields=['notes'])
+                
+                # ============================================
+                # REMOVED: Finance creation from credit app
+                # Let the finance app handle this via signal or separate view
+                # ============================================
+                
+                # Prepare success message
+                if partially_paid_count > 0:
+                    success_msg = (
+                        f'✅ Payment of KES {amount:,.2f} recorded from {company.name}.\n'
+                        f'✓ {fully_paid_count} transaction(s) fully paid.\n'
+                        f'⚠️ {partially_paid_count} transaction(s) partially paid.'
+                    )
                 else:
-                    print("Updating bank account...")
-                    bank_account, _ = BankAccount.objects.get_or_create(id=1)
-                    bank_account.update_balance(amount, 'income', request.user)
-                    print(f"Bank account updated. New balance: {bank_account.balance}")
+                    success_msg = (
+                        f'✅ Payment of KES {amount:,.2f} recorded from {company.name}.\n'
+                        f'✓ {fully_paid_count} transaction(s) marked as paid.'
+                    )
                 
-            except ImportError as e:
-                print(f"Finance app not available: {e}")
-                logger.warning("Finance app not available - skipping finance update")
-            except Exception as e:
-                print(f"Error updating finance accounts: {str(e)}")
-                logger.error(f"Error updating finance accounts: {str(e)}")
-            
-            messages.success(
-                request,
-                f'✅ Payment of KES {amount:,.2f} recorded from {company.name}. '
-                f'{transactions.count()} transactions marked as paid.'
-            )
-            print("Payment completed successfully!")
-            return redirect('credit:payment_list')
-            
+                messages.success(request, success_msg)
+                
+                if remaining_amount > 0:
+                    messages.info(request, f'💰 Remaining payment amount: KES {remaining_amount:,.2f} (will be applied to next transactions)')
+                
+                return redirect('credit:payment_list')
+                
         except Exception as e:
-            print(f"ERROR: {str(e)}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"Error processing payment: {str(e)}", exc_info=True)
             messages.error(request, f'Error processing payment: {str(e)}')
             return redirect('credit:credit_company_payment', company_id=company.id)
     
-    # GET request - show form
-    print("\nGET Request - Showing form")
+    # GET request - show simple form
     context = {
         'companies': companies,
         'company': company,
@@ -1722,6 +1621,51 @@ def credit_company_payment(request, company_id):
     }
     
     return render(request, 'credit/company_payment.html', context)
+
+
+
+
+@login_required
+def api_pending_transactions(request, company_id):
+    """API endpoint to get pending transactions for a company (FIFO order)"""
+    try:
+        from .models import CreditTransaction
+        
+        transactions = CreditTransaction.objects.filter(
+            credit_company_id=company_id,
+            payment_status__in=['pending', 'partially_paid']
+        ).select_related('customer').order_by('transaction_date')  # FIFO: oldest first
+        
+        transaction_list = []
+        for trans in transactions:
+            transaction_list.append({
+                'id': trans.id,
+                'transaction_id': trans.transaction_id,
+                'customer': trans.customer.full_name,
+                'amount': float(trans.ceiling_price),
+                'paid_amount': float(trans.partial_payment_amount or 0),
+                'remaining': float(trans.remaining_balance),
+                'date': trans.transaction_date.strftime('%Y-%m-%d'),
+                'days_old': (timezone.now().date() - trans.transaction_date.date()).days
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'transactions': transaction_list,
+            'total_pending': sum(t['remaining'] for t in transaction_list),
+            'count': len(transaction_list)
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e),
+            'transactions': []
+        })
+
+
+
+
 
 
 

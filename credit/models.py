@@ -474,73 +474,105 @@ class SellerCommissionSummary(models.Model):
 class CreditTransaction(models.Model):
     """
     Records when you give a phone to customer under a credit company's plan
-    Now with commission tracking for sellers
+    Now with commission tracking for sellers and partial payment support
     """
     
     PAYMENT_STATUS = [
-        ('pending', 'Pending Payment'),      # Company hasn't paid yet
-        ('paid', 'Paid by Company'),         # Company has paid you
-        ('cancelled', 'Cancelled'),          # Transaction cancelled
-        ('reversed', 'Reversed'),            # Transaction reversed, product available
+        ('pending', 'Pending Payment'),           # Company hasn't paid yet
+        ('partially_paid', 'Partially Paid'),     # Partial payment received
+        ('paid', 'Paid by Company'),              # Company has paid you fully
+        ('cancelled', 'Cancelled'),               # Transaction cancelled
+        ('reversed', 'Reversed'),                 # Transaction reversed, product available
     ]
     
     COMMISSION_STATUS = [
-        ('not_set', 'Not Set'),                # For transactions where company hasn't paid
-        ('requested', 'Requested'),            # New status - commission requested but not approved
-        ('approved', 'Approved'),              # Approved for payment
-        ('paid', 'Paid to Seller'),            # Commission has been paid
-        ('cancelled', 'Cancelled'),            # Commission cancelled
+        ('not_set', 'Not Set'),                   # For transactions where company hasn't paid
+        ('requested', 'Requested'),               # Commission requested but not approved
+        ('approved', 'Approved'),                 # Approved for payment
+        ('paid', 'Paid to Seller'),               # Commission has been paid
+        ('cancelled', 'Cancelled'),               # Commission cancelled
     ]
     
-    # Transaction ID (auto-generated in Sale format: #SALE-XXXX)
-    transaction_id = models.CharField(max_length=100, unique=True, db_index=True)
+    # ============================================
+    # BASIC IDENTIFICATION
+    # ============================================
+    transaction_id = models.CharField(
+        max_length=100, 
+        unique=True, 
+        db_index=True,
+        help_text="Auto-generated transaction ID in format #SALE-XXXX"
+    )
     
-    # The credit company (you select from companies you added)
+    # ============================================
+    # RELATIONSHIPS
+    # ============================================
     credit_company = models.ForeignKey(
-        CreditCompany,
+        'CreditCompany',
         on_delete=models.PROTECT,
         related_name='transactions',
         help_text="Select the credit company"
     )
     
-    # The customer
     customer = models.ForeignKey(
-        CreditCustomer,
+        'CreditCustomer',
         on_delete=models.PROTECT,
-        related_name='transactions'
+        related_name='transactions',
+        help_text="Customer who received the product"
     )
     
-    # You (the dealer/seller)
     dealer = models.ForeignKey(
         User,
         on_delete=models.PROTECT,
-        related_name='credit_transactions'
+        related_name='credit_transactions',
+        help_text="Seller/Dealer who made the sale"
     )
     
-    # The product (phone)
     product = models.ForeignKey(
-        Product,
+        'inventory.Product',
         on_delete=models.PROTECT,
-        related_name='credit_transactions'
+        related_name='credit_transactions',
+        help_text="Product sold on credit"
     )
     
-    # Product details (snapshot)
-    product_name = models.CharField(max_length=200, blank=True)
-    product_code = models.CharField(max_length=100, blank=True)
+    # ============================================
+    # PRODUCT SNAPSHOT (for history)
+    # ============================================
+    product_name = models.CharField(
+        max_length=200, 
+        blank=True,
+        help_text="Product name at time of sale"
+    )
+    product_code = models.CharField(
+        max_length=100, 
+        blank=True,
+        help_text="Product code at time of sale"
+    )
     imei = models.CharField(
         max_length=100,
         blank=True,
         help_text="Phone IMEI number (if applicable)"
     )
     
-    # Money - Ceiling price is what the company will pay you
+    # ============================================
+    # FINANCIAL AMOUNTS
+    # ============================================
     ceiling_price = models.DecimalField(
         max_digits=12,
         decimal_places=2,
         help_text="Amount the credit company will pay you"
     )
     
-    # ===== COMMISSION FIELDS =====
+    # ===== PARTIAL PAYMENT TRACKING =====
+    partial_payment_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        help_text="Amount already paid for partial payments (when company pays partially)"
+    )
+    
+    # ============================================
+    # COMMISSION FIELDS
+    # ============================================
     commission_type = models.CharField(
         max_length=20,
         choices=[
@@ -568,7 +600,8 @@ class CreditTransaction(models.Model):
     commission_status = models.CharField(
         max_length=20,
         choices=COMMISSION_STATUS,
-        default='not_set' 
+        default='not_set',
+        help_text="Status of seller's commission"
     )
     
     commission_paid_date = models.DateTimeField(
@@ -582,7 +615,8 @@ class CreditTransaction(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='commission_payments_made'
+        related_name='commission_payments_made',
+        help_text="Who paid the commission to the seller"
     )
     
     commission_notes = models.TextField(
@@ -590,27 +624,38 @@ class CreditTransaction(models.Model):
         help_text="Notes about commission payment"
     )
     
-    # Dates
-    transaction_date = models.DateTimeField(default=timezone.now)
+    # ============================================
+    # DATES
+    # ============================================
+    transaction_date = models.DateTimeField(
+        default=timezone.now,
+        help_text="When the credit transaction was created"
+    )
     paid_date = models.DateTimeField(
         null=True,
         blank=True,
-        help_text="When the company paid you"
+        help_text="When the company fully paid you"
     )
     
-    # Payment tracking
+    # ============================================
+    # PAYMENT TRACKING
+    # ============================================
     payment_status = models.CharField(
         max_length=20,
         choices=PAYMENT_STATUS,
-        default='pending'
+        default='pending',
+        help_text="Payment status from the credit company"
     )
+    
     payment_reference = models.CharField(
         max_length=200,
         blank=True,
         help_text="Company's payment reference (M-Pesa code, bank ref, etc.)"
     )
     
-    # ETR Receipt Number (same format as sales)
+    # ============================================
+    # RECEIPT & REFERENCE
+    # ============================================
     etr_receipt_number = models.CharField(
         max_length=50,
         blank=True,
@@ -618,17 +663,20 @@ class CreditTransaction(models.Model):
         help_text="ETR receipt number (e.g., 0501)"
     )
     
-    # Any reference from the company
     company_reference = models.CharField(
         max_length=200,
         blank=True,
         help_text="Reference number from the credit company"
     )
     
-    # Notes
+    # ============================================
+    # NOTES & DOCUMENTATION
+    # ============================================
     notes = models.TextField(blank=True)
     
-    # Reversal tracking
+    # ============================================
+    # REVERSAL TRACKING
+    # ============================================
     reversed_at = models.DateTimeField(null=True, blank=True)
     reversed_by = models.ForeignKey(
         User,
@@ -639,12 +687,9 @@ class CreditTransaction(models.Model):
     )
     reversal_reason = models.TextField(blank=True)
     
-    # Metadata
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-
-    # Link to finance accounts
+    # ============================================
+    # FINANCE INTEGRATION
+    # ============================================
     finance_transaction_id = models.CharField(
         max_length=100,
         blank=True,
@@ -664,6 +709,15 @@ class CreditTransaction(models.Model):
         help_text="Which finance account this payment was recorded in"
     )
     
+    # ============================================
+    # METADATA
+    # ============================================
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    # ============================================
+    # META CLASS
+    # ============================================
     class Meta:
         ordering = ['-transaction_date']
         indexes = [
@@ -672,20 +726,62 @@ class CreditTransaction(models.Model):
             models.Index(fields=['credit_company', 'payment_status']),
             models.Index(fields=['-transaction_date']),
             models.Index(fields=['etr_receipt_number']),
-            models.Index(fields=['commission_status']),  # Added for commission queries
-            models.Index(fields=['dealer', 'commission_status']),  # Added for seller queries
+            models.Index(fields=['commission_status']),
+            models.Index(fields=['dealer', 'commission_status']),
+            models.Index(fields=['partial_payment_amount']),  # For partial payment queries
         ]
         constraints = [
             models.UniqueConstraint(
                 fields=['product'],
-                condition=Q(payment_status='pending') | Q(payment_status='paid'),
+                condition=Q(payment_status='pending') | Q(payment_status='paid') | Q(payment_status='partially_paid'),
                 name='unique_product_per_active_transaction'
             )
         ]
     
+    # ============================================
+    # STRING REPRESENTATION
+    # ============================================
     def __str__(self):
         return f"{self.transaction_id} - {self.customer.full_name} - {self.credit_company.name} - KSH {self.ceiling_price}"
     
+    # ============================================
+    # PROPERTIES
+    # ============================================
+    @property
+    def remaining_balance(self):
+        """Calculate remaining balance after partial payments"""
+        return self.ceiling_price - self.partial_payment_amount
+    
+    @property
+    def is_fully_paid(self):
+        """Check if transaction is fully paid"""
+        return self.partial_payment_amount >= self.ceiling_price
+    
+    @property
+    def paid_percentage(self):
+        """Calculate percentage paid"""
+        if self.ceiling_price > 0:
+            return (self.partial_payment_amount / self.ceiling_price) * 100
+        return 0
+    
+    @property
+    def days_since_given(self):
+        """Days since phone was given to customer"""
+        delta = date.today() - self.transaction_date.date()
+        return delta.days
+    
+    @property
+    def etr_number(self):
+        """Get just the ETR number (last 4 digits)"""
+        if self.etr_receipt_number:
+            return self.etr_receipt_number
+        if self.transaction_id and self.transaction_id.startswith('#SALE-'):
+            return self.transaction_id.replace('#SALE-', '')
+        return "0000"
+    
+    # ============================================
+    # SAVE METHOD
+    # ============================================
     def save(self, *args, **kwargs):
         # Auto-generate transaction ID in Sale format if not set
         if not self.transaction_id:
@@ -700,22 +796,29 @@ class CreditTransaction(models.Model):
         if self.ceiling_price and self.commission_value and not self.commission_amount:
             self.calculate_commission()
         
+        # Auto-update payment status based on partial payments
+        if self.partial_payment_amount > 0 and self.partial_payment_amount < self.ceiling_price:
+            if self.payment_status == 'pending':
+                self.payment_status = 'partially_paid'
+        elif self.partial_payment_amount >= self.ceiling_price and self.ceiling_price > 0:
+            if self.payment_status != 'paid':
+                self.payment_status = 'paid'
+        
         super().save(*args, **kwargs)
     
+    # ============================================
+    # ID GENERATION
+    # ============================================
     def _generate_sale_id_and_etr(self):
         """
         Generate Sale ID in format #SALE-XXXX and ETR number (XXXX)
         Shares the same counter with regular sales
         """
-        # Import here to avoid circular import
         try:
             from sales.models import Sale
         except ImportError:
             Sale = None
         
-        today = date.today()
-        
-        # Get the highest sequence number from BOTH regular sales and credit transactions
         last_sequence = 0
         
         # Check regular sales if the model exists
@@ -743,84 +846,91 @@ class CreditTransaction(models.Model):
             except (ValueError, AttributeError):
                 pass
         
-        # Also check for any existing sequence numbers in the database
-        # This handles case when there are no records yet
-        if last_sequence == 0:
-            # Check if there are any sales with numeric IDs
-            all_sales = []
-            if Sale:
-                all_sales = Sale.objects.filter(
-                    sale_id__startswith='#SALE-'
-                ).values_list('sale_id', flat=True)
-            
-            all_credits = CreditTransaction.objects.filter(
-                transaction_id__startswith='#SALE-'
-            ).values_list('transaction_id', flat=True)
-            
-            all_ids = list(all_sales) + list(all_credits)
-            
-            for id_str in all_ids:
-                try:
-                    num = int(id_str.replace('#SALE-', ''))
-                    last_sequence = max(last_sequence, num)
-                except (ValueError, AttributeError):
-                    pass
-        
         # Increment for new transaction
         new_sequence = last_sequence + 1
         formatted_sequence = str(new_sequence).zfill(4)
         
-        # Generate IDs
         transaction_id = f"#SALE-{formatted_sequence}"
         etr_number = formatted_sequence
         
         return transaction_id, etr_number
     
+    # ============================================
+    # COMMISSION METHODS
+    # ============================================
     def calculate_commission(self):
         """Calculate commission amount based on type and value"""
         if self.commission_type == 'percentage':
-            # Percentage of ceiling price
             self.commission_amount = (self.ceiling_price * self.commission_value) / Decimal('100.00')
         else:
-            # Fixed amount
             self.commission_amount = self.commission_value
         
-        # Round to 2 decimal places
         self.commission_amount = round(self.commission_amount, 2)
-        
         return self.commission_amount
     
-    def mark_as_paid(self, payment_ref='', paid_by=None):
-        """Mark as paid when the credit company sends money"""
-        self.payment_status = 'paid'
-        self.paid_date = timezone.now()
+    def get_seller_commission_info(self):
+        """Get commission information for the seller"""
+        return {
+            'seller': self.dealer.get_full_name() or self.dealer.username,
+            'commission_type': self.get_commission_type_display(),
+            'commission_value': self.commission_value,
+            'commission_amount': self.commission_amount,
+            'commission_status': self.get_commission_status_display(),
+            'commission_paid_date': self.commission_paid_date
+        }
+    
+    # ============================================
+    # PAYMENT METHODS
+    # ============================================
+    def mark_as_paid(self, payment_ref='', paid_by=None, amount=None):
+        """
+        Mark as paid when the credit company sends money
+        Can handle full or partial payments
+        """
+        if amount is None:
+            amount = self.ceiling_price
+        
+        # Update partial payment amount
+        self.partial_payment_amount += amount
+        
+        # Check if fully paid
+        if self.partial_payment_amount >= self.ceiling_price:
+            self.payment_status = 'paid'
+            self.paid_date = timezone.now()
+        else:
+            self.payment_status = 'partially_paid'
+        
         if payment_ref:
             self.payment_reference = payment_ref
+        
         self.save()
         
-        # Create stock entry (record the sale)
-        from inventory.models import StockEntry
-        StockEntry.objects.create(
-            product=self.product,
-            quantity=-1,
-            entry_type='sale',
-            unit_price=self.ceiling_price,
-            total_amount=self.ceiling_price,
-            reference_id=self.transaction_id,
-            notes=f'Credit sale - Paid by {self.credit_company.name}',
-            created_by=paid_by or self.dealer
-        )
+        # Only create stock entry when fully paid
+        if self.payment_status == 'paid':
+            from inventory.models import StockEntry
+            StockEntry.objects.create(
+                product=self.product,
+                quantity=-1,
+                entry_type='sale',
+                unit_price=self.ceiling_price,
+                total_amount=self.ceiling_price,
+                reference_id=self.transaction_id,
+                notes=f'Credit sale - Paid by {self.credit_company.name}',
+                created_by=paid_by or self.dealer
+            )
         
         # Log the action
         CreditTransactionLog.objects.create(
             transaction=self,
             action='paid',
             performed_by=paid_by or self.dealer,
-            notes=f'Paid - Ref: {payment_ref}'
+            notes=f'Payment of KES {amount} received. Ref: {payment_ref}. Remaining: KES {self.remaining_balance}'
         )
         
         # Update seller commission summary
         self._update_seller_commission_summary()
+        
+        return self.payment_status == 'paid'
     
     def mark_commission_as_paid(self, paid_by=None, notes=""):
         """Mark commission as paid to seller"""
@@ -836,7 +946,6 @@ class CreditTransaction(models.Model):
             commission_record = self.seller_commission_record
             commission_record.mark_as_paid(paid_by=paid_by, notes=notes)
         except SellerCommission.DoesNotExist:
-            # Create one if it doesn't exist (for backward compatibility)
             SellerCommission.objects.create(
                 seller=self.dealer,
                 transaction=self,
@@ -847,10 +956,8 @@ class CreditTransaction(models.Model):
                 notes=notes
             )
         
-        # Update summary
         self._update_seller_commission_summary()
         
-        # Log commission payment
         CreditTransactionLog.objects.create(
             transaction=self,
             action='commission_paid',
@@ -858,6 +965,9 @@ class CreditTransaction(models.Model):
             notes=f"Commission of KSH {self.commission_amount} paid to seller. {notes}"
         )
     
+    # ============================================
+    # CANCELLATION & REVERSAL METHODS
+    # ============================================
     def cancel(self, reason='', cancelled_by=None):
         """Cancel the transaction"""
         self.payment_status = 'cancelled'
@@ -865,7 +975,7 @@ class CreditTransaction(models.Model):
         self.notes = f"{self.notes}\nCancelled: {reason}".strip()
         self.save()
         
-        # When cancelling, restore product availability
+        # Restore product availability
         if self.product:
             if self.product.category.is_single_item:
                 self.product.status = 'available'
@@ -876,7 +986,7 @@ class CreditTransaction(models.Model):
                     self.product.status = 'available'
             self.product.save()
         
-        # Update commission record if exists
+        # Update commission record
         try:
             commission_record = self.seller_commission_record
             commission_record.status = 'cancelled'
@@ -892,7 +1002,6 @@ class CreditTransaction(models.Model):
             notes=reason
         )
         
-        # Update summary
         self._update_seller_commission_summary()
     
     def reverse_transaction(self, reversed_by=None, reason=""):
@@ -910,13 +1019,10 @@ class CreditTransaction(models.Model):
             raise ValidationError("Paid transactions cannot be reversed. Please contact admin.")
         
         with db_transaction.atomic():
-            # Store old status
             old_status = self.payment_status
             product = self.product
             
-            # ============================================
-            # RESTORE PRODUCT STATUS
-            # ============================================
+            # Restore product status
             if product.category.is_single_item:
                 product.status = 'available'
                 product.quantity = 1
@@ -926,7 +1032,6 @@ class CreditTransaction(models.Model):
                     product.status = 'available'
                 if product.quantity <= product.reorder_level:
                     product.status = 'lowstock'
-            
             product.save()
             
             # Create reversal stock entry
@@ -944,13 +1049,13 @@ class CreditTransaction(models.Model):
             
             # Update transaction status
             self.payment_status = 'reversed'
-            self.commission_status = 'cancelled'  # Cancel commission on reversal
+            self.commission_status = 'cancelled'
             self.reversal_reason = reason
             self.reversed_at = timezone.now()
             self.reversed_by = reversed_by
             self.save()
             
-            # Update commission record if exists
+            # Update commission record
             try:
                 commission_record = self.seller_commission_record
                 commission_record.status = 'cancelled'
@@ -959,7 +1064,6 @@ class CreditTransaction(models.Model):
             except SellerCommission.DoesNotExist:
                 pass
             
-            # Create reversal log
             CreditTransactionLog.objects.create(
                 transaction=self,
                 action='reversed',
@@ -967,20 +1071,13 @@ class CreditTransaction(models.Model):
                 notes=f"Transaction reversed. Product restored. Commission cancelled. Reason: {reason}"
             )
             
-            # Update summary
             self._update_seller_commission_summary()
-            
-            logger.info(
-                f"[CREDIT REVERSAL] Transaction: {self.transaction_id} | "
-                f"Product: {product.product_code} | "
-                f"Old Status: {old_status} | New Status: reversed | "
-                f"Product Status: {product.status} | "
-                f"Product Quantity: {product.quantity} | "
-                f"Reason: {reason}"
-            )
             
             return True
     
+    # ============================================
+    # HELPER METHODS
+    # ============================================
     def _update_seller_commission_summary(self):
         """Update or create seller commission summary"""
         summary, created = SellerCommissionSummary.objects.get_or_create(
@@ -988,31 +1085,16 @@ class CreditTransaction(models.Model):
         )
         summary.update_from_transactions()
     
-    def get_seller_commission_info(self):
-        """Get commission information for the seller"""
+    def get_payment_summary(self):
+        """Get payment summary for this transaction"""
         return {
-            'seller': self.dealer.get_full_name() or self.dealer.username,
-            'commission_type': self.get_commission_type_display(),
-            'commission_value': self.commission_value,
-            'commission_amount': self.commission_amount,
-            'commission_status': self.get_commission_status_display(),
-            'commission_paid_date': self.commission_paid_date
+            'total_amount': self.ceiling_price,
+            'paid_amount': self.partial_payment_amount,
+            'remaining_balance': self.remaining_balance,
+            'paid_percentage': self.paid_percentage,
+            'status': self.get_payment_status_display(),
+            'is_fully_paid': self.is_fully_paid
         }
-    
-    @property
-    def days_since_given(self):
-        """Days since phone was given to customer"""
-        delta = date.today() - self.transaction_date.date()
-        return delta.days
-    
-    @property
-    def etr_number(self):
-        """Get just the ETR number (last 4 digits)"""
-        if self.etr_receipt_number:
-            return self.etr_receipt_number
-        if self.transaction_id and self.transaction_id.startswith('#SALE-'):
-            return self.transaction_id.replace('#SALE-', '')
-        return "0000"
 
 
 # ====================================

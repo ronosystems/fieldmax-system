@@ -20,24 +20,19 @@
         <h5 class="mb-0"><i class="fas fa-money-bill-wave me-2"></i>Record Company Payment</h5>
     </div>
     <div class="card-body">
+        <!-- FIFO Info Alert -->
+        <div class="alert alert-info mb-3">
+            <i class="fas fa-info-circle me-2"></i>
+            <strong>FIFO Payment Logic:</strong> Payments are applied to the oldest pending transactions first. 
+            Once a transaction is fully paid, it's marked as PAID.
+        </div>
+
         <form method="post" id="paymentForm">
             {% csrf_token %}
             
-            <!-- Debug Info (only visible in development) -->
-            {% if debug %}
-            <div class="alert alert-info small mb-3">
-                <strong>Debug Info:</strong><br>
-                Form action: {{ request.path }}<br>
-                Method: POST<br>
-                CSRF token present: {% if csrf_token %}Yes{% else %}No{% endif %}<br>
-                {% if company %}Company ID: {{ company.id }}{% else %}No company preselected{% endif %}
-            </div>
-            {% endif %}
-            
             <div class="row">
                 <div class="col-md-6">
-                    <h6 class="mb-3">Payment Details</h6>
-                    
+                    <!-- Company Selection -->
                     <div class="mb-3">
                         <label class="form-label">Credit Company <span class="text-danger">*</span></label>
                         <select name="company" class="form-select" required id="companySelect">
@@ -50,12 +45,14 @@
                         </select>
                     </div>
                     
+                    <!-- Amount Paid -->
                     <div class="mb-3">
-                        <label class="form-label">Amount (KSH) <span class="text-danger">*</span></label>
-                        <input type="number" name="amount" class="form-control" step="0.01" required id="amountInput" value="{{ total_amount|floatformat:2 }}">
-                        <div class="form-text">Total from selected transactions: KSH <span id="selectedTotalDisplay">0</span></div>
+                        <label class="form-label">Amount Paid (KSH) <span class="text-danger">*</span></label>
+                        <input type="number" name="amount" class="form-control" step="0.01" required id="amountInput" placeholder="Enter amount">
+                        <div class="form-text" id="pendingInfo"></div>
                     </div>
                     
+                    <!-- Payment Method -->
                     <div class="mb-3">
                         <label class="form-label">Payment Method <span class="text-danger">*</span></label>
                         <select name="payment_method" class="form-select" required>
@@ -66,106 +63,33 @@
                         </select>
                     </div>
                     
+                    <!-- Payment Reference -->
                     <div class="mb-3">
                         <label class="form-label">Payment Reference <span class="text-danger">*</span></label>
                         <input type="text" name="payment_reference" class="form-control" required placeholder="M-Pesa code, bank ref, cheque no.">
                     </div>
                     
+                    <!-- Payment Date -->
                     <div class="mb-3">
                         <label class="form-label">Payment Date <span class="text-danger">*</span></label>
                         <input type="date" name="payment_date" class="form-control" value="{% now 'Y-m-d' %}" required>
                     </div>
+                    
+                    <!-- Notes (Optional) -->
+                    <div class="mb-3">
+                        <label class="form-label">Notes (Optional)</label>
+                        <textarea name="notes" class="form-control" rows="3" placeholder="Additional notes..."></textarea>
+                    </div>
                 </div>
                 
                 <div class="col-md-6">
-                    <h6 class="mb-3">Bank Details (if applicable)</h6>
-                    
-                    <div class="mb-3">
-                        <label class="form-label">Bank Name</label>
-                        <input type="text" name="bank_name" class="form-control">
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label">Account Number</label>
-                        <input type="text" name="account_number" class="form-control">
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label">Notes</label>
-                        <textarea name="notes" class="form-control" rows="4"></textarea>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Transactions to include -->
-            <div class="row mt-4">
-                <div class="col-12">
-                    <h6 class="mb-3">Select Pending Transactions to Include</h6>
-                    <div class="card">
-                        <div class="card-body p-0">
-                            <div class="table-responsive">
-                                <table class="table table-hover mb-0">
-                                    <thead class="table-light">
-                                        <tr>
-                                            <th style="width: 40px;"><input type="checkbox" id="selectAll"></th>
-                                            <th>Transaction ID</th>
-                                            <th>Customer</th>
-                                            <th>Product</th>
-                                            <th>Amount</th>
-                                            <th>Date Given</th>
-                                            <th>Commission</th>
-                                         </thead>
-                                    <tbody id="transactionList">
-                                        {% for transaction in pending_transactions %}
-                                        <tr data-company="{{ transaction.credit_company_id }}" data-amount="{{ transaction.ceiling_price|floatformat:2 }}" data-commission="{{ transaction.commission_amount|floatformat:2 }}">
-                                            <td class="text-center">
-                                                <input type="checkbox" name="transactions" value="{{ transaction.id }}" class="transaction-checkbox">
-                                              </td>
-                                              <td>
-                                                <span class="badge bg-warning text-dark">{{ transaction.transaction_id }}</span>
-                                                {% if transaction.etr_receipt_number %}
-                                                <br><small class="text-muted">ETR: {{ transaction.etr_receipt_number }}</small>
-                                                {% endif %}
-                                              </td>
-                                              <td>
-                                                <strong>{{ transaction.customer.full_name }}</strong><br>
-                                                <small class="text-muted">{{ transaction.customer.phone_number }}</small>
-                                              </td>
-                                              <td>
-                                                {{ transaction.product_name|default:transaction.product.display_name }}<br>
-                                                <small class="text-muted">SKU: {{ transaction.product.sku_value|default:"N/A" }}</small>
-                                              </td>
-                                              <td class="fw-bold text-primary">KES {{ transaction.ceiling_price|floatformat:2|intcomma }}</td>
-                                              <td>{{ transaction.transaction_date|date:"Y-m-d" }}</td>
-                                              <td class="text-success">KES {{ transaction.commission_amount|floatformat:2|intcomma }}</td>
-                                         </tr>
-                                        {% empty %}
-                                         <tr>
-                                            <td colspan="7" class="text-center py-4">
-                                                {% if company %}
-                                                    <i class="fas fa-check-circle fa-2x text-success mb-2"></i>
-                                                    <p class="mb-0">No pending transactions for {{ company.name }}</p>
-                                                    <small class="text-muted">All transactions are up to date</small>
-                                                {% else %}
-                                                    <i class="fas fa-info-circle fa-2x text-info mb-2"></i>
-                                                    <p class="mb-0">Select a company to view pending transactions</p>
-                                                {% endif %}
-                                            </td>
-                                         </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                    {% if pending_transactions %}
-                                    <tfoot class="table-light">
-                                        <tr class="fw-bold">
-                                            <td colspan="4" class="text-end">Totals:</td>
-                                            <td id="selectedTotal">KES 0</td>
-                                            <td></td>
-                                            <td id="selectedCommissionTotal">KES 0</td>
-                                        </tr>
-                                    </tfoot>
-                                    {% endif %}
-                                </table>
-                            </div>
+                    <!-- FIFO Payment Preview Card -->
+                    <div class="card bg-light">
+                        <div class="card-header">
+                            <h6 class="mb-0"><i class="fas fa-chart-line me-2"></i>FIFO Payment Preview</h6>
+                        </div>
+                        <div class="card-body" id="previewContent">
+                            <p class="text-muted mb-0">Select a company to see pending transactions...</p>
                         </div>
                     </div>
                 </div>
@@ -184,231 +108,287 @@
 </div>
 
 <style>
-    .required:after {
-        content: " *";
-        color: #dc3545;
+    .fifo-item {
+        padding: 8px;
+        margin-bottom: 5px;
+        border-radius: 5px;
+        transition: all 0.3s ease;
     }
     
-    .transaction-checkbox {
-        cursor: pointer;
+    .fifo-item.paid {
+        background-color: #d4edda;
+        border-left: 3px solid #28a745;
     }
     
-    .table tbody tr:hover {
+    .fifo-item.partial {
+        background-color: #fff3cd;
+        border-left: 3px solid #ffc107;
+    }
+    
+    .fifo-item.pending {
         background-color: #f8f9fa;
+        border-left: 3px solid #6c757d;
     }
     
-    .badge {
-        font-size: 0.85rem;
-        padding: 0.35rem 0.65rem;
+    .progress {
+        height: 6px;
+        border-radius: 3px;
     }
 </style>
 
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('Page loaded - Payment form initialized');
-    
-    const selectAll = document.getElementById('selectAll');
-    const checkboxes = document.querySelectorAll('.transaction-checkbox');
-    const selectedTotalSpan = document.getElementById('selectedTotal');
-    const selectedCommissionTotalSpan = document.getElementById('selectedCommissionTotal');
-    const selectedTotalDisplay = document.getElementById('selectedTotalDisplay');
-    const amountInput = document.getElementById('amountInput');
     const companySelect = document.getElementById('companySelect');
+    const amountInput = document.getElementById('amountInput');
+    const pendingInfo = document.getElementById('pendingInfo');
+    const previewContent = document.getElementById('previewContent');
     const paymentForm = document.getElementById('paymentForm');
     
-    console.log('Elements found:', {
-        selectAll: !!selectAll,
-        checkboxes: checkboxes.length,
-        selectedTotalSpan: !!selectedTotalSpan,
-        amountInput: !!amountInput,
-        companySelect: !!companySelect,
-        paymentForm: !!paymentForm
-    });
+    let pendingTransactions = [];
     
-    // Store amount and commission for each transaction
-    const transactionData = {};
-    checkboxes.forEach(checkbox => {
-        const row = checkbox.closest('tr');
-        const amount = parseFloat(row.dataset.amount) || 0;
-        const commission = parseFloat(row.dataset.commission) || 0;
-        transactionData[checkbox.value] = { amount, commission };
-    });
-    
-    console.log('Transaction data loaded:', Object.keys(transactionData).length);
-    
-    // When company changes, reload page with selected company
+    // When company changes, fetch pending transactions
     if (companySelect) {
         companySelect.addEventListener('change', function() {
             const companyId = this.value;
-            console.log('Company changed to:', companyId);
             if (companyId) {
-                window.location.href = `/credit/company/${companyId}/payment/`;
+                fetchPendingTransactions(companyId);
             } else {
-                window.location.href = `/credit/payments/add/`;
+                previewContent.innerHTML = '<p class="text-muted mb-0">Select a company to see pending transactions...</p>';
+                pendingInfo.textContent = '';
             }
         });
     }
     
-    // Select all functionality
-    if (selectAll) {
-        selectAll.addEventListener('change', function() {
-            console.log('Select all clicked:', this.checked);
-            const visibleCheckboxes = Array.from(checkboxes).filter(cb => {
-                const row = cb.closest('tr');
-                return row && row.style.display !== 'none';
+    // Fetch pending transactions via AJAX
+    async function fetchPendingTransactions(companyId) {
+        try {
+            previewContent.innerHTML = '<div class="text-center"><i class="fas fa-spinner fa-spin"></i> Loading transactions...</div>';
+            
+            const response = await fetch(`/credit/api/pending-transactions/${companyId}/`);
+            const data = await response.json();
+            
+            if (data.success && data.transactions.length > 0) {
+                pendingTransactions = data.transactions;
+                updatePreview();
+                updatePendingInfo();
+            } else {
+                pendingTransactions = [];
+                previewContent.innerHTML = `
+                    <div class="alert alert-success mb-0">
+                        <i class="fas fa-check-circle"></i> No pending transactions for this company!
+                    </div>
+                `;
+                pendingInfo.innerHTML = '<span class="text-success">✓ All transactions are paid up</span>';
+            }
+        } catch (error) {
+            console.error('Error fetching transactions:', error);
+            previewContent.innerHTML = '<div class="alert alert-danger mb-0">Error loading transactions. Please try again.</div>';
+        }
+    }
+    
+    // Update preview based on amount entered
+    function updatePreview() {
+        const amount = parseFloat(amountInput.value) || 0;
+        
+        if (pendingTransactions.length === 0) {
+            previewContent.innerHTML = '<p class="text-muted mb-0">No pending transactions for this company</p>';
+            return;
+        }
+        
+        // FIFO Logic: Sort by date (oldest first)
+        const sortedTransactions = [...pendingTransactions].sort((a, b) => new Date(a.date) - new Date(b.date));
+        
+        // Calculate allocation
+        let remainingAmount = amount;
+        let allocations = [];
+        let totalPending = 0;
+        
+        for (const transaction of sortedTransactions) {
+            totalPending += transaction.amount;
+            
+            if (remainingAmount <= 0) {
+                allocations.push({
+                    ...transaction,
+                    amountPaid: 0,
+                    remainingBalance: transaction.amount,
+                    status: 'pending',
+                    statusText: 'Pending'
+                });
+                continue;
+            }
+            
+            const amountPaid = Math.min(remainingAmount, transaction.amount);
+            const remainingBalance = transaction.amount - amountPaid;
+            const isFullyPaid = amountPaid >= transaction.amount;
+            
+            allocations.push({
+                ...transaction,
+                amountPaid: amountPaid,
+                remainingBalance: remainingBalance,
+                status: isFullyPaid ? 'paid' : (amountPaid > 0 ? 'partial' : 'pending'),
+                statusText: isFullyPaid ? '✓ Fully Paid' : (amountPaid > 0 ? '⚠️ Partially Paid' : 'Pending')
             });
             
-            visibleCheckboxes.forEach(checkbox => {
-                checkbox.checked = selectAll.checked;
-            });
-            updateTotal();
-        });
+            remainingAmount -= amountPaid;
+        }
+        
+        const totalPaid = amount;
+        const remainingAfterPayment = remainingAmount;
+        
+        // Build preview HTML
+        let html = `
+            <div class="mb-3">
+                <div class="d-flex justify-content-between mb-2">
+                    <strong>Total Pending:</strong>
+                    <span>KES ${totalPending.toLocaleString()}</span>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <strong>Payment Amount:</strong>
+                    <span class="text-primary fw-bold">KES ${totalPaid.toLocaleString()}</span>
+                </div>
+                <div class="d-flex justify-content-between mb-3">
+                    <strong>Remaining Balance:</strong>
+                    <span class="${remainingAfterPayment > 0 ? 'text-warning' : 'text-success'}">
+                        KES ${Math.max(0, totalPending - totalPaid).toLocaleString()}
+                    </span>
+                </div>
+                ${remainingAfterPayment > 0 ? `
+                    <div class="alert alert-warning small py-2">
+                        <i class="fas fa-exclamation-triangle"></i> Overpayment: KES ${remainingAfterPayment.toLocaleString()} will be recorded
+                    </div>
+                ` : ''}
+            </div>
+            <hr>
+            <div class="transaction-list">
+        `;
+        
+        for (const alloc of allocations) {
+            const statusClass = alloc.status === 'paid' ? 'paid' : (alloc.status === 'partial' ? 'partial' : 'pending');
+            const progressPercent = (alloc.amountPaid / alloc.amount) * 100;
+            
+            html += `
+                <div class="fifo-item ${statusClass} mb-2">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <div>
+                            <strong>${alloc.transaction_id}</strong>
+                            <br>
+                            <small class="text-muted">${alloc.customer} | ${alloc.date}</small>
+                        </div>
+                        <div class="text-end">
+                            <div>KES ${alloc.amount.toLocaleString()}</div>
+                            ${alloc.amountPaid > 0 ? `<small class="text-success">Paid: KES ${alloc.amountPaid.toLocaleString()}</small>` : ''}
+                        </div>
+                    </div>
+                    <div class="progress mb-1">
+                        <div class="progress-bar ${alloc.status === 'paid' ? 'bg-success' : (alloc.status === 'partial' ? 'bg-warning' : 'bg-secondary')}" 
+                             style="width: ${progressPercent}%"></div>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <small class="text-muted">Remaining: KES ${alloc.remainingBalance.toLocaleString()}</small>
+                        <small class="fw-bold ${alloc.status === 'paid' ? 'text-success' : (alloc.status === 'partial' ? 'text-warning' : 'text-secondary')}">
+                            ${alloc.statusText}
+                        </small>
+                    </div>
+                </div>
+            `;
+        }
+        
+        html += `</div>`;
+        
+        if (totalPaid > 0 && totalPaid < totalPending) {
+            html += `
+                <div class="alert alert-info small mt-3 mb-0">
+                    <i class="fas fa-info-circle"></i>
+                    <strong>FIFO Applied:</strong> Payment of KES ${totalPaid.toLocaleString()} applied to oldest transaction first.
+                    <strong>${allocations.filter(a => a.status === 'paid').length}</strong> transaction(s) fully paid.
+                    ${allocations.filter(a => a.status === 'partial').length > 0 ? 
+                        `<strong>${allocations.filter(a => a.status === 'partial').length}</strong> transaction(s) partially paid.` : ''}
+                </div>
+            `;
+        } else if (totalPaid >= totalPending && totalPending > 0) {
+            html += `
+                <div class="alert alert-success small mt-3 mb-0">
+                    <i class="fas fa-check-circle"></i>
+                    <strong>All cleared!</strong> Payment covers all pending transactions.
+                </div>
+            `;
+        }
+        
+        previewContent.innerHTML = html;
     }
     
-    // Update total when checkboxes change
-    checkboxes.forEach(checkbox => {
-        checkbox.addEventListener('change', function() {
-            console.log('Checkbox changed:', this.value, this.checked);
-            updateTotal();
-        });
-    });
-    
-    // Update total function
-    function updateTotal() {
-        let total = 0;
-        let totalCommission = 0;
+    // Update pending info text
+    function updatePendingInfo() {
+        const totalPending = pendingTransactions.reduce((sum, t) => sum + t.amount, 0);
+        const count = pendingTransactions.length;
         
-        checkboxes.forEach(checkbox => {
-            if (checkbox.checked) {
-                const data = transactionData[checkbox.value];
-                if (data) {
-                    total += data.amount;
-                    totalCommission += data.commission;
-                }
+        if (totalPending > 0) {
+            pendingInfo.innerHTML = `
+                <span class="text-warning">
+                    <i class="fas fa-clock"></i> Total pending: KES ${totalPending.toLocaleString()} (${count} transaction${count !== 1 ? 's' : ''})
+                </span>
+            `;
+        } else {
+            pendingInfo.innerHTML = '<span class="text-success">✓ No pending transactions</span>';
+        }
+    }
+    
+    // Amount input listener
+    if (amountInput) {
+        amountInput.addEventListener('input', function() {
+            if (pendingTransactions.length > 0) {
+                updatePreview();
             }
         });
-        
-        if (selectedTotalSpan) {
-            selectedTotalSpan.textContent = 'KES ' + total.toLocaleString();
-        }
-        if (selectedCommissionTotalSpan) {
-            selectedCommissionTotalSpan.textContent = 'KES ' + totalCommission.toLocaleString();
-        }
-        if (selectedTotalDisplay) {
-            selectedTotalDisplay.textContent = total.toLocaleString();
-        }
-        
-        // Auto-fill amount if empty or if all transactions selected
-        if (amountInput && (amountInput.value === '' || amountInput.value == '0')) {
-            amountInput.value = total.toFixed(2);
-            console.log('Auto-filled amount:', amountInput.value);
-        }
-        
-        // Update select all checkbox state
-        const visibleCheckboxes = Array.from(checkboxes).filter(cb => {
-            const row = cb.closest('tr');
-            return row && row.style.display !== 'none';
-        });
-        
-        const checkedVisible = visibleCheckboxes.filter(cb => cb.checked);
-        
-        if (selectAll && visibleCheckboxes.length > 0) {
-            selectAll.checked = checkedVisible.length === visibleCheckboxes.length;
-            selectAll.indeterminate = checkedVisible.length > 0 && checkedVisible.length < visibleCheckboxes.length;
-        }
-        
-        console.log('Total updated:', { total, totalCommission, checkedCount: checkedVisible.length });
     }
     
-    // Form validation and submission
+    // Form validation
     if (paymentForm) {
         paymentForm.addEventListener('submit', function(e) {
-            console.log('Form submit event triggered');
-            
-            const checkedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
-            console.log('Checked transactions:', checkedCount);
-            
-            if (checkedCount === 0) {
-                e.preventDefault();
-                console.log('Validation failed: No transactions selected');
-                alert('Please select at least one transaction to include in this payment.');
-                return false;
-            }
-            
-            const company = document.querySelector('select[name="company"]').value;
-            console.log('Company ID:', company);
+            const company = companySelect.value;
+            const amount = parseFloat(amountInput.value);
+            const paymentMethod = document.querySelector('select[name="payment_method"]').value;
+            const paymentReference = document.querySelector('input[name="payment_reference"]').value;
             
             if (!company) {
                 e.preventDefault();
-                console.log('Validation failed: No company selected');
                 alert('Please select a credit company.');
                 return false;
             }
             
-            const amount = parseFloat(amountInput.value);
-            console.log('Amount:', amount);
-            
             if (!amount || amount <= 0) {
                 e.preventDefault();
-                console.log('Validation failed: Invalid amount');
                 alert('Please enter a valid amount.');
                 return false;
             }
             
-            const paymentMethod = document.querySelector('select[name="payment_method"]').value;
-            console.log('Payment method:', paymentMethod);
-            
             if (!paymentMethod) {
                 e.preventDefault();
-                console.log('Validation failed: No payment method');
                 alert('Please select a payment method.');
                 return false;
             }
             
-            const paymentReference = document.querySelector('input[name="payment_reference"]').value;
-            console.log('Payment reference:', paymentReference);
-            
             if (!paymentReference) {
                 e.preventDefault();
-                console.log('Validation failed: No payment reference');
                 alert('Please enter a payment reference.');
                 return false;
             }
             
-            console.log('All validations passed. Submitting form...');
+            const totalPending = pendingTransactions.reduce((sum, t) => sum + t.amount, 0);
+            const confirmMsg = `Confirm payment:\n\nCompany: ${companySelect.options[companySelect.selectedIndex]?.text}\nAmount: KES ${amount.toLocaleString()}\n\nFIFO Logic: This payment will be applied to the oldest pending transaction first.\n\nContinue?`;
             
-            // Show loading state
+            if (!confirm(confirmMsg)) {
+                e.preventDefault();
+                return false;
+            }
+            
+            // Show loading
             const submitBtn = document.getElementById('submitBtn');
-            if (submitBtn) {
-                submitBtn.disabled = true;
-                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Processing...';
-                console.log('Submit button disabled');
-            }
-            
-            // Allow form to submit
-            return true;
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Processing FIFO Payment...';
         });
     }
-    
-    // Auto-calculate total if amount field is changed
-    if (amountInput) {
-        amountInput.addEventListener('change', function() {
-            const totalDue = {{ total_amount|floatformat:2 }};
-            const entered = parseFloat(this.value);
-            console.log('Amount changed:', entered, 'Total due:', totalDue);
-            
-            if (entered > totalDue) {
-                alert('Amount entered exceeds total due. Will be recorded as overpayment.');
-            } else if (entered < totalDue && entered > 0) {
-                alert('Amount entered is less than total due. Remaining balance will still be pending.');
-            }
-        });
-    }
-    
-    // Initial update
-    updateTotal();
-    console.log('Initial update complete');
 });
 </script>
 {% endblock %}

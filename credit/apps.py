@@ -1,4 +1,3 @@
-# credit/apps.py
 from django.apps import AppConfig
 
 class CreditConfig(AppConfig):
@@ -6,4 +5,6 @@ class CreditConfig(AppConfig):
     name = 'credit'
     
     def ready(self):
-        import credit.signals  # Register signals
+        # Signals are now handled by finance app
+        # import credit.signals  # DISABLED - causes duplicates
+        pass
