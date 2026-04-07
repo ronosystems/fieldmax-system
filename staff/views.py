@@ -1198,7 +1198,6 @@ def prepare_dashboard_messages(request, dashboard_name=None):
 
 
 
-
 #==========================================
 # ADMIN DASHBOARD - COMPREHENSIVE STATISTICS
 #==========================================
@@ -1210,9 +1209,10 @@ def admin_dashboard(request):
     from inventory.models import Product, Category, StockAlert, ReturnRequest
     from sales.models import Sale, SaleItem
     from credit.models import CreditTransaction, CreditCustomer, CreditCompany
-    from django.db.models import Sum, Count, Q, F
+    from django.db.models import Sum, Count, Q, F, Avg, DecimalField
     from django.utils import timezone
     from datetime import timedelta
+    from decimal import Decimal
     
     User = get_user_model()
 
@@ -1221,6 +1221,10 @@ def admin_dashboard(request):
     today = timezone.now().date()
     week_ago = today - timedelta(days=7)
     month_ago = today - timedelta(days=30)
+    
+    # Get current month range
+    current_year = today.year
+    current_month = today.month
     
     # ============================================
     # GET RETURNED SALE IDs (to exclude from active sales)
@@ -1241,6 +1245,45 @@ def admin_dashboard(request):
     )
     
     # ============================================
+    # CURRENT MONTH'S SALES
+    # ============================================
+    current_month_sales = active_sales.filter(
+        sale_date__year=current_year,
+        sale_date__month=current_month
+    )
+    
+    current_month_sales_value = current_month_sales.aggregate(
+        total=Sum('total_amount')
+    )['total'] or 0
+    
+    current_month_sales_count = current_month_sales.count()
+    current_month_items_sold = SaleItem.objects.filter(
+        sale__in=current_month_sales
+    ).aggregate(total=Sum('quantity'))['total'] or 0
+    
+    # Get month name
+    month_name = timezone.now().strftime('%B')
+    
+    # Calculate previous month's sales for comparison
+    if current_month == 1:
+        prev_month = 12
+        prev_year = current_year - 1
+    else:
+        prev_month = current_month - 1
+        prev_year = current_year
+    
+    previous_month_sales = active_sales.filter(
+        sale_date__year=prev_year,
+        sale_date__month=prev_month
+    ).aggregate(total=Sum('total_amount'))['total'] or 0
+    
+    # Calculate percentage change
+    if previous_month_sales > 0:
+        monthly_percentage_change = ((current_month_sales_value - previous_month_sales) / previous_month_sales) * 100
+    else:
+        monthly_percentage_change = 100 if current_month_sales_value > 0 else 0
+    
+    # ============================================
     # SYSTEM OVERVIEW
     # ============================================
     total_users = User.objects.count()
@@ -1248,6 +1291,60 @@ def admin_dashboard(request):
     total_staff = User.objects.filter(is_staff=True).count()
     total_products = Product.objects.count()
     total_categories = Category.objects.count()
+    
+    # ============================================
+    # PRODUCT STATS
+    # ============================================
+    # Total items count (sum of all product quantities)
+    total_item_count = Product.objects.aggregate(
+        total=Sum('quantity')
+    )['total'] or 0
+    
+    # Total inventory value (selling price × quantity)
+    total_inventory_value = Product.objects.filter(
+        is_active=True
+    ).aggregate(
+        total_value=Sum(F('selling_price') * F('quantity'), output_field=DecimalField())
+    )['total_value'] or Decimal('0')
+    
+    # Total inventory cost (buying price × quantity)
+    total_inventory_cost = Product.objects.filter(
+        is_active=True
+    ).aggregate(
+        total_cost=Sum(F('buying_price') * F('quantity'), output_field=DecimalField())
+    )['total_cost'] or Decimal('0')
+    
+    # Calculate potential profit
+    potential_profit = total_inventory_value - total_inventory_cost
+    
+    # Calculate profit margin percentage
+    if total_inventory_value > 0:
+        profit_margin_percentage = (potential_profit / total_inventory_value) * 100
+    else:
+        profit_margin_percentage = 0
+    
+    # Products added this month
+    products_added_this_month = Product.objects.filter(
+        created_at__year=current_year,
+        created_at__month=current_month
+    ).count()
+    
+    # Products with zero stock
+    zero_stock_products = Product.objects.filter(
+        quantity=0
+    ).count()
+    
+    # Active products vs inactive
+    active_products = Product.objects.filter(is_active=True).count()
+    inactive_products = Product.objects.filter(is_active=False).count()
+    
+    # Products by type (single vs bulk)
+    single_items = Product.objects.filter(
+        category__item_type='single'
+    ).count()
+    bulk_items = Product.objects.filter(
+        category__item_type='bulk'
+    ).count()
     
     # ============================================
     # TODAY'S STATS
@@ -1349,7 +1446,7 @@ def admin_dashboard(request):
     ).count()
     
     # ============================================
-    # STAFF BY POSITION - FIXED: Removed is_active filter
+    # STAFF BY POSITION
     # ============================================
     from staff.models import Staff
     staff_by_position = Staff.objects.values('position').annotate(
@@ -1451,14 +1548,35 @@ def admin_dashboard(request):
         'total_users': total_users,
         'active_users': active_users,
         'total_staff': total_staff,
-        'total_staff_count': total_staff_count,  # Added this
+        'total_staff_count': total_staff_count,
         'total_products': total_products,
         'total_categories': total_categories,
+        
+        # Product Stats
+        'total_item_count': total_item_count,
+        'total_inventory_value': total_inventory_value,
+        'total_inventory_cost': total_inventory_cost,
+        'potential_profit': potential_profit,
+        'profit_margin_percentage': profit_margin_percentage,
+        'products_added_this_month': products_added_this_month,
+        'zero_stock_products': zero_stock_products,
+        'active_products': active_products,
+        'inactive_products': inactive_products,
+        'single_items': single_items,
+        'bulk_items': bulk_items,
         
         # Today's Stats
         'today_sales': today_sales,
         'today_sales_count': today_sales_count,
         'today_items_sold': today_items_sold,
+        
+        # Current Month's Stats
+        'current_month_sales_value': current_month_sales_value,
+        'current_month_sales_count': current_month_sales_count,
+        'current_month_items_sold': current_month_items_sold,
+        'month_name': month_name,
+        'monthly_percentage_change': monthly_percentage_change,
+        'previous_month_sales': previous_month_sales,
         
         # Sales Overview
         'total_sales_value': total_sales_value,
@@ -1520,7 +1638,6 @@ def admin_dashboard(request):
     }
     
     return render(request, 'staff/dashboards/admin_dashboard.html', context)
-
 
 
 
