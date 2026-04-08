@@ -1,0 +1,271 @@
+{% extends 'credit/base.html' %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}Cancel Transaction - {{ transaction.transaction_id }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-md-8 mx-auto">
+            <div class="card">
+                <div class="card-header bg-danger text-white">
+                    <h3 class="mb-0">
+                        <i class="fas fa-ban"></i> Cancel Transaction
+                    </h3>
+                </div>
+                <div class="card-body">
+                    
+                    <!-- Warning Alert -->
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle fa-2x float-start me-3"></i>
+                        <strong>WARNING: This action cannot be easily undone!</strong><br>
+                        Cancelling a transaction will:
+                        <ul class="mt-2 mb-0">
+                            <li>Mark the transaction as CANCELLED</li>
+                            <li>Make the product available again (if it was a single item)</li>
+                            <li>Remove any pending commission for this transaction</li>
+                            <li>Create a cancellation record in the audit log</li>
+                            <li>This transaction will no longer be eligible for payment</li>
+                        </ul>
+                    </div>
+                    
+                    <!-- Transaction Details -->
+                    <div class="alert alert-info">
+                        <h5><i class="fas fa-receipt"></i> Transaction Details</h5>
+                        <div class="row mt-3">
+                            <div class="col-md-6">
+                                <table class="table table-sm table-borderless">
+                                    <tr>
+                                        <th width="40%">Transaction ID:</th>
+                                        <td><code>{{ transaction.transaction_id }}</code></td>
+                                    </tr>
+                                    <tr>
+                                        <th>Date:</th>
+                                        <td>{{ transaction.transaction_date|date:"Y-m-d H:i" }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Status:</th>
+                                        <td>
+                                            <span class="badge {% if transaction.payment_status == 'pending' %}bg-warning{% elif transaction.payment_status == 'paid' %}bg-success{% elif transaction.payment_status == 'cancelled' %}bg-danger{% else %}bg-secondary{% endif %}">
+                                                {{ transaction.get_payment_status_display }}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th>Customer:</th>
+                                        <td>{{ transaction.customer.full_name }}</td>
+                                    </tr>
+                                </table>
+                            </div>
+                            <div class="col-md-6">
+                                <table class="table table-sm table-borderless">
+                                    <tr>
+                                        <th width="40%">Product:</th>
+                                        <td>{{ transaction.product.name }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>SKU/IMEI:</th>
+                                        <td><code>{{ transaction.product.product_code }}</code></td>
+                                    </tr>
+                                    <tr>
+                                        <th>Amount:</th>
+                                        <td class="fw-bold">KES {{ transaction.ceiling_price|intcomma }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Company:</th>
+                                        <td>{{ transaction.credit_company.name }}</td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Payment Status Warning -->
+                    {% if transaction.payment_status == 'paid' %}
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <strong>⚠️ This transaction has already been paid!</strong><br>
+                        Cancelling a paid transaction will require:
+                        <ul class="mt-2 mb-0">
+                            <li>Manual refund processing</li>
+                            <li>Adjustment of financial records</li>
+                            <li>Commission reversal (if commission was paid)</li>
+                        </ul>
+                        Please contact an administrator before proceeding.
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Commission Info -->
+                    {% if transaction.commission_amount %}
+                    <div class="alert alert-secondary">
+                        <i class="fas fa-percent"></i>
+                        <strong>Commission Information:</strong><br>
+                        Commission Amount: <strong>KES {{ transaction.commission_amount|intcomma }}</strong><br>
+                        Commission Status: 
+                        <span class="badge {% if transaction.commission_status == 'paid' %}bg-success{% elif transaction.commission_status == 'pending' %}bg-warning{% else %}bg-secondary{% endif %}">
+                            {{ transaction.get_commission_status_display }}
+                        </span>
+                        {% if transaction.commission_status == 'paid' %}
+                        <div class="text-danger mt-2">
+                            ⚠️ Commission has already been paid. Cancelling will require commission recovery.
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Cancellation Form -->
+                    <form method="POST" id="cancelForm">
+                        {% csrf_token %}
+                        
+                        <div class="form-group mb-3">
+                            <label for="reason" class="form-label fw-bold">
+                                Reason for Cancellation *
+                            </label>
+                            <textarea class="form-control" 
+                                      id="reason" 
+                                      name="reason" 
+                                      rows="4" 
+                                      required
+                                      placeholder="Please provide a detailed reason for cancelling this transaction..."></textarea>
+                            <small class="form-text text-muted">
+                                This reason will be recorded in the audit log for future reference
+                            </small>
+                        </div>
+                        
+                        <!-- Confirmation Section -->
+                        <div class="alert alert-danger mt-3">
+                            <div class="form-check">
+                                <input type="checkbox" 
+                                       class="form-check-input" 
+                                       id="confirmCancel" 
+                                       required>
+                                <label class="form-check-label text-danger fw-bold" for="confirmCancel">
+                                    I confirm that I want to CANCEL transaction #{{ transaction.transaction_id }}
+                                    {% if transaction.payment_status == 'paid' %}
+                                    and understand that this will require manual refund processing
+                                    {% endif %}
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <!-- Action Buttons -->
+                        <div class="form-group text-center mt-4">
+                            <button type="submit" class="btn btn-danger btn-lg" id="submitBtn" disabled>
+                                <i class="fas fa-ban"></i> Cancel Transaction
+                            </button>
+                            <a href="{% url 'credit:transaction_detail' transaction.pk %}" class="btn btn-secondary btn-lg">
+                                <i class="fas fa-arrow-left"></i> Go Back
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- Additional Information Card -->
+            <div class="card mt-3">
+                <div class="card-header bg-light">
+                    <i class="fas fa-info-circle"></i> Important Notes
+                </div>
+                <div class="card-body">
+                    <ul class="mb-0">
+                        <li>Cancelled transactions cannot be reactivated</li>
+                        <li>A new transaction would need to be created if needed</li>
+                        <li>The product will be returned to available inventory</li>
+                        <li>Any associated commission will be cancelled</li>
+                        <li>This action is logged for audit purposes</li>
+                        {% if transaction.payment_status == 'pending' %}
+                        <li class="text-success">✓ This transaction has no payments, so cancellation is straightforward</li>
+                        {% elif transaction.payment_status == 'paid' %}
+                        <li class="text-danger">⚠️ This transaction has been paid - cancellation requires manual refund processing</li>
+                        {% endif %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const confirmCheckbox = document.getElementById('confirmCancel');
+    const submitBtn = document.getElementById('submitBtn');
+    const reasonTextarea = document.getElementById('reason');
+    
+    // Get payment status from Django template variable
+    const isPaid = {% if transaction.payment_status == 'paid' %}true{% else %}false{% endif %};
+    const amount = {{ transaction.ceiling_price|default:0 }};
+    
+    // Enable submit button only when confirmed and reason provided
+    function checkForm() {
+        submitBtn.disabled = !(confirmCheckbox.checked && reasonTextarea.value.trim() !== '');
+    }
+    
+    confirmCheckbox.addEventListener('change', checkForm);
+    reasonTextarea.addEventListener('input', checkForm);
+    
+    // Form submission confirmation with extra warning for paid transactions
+    document.getElementById('cancelForm').addEventListener('submit', function(e) {
+        if (isPaid) {
+            if (!confirm(`⚠️⚠️⚠️ EXTREME WARNING ⚠️⚠️⚠️\n\nThis transaction has already been PAID (KES ${amount.toLocaleString()}).\n\nCancelling will require:\n• Manual refund processing\n• Financial record adjustments\n• Possible commission recovery\n\nThis should only be done by an administrator.\n\nAre you ABSOLUTELY sure you want to cancel this transaction?`)) {
+                e.preventDefault();
+            }
+        } else {
+            if (!confirm(`⚠️ WARNING: You are about to CANCEL transaction #{{ transaction.transaction_id }}.\n\nThis will:\n• Mark the transaction as CANCELLED\n• Return the product to inventory\n• Cancel any pending commission\n\nThis action cannot be undone.\n\nAre you sure you want to continue?`)) {
+                e.preventDefault();
+            }
+        }
+    });
+    
+    // Character counter for reason
+    const charCount = document.createElement('small');
+    charCount.className = 'form-text text-muted mt-1';
+    charCount.id = 'charCount';
+    reasonTextarea.parentNode.appendChild(charCount);
+    
+    function updateCharCount() {
+        const length = reasonTextarea.value.length;
+        charCount.textContent = `${length} characters entered (minimum 10 recommended)`;
+        if (length < 10 && length > 0) {
+            charCount.style.color = '#ffc107';
+        } else if (length >= 10) {
+            charCount.style.color = '#28a745';
+        } else {
+            charCount.style.color = '#6c757d';
+        }
+    }
+    
+    reasonTextarea.addEventListener('input', updateCharCount);
+    updateCharCount();
+});
+</script>
+
+<style>
+    .form-group label {
+        font-weight: 500;
+    }
+    .alert ul {
+        margin-bottom: 0;
+        padding-left: 20px;
+    }
+    textarea {
+        resize: vertical;
+        min-height: 100px;
+    }
+    .badge {
+        font-size: 0.9em;
+        padding: 5px 10px;
+    }
+    .btn-danger {
+        transition: all 0.3s ease;
+    }
+    .btn-danger:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    #reason:focus {
+        border-color: #dc3545;
+        box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+    }
+</style>
+{% endblock %}

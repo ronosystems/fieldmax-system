@@ -1,55 +1,234 @@
-{% extends 'credit/staff_base.html' %}
+{% extends 'credit/base.html' %}
 {% load static %}
+{% load humanize %}
 
-{% block title %}Cancel Transaction{% endblock %}
+{% block title %}Process Payment - {{ transaction.transaction_id }}{% endblock %}
 
 {% block content %}
-<div class="mb-4">
-    <nav aria-label="breadcrumb">
-        <ol class="breadcrumb">
-            <li class="breadcrumb-item"><a href="{% url 'credit:dashboard' %}">Dashboard</a></li>
-            <li class="breadcrumb-item"><a href="{% url 'credit:transaction_list' %}">Transactions</a></li>
-            <li class="breadcrumb-item"><a href="{% url 'credit:transaction_detail' transaction.id %}">{{ transaction.transaction_id }}</a></li>
-            <li class="breadcrumb-item active">Cancel</li>
-        </ol>
-    </nav>
-</div>
-
-<div class="row justify-content-center">
-    <div class="col-md-6">
-        <div class="card border-danger">
-            <div class="card-header bg-danger text-white">
-                <h5 class="mb-0"><i class="fas fa-exclamation-triangle me-2"></i>Cancel Transaction</h5>
-            </div>
-            <div class="card-body">
-                <div class="alert alert-warning">
-                    <strong>Transaction:</strong> {{ transaction.transaction_id }}<br>
-                    <strong>Customer:</strong> {{ transaction.customer.full_name }}<br>
-                    <strong>Amount:</strong> KSH {{ transaction.ceiling_price|floatformat:0 }}<br>
-                    <strong>Status:</strong> <span class="badge bg-danger">Pending</span>
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-md-8 mx-auto">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h3 class="mb-0">
+                        <i class="fas fa-money-bill-wave"></i> Process Payment
+                    </h3>
                 </div>
-                
-                <p class="text-danger">Are you sure you want to cancel this transaction? This action cannot be undone.</p>
-                
-                <form method="post">
-                    {% csrf_token %}
+                <div class="card-body">
                     
-                    <div class="mb-3">
-                        <label class="form-label">Reason for Cancellation</label>
-                        <textarea name="reason" class="form-control" rows="3" required></textarea>
+                    <!-- Transaction Details -->
+                    <div class="alert alert-info">
+                        <h5><i class="fas fa-receipt"></i> Transaction Details</h5>
+                        <div class="row mt-3">
+                            <div class="col-md-6">
+                                <table class="table table-sm table-borderless">
+                                    <tr>
+                                        <th width="40%">Transaction ID:</th>
+                                        <td><code>{{ transaction.transaction_id }}</code></td>
+                                    </tr>
+                                    <tr>
+                                        <th>Date:</th>
+                                        <td>{{ transaction.transaction_date|date:"Y-m-d H:i" }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Customer:</th>
+                                        <td>{{ transaction.customer.full_name }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Phone:</th>
+                                        <td>{{ transaction.customer.phone_number }}</td>
+                                    </tr>
+                                </table>
+                            </div>
+                            <div class="col-md-6">
+                                <table class="table table-sm table-borderless">
+                                    <tr>
+                                        <th width="40%">Product:</th>
+                                        <td>{{ transaction.product.name }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>SKU/IMEI:</th>
+                                        <td><code>{{ transaction.product.product_code }}</code></td>
+                                    </tr>
+                                    <tr>
+                                        <th>Company:</th>
+                                        <td>{{ transaction.credit_company.name }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Seller:</th>
+                                        <td>{{ transaction.dealer.get_full_name|default:transaction.dealer.username }}</td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                     
-                    <div class="d-flex justify-content-center gap-3">
-                        <a href="{% url 'credit:transaction_detail' transaction.id %}" class="btn btn-secondary">
-                            <i class="fas fa-times"></i> No, Go Back
-                        </a>
-                        <button type="submit" class="btn btn-danger">
-                            <i class="fas fa-trash"></i> Yes, Cancel Transaction
-                        </button>
+                    <!-- Payment Summary -->
+                    <div class="alert alert-warning">
+                        <div class="row text-center">
+                            <div class="col-md-4">
+                                <h5>Total Amount</h5>
+                                <h3 class="text-primary">KES {{ transaction.ceiling_price|intcomma }}</h3>
+                            </div>
+                            <div class="col-md-4">
+                                <h5>Amount Paid</h5>
+                                <h3 class="text-success">KES {{ transaction.partial_payment_amount|default:0|intcomma }}</h3>
+                            </div>
+                            <div class="col-md-4">
+                                <h5>Remaining Balance</h5>
+                                <h3 class="text-danger">KES {{ transaction.remaining_balance|intcomma }}</h3>
+                            </div>
+                        </div>
                     </div>
-                </form>
+                    
+                    <!-- Commission Info (if applicable) -->
+                    {% if transaction.commission_amount %}
+                    <div class="alert alert-secondary">
+                        <i class="fas fa-percent"></i>
+                        <strong>Commission:</strong> KES {{ transaction.commission_amount|intcomma }} 
+                        ({{ transaction.commission_value }}% {{ transaction.get_commission_type_display }})
+                        <br>
+                        <small class="text-muted">Commission will be payable to seller when company payment is processed</small>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Payment Form -->
+                    <form method="POST" id="paymentForm">
+                        {% csrf_token %}
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    <label for="payment_reference" class="form-label fw-bold">
+                                        Payment Reference *
+                                    </label>
+                                    <input type="text" 
+                                           class="form-control" 
+                                           id="payment_reference" 
+                                           name="payment_reference" 
+                                           required
+                                           placeholder="MPESA Code, Bank Ref, Cheque No, etc.">
+                                    <small class="form-text text-muted">
+                                        Enter the transaction reference from the payment
+                                    </small>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    <label class="form-label fw-bold">
+                                        Amount to Pay
+                                    </label>
+                                    <div class="input-group">
+                                        <span class="input-group-text">KES</span>
+                                        <input type="text" 
+                                               class="form-control" 
+                                               id="amount_display" 
+                                               value="{{ transaction.remaining_balance|floatformat:2|intcomma }}"
+                                               readonly>
+                                    </div>
+                                    <small class="form-text text-muted">
+                                        Full payment of remaining balance
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Confirmation Section -->
+                        <div class="alert alert-danger mt-3">
+                            <div class="form-check">
+                                <input type="checkbox" 
+                                       class="form-check-input" 
+                                       id="confirmPayment" 
+                                       required>
+                                <label class="form-check-label text-danger fw-bold" for="confirmPayment">
+                                    I confirm that payment of KES {{ transaction.remaining_balance|intcomma }} has been received 
+                                    from {{ transaction.credit_company.name }} for transaction #{{ transaction.transaction_id }}
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <!-- Action Buttons -->
+                        <div class="form-group text-center mt-4">
+                            <button type="submit" class="btn btn-success btn-lg" id="submitBtn" disabled>
+                                <i class="fas fa-check-circle"></i> Process Payment
+                            </button>
+                            <a href="{% url 'credit:transaction_detail' transaction.pk %}" class="btn btn-secondary btn-lg">
+                                <i class="fas fa-times"></i> Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- Additional Info Card -->
+            <div class="card mt-3">
+                <div class="card-header bg-light">
+                    <i class="fas fa-info-circle"></i> Payment Information
+                </div>
+                <div class="card-body">
+                    <ul class="mb-0">
+                        <li>This payment will mark the transaction as <strong class="text-success">PAID</strong></li>
+                        <li>Seller commission of <strong>KES {{ transaction.commission_amount|default:0|intcomma }}</strong> will become payable</li>
+                        <li>A payment record will be created in the finance system</li>
+                        <li>The product will be marked as sold (if not already)</li>
+                        <li>This action cannot be automatically reversed - contact admin for reversals</li>
+                    </ul>
+                </div>
             </div>
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const confirmCheckbox = document.getElementById('confirmPayment');
+    const submitBtn = document.getElementById('submitBtn');
+    const paymentRef = document.getElementById('payment_reference');
+    
+    // Enable submit button only when confirmed and reference provided
+    function checkForm() {
+        submitBtn.disabled = !(confirmCheckbox.checked && paymentRef.value.trim() !== '');
+    }
+    
+    confirmCheckbox.addEventListener('change', checkForm);
+    paymentRef.addEventListener('input', checkForm);
+    
+    // Add warning if payment reference is suspiciously short
+    paymentRef.addEventListener('blur', function() {
+        const value = this.value.trim();
+        if (value && value.length < 5) {
+            if (!confirm('Payment reference seems very short. Are you sure this is correct?')) {
+                this.value = '';
+                this.focus();
+            }
+        }
+    });
+    
+    // Form submission confirmation
+    document.getElementById('paymentForm').addEventListener('submit', function(e) {
+        const remainingBalance = {{ transaction.remaining_balance|default:0 }};
+        if (remainingBalance > 0) {
+            if (!confirm(`⚠️ WARNING: You are about to process a payment of KES ${remainingBalance.toLocaleString()}. This will mark the transaction as PAID. This action cannot be undone. Continue?`)) {
+                e.preventDefault();
+            }
+        }
+    });
+});
+</script>
+
+<style>
+    .form-group label {
+        font-weight: 500;
+    }
+    .alert ul {
+        margin-bottom: 0;
+        padding-left: 20px;
+    }
+    #amount_display {
+        background-color: #f8f9fa;
+        font-weight: bold;
+        font-size: 1.2em;
+    }
+</style>
 {% endblock %}
