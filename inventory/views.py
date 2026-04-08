@@ -3507,3 +3507,636 @@ def check_product_quantity(request, product_id):
         'entries': entry_details,
         'suggestion': 'Quantities match!' if matches else f'Expected {calculated_total} but have {product.quantity}'
     })
+
+
+
+
+# ============================================
+# RECORD LOSSES PAGE (Like Transfer Page)
+# ============================================
+@login_required
+def record_losses_page(request):
+    """Display record losses page with selected products"""
+    # Get SKUs from query string (same as transfer)
+    skus_param = request.GET.get('skus', '')
+    
+    if not skus_param:
+        messages.warning(request, 'No products selected for loss recording.')
+        return redirect('inventory:product_list')
+    
+    # Split SKUs (they come as comma-separated)
+    sku_list = [sku.strip() for sku in skus_param.split(',') if sku.strip()]
+    
+    # Get products by SKU
+    products = Product.objects.filter(
+        sku_value__in=sku_list,
+        is_active=True
+    ).select_related('category', 'owner')
+    
+    # Filter products that are available (not already stolen/lost)
+    available_products = [p for p in products if not p.is_stolen_or_lost]
+    
+    if not available_products:
+        messages.error(request, 'No valid products found to record as loss.')
+        return redirect('inventory:product_list')
+    
+    # Count single vs bulk items
+    single_count = sum(1 for p in available_products if p.category.is_single_item)
+    bulk_count = len(available_products) - single_count
+    
+    # Calculate total loss value
+    total_loss_value = sum(p.buying_price for p in available_products)
+    
+    # Create SKUs string for form
+    skus_string = '\n'.join([p.sku_value for p in available_products])
+    
+    context = {
+        'selected_products': available_products,
+        'single_count': single_count,
+        'bulk_count': bulk_count,
+        'skus_string': skus_string,
+        'total_loss_value': total_loss_value,
+    }
+    
+    return render(request, 'inventory/products/record_losses.html', context)
+
+
+# ============================================
+# PROCESS RECORD LOSSES (Like Transfer POST)
+# ============================================
+@login_required
+def record_losses_process(request):
+    """Process recording multiple products as stolen/lost"""
+    if request.method == 'POST':
+        try:
+            # Get form data
+            loss_type = request.POST.get('loss_type')  # stolen, lost, damaged
+            police_report = request.POST.get('police_report', '')
+            police_station = request.POST.get('police_station', '')
+            notes = request.POST.get('notes', '')
+            file_insurance = request.POST.get('file_insurance') == 'on'
+            loss_date = request.POST.get('loss_date')
+            
+            # Get SKUs from textarea (one per line)
+            skus_text = request.POST.get('skus', '')
+            sku_list = [sku.strip() for sku in skus_text.split('\n') if sku.strip()]
+            
+            if not sku_list:
+                messages.error(request, 'Please enter at least one SKU.')
+                return redirect('inventory:product_list')
+            
+            if not loss_type:
+                messages.error(request, 'Please select a loss type.')
+                return redirect('inventory:product_list')
+            
+            # Find products by SKU
+            products_to_mark = []
+            not_found_skus = []
+            already_marked_skus = []
+            sold_skus = []
+            
+            with transaction.atomic():
+                for sku in sku_list:
+                    try:
+                        # Get product with related data
+                        product = Product.objects.select_related('category', 'owner').get(
+                            sku_value=sku,
+                            is_active=True
+                        )
+                        
+                        # Check if already marked as stolen/lost
+                        if product.is_stolen_or_lost:
+                            already_marked_skus.append(sku)
+                            continue
+                        
+                        # Check if product is sold (can't mark sold items as stolen)
+                        if product.status == 'sold':
+                            sold_skus.append(sku)
+                            continue
+                        
+                        products_to_mark.append(product)
+                        
+                    except Product.DoesNotExist:
+                        not_found_skus.append(sku)
+                
+                # Show warnings for problematic SKUs
+                if not_found_skus:
+                    messages.warning(
+                        request,
+                        f'❌ SKUs not found: {", ".join(not_found_skus[:5])}' +
+                        (f' and {len(not_found_skus)-5} more' if len(not_found_skus) > 5 else '')
+                    )
+                
+                if already_marked_skus:
+                    messages.warning(
+                        request,
+                        f'⚠️ SKUs already marked as loss: {", ".join(already_marked_skus[:5])}' +
+                        (f' and {len(already_marked_skus)-5} more' if len(already_marked_skus) > 5 else '')
+                    )
+                
+                if sold_skus:
+                    messages.warning(
+                        request,
+                        f'💰 Sold items cannot be marked as loss: {", ".join(sold_skus[:5])}' +
+                        (f' and {len(sold_skus)-5} more' if len(sold_skus) > 5 else '')
+                    )
+                
+                if not products_to_mark:
+                    messages.error(request, 'No valid products found to mark as loss.')
+                    return redirect('inventory:product_list')
+                
+                # Process each product
+                processed_count = 0
+                processed_skus = []
+                
+                for product in products_to_mark:
+                    if loss_type == 'stolen':
+                        product.mark_as_stolen(
+                            reported_by=request.user,
+                            police_report=police_report,
+                            police_station=police_station,
+                            notes=notes,
+                            insurance_claim=file_insurance
+                        )
+                    elif loss_type == 'lost':
+                        product.mark_as_lost(
+                            reported_by=request.user,
+                            notes=notes
+                        )
+                    elif loss_type == 'damaged':
+                        product.write_off_as_damaged(
+                            reported_by=request.user,
+                            notes=notes
+                        )
+                    
+                    # Update loss date if provided
+                    if loss_date:
+                        product.loss_reported_date = loss_date
+                        product.save()
+                    
+                    processed_count += 1
+                    processed_skus.append(product.sku_value)
+                    
+                    # Log the action
+                    logger.warning(
+                        f"[LOSS RECORDED] {product.product_code} | "
+                        f"Type: {loss_type.upper()} | "
+                        f"By: {request.user.username} | "
+                        f"Police: {police_report or 'N/A'}"
+                    )
+                
+                # Success message
+                loss_type_display = {'stolen': 'STOLEN', 'lost': 'LOST', 'damaged': 'DAMAGED (Written Off)'}
+                messages.error(
+                    request,
+                    f'⚠️ Successfully marked {processed_count} product(s) as {loss_type_display.get(loss_type, loss_type.upper())}.'
+                )
+                
+                # Show which SKUs were processed
+                if processed_skus:
+                    messages.info(
+                        request,
+                        f'📋 Processed SKUs: {", ".join(processed_skus[:5])}' +
+                        (f' and {len(processed_skus)-5} more' if len(processed_skus) > 5 else '')
+                    )
+            
+            return redirect('inventory:stolen_products_list')
+            
+        except Exception as e:
+            logger.error(f"Error recording losses: {str(e)}")
+            messages.error(request, f'Error recording losses: {str(e)}')
+            return redirect('inventory:product_list')
+    
+    # GET request - redirect to product list
+    return redirect('inventory:product_list')
+
+
+
+
+
+# inventory/views.py
+from django.shortcuts import render, get_object_or_404, redirect
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.contrib import messages
+from django.http import JsonResponse, HttpResponse
+from django.utils import timezone
+from django.db import transaction
+from django.core.paginator import Paginator
+from django.db.models import Sum, Q
+from .models import Product, StockEntry, Category
+from decimal import Decimal
+import csv
+import logging
+
+logger = logging.getLogger(__name__)
+
+# Check if user is manager or admin
+def is_manager_or_admin(user):
+    return user.is_staff or user.groups.filter(name='Manager').exists()
+
+# ============================================
+# REPORT PRODUCT STOLEN
+# ============================================
+@login_required
+@user_passes_test(is_manager_or_admin)
+def report_product_stolen(request, product_id):
+    """Mark a single product as stolen"""
+    product = get_object_or_404(Product, id=product_id)
+    
+    # Check if already stolen
+    if product.is_stolen_or_lost:
+        messages.warning(request, f'{product.display_name} is already marked as {product.loss_type}')
+        return redirect('inventory:product_detail', product_id=product.id)
+    
+    if request.method == 'POST':
+        # Get form data
+        police_report = request.POST.get('police_report')
+        police_station = request.POST.get('police_station')
+        notes = request.POST.get('notes')
+        file_insurance = request.POST.get('file_insurance') == 'on'
+        loss_date = request.POST.get('loss_date')
+        
+        try:
+            with transaction.atomic():
+                # Mark as stolen
+                product.mark_as_stolen(
+                    reported_by=request.user,
+                    police_report=police_report,
+                    police_station=police_station,
+                    notes=notes,
+                    insurance_claim=file_insurance
+                )
+                
+                # If loss date provided, update it
+                if loss_date:
+                    product.loss_reported_date = loss_date
+                    product.save()
+                
+                messages.error(
+                    request, 
+                    f'⚠️ {product.display_name} has been marked as STOLEN. '
+                    f'Police report: {police_report or "Not filed"}.'
+                )
+                
+                # Log the action
+                logger.warning(f"Product stolen: {product.product_code} - Reported by {request.user.username}")
+                
+                return redirect('inventory:product_detail', product_id=product.id)
+                
+        except Exception as e:
+            messages.error(request, f'Error marking product as stolen: {str(e)}')
+            logger.error(f"Error marking stolen: {str(e)}")
+    
+    # GET request - show form
+    context = {
+        'product': product,
+        'title': f'Report Stolen: {product.display_name}',
+        'loss_type': 'stolen',
+        'requires_police_report': True,
+    }
+    return render(request, 'inventory/products/report_stolen_form.html', context)
+
+
+# ============================================
+# REPORT PRODUCT LOST
+# ============================================
+@login_required
+@user_passes_test(is_manager_or_admin)
+def report_product_lost(request, product_id):
+    """Mark a product as lost (no police report needed)"""
+    product = get_object_or_404(Product, id=product_id)
+    
+    if product.is_stolen_or_lost:
+        messages.warning(request, f'{product.display_name} is already marked as {product.loss_type}')
+        return redirect('inventory:product_detail', product_id=product.id)
+    
+    if request.method == 'POST':
+        notes = request.POST.get('notes')
+        loss_date = request.POST.get('loss_date')
+        
+        try:
+            with transaction.atomic():
+                # Mark as lost
+                product.mark_as_lost(
+                    reported_by=request.user,
+                    notes=notes
+                )
+                
+                if loss_date:
+                    product.loss_reported_date = loss_date
+                    product.save()
+                
+                messages.warning(
+                    request, 
+                    f'📍 {product.display_name} has been marked as LOST.'
+                )
+                
+                logger.warning(f"Product lost: {product.product_code} - Reported by {request.user.username}")
+                
+                return redirect('inventory:product_detail', product_id=product.id)
+                
+        except Exception as e:
+            messages.error(request, f'Error marking product as lost: {str(e)}')
+    
+    context = {
+        'product': product,
+        'title': f'Report Lost: {product.display_name}',
+        'loss_type': 'lost',
+        'requires_police_report': False,
+    }
+    return render(request, 'inventory/products/report_stolen_form.html', context)
+
+
+# ============================================
+# MARK PRODUCT AS DAMAGED (WRITE OFF)
+# ============================================
+@login_required
+@user_passes_test(is_manager_or_admin)
+def mark_product_damaged(request, product_id):
+    """Write off a product as totally damaged"""
+    product = get_object_or_404(Product, id=product_id)
+    
+    if request.method == 'POST':
+        notes = request.POST.get('notes')
+        
+        try:
+            product.write_off_as_damaged(
+                reported_by=request.user,
+                notes=notes
+            )
+            
+            messages.warning(
+                request, 
+                f'💔 {product.display_name} has been written off as DAMAGED.'
+            )
+            
+            return redirect('inventory:product_detail', product_id=product.id)
+            
+        except Exception as e:
+            messages.error(request, f'Error writing off product: {str(e)}')
+    
+    context = {
+        'product': product,
+        'title': f'Write Off as Damaged: {product.display_name}',
+    }
+    return render(request, 'inventory/products/mark_damaged_form.html', context)
+
+
+# ============================================
+# RECOVER STOLEN PRODUCT
+# ============================================
+@login_required
+@user_passes_test(is_manager_or_admin)
+def recover_stolen_product(request, product_id):
+    """Mark a stolen product as recovered and return to inventory"""
+    product = get_object_or_404(Product, id=product_id)
+    
+    if not product.is_stolen_or_lost:
+        messages.warning(request, 'This product is not marked as stolen/lost')
+        return redirect('inventory:product_detail', product_id=product.id)
+    
+    if request.method == 'POST':
+        notes = request.POST.get('notes')
+        condition = request.POST.get('condition', 'good')
+        
+        try:
+            with transaction.atomic():
+                product.mark_as_recovered(
+                    recovered_by=request.user,
+                    notes=f"Recovered. Condition: {condition}. {notes or ''}"
+                )
+                
+                # Update condition if needed
+                if condition == 'damaged':
+                    product.condition = 'used_fair'
+                else:
+                    product.condition = 'used'
+                product.save()
+                
+                messages.success(
+                    request, 
+                    f'✅ {product.display_name} has been RECOVERED and returned to inventory!'
+                )
+                
+                logger.info(f"Product recovered: {product.product_code} by {request.user.username}")
+                
+                return redirect('inventory:product_detail', product_id=product.id)
+                
+        except Exception as e:
+            messages.error(request, f'Error recovering product: {str(e)}')
+    
+    context = {
+        'product': product,
+        'title': f'Recover Product: {product.display_name}',
+    }
+    return render(request, 'inventory/products/recover_product_form.html', context)
+
+
+# ============================================
+# FILE INSURANCE CLAIM
+# ============================================
+@login_required
+@user_passes_test(is_manager_or_admin)
+def file_insurance_claim(request, product_id):
+    """File insurance claim for stolen/lost product"""
+    product = get_object_or_404(Product, id=product_id)
+    
+    if not product.is_stolen_or_lost:
+        messages.warning(request, 'Insurance claims can only be filed for stolen/lost products')
+        return redirect('inventory:product_detail', product_id=product.id)
+    
+    if product.insurance_claim_filed:
+        messages.info(request, 'Insurance claim already filed for this product')
+        return redirect('inventory:product_detail', product_id=product.id)
+    
+    if request.method == 'POST':
+        claim_number = request.POST.get('claim_number')
+        claim_amount = request.POST.get('claim_amount')
+        
+        try:
+            product.file_insurance_claim(
+                claim_number=claim_number,
+                claim_amount=Decimal(claim_amount)
+            )
+            
+            messages.success(
+                request, 
+                f'📄 Insurance claim {claim_number} filed for KES {claim_amount}'
+            )
+            
+            return redirect('inventory:product_detail', product_id=product.id)
+            
+        except Exception as e:
+            messages.error(request, f'Error filing claim: {str(e)}')
+    
+    context = {
+        'product': product,
+        'title': f'File Insurance Claim: {product.display_name}',
+        'max_claim': product.buying_price,
+    }
+    return render(request, 'inventory/products/file_insurance_form.html', context)
+
+
+# ============================================
+# LIST STOLEN/LOST PRODUCTS
+# ============================================
+@login_required
+def stolen_products_list(request):
+    """Display all stolen and lost products"""
+    
+    # Get filter parameters
+    loss_type = request.GET.get('loss_type', '')
+    insurance_status = request.GET.get('insurance', '')
+    search = request.GET.get('search', '')
+    
+    # Base queryset
+    products = Product.objects.filter(is_stolen_or_lost=True)
+    
+    # Apply filters
+    if loss_type:
+        products = products.filter(loss_type=loss_type)
+    
+    if insurance_status == 'filed':
+        products = products.filter(insurance_claim_filed=True)
+    elif insurance_status == 'not_filed':
+        products = products.filter(insurance_claim_filed=False)
+    
+    if search:
+        products = products.filter(
+            Q(product_code__icontains=search) |
+            Q(name__icontains=search) |
+            Q(sku_value__icontains=search) |
+            Q(police_report_number__icontains=search)
+        )
+    
+    # Calculate totals
+    total_loss_value = products.aggregate(
+        total=Sum('buying_price')
+    )['total'] or Decimal('0.00')
+    
+    insurance_recovered = products.filter(
+        insurance_payout_amount__isnull=False
+    ).aggregate(total=Sum('insurance_payout_amount'))['total'] or Decimal('0.00')
+    
+    net_loss = total_loss_value - insurance_recovered
+    
+    # Pagination
+    paginator = Paginator(products, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    context = {
+        'products': page_obj,
+        'total_loss_value': total_loss_value,
+        'insurance_recovered': insurance_recovered,
+        'net_loss': net_loss,
+        'loss_types': Product.LOSS_TYPE_CHOICES if hasattr(Product, 'LOSS_TYPE_CHOICES') else [],
+        'current_filters': {
+            'loss_type': loss_type,
+            'insurance': insurance_status,
+            'search': search,
+        },
+        'title': 'Stolen & Lost Products',
+    }
+    return render(request, 'inventory/products/stolen_list.html', context)
+
+
+# ============================================
+# STOLEN PRODUCTS REPORT (CSV Export)
+# ============================================
+@login_required
+@user_passes_test(is_manager_or_admin)
+def stolen_products_report(request):
+    """Export stolen products report as CSV"""
+    
+    products = Product.objects.filter(is_stolen_or_lost=True)
+    
+    # Create CSV response
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="stolen_products_{timezone.now().date()}.csv"'
+    
+    writer = csv.writer(response)
+    
+    # Write headers
+    writer.writerow([
+        'Product Code', 'Product Name', 'SKU/IMEI', 'Loss Type', 
+        'Loss Date', 'Reported By', 'Police Report', 'Buying Price',
+        'Selling Price', 'Insurance Filed', 'Insurance Claim #',
+        'Insurance Payout', 'Status'
+    ])
+    
+    # Write data
+    for product in products:
+        writer.writerow([
+            product.product_code,
+            product.display_name,
+            product.sku_value or 'N/A',
+            product.get_loss_type_display() if product.loss_type else 'N/A',
+            product.loss_reported_date.strftime('%Y-%m-%d %H:%M') if product.loss_reported_date else 'N/A',
+            product.loss_reported_by.username if product.loss_reported_by else 'N/A',
+            product.police_report_number or 'N/A',
+            f"KES {product.buying_price:,.2f}",
+            f"KES {product.selling_price:,.2f}",
+            'Yes' if product.insurance_claim_filed else 'No',
+            product.insurance_claim_number or 'N/A',
+            f"KES {product.insurance_payout_amount:,.2f}" if product.insurance_payout_amount else 'N/A',
+            product.get_status_display(),
+        ])
+    
+    return response
+
+
+# ============================================
+# BULK REPORT STOLEN (For multiple items)
+# ============================================
+@login_required
+@user_passes_test(is_manager_or_admin)
+def bulk_report_stolen(request):
+    """Report multiple products as stolen at once"""
+    
+    if request.method == 'POST':
+        product_ids = request.POST.getlist('product_ids')
+        police_report = request.POST.get('police_report')
+        police_station = request.POST.get('police_station')
+        notes = request.POST.get('notes')
+        
+        if not product_ids:
+            messages.error(request, 'No products selected')
+            return redirect('inventory:bulk_report_stolen')
+        
+        success_count = 0
+        error_count = 0
+        
+        for product_id in product_ids:
+            try:
+                product = Product.objects.get(id=product_id)
+                if not product.is_stolen_or_lost:
+                    product.mark_as_stolen(
+                        reported_by=request.user,
+                        police_report=police_report,
+                        police_station=police_station,
+                        notes=notes
+                    )
+                    success_count += 1
+            except Exception as e:
+                error_count += 1
+                logger.error(f"Error marking product {product_id} as stolen: {str(e)}")
+        
+        messages.error(
+            request, 
+            f'⚠️ {success_count} products marked as stolen. {error_count} failed.'
+        )
+        
+        return redirect('inventory:stolen_products_list')
+    
+    # GET request - show product selection
+    products = Product.objects.filter(
+        status__in=['available', 'in_stock'],
+        is_stolen_or_lost=False
+    ).exclude(category__item_type='bulk')
+    
+    context = {
+        'products': products,
+        'title': 'Bulk Report Stolen Products',
+    }
+    return render(request, 'inventory/products/bulk_report_stolen.html', context)

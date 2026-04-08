@@ -1,0 +1,119 @@
+{% extends 'inventory/staff_base.html' %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-danger text-white">
+                    <h3 class="mb-0">
+                        <i class="fas fa-skull-crosswalk"></i> {{ title }}
+                    </h3>
+                </div>
+                <div class="card-body">
+                    <!-- Product Information -->
+                    <div class="alert alert-info">
+                        <h5>Product Details:</h5>
+                        <table class="table table-sm">
+                            <tr>
+                                <th>Product Code:</th>
+                                <td>{{ product.product_code }}</td>
+                            </tr>
+                            <tr>
+                                <th>Product Name:</th>
+                                <td>{{ product.display_name }}</td>
+                            </tr>
+                            <tr>
+                                <th>SKU/IMEI:</th>
+                                <td><code>{{ product.sku_value|default:"N/A" }}</code></td>
+                            </tr>
+                            <tr>
+                                <th>Buying Price:</th>
+                                <td class="text-danger">KES {{ product.buying_price|intcomma }}</td>
+                            </tr>
+                            <tr>
+                                <th>Selling Price:</th>
+                                <td>KES {{ product.selling_price|intcomma }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                    
+                    <!-- Warning Message -->
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Warning:</strong> Marking as {{ loss_type }} will:
+                        <ul class="mb-0 mt-2">
+                            <li>Remove this product from available inventory</li>
+                            <li>Record a financial loss of KES {{ product.buying_price|intcomma }}</li>
+                            <li>Create an audit trail for accounting purposes</li>
+                            <li>Prevent this product from being sold</li>
+                        </ul>
+                    </div>
+                    
+                    <!-- Form -->
+                    <form method="POST">
+                        {% csrf_token %}
+                        
+                        {% if requires_police_report %}
+                        <div class="form-group mb-3">
+                            <label for="police_report">Police Report Number *</label>
+                            <input type="text" class="form-control" id="police_report" 
+                                   name="police_report" required>
+                            <small class="form-text text-muted">
+                                Enter the OB number or police report reference
+                            </small>
+                        </div>
+                        
+                        <div class="form-group mb-3">
+                            <label for="police_station">Police Station</label>
+                            <input type="text" class="form-control" id="police_station" 
+                                   name="police_station">
+                            <small class="form-text text-muted">
+                                Which police station was the report filed at?
+                            </small>
+                        </div>
+                        {% endif %}
+                        
+                        <div class="form-group mb-3">
+                            <label for="loss_date">Date of Incident</label>
+                            <input type="datetime-local" class="form-control" id="loss_date" 
+                                   name="loss_date">
+                        </div>
+                        
+                        <div class="form-group mb-3">
+                            <label for="notes">Incident Details / Notes</label>
+                            <textarea class="form-control" id="notes" name="notes" rows="4"
+                                      placeholder="Describe what happened..."></textarea>
+                        </div>
+                        
+                        {% if loss_type == 'stolen' %}
+                        <div class="form-check mb-3">
+                            <input type="checkbox" class="form-check-input" id="file_insurance" 
+                                   name="file_insurance">
+                            <label class="form-check-label" for="file_insurance">
+                                File insurance claim for this product
+                            </label>
+                        </div>
+                        {% endif %}
+                        
+                        <div class="form-group">
+                            <button type="submit" class="btn btn-danger btn-lg">
+                                <i class="fas fa-skull-crosswalk"></i> 
+                                Confirm {{ loss_type|title }}
+                            </button>
+                            <a href="{% url 'inventory:product_detail' product.id %}" 
+                               class="btn btn-secondary btn-lg">
+                                Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

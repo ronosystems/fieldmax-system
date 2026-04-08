@@ -1,0 +1,227 @@
+{% extends 'inventory/staff_base.html' %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}Record Losses{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-danger text-white">
+                    <h3 class="mb-0">
+                        <i class="fas fa-skull-crosswalk"></i> Record Product Losses
+                    </h3>
+                </div>
+                <div class="card-body">
+                    
+                    <!-- Selected Products Summary -->
+                    <div class="alert alert-info">
+                        <h5><i class="fas fa-info-circle"></i> Selected Products</h5>
+                        <p>You are about to mark <strong>{{ selected_products|length }}</strong> product(s) as loss:</p>
+                        <ul>
+                            <li>📱 Single items: <strong>{{ single_count }}</strong></li>
+                            <li>📦 Bulk items: <strong>{{ bulk_count }}</strong></li>
+                            <li>💰 Total loss value: <strong class="text-danger">KES {{ total_loss_value|intcomma }}</strong></li>
+                        </ul>
+                    </div>
+                    
+                    <!-- Products Table -->
+                    <div class="table-responsive mb-4">
+                        <table class="table table-bordered">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Product Code</th>
+                                    <th>Product Name</th>
+                                    <th>SKU/IMEI</th>
+                                    <th>Category</th>
+                                    <th>Buying Price</th>
+                                    <th>Selling Price</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for product in selected_products %}
+                                <tr>
+                                    <td><code>{{ product.product_code }}</code></td>
+                                    <td>{{ product.display_name }}</td>
+                                    <td><code>{{ product.sku_value }}</code></td>
+                                    <td>{{ product.category.name }}</td>
+                                    <td>KES {{ product.buying_price|intcomma }}</td>
+                                    <td>KES {{ product.selling_price|intcomma }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Loss Form -->
+                    <form method="POST" action="{% url 'inventory:record_losses_process' %}">
+                        {% csrf_token %}
+                        
+                        <!-- Hidden field for SKUs -->
+                        <textarea name="skus" style="display:none;">{{ skus_string }}</textarea>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="card mb-3">
+                                    <div class="card-header bg-danger text-white">
+                                        <i class="fas fa-exclamation-triangle"></i> Loss Details
+                                    </div>
+                                    <div class="card-body">
+                                        <!-- Loss Type -->
+                                        <div class="form-group mb-3">
+                                            <label class="form-label fw-bold">Loss Type *</label>
+                                            <select name="loss_type" class="form-select" required>
+                                                <option value="">-- Select Loss Type --</option>
+                                                <option value="stolen">🔫 Stolen</option>
+                                                <option value="lost">📍 Lost</option>
+                                                <option value="damaged">💔 Damaged (Write Off)</option>
+                                            </select>
+                                        </div>
+                                        
+                                        <!-- Loss Date -->
+                                        <div class="form-group mb-3">
+                                            <label class="form-label">Date of Incident</label>
+                                            <input type="datetime-local" name="loss_date" 
+                                                   class="form-control" 
+                                                   value="{{ timezone.now|date:'Y-m-d\TH:i' }}">
+                                        </div>
+                                        
+                                        <!-- Police Report (shown for stolen) -->
+                                        <div class="form-group mb-3 police-report-field" style="display:none;">
+                                            <label class="form-label">Police Report Number</label>
+                                            <input type="text" name="police_report" class="form-control" 
+                                                   placeholder="Enter OB number or police report reference">
+                                            <small class="form-text text-muted">Required for stolen items</small>
+                                        </div>
+                                        
+                                        <div class="form-group mb-3 police-station-field" style="display:none;">
+                                            <label class="form-label">Police Station</label>
+                                            <input type="text" name="police_station" class="form-control" 
+                                                   placeholder="Where was the report filed?">
+                                        </div>
+                                        
+                                        <!-- Notes -->
+                                        <div class="form-group mb-3">
+                                            <label class="form-label">Incident Details / Notes</label>
+                                            <textarea name="notes" class="form-control" rows="4" 
+                                                      placeholder="Describe what happened..."></textarea>
+                                        </div>
+                                        
+                                        <!-- Insurance Claim Option -->
+                                        <div class="form-check mb-3 insurance-field" style="display:none;">
+                                            <input type="checkbox" class="form-check-input" id="fileInsurance" name="file_insurance">
+                                            <label class="form-check-label" for="fileInsurance">
+                                                File insurance claim for these products
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <div class="card mb-3">
+                                    <div class="card-header bg-warning">
+                                        <i class="fas fa-exclamation-triangle"></i> Warning & Confirmation
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="alert alert-danger">
+                                            <i class="fas fa-skull-crosswalk"></i>
+                                            <strong>IMPORTANT:</strong> This action will:
+                                            <ul class="mt-2 mb-0">
+                                                <li>Remove these products from available inventory</li>
+                                                <li>Record a financial loss of <strong>KES {{ total_loss_value|intcomma }}</strong></li>
+                                                <li>Create an audit trail for accounting purposes</li>
+                                                <li>Prevent these products from being sold</li>
+                                            </ul>
+                                        </div>
+                                        
+                                        <div class="alert alert-warning">
+                                            <i class="fas fa-print"></i>
+                                            <strong>For stolen items:</strong>
+                                            <ul class="mt-2 mb-0">
+                                                <li>You will need to provide a police report number</li>
+                                                <li>Consider filing an insurance claim</li>
+                                                <li>Keep a copy of this report for your records</li>
+                                            </ul>
+                                        </div>
+                                        
+                                        <!-- Confirmation Checkbox -->
+                                        <div class="form-check mb-3">
+                                            <input type="checkbox" class="form-check-input" id="confirmLoss" required>
+                                            <label class="form-check-label text-danger fw-bold" for="confirmLoss">
+                                                I confirm that these product(s) are {{ 'stolen/lost/damaged' }} and understand this action cannot be easily reversed.
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Form Actions -->
+                        <div class="form-group text-center mt-3">
+                            <button type="submit" class="btn btn-danger btn-lg" id="submitBtn" disabled>
+                                <i class="fas fa-skull-crosswalk"></i> Confirm Loss
+                            </button>
+                            <a href="{% url 'inventory:product_list' %}" class="btn btn-secondary btn-lg">
+                                <i class="fas fa-times"></i> Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const lossTypeSelect = document.querySelector('select[name="loss_type"]');
+    const policeReportField = document.querySelector('.police-report-field');
+    const policeStationField = document.querySelector('.police-station-field');
+    const insuranceField = document.querySelector('.insurance-field');
+    const confirmCheckbox = document.getElementById('confirmLoss');
+    const submitBtn = document.getElementById('submitBtn');
+    
+    // Show/hide fields based on loss type
+    function updateFields() {
+        const lossType = lossTypeSelect.value;
+        
+        if (lossType === 'stolen') {
+            policeReportField.style.display = 'block';
+            policeStationField.style.display = 'block';
+            insuranceField.style.display = 'block';
+            // Make police report required for stolen
+            const policeInput = document.querySelector('input[name="police_report"]');
+            if (policeInput) policeInput.required = true;
+        } else {
+            policeReportField.style.display = 'none';
+            policeStationField.style.display = 'none';
+            insuranceField.style.display = 'none';
+            const policeInput = document.querySelector('input[name="police_report"]');
+            if (policeInput) policeInput.required = false;
+        }
+    }
+    
+    lossTypeSelect.addEventListener('change', updateFields);
+    
+    // Enable submit button only when confirmed
+    confirmCheckbox.addEventListener('change', function() {
+        submitBtn.disabled = !this.checked;
+    });
+    
+    // Initial call
+    updateFields();
+});
+</script>
+
+<style>
+    .form-group label {
+        font-weight: 500;
+    }
+    .alert-danger ul, .alert-warning ul {
+        padding-left: 20px;
+    }
+</style>
+{% endblock %}

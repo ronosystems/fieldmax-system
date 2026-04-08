@@ -1,0 +1,90 @@
+{% extends 'inventory/staff_base.html' %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h3 class="mb-0">
+                        <i class="fas fa-undo"></i> {{ title }}
+                    </h3>
+                </div>
+                <div class="card-body">
+                    <!-- Product Information -->
+                    <div class="alert alert-info">
+                        <h5>Product Details:</h5>
+                        <table class="table table-sm">
+                            <tr>
+                                <th>Product Code:</th>
+                                <td>{{ product.product_code }}</td>
+                            </tr>
+                            <tr>
+                                <th>Product Name:</th>
+                                <td>{{ product.display_name }}</td>
+                            </tr>
+                            <tr>
+                                <th>SKU/IMEI:</th>
+                                <td><code>{{ product.sku_value|default:"N/A" }}</code></td>
+                            </tr>
+                            <tr>
+                                <th>Loss Type:</th>
+                                <td>{{ product.get_loss_type_display|default:product.loss_type|title }}</td>
+                            </tr>
+                            <tr>
+                                <th>Loss Date:</th>
+                                <td>{{ product.loss_reported_date|date:"Y-m-d H:i" }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                    
+                    <!-- Success Message -->
+                    <div class="alert alert-success">
+                        <i class="fas fa-check-circle"></i>
+                        <strong>Recovery will:</strong>
+                        <ul class="mb-0 mt-2">
+                            <li>Return this product to available inventory</li>
+                            <li>Update status to available</li>
+                            <li>Create a recovery record in audit trail</li>
+                        </ul>
+                    </div>
+                    
+                    <!-- Form -->
+                    <form method="POST">
+                        {% csrf_token %}
+                        
+                        <div class="form-group mb-3">
+                            <label for="condition">Product Condition</label>
+                            <select name="condition" id="condition" class="form-control" required>
+                                <option value="good">Good - Like New</option>
+                                <option value="fair">Fair - Some wear</option>
+                                <option value="damaged">Damaged - Needs repair</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group mb-3">
+                            <label for="notes">Recovery Notes</label>
+                            <textarea class="form-control" id="notes" name="notes" rows="4"
+                                      placeholder="How was the product recovered? Any additional details?"></textarea>
+                        </div>
+                        
+                        <div class="form-group">
+                            <button type="submit" class="btn btn-success btn-lg">
+                                <i class="fas fa-undo"></i> Confirm Recovery
+                            </button>
+                            <a href="{% url 'inventory:product_detail' product.id %}" 
+                               class="btn btn-secondary btn-lg">
+                                Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

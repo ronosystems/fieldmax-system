@@ -87,4 +87,41 @@ urlpatterns = [
     path('reports/inventory/', views.inventory_report, name='inventory_report'),
     path('reports/category-analysis/', views.category_analysis, name='category_analysis'),
     path('check-product-quantity/<int:product_id>/', views.check_product_quantity, name='check_product_quantity'),
+
+    path('record-losses/', views.record_losses_page, name='record_losses_page'),
+    path('record-losses/process/', views.record_losses_process, name='record_losses_process'),
+    
+    # Theft/Loss Management URLs
+    path('product/<int:product_id>/report-stolen/', 
+         views.report_product_stolen, 
+         name='report_stolen'),
+    
+    path('product/<int:product_id>/report-lost/', 
+         views.report_product_lost, 
+         name='report_lost'),
+    
+    path('product/<int:product_id>/mark-damaged/', 
+         views.mark_product_damaged, 
+         name='mark_damaged'),
+    
+    path('product/<int:product_id>/recover/', 
+         views.recover_stolen_product, 
+         name='recover_product'),
+    
+    path('product/<int:product_id>/file-insurance/', 
+         views.file_insurance_claim, 
+         name='file_insurance'),
+    
+    path('stolen-products/', 
+         views.stolen_products_list, 
+         name='stolen_products_list'),
+    
+    path('stolen-products/report/', 
+         views.stolen_products_report, 
+         name='stolen_products_report'),
+    
+    # Bulk operation for multiple stolen items
+    path('bulk-report-stolen/', 
+         views.bulk_report_stolen, 
+         name='bulk_report_stolen'),
 ]

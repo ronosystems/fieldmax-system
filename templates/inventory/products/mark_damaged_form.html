@@ -1,0 +1,79 @@
+{% extends 'inventory/staff_base.html' %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <h3 class="mb-0">
+                        <i class="fas fa-hammer"></i> {{ title }}
+                    </h3>
+                </div>
+                <div class="card-body">
+                    <!-- Product Information -->
+                    <div class="alert alert-info">
+                        <h5>Product Details:</h5>
+                        <table class="table table-sm">
+                            <tr>
+                                <th>Product Code:</th>
+                                <td>{{ product.product_code }}</td>
+                            </tr>
+                            <tr>
+                                <th>Product Name:</th>
+                                <td>{{ product.display_name }}</td>
+                            </tr>
+                            <tr>
+                                <th>SKU/IMEI:</th>
+                                <td><code>{{ product.sku_value|default:"N/A" }}</code></td>
+                            </tr>
+                            <tr>
+                                <th>Buying Price:</th>
+                                <td class="text-danger">KES {{ product.buying_price|intcomma }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                    
+                    <!-- Warning Message -->
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Warning:</strong> Writing off as damaged will:
+                        <ul class="mb-0 mt-2">
+                            <li>Remove this product from available inventory</li>
+                            <li>Record a financial loss of KES {{ product.buying_price|intcomma }}</li>
+                            <li>Create an audit trail for accounting purposes</li>
+                            <li>Mark this product as unsellable</li>
+                        </ul>
+                    </div>
+                    
+                    <!-- Form -->
+                    <form method="POST">
+                        {% csrf_token %}
+                        
+                        <div class="form-group mb-3">
+                            <label for="notes">Damage Details / Notes</label>
+                            <textarea class="form-control" id="notes" name="notes" rows="5"
+                                      placeholder="Describe the damage, how it happened, and any other details..."
+                                      required></textarea>
+                        </div>
+                        
+                        <div class="form-group">
+                            <button type="submit" class="btn btn-dark btn-lg">
+                                <i class="fas fa-hammer"></i> Confirm Write Off
+                            </button>
+                            <a href="{% url 'inventory:product_detail' product.id %}" 
+                               class="btn btn-secondary btn-lg">
+                                Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

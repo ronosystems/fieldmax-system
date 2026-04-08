@@ -31,7 +31,26 @@
         <button type="button" class="btn btn-warning me-2" onclick="goToTransferPage()">
             <i class="fas fa-exchange-alt me-2"></i>Transfer Products
         </button>
+
+        <!-- Record Losses button  -->
+        <button type="button" class="btn btn-danger" onclick="goToRecordLossesPage()">
+            <i class="fas fa-skull-crosswalk me-2"></i>Record Losses
+        </button>
+
+        <!-- stolen products list button -->
+        <a href="{% url 'inventory:stolen_products_list' %}" class="btn btn-outline-danger">
+            <i class="fas fa-skull-crosswalk me-2"></i>Stolen/Lost Management
+        </a>
     </div>
+</div>
+
+<!-- NEW: Stolen Products Alert Banner -->
+<div id="stolenAlert" class="alert alert-danger alert-dismissible fade show mb-4" style="display: none;">
+    <i class="fas fa-exclamation-triangle me-2"></i>
+    <strong>Security Alert:</strong> 
+    <span id="stolenCount"></span> product(s) have been reported stolen/lost.
+    <a href="{% url 'inventory:stolen_products_list' %}" class="alert-link">View details</a>
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
 </div>
 
 <!-- Filters -->
@@ -57,6 +76,16 @@
                     <option value="sold" {% if request.GET.status == 'sold' %}selected{% endif %}>Sold</option>
                     <option value="lowstock" {% if request.GET.status == 'lowstock' %}selected{% endif %}>Low Stock</option>
                     <option value="outofstock" {% if request.GET.status == 'outofstock' %}selected{% endif %}>Out of Stock</option>
+                    <option value="stolen" {% if request.GET.status == 'stolen' %}selected{% endif %}>Stolen/Lost</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Loss Type</label>
+                <select name="loss_type" class="form-select">
+                    <option value="">All Types</option>
+                    <option value="stolen" {% if request.GET.loss_type == 'stolen' %}selected{% endif %}>Stolen</option>
+                    <option value="lost" {% if request.GET.loss_type == 'lost' %}selected{% endif %}>Lost</option>
+                    <option value="damaged_total" {% if request.GET.loss_type == 'damaged_total' %}selected{% endif %}>Damaged (Write-off)</option>
                 </select>
             </div>
             <div class="col-md-3">
@@ -123,22 +152,29 @@
                 </thead>
                 <tbody>
                     {% for product in products %}
-                    <tr>
+                    <tr class="{% if product.is_stolen_or_lost %}table-danger{% endif %}">
                         <td>
                             <input type="checkbox" class="product-checkbox form-check-input" 
                                    data-id="{{ product.id }}"
                                    data-sku="{{ product.sku_value }}"
                                    data-name="{{ product.display_name }}"
                                    data-owner="{{ product.owner.id }}"
-                                   {% if not product.sku_value or product.status != 'available' %}disabled{% endif %}
+                                   {% if not product.sku_value or product.status != 'available' or product.is_stolen_or_lost %}disabled{% endif %}
                                    
                                    {# Disable if not owner AND not authorized #}
                                    {% if product.owner != request.user and not can_transfer_any %}disabled{% endif %}>
                         </td>
-                        <td><span class="badge bg-secondary">{{ product.product_code }}</span></td>
+                        <td>
+                            <span class="badge {% if product.is_stolen_or_lost %}bg-danger{% else %}bg-secondary{% endif %}">
+                                {{ product.product_code }}
+                            </span>
+                        </td>
                         <td>
                             <a href="{% url 'inventory:product_detail' product.id %}" class="text-decoration-none fw-bold">
                                 {{ product.name }}
+                                {% if product.is_stolen_or_lost %}
+                                    <i class="fas fa-skull-crosswalk text-danger ms-1" title="Stolen/Lost"></i>
+                                {% endif %}
                             </a>
                         </td>
                         <td><span class="badge bg-secondary">{{ product.model }}</span></td>
@@ -171,6 +207,8 @@
                             {% if product.category.is_single_item %}
                                 {% if product.quantity > 0 and product.status == 'available' %}
                                     <span class="badge bg-success">✓ In Stock</span>
+                                {% elif product.is_stolen_or_lost %}
+                                    <span class="badge bg-danger">💀 STOLEN/LOST</span>
                                 {% else %}
                                     <span class="badge bg-danger">SOLD</span>
                                 {% endif %}
@@ -183,7 +221,12 @@
                         </td>
                         <!-- Status Column -->
                         <td>
-                            {% if product.status == 'available' %}
+                            {% if product.is_stolen_or_lost %}
+                                <span class="badge bg-danger">
+                                    <i class="fas fa-skull-crosswalk"></i> 
+                                    {{ product.get_loss_type_display|default:"Stolen/Lost" }}
+                                </span>
+                            {% elif product.status == 'available' %}
                                 <span class="badge-available">✓ Available</span>
                             {% elif product.status == 'sold' %}
                                 <span class="badge bg-secondary">Sold Out</span>
@@ -213,6 +256,48 @@
                                 <a href="{% url 'inventory:product_edit' product.id %}" class="btn btn-sm btn-warning" title="Edit">
                                     <i class="fas fa-edit"></i>
                                 </a>
+                                
+                                <!-- NEW: Report Issue Dropdown for each product -->
+                                <div class="btn-group" role="group">
+                                    <button type="button" class="btn btn-sm btn-danger dropdown-toggle" 
+                                            data-bs-toggle="dropdown" title="Report Issue">
+                                        <i class="fas fa-exclamation-triangle"></i>
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end">
+                                        <li>
+                                            <a class="dropdown-item text-danger" href="{% url 'inventory:report_stolen' product.id %}">
+                                                <i class="fas fa-skull-crosswalk"></i> Report Stolen
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item text-warning" href="{% url 'inventory:report_lost' product.id %}">
+                                                <i class="fas fa-search-location"></i> Report Lost
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item text-dark" href="{% url 'inventory:mark_damaged' product.id %}">
+                                                <i class="fas fa-hammer"></i> Write Off as Damaged
+                                            </a>
+                                        </li>
+                                        
+                                        {% if product.is_stolen_or_lost %}
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li>
+                                            <a class="dropdown-item text-success" href="{% url 'inventory:recover_product' product.id %}">
+                                                <i class="fas fa-undo"></i> Recover Product
+                                            </a>
+                                        </li>
+                                        {% if not product.insurance_claim_filed %}
+                                        <li>
+                                            <a class="dropdown-item text-info" href="{% url 'inventory:file_insurance' product.id %}">
+                                                <i class="fas fa-file-invoice-dollar"></i> File Insurance
+                                            </a>
+                                        </li>
+                                        {% endif %}
+                                        {% endif %}
+                                    </ul>
+                                </div>
+                                
                                 <a href="{% url 'inventory:product_delete' product.id %}" class="btn btn-sm btn-danger" title="Delete" 
                                    onclick="return confirm('Are you sure you want to delete this product?')">
                                     <i class="fas fa-trash"></i>
@@ -222,7 +307,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="13" class="text-center py-4">
+                        <td colspan="14" class="text-center py-4">
                             <i class="fas fa-box-open fa-3x text-muted mb-3"></i>
                             <p class="text-muted">No products found</p>
                             <a href="{% url 'inventory:product_add' %}" class="btn btn-primary btn-sm">
@@ -368,6 +453,21 @@
         opacity: 0.3;
         cursor: not-allowed;
     }
+    
+    /* NEW: Stolen row highlight */
+    .table-danger {
+        background-color: #f8d7da !important;
+    }
+    
+    /* Dropdown menu styling */
+    .dropdown-menu {
+        min-width: 200px;
+    }
+    
+    .dropdown-item i {
+        width: 20px;
+        margin-right: 8px;
+    }
 </style>
 {% endblock %}
 
@@ -378,6 +478,27 @@ document.addEventListener('DOMContentLoaded', function() {
     const canTransferAny = {{ can_transfer_any|yesno:"true,false" }};
     
     console.log('Can Transfer Any:', canTransferAny);
+    
+    // ============================================
+    // CHECK FOR STOLEN PRODUCTS AND SHOW ALERT
+    // ============================================
+    function checkStolenProducts() {
+        // Count products with stolen/lost status from the table
+        const stolenRows = document.querySelectorAll('tbody tr.table-danger');
+        const stolenCount = stolenRows.length;
+        
+        if (stolenCount > 0) {
+            const alertDiv = document.getElementById('stolenAlert');
+            const stolenCountSpan = document.getElementById('stolenCount');
+            if (alertDiv && stolenCountSpan) {
+                stolenCountSpan.textContent = stolenCount;
+                alertDiv.style.display = 'block';
+            }
+        }
+    }
+    
+    // Call the function
+    checkStolenProducts();
     
     // ============================================
     // SINGLE PRODUCT SEARCH
@@ -394,14 +515,18 @@ document.addEventListener('DOMContentLoaded', function() {
         window.location.href = `{% url 'inventory:product_list' %}?search=${encodeURIComponent(searchTerm)}`;
     }
     
-    searchBtn.addEventListener('click', searchSingleProduct);
+    if (searchBtn) {
+        searchBtn.addEventListener('click', searchSingleProduct);
+    }
     
-    quickSearch.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            searchSingleProduct();
-        }
-    });
+    if (quickSearch) {
+        quickSearch.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                searchSingleProduct();
+            }
+        });
+    }
     
     // ============================================
     // PRODUCT SELECTION FOR TRANSFER
@@ -410,7 +535,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const productCheckboxes = document.querySelectorAll('.product-checkbox');
     const selectedProductsBar = document.getElementById('selectedProductsBar');
     const selectedCount = document.getElementById('selectedCount');
-    const clearSelectedBtn = document.getElementById('clearSelectedBtn');
     
     let selectedProducts = [];
     
@@ -449,8 +573,8 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         
         const count = selectedProducts.length;
-        selectedCount.textContent = count;
-        selectedProductsBar.style.display = count > 0 ? 'block' : 'none';
+        if (selectedCount) selectedCount.textContent = count;
+        if (selectedProductsBar) selectedProductsBar.style.display = count > 0 ? 'block' : 'none';
         saveSelectedProducts();
     }
     
@@ -475,10 +599,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if (selectAllCheckbox) selectAllCheckbox.checked = false;
         sessionStorage.removeItem('selectedProducts');
     };
-    
-    if (clearSelectedBtn) {
-        clearSelectedBtn.addEventListener('click', clearSelections);
-    }
     
     // Handle checkbox changes
     productCheckboxes.forEach(checkbox => {
@@ -547,6 +667,17 @@ document.addEventListener('DOMContentLoaded', function() {
     };
     
     loadSelectedProducts();
+    // Add this function to your product list template's extra_js block
+    window.goToRecordLossesPage = function() {
+        if (selectedProducts.length === 0) {
+            alert('Please select at least one product to record as loss.');
+            return;
+        }
+    
+        const skus = selectedProducts.map(p => p.sku).join(',');
+        sessionStorage.removeItem('selectedProducts');
+        window.location.href = `/inventory/record-losses/?skus=${encodeURIComponent(skus)}`;
+    };
 });
 </script>
 {% endblock %}

@@ -139,6 +139,7 @@ class Product(models.Model):
     - Bulk items: Multiple units share one Product record with same SKU
     - Auto generates product code (FSL format starting from FSL00200)
     - Auto generates barcode when blank
+    - Supports stolen/lost tracking for security and insurance
     """
     
     STATUS_CHOICES = [
@@ -148,6 +149,9 @@ class Product(models.Model):
         ('damaged', 'Damaged'),
         ('lowstock', 'Low Stock'),
         ('outofstock', 'Out of Stock'),
+        ('stolen', 'Stolen / Lost'),           # ADDED: For theft/loss tracking
+        ('writeoff', 'Written Off'),            # ADDED: For insurance write-offs
+        ('recalled', 'Recalled by Manufacturer'), # ADDED: For product recalls
     ]
 
     CONDITION_CHOICES = [
@@ -156,9 +160,12 @@ class Product(models.Model):
         ('used', 'Used - Excellent'),
         ('used_good', 'Used - Good'),
         ('used_fair', 'Used - Fair'),
+        ('damaged', 'Damaged - Not Sellable'),  # ADDED: For unsellable damaged items
     ]
 
-    # Basic Information
+    # ============================================
+    # BASIC INFORMATION
+    # ============================================
     name = models.CharField(max_length=255, blank=True, null=True, 
                            help_text="Product name (auto-generated from brand/model if blank)")
     category = models.ForeignKey(Category, on_delete=models.PROTECT, related_name='products')
@@ -170,7 +177,9 @@ class Product(models.Model):
     view_count = models.PositiveIntegerField(default=0)
     sales_count = models.PositiveIntegerField(default=0)
 
-    # SKU (IMEI/Serial) - MUST BE UNIQUE for single items
+    # ============================================
+    # SKU AND BARCODE (UNIQUE IDENTIFIERS)
+    # ============================================
     sku_value = models.CharField(
         max_length=200, 
         help_text="IMEI NUMBER OR SERIAL NUMBER - MUST BE UNIQUE for each unit",
@@ -180,7 +189,6 @@ class Product(models.Model):
         null=True 
     )
 
-    # Barcode - Auto-generated for ALL products when blank
     barcode = models.CharField(
         max_length=30,
         db_index=True,
@@ -190,13 +198,28 @@ class Product(models.Model):
         help_text="Barcode - Auto-generated if left blank"
     )
     
-    # Quantity
+    # ============================================
+    # QUANTITY AND STOCK
+    # ============================================
     quantity = models.PositiveIntegerField(
         default=1,
         help_text="1 for single items (auto-set), multiple for bulk items"
     )
     
-    # Pricing
+    # Reserved stock (for pending orders)
+    reserved_quantity = models.PositiveIntegerField(
+        default=0,
+        help_text="Quantity reserved for pending orders"
+    )
+    
+    # Available quantity (calculated: quantity - reserved_quantity)
+    @property
+    def available_quantity(self):
+        return max(0, self.quantity - self.reserved_quantity)
+    
+    # ============================================
+    # PRICING
+    # ============================================
     buying_price = models.DecimalField(
         max_digits=12, 
         decimal_places=2,
@@ -215,10 +238,14 @@ class Product(models.Model):
         blank=True
     )
     
-    # Images
+    # ============================================
+    # IMAGES
+    # ============================================
     image = CloudinaryField('image', blank=True, null=True)
     
-    # Status
+    # ============================================
+    # STATUS AND CONDITION
+    # ============================================
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='available')
     
     # Brand and Model - REQUIRED for single items
@@ -245,6 +272,9 @@ class Product(models.Model):
     
     description = models.TextField(blank=True, null=True)
     
+    # ============================================
+    # SUPPLIER INFORMATION
+    # ============================================
     supplier = models.ForeignKey(
         Supplier, 
         on_delete=models.SET_NULL, 
@@ -266,10 +296,134 @@ class Product(models.Model):
         help_text="When was this last restocked"
     )
 
-    # Metadata
+    # ============================================
+    # THEFT / LOSS TRACKING (NEW)
+    # ============================================
+    is_stolen_or_lost = models.BooleanField(
+        default=False,
+        help_text="Mark True if product is stolen or lost"
+    )
+    
+    loss_type = models.CharField(
+        max_length=20,
+        choices=[
+            ('stolen', 'Stolen'),
+            ('lost', 'Lost'),
+            ('damaged_total', 'Totally Damaged'),
+            ('expired', 'Expired'),
+            ('recalled', 'Recalled'),
+        ],
+        null=True,
+        blank=True,
+        help_text="Type of loss incident"
+    )
+    
+    loss_reported_date = models.DateTimeField(
+        null=True, 
+        blank=True,
+        help_text="When was the loss reported"
+    )
+    
+    loss_reported_by = models.ForeignKey(
+        User, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True,
+        related_name='reported_losses',
+        help_text="Staff member who reported the loss"
+    )
+    
+    loss_notes = models.TextField(
+        blank=True, 
+        null=True,
+        help_text="Detailed description of the incident"
+    )
+    
+    police_report_number = models.CharField(
+        max_length=100, 
+        blank=True, 
+        null=True,
+        help_text="Police report reference number"
+    )
+    
+    police_station = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        help_text="Police station where report was filed"
+    )
+    
+    insurance_claim_filed = models.BooleanField(
+        default=False,
+        help_text="Has insurance claim been filed?"
+    )
+    
+    insurance_claim_number = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="Insurance claim reference number"
+    )
+    
+    insurance_claim_amount = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2, 
+        null=True, 
+        blank=True,
+        help_text="Amount claimed from insurance"
+    )
+    
+    insurance_payout_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Actual amount received from insurance"
+    )
+    
+    insurance_payout_date = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When insurance paid out"
+    )
+    
+    recovered_date = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="If product was recovered after being stolen"
+    )
+    
+    recovered_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='recovered_products',
+        help_text="Who recovered the product"
+    )
+    
+    recovery_notes = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Notes about recovery"
+    )
+
+    # ============================================
+    # AUDIT AND METADATA
+    # ============================================
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     is_active = models.BooleanField(default=True)
+    
+    # Audit trail
+    last_modified_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='modified_products',
+        help_text="Last user who modified this product"
+    )
 
     class Meta:
         ordering = ['-created_at']
@@ -280,6 +434,11 @@ class Product(models.Model):
             models.Index(fields=['product_code']),
             models.Index(fields=['brand', 'model']),
             models.Index(fields=['-created_at']),
+            # New indexes for loss tracking
+            models.Index(fields=['is_stolen_or_lost', 'loss_type']),
+            models.Index(fields=['loss_reported_date']),
+            models.Index(fields=['insurance_claim_filed']),
+            models.Index(fields=['status']),
         ]
     
     def save(self, *args, **kwargs):
@@ -290,7 +449,12 @@ class Product(models.Model):
         3. Auto-generate barcode if not provided (for ALL products)
         4. Enforce single item quantity = 1
         5. Update status
+        6. Track last modified by
         """
+        
+        # Store who modified this (if passed in kwargs)
+        if 'modified_by' in kwargs:
+            self.last_modified_by = kwargs.pop('modified_by')
         
         # Auto-generate name from brand/model if not provided
         if not self.name and self.brand and self.model:
@@ -314,13 +478,14 @@ class Product(models.Model):
         
         # Enforce single item quantity = 1
         if self.category and self.category.is_single_item:
-            if self.status == 'sold':
+            if self.status == 'sold' or self.status == 'stolen':
                 self.quantity = 0
             else:
                 self.quantity = 1
         
-        # Auto-update status
-        self._update_status()
+        # Auto-update status (but don't override stolen status)
+        if self.status != 'stolen' and self.status != 'writeoff':
+            self._update_status()
         
         # Validate before saving
         self.clean()
@@ -434,12 +599,16 @@ class Product(models.Model):
         logger.info(f"✅ Generated barcode: {barcode} for product {self.product_code}")
         return barcode
 
-
     def _update_status(self):
         """
         Auto-update status based on quantity and item type
+        Excludes stolen/lost items
         """
         if not self.category:
+            return
+            
+        # Skip if already stolen or written off
+        if self.status in ['stolen', 'writeoff', 'recalled']:
             return
             
         # ============================================
@@ -455,7 +624,6 @@ class Product(models.Model):
                 self.status = 'available'
                 self.quantity = 1
             return
-
 
         # ============================================
         # BULK ITEMS - Stock level based status
@@ -482,16 +650,16 @@ class Product(models.Model):
         
         # Single items validation
         if self.category.is_single_item:
-            # FIXED: Allow quantity = 0 for sold items, 1 for available
-            if self.status == 'sold':
+            # FIXED: Allow quantity = 0 for sold/stolen items, 1 for available
+            if self.status in ['sold', 'stolen', 'writeoff']:
                 if self.quantity != 0:
-                    raise ValidationError("Sold single items must have quantity = 0")
+                    raise ValidationError(f"{self.get_status_display()} single items must have quantity = 0")
             else:
                 if self.quantity != 1:
                     raise ValidationError("Single items must have quantity = 1")
             
-            # Must have SKU
-            if not self.sku_value:
+            # Must have SKU (unless stolen and reported)
+            if not self.sku_value and self.status != 'stolen':
                 raise ValidationError("SKU value (IMEI/Serial) is required for single items")
             
             # Should have brand and model
@@ -513,7 +681,159 @@ class Product(models.Model):
                 if len(self.sku_value) != 15:
                     logger.warning(f"IMEI {self.sku_value} has unusual length: {len(self.sku_value)}")
 
+    # ============================================
+    # THEFT / LOSS MANAGEMENT METHODS
+    # ============================================
+    
+    def mark_as_stolen(self, reported_by, police_report=None, police_station=None, 
+                       notes=None, insurance_claim=False):
+        """
+        Mark a product as stolen
+        This removes it from inventory but keeps record for police and insurance
+        """
+        from django.utils import timezone
+        
+        # Update product status
+        self.status = 'stolen'
+        self.is_stolen_or_lost = True
+        self.loss_type = 'stolen'
+        self.loss_reported_date = timezone.now()
+        self.loss_reported_by = reported_by
+        self.loss_notes = notes
+        self.police_report_number = police_report
+        self.police_station = police_station
+        self.insurance_claim_filed = insurance_claim
+        
+        # Remove from available stock
+        if self.category and self.category.is_single_item:
+            self.quantity = 0
+        else:
+            # For bulk, you need to specify quantity stolen
+            # This should be handled separately
+            pass
+        
+        self.save(modified_by=reported_by)
+        
+        # Create stock entry for the loss
+        StockEntry.objects.create(
+            product=self,
+            quantity=-1 if (self.category and self.category.is_single_item) else 0,
+            entry_type='adjustment',
+            unit_price=self.buying_price,
+            total_amount=self.buying_price,
+            reference_id=f"STOLEN-{self.product_code}",
+            notes=f"Product reported stolen. Police report: {police_report or 'N/A'}. {notes or ''}",
+            created_by=reported_by
+        )
+        
+        logger.warning(f"⚠️ PRODUCT STOLEN: {self.product_code} - {self.display_name} by {reported_by.username}")
+        
+        return True
+    
+    def file_insurance_claim(self, claim_number, claim_amount):
+        """File insurance claim for stolen product"""
+        self.insurance_claim_filed = True
+        self.insurance_claim_number = claim_number
+        self.insurance_claim_amount = claim_amount
+        self.save()
+        
+        logger.info(f"📄 Insurance claim filed for {self.product_code}: {claim_number} - KES {claim_amount}")
+        
+        return True
+    
+    def record_insurance_payout(self, payout_amount, payout_date=None):
+        """Record insurance payout received"""
+        from django.utils import timezone
+        
+        self.insurance_payout_amount = payout_amount
+        self.insurance_payout_date = payout_date or timezone.now()
+        self.save()
+        
+        logger.info(f"💰 Insurance payout received for {self.product_code}: KES {payout_amount}")
+        
+        # Create financial transaction record
+        # This would integrate with your finance app
+        return True
+    
+    def mark_as_recovered(self, recovered_by, notes=None):
+        """
+        Mark a stolen product as recovered
+        Returns it to inventory
+        """
+        from django.utils import timezone
+        
+        self.status = 'available'
+        self.is_stolen_or_lost = False
+        self.recovered_date = timezone.now()
+        self.recovered_by = recovered_by
+        self.recovery_notes = notes
+        
+        # Return to stock
+        if self.category and self.category.is_single_item:
+            self.quantity = 1
+        
+        self.save(modified_by=recovered_by)
+        
+        # Create stock entry for recovery
+        StockEntry.objects.create(
+            product=self,
+            quantity=1 if (self.category and self.category.is_single_item) else 0,
+            entry_type='adjustment',
+            unit_price=self.buying_price,
+            total_amount=self.buying_price,
+            reference_id=f"RECOVERED-{self.product_code}",
+            notes=f"Product recovered after being stolen. {notes or ''}",
+            created_by=recovered_by
+        )
+        
+        logger.info(f"✅ PRODUCT RECOVERED: {self.product_code} - {self.display_name} by {recovered_by.username}")
+        
+        return True
+    
+    def mark_as_lost(self, reported_by, notes=None):
+        """Mark product as lost (not stolen, just missing)"""
+        from django.utils import timezone
+        
+        self.status = 'stolen'  # Use same status for tracking
+        self.is_stolen_or_lost = True
+        self.loss_type = 'lost'
+        self.loss_reported_date = timezone.now()
+        self.loss_reported_by = reported_by
+        self.loss_notes = notes
+        
+        if self.category and self.category.is_single_item:
+            self.quantity = 0
+        
+        self.save(modified_by=reported_by)
+        
+        logger.warning(f"📍 PRODUCT LOST: {self.product_code} - {self.display_name}")
+        
+        return True
+    
+    def write_off_as_damaged(self, reported_by, notes=None):
+        """Write off a product as totally damaged"""
+        from django.utils import timezone
+        
+        self.status = 'writeoff'
+        self.is_stolen_or_lost = True
+        self.loss_type = 'damaged_total'
+        self.loss_reported_date = timezone.now()
+        self.loss_reported_by = reported_by
+        self.loss_notes = notes
+        
+        if self.category and self.category.is_single_item:
+            self.quantity = 0
+        
+        self.save(modified_by=reported_by)
+        
+        logger.warning(f"💔 PRODUCT WRITTEN OFF (DAMAGED): {self.product_code} - {self.display_name}")
+        
+        return True
 
+    # ============================================
+    # PROPERTIES AND HELPER METHODS
+    # ============================================
+    
     def to_json(self):
         return json.dumps({
             'id': self.id,
@@ -522,8 +842,8 @@ class Product(models.Model):
             'price': float(self.selling_price),
             'stock': self.quantity,
             'sku': self.sku_value or '',
+            'is_stolen': self.is_stolen_or_lost,
         })
-
 
     def __str__(self):
         """Safe string representation that handles None values"""
@@ -532,10 +852,13 @@ class Product(models.Model):
             product_code = self.product_code or "No Code"
             status_display = self.get_status_display() if self.status else "Unknown"
             
-            if self.category and self.category.is_single_item and self.sku_value:
-                return f"{display_name} - {self.sku_value} ({product_code})"
+            # Add stolen indicator
+            stolen_indicator = " [STOLEN]" if self.is_stolen_or_lost else ""
             
-            return f"{display_name} ({product_code}) - {status_display}"
+            if self.category and self.category.is_single_item and self.sku_value:
+                return f"{display_name} - {self.sku_value} ({product_code}){stolen_indicator}"
+            
+            return f"{display_name} ({product_code}) - {status_display}{stolen_indicator}"
         except Exception:
             # Ultimate fallback
             return f"Product #{self.id or 'New'}"
@@ -544,38 +867,55 @@ class Product(models.Model):
     def can_be_used_for_credit(self):
         """
         Check if this product can be used for a new credit transaction
+        Only single items can be used for credit, and not stolen/lost
         """
         try:
+            # Check if stolen
+            if self.is_stolen_or_lost:
+                return False, f"Product is {self.loss_type or 'stolen/lost'}"
+            
+            # First check if this is a single item
+            if not self.category.is_single_item:
+                return False, "Only single items (phones, electronics) can be used for credit"
+        
             if self.status != 'available':
                 return False, f"Product is {self.get_status_display()}"
-            
+        
             if self.quantity < 1:
                 return False, "Product is out of stock"
-            
-            return True, "Product is available"
-        except Exception:
+        
+            # Check if this product already has ANY credit transaction
+            from credit.models import CreditTransaction
+            if CreditTransaction.objects.filter(product=self).exists():
+                return False, "Product already has a credit transaction"
+        
+            return True, "Product is available for credit"
+        except Exception as e:
+            logger.error(f"Error checking credit availability: {str(e)}")
             return False, "Error checking availability"
 
     @property
     def can_restock(self):
         """Check if this product can be restocked"""
-        return self.category and self.category.is_bulk_item
+        return self.category and self.category.is_bulk_item and not self.is_stolen_or_lost
 
     @property
     def profit_margin(self):
-        if self.buying_price and self.selling_price:
+        if self.buying_price and self.selling_price and not self.is_stolen_or_lost:
             return self.selling_price - self.buying_price
         return Decimal('0.00')
 
     @property
     def profit_percentage(self):
-        if self.buying_price and self.buying_price > 0 and self.selling_price:
+        if self.buying_price and self.buying_price > 0 and self.selling_price and not self.is_stolen_or_lost:
             return ((self.selling_price - self.buying_price) / self.buying_price) * 100
         return Decimal('0.0')
 
     @property
     def needs_reorder(self):
-        if self.category and self.category.is_bulk_item and self.reorder_level and self.quantity is not None:
+        if (self.category and self.category.is_bulk_item and 
+            self.reorder_level and self.quantity is not None and 
+            not self.is_stolen_or_lost):
             return self.quantity <= self.reorder_level
         return False
     
@@ -613,7 +953,7 @@ class Product(models.Model):
     @property
     def is_in_warranty(self):
         """Check if item still under warranty"""
-        if not self.warranty_months or not self.created_at:
+        if not self.warranty_months or not self.created_at or self.is_stolen_or_lost:
             return False
         from datetime import timedelta
         from django.utils import timezone
@@ -627,13 +967,15 @@ class Product(models.Model):
             return self.selling_price - self.best_price
         return Decimal('0.00')
     
-    # Add these methods to your existing Product class
-
     @property
     def stock_status(self):
         """Get detailed stock status"""
         if not self.category:
             return 'unknown'
+        
+        # Check stolen/lost first
+        if self.is_stolen_or_lost:
+            return 'stolen'
     
         if self.category.is_single_item:
             if self.quantity == 0:
@@ -645,7 +987,7 @@ class Product(models.Model):
             else:
                 return 'available'
         else:
-        # Bulk items
+            # Bulk items
             if self.quantity <= 0:
                 return 'outofstock'
             elif self.reorder_level and self.quantity <= self.reorder_level:
@@ -665,6 +1007,7 @@ class Product(models.Model):
             'outofstock': 'secondary',
             'reserved': 'info',
             'damaged': 'dark',
+            'stolen': 'danger',  # Red badge for stolen
         }
         return status_map.get(self.stock_status, 'light')
 
@@ -678,35 +1021,18 @@ class Product(models.Model):
             'outofstock': 'fa-times-circle',
             'reserved': 'fa-clock',
             'damaged': 'fa-exclamation-triangle',
+            'stolen': 'fa-skull-crossbones',  # Skull icon for stolen
         }
         return icon_map.get(self.stock_status, 'fa-box')
-
+    
     @property
-    def can_be_used_for_credit(self):
-        """
-        Check if this product can be used for a new credit transaction
-        Only single items can be used for credit
-        """
-        try:
-            # First check if this is a single item
-            if not self.category.is_single_item:
-                return False, "Only single items (phones, electronics) can be used for credit"
-        
-            if self.status != 'available':
-                return False, f"Product is {self.get_status_display()}"
-        
-            if self.quantity < 1:
-                return False, "Product is out of stock"
-        
-            # Check if this product already has ANY credit transaction
-            from credit.models import CreditTransaction
-            if CreditTransaction.objects.filter(product=self).exists():
-                return False, "Product already has a credit transaction"
-        
-            return True, "Product is available for credit"
-        except Exception as e:
-            logger.error(f"Error checking credit availability: {str(e)}")
-            return False, "Error checking availability"
+    def financial_loss_amount(self):
+        """Calculate financial loss if product is stolen/written off"""
+        if self.is_stolen_or_lost and self.insurance_payout_amount:
+            return self.buying_price - self.insurance_payout_amount
+        elif self.is_stolen_or_lost:
+            return self.buying_price
+        return Decimal('0.00')
 
 
 
