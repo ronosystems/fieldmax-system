@@ -3294,14 +3294,13 @@ def security_dashboard(request):
 
 
 
-
 # ============================================
 # M-PESA AGENT DASHBOARD
 # ============================================
 @login_required
 @dashboard_for_role('M-Pesa Agent')
 def mpesa_agent_dashboard(request):
-    """Dashboard for M-Pesa Agent - redirects to shop reporting"""
+    """Dashboard for M-Pesa Agent - shows only their own reports"""
     from shops.models import DailyShopReport
     from django.db.models import Sum
     from django.utils import timezone
@@ -3313,41 +3312,46 @@ def mpesa_agent_dashboard(request):
     week_ago = today - timedelta(days=7)
     month_ago = today - timedelta(days=30)
     
-    # Get the agent's shop branch (assuming they are assigned to a shop)
-    # You can add a shop field to Staff model or get from UserProfile
+    # Get the agent's shop branch from staff profile
     shop_branch = None
     if hasattr(request.user, 'staff_profile') and request.user.staff_profile:
-        # If staff has a shop assignment
-        shop_branch = getattr(request.user.staff_profile, 'assigned_shop', None)
+        shop_branch = request.user.staff_profile.assigned_shop
     
-    # Get statistics for the agent's shop
+    # Get statistics for the agent's OWN reports (filtered by submitted_by)
     if shop_branch:
-        # Today's report
+        # Today's report (only this agent's report)
         today_report = DailyShopReport.objects.filter(
             shop=shop_branch,
-            report_date=today
+            report_date=today,
+            submitted_by=request.user  # Only this agent's reports
         ).first()
         
-        # Weekly sales
+        # Weekly sales (only this agent's reports)
         weekly_sales = DailyShopReport.objects.filter(
             shop=shop_branch,
             report_date__gte=week_ago,
-            report_date__lte=today
+            report_date__lte=today,
+            submitted_by=request.user  # Only this agent's reports
         ).aggregate(total=Sum('shop_sales'))['total'] or 0
         
-        # Monthly sales
+        # Monthly sales (only this agent's reports)
         monthly_sales = DailyShopReport.objects.filter(
             shop=shop_branch,
             report_date__gte=month_ago,
-            report_date__lte=today
+            report_date__lte=today,
+            submitted_by=request.user  # Only this agent's reports
         ).aggregate(total=Sum('shop_sales'))['total'] or 0
         
-        # Total reports submitted
-        total_reports = DailyShopReport.objects.filter(shop=shop_branch).count()
+        # Total reports submitted by this agent
+        total_reports = DailyShopReport.objects.filter(
+            shop=shop_branch,
+            submitted_by=request.user  # Only this agent's reports
+        ).count()
         
-        # Recent reports
+        # Recent reports submitted by this agent
         recent_reports = DailyShopReport.objects.filter(
-            shop=shop_branch
+            shop=shop_branch,
+            submitted_by=request.user  # Only this agent's reports
         ).order_by('-report_date')[:5]
         
     else:
@@ -3369,7 +3373,6 @@ def mpesa_agent_dashboard(request):
     }
     
     return render(request, 'staff/dashboards/mpesa_agent_dashboard.html', context)
-
 
 
 
