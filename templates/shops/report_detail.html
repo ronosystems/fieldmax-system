@@ -1,0 +1,381 @@
+{% extends 'shops/base.html' %}
+{% load humanize %}
+
+{% block title %}Report Details - {{ report.shop.name }} {{ report.report_date }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .report-header {
+        background: linear-gradient(135deg, #059669 0%, #047857 100%);
+        color: white;
+        border-radius: 15px;
+        padding: 25px;
+        margin-bottom: 25px;
+    }
+    
+    .report-header h2 {
+        margin-bottom: 5px;
+    }
+    
+    .report-header p {
+        margin-bottom: 0;
+        opacity: 0.9;
+    }
+    
+    .info-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 20px;
+        transition: all 0.3s ease;
+    }
+    
+    .info-card:hover {
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    }
+    
+    .info-label {
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        color: var(--text-secondary);
+        margin-bottom: 5px;
+    }
+    
+    .info-value-large {
+        font-size: 2rem;
+        font-weight: bold;
+        color: var(--primary-color);
+    }
+    
+    .status-badge {
+        display: inline-block;
+        padding: 5px 15px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 500;
+    }
+    
+    .status-finalized {
+        background: #10b981;
+        color: white;
+    }
+    
+    .status-draft {
+        background: #f59e0b;
+        color: white;
+    }
+    
+    .amount-positive {
+        color: #10b981;
+    }
+    
+    .amount-negative {
+        color: #ef4444;
+    }
+    
+    @media print {
+        .no-print {
+            display: none !important;
+        }
+        .report-header {
+            background: #059669 !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+    }
+    
+    .table-bank thead th, .table-expense thead th, .table-mpesa thead th {
+        background: var(--light-bg);
+        font-weight: 600;
+        font-size: 0.85rem;
+    }
+    
+    .table-active {
+        background: var(--light-bg);
+    }
+    
+    .mpesa-header {
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        color: white;
+    }
+    
+    .bank-header {
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        color: white;
+    }
+    
+    .expense-header {
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+        color: white;
+    }
+    
+    .action-buttons {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+    
+    .action-buttons .btn {
+        margin-right: 5px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Report Header -->
+    <div class="report-header">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <h2>
+                    <i class="fas fa-file-alt me-2"></i>
+                    Daily Shop Report
+                </h2>
+                <p>{{ report.shop.name }} | {{ report.report_date|date:"l, F d, Y" }}</p>
+            </div>
+            <div class="col-md-4 text-md-end mt-3 mt-md-0">
+                <div class="status-badge {% if report.is_finalized %}status-finalized{% else %}status-draft{% endif %}">
+                    {% if report.is_finalized %}
+                        <i class="fas fa-check-circle me-1"></i>FINALIZED
+                    {% else %}
+                        <i class="fas fa-edit me-1"></i>DRAFT
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="row mb-4 no-print">
+        <div class="col-12">
+            <div class="action-buttons">
+                <a href="{% url 'shops:reports_list' %}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Reports
+                </a>
+                {% if not report.is_finalized %}
+                <a href="{% url 'shops:edit_report' report.id %}" class="btn btn-warning">
+                    <i class="fas fa-edit me-2"></i>Edit Report
+                </a>
+                <form method="post" action="{% url 'shops:finalize_report' report.id %}" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-success" onclick="return confirm('Are you sure you want to finalize this report? Once finalized, it cannot be edited or deleted.');">
+                        <i class="fas fa-lock me-2"></i>Finalize Report
+                    </button>
+                </form>
+                {% endif %}
+                <button onclick="window.print()" class="btn btn-primary">
+                    <i class="fas fa-print me-2"></i>Print Report
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="info-card text-center">
+                <div class="info-label">Total Shop Sales</div>
+                <div class="info-value-large">KES {{ report.shop_sales|floatformat:2|intcomma }}</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="info-card text-center">
+                <div class="info-label">Total Expenses</div>
+                <div class="info-value-large">KES {{ report.total_expenses|floatformat:2|intcomma }}</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="info-card text-center">
+                <div class="info-label">Net Profit/Loss</div>
+                <div class="info-value-large {% if net_profit >= 0 %}amount-positive{% else %}amount-negative{% endif %}">
+                    KES {{ net_profit|floatformat:2|intcomma }}
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="info-card text-center">
+                <div class="info-label">Total Closing Balance</div>
+                <div class="info-value-large">KES {{ report.total_closing_balance|floatformat:2|intcomma }}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- M-Pesa Details -->
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header mpesa-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-mobile-alt me-2"></i>M-Pesa Closing Balances
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-mpesa">
+                            <thead>
+                                <tr>
+                                    <th>Description</th>
+                                    <th class="text-end">Amount (KES)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>M-Pesa Float Balance</strong></td>
+                                    <td class="text-end"><strong>KES {{ report.closing_mpesa_float|floatformat:2|intcomma }}</strong></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>M-Pesa Cash Balance</strong></td>
+                                    <td class="text-end"><strong>KES {{ report.closing_mpesa_cash|floatformat:2|intcomma }}</strong></td>
+                                </tr>
+                            </tbody>
+                            <tfoot>
+                                <tr class="table-active">
+                                    <td><strong>Total M-Pesa Balance</strong></td>
+                                    <td class="text-end"><strong class="text-success">KES {{ total_mpesa|floatformat:2|intcomma }}</strong></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Bank Balances -->
+            <div class="card mb-4">
+                <div class="card-header bank-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-university me-2"></i>Bank Closing Balances
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if bank_closings %}
+                    <div class="table-responsive">
+                        <table class="table table-hover table-bank">
+                            <thead>
+                                <tr>
+                                    <th>Bank Name</th>
+                                    <th>Account Name</th>
+                                    <th class="text-end">Balance (KES)</th>
+                                </thead>
+                            <tbody>
+                                {% for closing in bank_closings %}
+                                <tr>
+                                    <td>{{ closing.bank_account.bank_name }}</div>
+                                    <td>{{ closing.bank_account.account_name }}</div>
+                                    <td class="text-end">KES {{ closing.closing_balance|floatformat:2|intcomma }}</div>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot>
+                                <tr class="table-active">
+                                    <td colspan="2"><strong>Total Bank Balance</strong></div>
+                                    <td class="text-end"><strong>KES {{ bank_total|floatformat:2|intcomma }}</strong></div>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-3">
+                        <p class="text-muted mb-0">No bank balances recorded for this report.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Expenses & Notes -->
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header expense-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-receipt me-2"></i>Expenses Breakdown
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if expenses %}
+                    <div class="table-responsive">
+                        <table class="table table-hover table-expense">
+                            <thead>
+                                <tr>
+                                    <th>Category</th>
+                                    <th>Description</th>
+                                    <th class="text-end">Amount (KES)</th>
+                                </thead>
+                            <tbody>
+                                {% for expense in expenses %}
+                                <tr>
+                                    <td>{{ expense.expense_category }}</div>
+                                    <td>{{ expense.description|default:"-" }}</div>
+                                    <td class="text-end">KES {{ expense.amount|floatformat:2|intcomma }}</div>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot>
+                                <tr class="table-active">
+                                    <td colspan="2"><strong>Total Expenses</strong></div>
+                                    <td class="text-end"><strong>KES {{ report.total_expenses|floatformat:2|intcomma }}</strong></div>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-3">
+                        <i class="fas fa-check-circle text-success fa-2x mb-2"></i>
+                        <p class="text-muted mb-0">No expenses recorded for this report.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Notes -->
+            {% if report.notes %}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-sticky-note me-2"></i>Additional Notes
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="mb-0">{{ report.notes|linebreaks }}</p>
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- Report Info -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-info-circle me-2"></i>Report Information
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-borderless">
+                        <tr>
+                            <td width="50%"><strong>Submitted By:</strong></div>
+                            <td>{{ report.submitted_by.get_full_name|default:report.submitted_by.username }}</div>
+                        </tr>
+                        <tr>
+                            <td><strong>Submission Time:</strong></div>
+                            <td>{{ report.submission_time|date:"F d, Y H:i:s" }}</div>
+                        </tr>
+                        <tr>
+                            <td><strong>Last Modified:</strong></div>
+                            <td>{{ report.last_modified|date:"F d, Y H:i:s" }}</div>
+                        </tr>
+                        <tr>
+                            <td><strong>Status:</strong></div>
+                            <td>
+                                {% if report.is_finalized %}
+                                    <span class="status-finalized">Finalized</span>
+                                {% else %}
+                                    <span class="status-draft">Draft</span>
+                                {% endif %}
+                            </div>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

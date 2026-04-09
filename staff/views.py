@@ -372,6 +372,7 @@ def get_correct_dashboard_url(user):
         (['Customer Service'], 'staff:customer_service_dashboard'),
         (['Security Officer'], 'staff:security_dashboard'),
         (['Cleaner'], 'staff:cleaner_dashboard'),
+        (['M-Pesa Agent'], 'staff:mpesa_agent_dashboard'),
     ]
     
     for groups, dashboard_url in dashboard_map:
@@ -552,6 +553,7 @@ def staff_dashboard(request):
             'Cleaner': 'staff:cleaner_dashboard',
             'Assistant Manager': 'staff:supervisor_dashboard',
             'Inventory Manager': 'staff:store_manager_dashboard',
+            'M-Pesa Agent': 'staff:mpesa_agent_dashboard', 
         }
         
         # Find matching dashboard
@@ -1176,6 +1178,8 @@ def prepare_dashboard_messages(request, dashboard_name=None):
                 dashboard_name = 'Finance Manager'
             elif 'Security Officer' in user_groups:
                 dashboard_name = 'Security'
+            elif 'M-Pesa Agent' in user_groups:
+                dashboard_name = 'M-Pesa Agent'
             elif 'Cleaner' in user_groups:
                 dashboard_name = 'Cleaner'
             else:
@@ -3284,6 +3288,88 @@ def security_dashboard(request):
         'recent_high_value': recent_high_value,
     }
     return render(request, 'staff/dashboards/security_dashboard.html', context)
+
+
+
+
+
+
+
+# ============================================
+# M-PESA AGENT DASHBOARD
+# ============================================
+@login_required
+@dashboard_for_role('M-Pesa Agent')
+def mpesa_agent_dashboard(request):
+    """Dashboard for M-Pesa Agent - redirects to shop reporting"""
+    from shops.models import DailyShopReport
+    from django.db.models import Sum
+    from django.utils import timezone
+    from datetime import timedelta
+    
+    prepare_dashboard_messages(request, 'M-Pesa Agent')
+    
+    today = timezone.now().date()
+    week_ago = today - timedelta(days=7)
+    month_ago = today - timedelta(days=30)
+    
+    # Get the agent's shop branch (assuming they are assigned to a shop)
+    # You can add a shop field to Staff model or get from UserProfile
+    shop_branch = None
+    if hasattr(request.user, 'staff_profile') and request.user.staff_profile:
+        # If staff has a shop assignment
+        shop_branch = getattr(request.user.staff_profile, 'assigned_shop', None)
+    
+    # Get statistics for the agent's shop
+    if shop_branch:
+        # Today's report
+        today_report = DailyShopReport.objects.filter(
+            shop=shop_branch,
+            report_date=today
+        ).first()
+        
+        # Weekly sales
+        weekly_sales = DailyShopReport.objects.filter(
+            shop=shop_branch,
+            report_date__gte=week_ago,
+            report_date__lte=today
+        ).aggregate(total=Sum('shop_sales'))['total'] or 0
+        
+        # Monthly sales
+        monthly_sales = DailyShopReport.objects.filter(
+            shop=shop_branch,
+            report_date__gte=month_ago,
+            report_date__lte=today
+        ).aggregate(total=Sum('shop_sales'))['total'] or 0
+        
+        # Total reports submitted
+        total_reports = DailyShopReport.objects.filter(shop=shop_branch).count()
+        
+        # Recent reports
+        recent_reports = DailyShopReport.objects.filter(
+            shop=shop_branch
+        ).order_by('-report_date')[:5]
+        
+    else:
+        today_report = None
+        weekly_sales = 0
+        monthly_sales = 0
+        total_reports = 0
+        recent_reports = []
+    
+    context = {
+        'shop_branch': shop_branch,
+        'today_report': today_report,
+        'today': today,
+        'weekly_sales': weekly_sales,
+        'monthly_sales': monthly_sales,
+        'total_reports': total_reports,
+        'recent_reports': recent_reports,
+        'has_report_today': today_report is not None,
+    }
+    
+    return render(request, 'staff/dashboards/mpesa_agent_dashboard.html', context)
+
 
 
 

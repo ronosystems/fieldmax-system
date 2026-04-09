@@ -1,6 +1,7 @@
 from django.apps import AppConfig
 
 
-class ProfilesConfig(AppConfig):
+class ShopsConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
-    name = 'profiles'
+    name = 'shops'
+    verbose_name = 'Shops'

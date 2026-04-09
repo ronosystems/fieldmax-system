@@ -1,0 +1,225 @@
+{% extends 'shops/base.html' %}
+{% load humanize %}
+
+{% block title %}Bank Accounts{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h2>
+                <i class="fas fa-university me-2"></i>Bank Accounts
+            </h2>
+            <p class="text-muted">Manage bank accounts for all shop branches</p>
+        </div>
+        <div class="col-md-4 text-end">
+            <a href="{% url 'shops:add_bank_account' %}" class="btn btn-primary">
+                <i class="fas fa-plus-circle me-2"></i>Add Bank Account
+            </a>
+        </div>
+    </div>
+
+    <!-- Filter Section -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">
+                <i class="fas fa-filter me-2"></i>Filter Bank Accounts
+            </h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <label class="form-label">Filter by Shop</label>
+                    <select id="shopFilter" class="form-select">
+                        <option value="all">All Shops</option>
+                        {% for shop in shops %}
+                            <option value="{{ shop.id }}">{{ shop.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Filter by Status</label>
+                    <select id="statusFilter" class="form-select">
+                        <option value="all">All</option>
+                        <option value="active">Active Only</option>
+                        <option value="inactive">Inactive Only</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">&nbsp;</label>
+                    <button id="resetFilters" class="btn btn-secondary d-block w-100">
+                        <i class="fas fa-undo me-2"></i>Reset Filters
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bank Accounts List -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">All Bank Accounts</h5>
+        </div>
+        <div class="card-body">
+            {% if accounts %}
+            <div class="table-responsive">
+                <table class="table table-hover " id="bankAccountsTable">
+                    <thead>
+                        <tr>
+                            <th>Shop Branch</th>
+                            <th>Bank Name</th>
+                            <th>Account Name</th>
+                            <th>Account Number</th>
+                            <th>Opening Balance</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </thead>
+                        <tbody>
+                            {% for account in accounts %}
+                            <tr data-shop-id="{{ account.shop.id }}" data-status="{% if account.is_active %}active{% else %}inactive{% endif %}">
+                                <td>
+                                    <strong>{{ account.shop.name }}</strong><br>
+                                    <small class="text-muted">{{ account.shop.code }}</small>
+                                </td>
+                                <td>{{ account.bank_name }}</td>
+                                <td>{{ account.account_name }}</td>
+                                <td>{{ account.account_number }}</td>
+                                <td class="text-end">
+                                    <span class="fw-bold">KES {{ account.opening_balance|floatformat:2|intcomma }}</span>
+                                </td>
+                                <td>
+                                    {% if account.is_active %}
+                                        <span class="badge-finalized">
+                                            <i class="fas fa-check-circle me-1"></i>Active
+                                        </span>
+                                    {% else %}
+                                        <span class="badge-pending">
+                                            <i class="fas fa-times-circle me-1"></i>Inactive
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{% url 'shops:edit_bank_account' account.id %}" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="fas fa-university fa-3x text-muted mb-3"></i>
+                <p class="text-muted">No bank accounts added yet.</p>
+                <a href="{% url 'shops:add_bank_account' %}" class="btn btn-primary">
+                    <i class="fas fa-plus-circle me-2"></i>Add Your First Bank Account
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Statistics Summary -->
+    {% if accounts %}
+    <div class="row mt-4">
+        <div class="col-md-4">
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fas fa-university"></i>
+                </div>
+                <div class="stat-value">{{ accounts|length }}</div>
+                <div class="stat-label">Total Accounts</div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <div class="stat-value">
+                    {% with active_count=accounts|length %}
+                        {{ accounts|dictsort:"is_active"|slice:":-1"|length }}
+                    {% endwith %}
+                </div>
+                <div class="stat-label">Active Accounts</div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fas fa-store"></i>
+                </div>
+                <div class="stat-value">{{ shops|length }}</div>
+                <div class="stat-label">Shop Branches</div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Initialize DataTable
+    var table = $('#bankAccountsTable').DataTable({
+        "pageLength": 25,
+        "language": {
+            "search": "Search Accounts:",
+            "lengthMenu": "Show _MENU_ accounts",
+            "info": "Showing _START_ to _END_ of _TOTAL_ accounts",
+            "infoEmpty": "Showing 0 to 0 of 0 accounts",
+            "infoFiltered": "(filtered from _MAX_ total accounts)",
+            "emptyTable": "No bank accounts found",
+            "zeroRecords": "No matching accounts found"
+        },
+        "order": [[0, "asc"]]
+    });
+    
+    // Shop filter
+    $('#shopFilter').change(function() {
+        var shopId = $(this).val();
+        if (shopId === 'all') {
+            table.column(0).search('').draw();
+        } else {
+            // Search in the first column for the shop name (contains shop data)
+            table.column(0).search('').draw();
+            
+            // Custom filter for shop ID stored in data attribute
+            $.fn.dataTable.ext.search.push(
+                function(settings, data, dataIndex) {
+                    var row = table.row(dataIndex).node();
+                    var rowShopId = $(row).data('shop-id');
+                    if (shopId === 'all') {
+                        return true;
+                    }
+                    return rowShopId == shopId;
+                }
+            );
+            table.draw();
+            $.fn.dataTable.ext.search.pop();
+        }
+    });
+    
+    // Status filter
+    $('#statusFilter').change(function() {
+        var status = $(this).val();
+        if (status === 'all') {
+            table.column(5).search('').draw();
+        } else if (status === 'active') {
+            table.column(5).search('Active').draw();
+        } else if (status === 'inactive') {
+            table.column(5).search('Inactive').draw();
+        }
+    });
+    
+    // Reset filters
+    $('#resetFilters').click(function() {
+        $('#shopFilter').val('all');
+        $('#statusFilter').val('all');
+        table.search('').columns().search('').draw();
+    });
+});
+</script>
+{% endblock %}

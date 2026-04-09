@@ -1,0 +1,329 @@
+{% extends 'shops/base.html' %}
+{% load humanize %}
+
+{% block title %}All Shop Reports{% endblock %}
+
+{% block extra_css %}
+<style>
+    .filter-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+    
+    .report-status {
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 500;
+        display: inline-block;
+    }
+    
+    .status-finalized {
+        background: #10b981;
+        color: white;
+    }
+    
+    .status-draft {
+        background: #f59e0b;
+        color: white;
+    }
+    
+    .export-btn {
+        transition: all 0.3s ease;
+    }
+    
+    .export-btn:hover {
+        transform: translateY(-2px);
+    }
+    
+    .summary-stats {
+        background: linear-gradient(135deg, var(--primary-color) 0%, #047857 100%);
+        color: white;
+        border-radius: 10px;
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+    
+    .summary-stats h3 {
+        font-size: 1.5rem;
+        margin-bottom: 5px;
+    }
+    
+    .summary-stats p {
+        margin-bottom: 0;
+        opacity: 0.9;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <h2>
+                <i class="fas fa-file-alt me-2"></i>All Shop Reports
+            </h2>
+            <p class="text-muted">View, filter, and manage all daily shop reports</p>
+        </div>
+        <div class="col-md-6 text-end">
+            <a href="{% url 'shops:create_report' %}" class="btn btn-primary">
+                <i class="fas fa-plus-circle me-2"></i>New Report
+            </a>
+            <button type="button" class="btn btn-success ms-2" id="exportCsvBtn">
+                <i class="fas fa-download me-2"></i>Export CSV
+            </button>
+        </div>
+    </div>
+
+    <!-- Summary Statistics -->
+    <div class="row">
+        <div class="col-md-3">
+            <div class="summary-stats text-center">
+                <i class="fas fa-chart-line fa-2x mb-2"></i>
+                <h3>{{ reports.paginator.count|intcomma }}</h3>
+                <p>Total Reports</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="summary-stats text-center">
+                <i class="fas fa-check-circle fa-2x mb-2"></i>
+                <h3>{{ finalized_count|default:0|intcomma }}</h3>
+                <p>Finalized Reports</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="summary-stats text-center">
+                <i class="fas fa-clock fa-2x mb-2"></i>
+                <h3>{{ draft_count|default:0|intcomma }}</h3>
+                <p>Draft Reports</p>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="summary-stats text-center">
+                <i class="fas fa-chart-simple fa-2x mb-2"></i>
+                <h3>KES {{ total_sales_value|floatformat:0|intcomma }}</h3>
+                <p>Total Sales Value</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Section -->
+    <div class="filter-card">
+        <h6 class="mb-3">
+            <i class="fas fa-filter me-2"></i>Filter Reports
+        </h6>
+        <form method="get" class="row g-3" id="filterForm">
+            <div class="col-md-3">
+                <label for="shop" class="form-label">Shop Branch</label>
+                <select name="shop" id="shop" class="form-select">
+                    <option value="">All Shops</option>
+                    {% for shop in shops %}
+                        <option value="{{ shop.id }}" {% if selected_shop|stringformat:"s" == shop.id|stringformat:"s" %}selected{% endif %}>
+                            {{ shop.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="col-md-2">
+                <label for="from_date" class="form-label">From Date</label>
+                <input type="date" name="from_date" id="from_date" class="form-control" value="{{ from_date }}">
+            </div>
+            
+            <div class="col-md-2">
+                <label for="to_date" class="form-label">To Date</label>
+                <input type="date" name="to_date" id="to_date" class="form-control" value="{{ to_date }}">
+            </div>
+            
+            <div class="col-md-2">
+                <label for="finalized" class="form-label">Status</label>
+                <select name="finalized" id="finalized" class="form-select">
+                    <option value="">All</option>
+                    <option value="true" {% if finalized_filter == 'true' %}selected{% endif %}>Finalized</option>
+                    <option value="false" {% if finalized_filter == 'false' %}selected{% endif %}>Draft</option>
+                </select>
+            </div>
+            
+            <div class="col-md-3">
+                <label class="form-label">&nbsp;</label>
+                <div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-search me-2"></i>Apply Filters
+                    </button>
+                    <a href="{% url 'shops:reports_list' %}" class="btn btn-secondary">
+                        <i class="fas fa-undo me-2"></i>Reset
+                    </a>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Reports Table -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">Reports List</h5>
+        </div>
+        <div class="card-body">
+            {% if reports %}
+            <div class="table-responsive">
+                <table class="table table-hover" id="reportsTable">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Shop Branch</th>
+                            <th>Submitted By</th>
+                            <th>Shop Sales (KES)</th>
+                            <th>M-Pesa Float</th>
+                            <th>M-Pesa Cash</th>
+                            <th>Total Bank</th>
+                            <th>Total Expenses</th>
+                            <th>Total Closing</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </thead>
+                        <tbody>
+                            {% for report in reports %}
+                            <tr>
+                                <td data-order="{{ report.report_date|date:'Y-m-d' }}">
+                                    <strong>{{ report.report_date|date:"M d, Y" }}</strong>
+                                 </div>
+                                <td>
+                                    <strong>{{ report.shop.name }}</strong><br>
+                                    <small class="text-muted">{{ report.shop.code }}</small>
+                                 </div>
+                                <td>
+                                    {{ report.submitted_by.get_full_name|default:report.submitted_by.username }}<br>
+                                    <small class="text-muted">{{ report.submission_time|date:"H:i" }}</small>
+                                 </div>
+                                <td class="text-end">
+                                    <span class="fw-bold text-success">KES {{ report.shop_sales|floatformat:2|intcomma }}</span>
+                                 </div>
+                                <td class="text-end">KES {{ report.closing_mpesa_float|floatformat:2|intcomma }} </div>
+                                <td class="text-end">KES {{ report.closing_mpesa_cash|floatformat:2|intcomma }} </div>
+                                <td class="text-end">
+                                    {% with bank_total=report.bank_closings.all|dictsortreversed:"closing_balance"|first %}
+                                        KES {{ bank_total.closing_balance|default:0|floatformat:2|intcomma }}
+                                    {% endwith %}
+                                 </div>
+                                <td class="text-end">KES {{ report.total_expenses|floatformat:2|intcomma }} </div>
+                                <td class="text-end">
+                                    <span class="fw-bold">KES {{ report.total_closing_balance|floatformat:2|intcomma }}</span>
+                                 </div>
+                                <td>
+                                    {% if report.is_finalized %}
+                                        <span class="status-finalized">
+                                            <i class="fas fa-check-circle me-1"></i>Finalized
+                                        </span>
+                                    {% else %}
+                                        <span class="status-draft">
+                                            <i class="fas fa-edit me-1"></i>Draft
+                                        </span>
+                                    {% endif %}
+                                 </div>
+                                <td>
+                                    <div class="btn-group" role="group">
+                                        <a href="{% url 'shops:report_detail' report.id %}" class="btn btn-sm btn-outline-primary" title="View">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                    </div>
+                                 </div>
+                             </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Pagination -->
+                {% if reports.has_other_pages %}
+                <nav aria-label="Page navigation" class="mt-4">
+                    <ul class="pagination justify-content-center">
+                        {% if reports.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page=1{% if selected_shop %}&shop={{ selected_shop }}{% endif %}{% if from_date %}&from_date={{ from_date }}{% endif %}{% if to_date %}&to_date={{ to_date }}{% endif %}{% if finalized_filter %}&finalized={{ finalized_filter }}{% endif %}">
+                                    <i class="fas fa-angle-double-left"></i>
+                                </a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ reports.previous_page_number }}{% if selected_shop %}&shop={{ selected_shop }}{% endif %}{% if from_date %}&from_date={{ from_date }}{% endif %}{% if to_date %}&to_date={{ to_date }}{% endif %}{% if finalized_filter %}&finalized={{ finalized_filter }}{% endif %}">
+                                    <i class="fas fa-angle-left"></i>
+                                </a>
+                            </li>
+                        {% endif %}
+                        
+                        {% for num in reports.paginator.page_range %}
+                            {% if reports.number == num %}
+                                <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                            {% elif num > reports.number|add:'-3' and num < reports.number|add:'3' %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ num }}{% if selected_shop %}&shop={{ selected_shop }}{% endif %}{% if from_date %}&from_date={{ from_date }}{% endif %}{% if to_date %}&to_date={{ to_date }}{% endif %}{% if finalized_filter %}&finalized={{ finalized_filter }}{% endif %}">
+                                        {{ num }}
+                                    </a>
+                                </li>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if reports.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ reports.next_page_number }}{% if selected_shop %}&shop={{ selected_shop }}{% endif %}{% if from_date %}&from_date={{ from_date }}{% endif %}{% if to_date %}&to_date={{ to_date }}{% endif %}{% if finalized_filter %}&finalized={{ finalized_filter }}{% endif %}">
+                                    <i class="fas fa-angle-right"></i>
+                                </a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ reports.paginator.num_pages }}{% if selected_shop %}&shop={{ selected_shop }}{% endif %}{% if from_date %}&from_date={{ from_date }}{% endif %}{% if to_date %}&to_date={{ to_date }}{% endif %}{% if finalized_filter %}&finalized={{ finalized_filter }}{% endif %}">
+                                    <i class="fas fa-angle-double-right"></i>
+                                </a>
+                            </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                {% endif %}
+                
+            {% else %}
+            <div class="text-center py-5">
+                <i class="fas fa-file-alt fa-3x text-muted mb-3"></i>
+                <p class="text-muted">No reports found.</p>
+                {% if selected_shop or from_date or to_date or finalized_filter %}
+                    <p class="text-muted">Try adjusting your filters or</p>
+                    <a href="{% url 'shops:reports_list' %}" class="btn btn-secondary">Clear Filters</a>
+                {% else %}
+                    <a href="{% url 'shops:create_report' %}" class="btn btn-primary">
+                        <i class="fas fa-plus-circle me-2"></i>Create First Report
+                    </a>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Initialize DataTable
+    $('#reportsTable').DataTable({
+        "pageLength": 25,
+        "language": {
+            "search": "Search Reports:",
+            "lengthMenu": "Show _MENU_ reports",
+            "info": "Showing _START_ to _END_ of _TOTAL_ reports",
+            "infoEmpty": "Showing 0 to 0 of 0 reports",
+            "infoFiltered": "(filtered from _MAX_ total reports)",
+            "emptyTable": "No reports found",
+            "zeroRecords": "No matching reports found"
+        },
+        "order": [[0, "desc"]]
+    });
+    
+    // Export CSV functionality
+    $('#exportCsvBtn').click(function() {
+        var params = new URLSearchParams(window.location.search);
+        var exportUrl = "{% url 'shops:export_csv' %}?" + params.toString();
+        window.location.href = exportUrl;
+    });
+});
+</script>
+{% endblock %}

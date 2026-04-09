@@ -51,6 +51,8 @@ def get_dashboard_name(user):
             'cleaner': 'Cleaner Dashboard',
             'inventory_manager': 'Inventory Manager Dashboard',
             'assistant_manager': 'Assistant Manager Dashboard',
+            'administrator': 'Admin Dashboard',
+            'mpesa_agent': 'Mpesa Agent Dashboard',
         }
         
         return dashboard_names.get(staff_app.position, 'Staff Dashboard')

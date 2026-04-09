@@ -1,0 +1,79 @@
+{% extends 'shops/base.html' %}
+{% load humanize %}
+
+{% block title %}Shop Branches{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h2>
+                <i class="fas fa-store me-2"></i>Shop Branches
+            </h2>
+            <p class="text-muted">Manage all shop branches and their details</p>
+        </div>
+        <div class="col-md-4 text-end">
+            <a href="{% url 'shops:add_branch' %}" class="btn btn-primary">
+                <i class="fas fa-plus-circle me-2"></i>Add New Branch
+            </a>
+        </div>
+    </div>
+
+    <!-- Branches List -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">All Shop Branches</h5>
+        </div>
+        <div class="card-body">
+            {% if branches %}
+            <div class="table-responsive">
+                <table class="table table-hover datatable">
+                    <thead>
+                        <tr>
+                            <th>Code</th>
+                            <th>Name</th>
+                            <th>Location</th>
+                            <th>Manager</th>
+                            <th>Phone</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for branch in branches %}
+                        <tr>
+                            <td><strong>{{ branch.code }}</strong></td>
+                            <td>{{ branch.name }}</td>
+                            <td>{{ branch.location }}</td>
+                            <td>{{ branch.manager }}</td>
+                            <td>{{ branch.phone }}</td>
+                            <td>
+                                {% if branch.is_active %}
+                                    <span class="badge-finalized"><i class="fas fa-check-circle me-1"></i>Active</span>
+                                {% else %}
+                                    <span class="badge-pending"><i class="fas fa-times-circle me-1"></i>Inactive</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{% url 'shops:edit_branch' branch.id %}" class="btn btn-sm btn-outline-primary">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="fas fa-store fa-3x text-muted mb-3"></i>
+                <p class="text-muted">No shop branches added yet.</p>
+                <a href="{% url 'shops:add_branch' %}" class="btn btn-primary">
+                    <i class="fas fa-plus-circle me-2"></i>Add Your First Branch
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

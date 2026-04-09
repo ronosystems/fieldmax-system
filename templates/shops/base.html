@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FieldMax Staff - {% block title %}Staff Dashboard{% endblock %}</title>
+    <title>FieldMax Shop - {% block title %}Shop Management{% endblock %}</title>
     
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -13,42 +13,41 @@
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css">
     
     {% load static %}
-    {% load staff_tags %}
     
-    <!-- Custom CSS -->
+    <!-- Custom CSS - Shop specific colors (Green/Teal theme) -->
     <style>
         :root {
-            --primary-color: #2563eb;
+            --primary-color: #059669;  /* Emerald green for shop */
             --success-color: #10b981;
             --danger-color: #ef4444;
             --warning-color: #f59e0b;
             --info-color: #3b82f6;
             --dark-color: #1f2937;
-            --light-bg: #f3f4f6;
-            --sidebar-bg: #142731;
-            --sidebar-hover: #1e3a4a;
+            --light-bg: #f0fdf4;  /* Light green background */
+            --sidebar-bg: #064e3b;  /* Dark green for shop sidebar */
+            --sidebar-hover: #047857;
             --navbar-bg: #000000;
-            --footer-bg: #084232;
+            --footer-bg: #064e3b;
             --text-primary: #111827;
             --text-secondary: #6b7280;
             --text-light: #f3f4f6;
-            --border-color: #e5e7eb;
+            --border-color: #d1d5db;
             --card-bg: #ffffff;
-            --main-content-bg: #045270;
+            --main-content-bg: #ecfdf5; /* Very light green */
         }
         
         [data-theme="dark"] {
-            --primary-color: #3b82f6;
+            --primary-color: #34d399;
             --success-color: #34d399;
             --danger-color: #f87171;
             --warning-color: #fbbf24;
             --info-color: #60a5fa;
             --dark-color: #f3f4f6;
             --light-bg: #111827;
-            --sidebar-bg: #1f2937;
-            --sidebar-hover: #374151;
+            --sidebar-bg: #022c22;
+            --sidebar-hover: #064e3b;
             --navbar-bg: #000000;
-            --footer-bg: #065f46;
+            --footer-bg: #022c22;
             --text-primary: #f9fafb;
             --text-secondary: #9ca3af;
             --text-light: #f3f4f6;
@@ -138,13 +137,56 @@
             background: rgba(255, 255, 255, 0.1);
         }
         
+        /* Admin Switch Button - Updated to blue */
+        .admin-switch-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgb(0, 140, 255);
+            border: none;
+            border-radius: 50px;
+            padding: 8px 18px;
+            color: white;
+            font-weight: 600;
+            font-size: 0.9rem;
+            text-decoration: none;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(0, 140, 255, 0.3);
+            animation: pulse 2s infinite;
+        }
+        
+        .admin-switch-btn:hover {
+            transform: translateY(-2px);
+            background: rgb(0, 100, 200);
+            color: white;
+        }
+        
+        .admin-switch-btn i {
+            font-size: 1rem;
+        }
+        
+        .admin-switch-btn .badge {
+            background: #1a1a2e;
+            color: white;
+            font-size: 0.7rem;
+            padding: 3px 8px;
+            border-radius: 50px;
+            margin-left: 5px;
+        }
+        
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(0, 140, 255, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(0, 140, 255, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(0, 140, 255, 0); }
+        }
+        
         .navbar-notification {
             position: relative;
             color: var(--text-light);
             font-size: 1.25rem;
             cursor: pointer;
             transition: color 0.2s;
-            margin-right: 1.5rem; 
+            margin-right: 1.5rem;
         }
         
         .navbar-notification:hover {
@@ -178,13 +220,13 @@
         }
         
         .navbar-user:hover {
-            background: rgb(0, 217, 255);
+            background: var(--primary-color);
         }
         
         .user-avatar {
             width: 40px;
             height: 40px;
-            background: linear-gradient(135deg, var(--primary-color), #2100df);
+            background: linear-gradient(135deg, var(--primary-color), #047857);
             border-radius: 50%;
             display: flex;
             align-items: center;
@@ -229,7 +271,12 @@
         
         .sidebar.collapsed .nav-link span,
         .sidebar.collapsed .sidebar-section-title,
-        .sidebar.collapsed .btn span {
+        .sidebar.collapsed .btn span,
+        .sidebar.collapsed .brand-text,
+        .sidebar.collapsed p,
+        .sidebar.collapsed hr + div,
+        .sidebar.collapsed .text-white-100,
+        .sidebar.collapsed .text-white-50 {
             display: none;
         }
         
@@ -237,6 +284,19 @@
             margin-right: 0;
             width: auto;
             font-size: 1.25rem;
+        }
+        
+        .sidebar.collapsed h4 {
+            font-size: 0;
+        }
+        
+        .sidebar.collapsed h4:before {
+            content: "S";
+            font-size: 1.5rem;
+        }
+        
+        .sidebar.collapsed .badge {
+            display: none;
         }
         
         .sidebar.show-mobile {
@@ -283,15 +343,27 @@
             border-radius: 3px;
         }
         
-        .sidebar-nav {
-            padding: 1.5rem 1rem;
-            color: var(--text-light);           
+        .sidebar .p-4 {
+            padding: 1.5rem 1rem !important;
+            color: var(--text-light);
         }
         
+        .sidebar h4 {
+            color: var(--text-light);
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .sidebar .text-white-100,
+        .sidebar .text-white-50 {
+            color: rgba(255, 255, 255, 0.8) !important;
+        }
+        
+        /* Sidebar section style */
         .sidebar-section {
             margin-bottom: 1.5rem;
-            background: rgb(0, 140, 255);
-            border-radius: 10px; 
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
             padding: 0.5rem;
         }
         
@@ -299,9 +371,10 @@
             font-size: 1rem;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            color: #000000;
+            color: #ffffff;
             padding: 0 1rem;
             margin-bottom: 0.75rem;
+            margin-top: 1rem;
             font-weight: 800;
         }
         
@@ -328,6 +401,7 @@
         
         .sidebar .nav-link:hover {
             background: var(--sidebar-hover);
+            transform: translateX(5px);
         }
         
         .sidebar .nav-link:hover i {
@@ -348,21 +422,12 @@
             padding: 0.25rem 0.5rem;
             font-size: 0.7rem;
             border-radius: 20px;
+            float: right;
         }
         
-        /* Logout button in sidebar */
-        .sidebar .logout-btn {
-            background: var(--danger-color);
-            border: none;
-            color: var(--text-light);
-            width: 100%;
-            text-align: left;
-            border-radius: 10px;
-            cursor: pointer;
-        }
-        
-        .sidebar .logout-btn:hover {
-            background: #dc2626;
+        .sidebar hr {
+            background-color: rgba(255, 255, 255, 0.2);
+            margin: 1rem 0;
         }
         
         /* Fixed Footer */
@@ -403,7 +468,7 @@
             margin-right: 5px;
         }
         
-        /* Main Content Area - Ready for other HTMLs */
+        /* Main Content Area */
         .main-content {
             position: fixed;
             top: 70px;
@@ -439,22 +504,269 @@
             border-radius: 4px;
         }
         
-        /* Breadcrumb Navigation - Optional, can be used in child templates */
-        .breadcrumb {
+        /* Content Cards - Shop specific */
+        .stat-card {
             background: var(--card-bg);
-            padding: 0.75rem 1rem;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.05);
+            transition: transform 0.3s;
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            position: relative;
+            cursor: pointer;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+        
+        .stat-icon {
+            font-size: 3rem;
+            opacity: 0.2;
+            position: absolute;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--primary-color);
+        }
+        
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 5px;
+            color: var(--text-primary);
+        }
+        
+        .stat-label {
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            font-size: 0.85rem;
+            letter-spacing: 1px;
+        }
+        
+        .card {
+            border: 1px solid var(--border-color);
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.05);
+            background: var(--card-bg);
+        }
+        
+        .card-header {
+            background: var(--card-bg);
+            border-bottom: 2px solid var(--light-bg);
+            padding: 20px 25px;
+            font-weight: 600;
+            border-radius: 15px 15px 0 0 !important;
+            color: var(--text-primary);
+        }
+        
+        .table {
+            color: var(--text-primary);
+            margin-bottom: 0;
+        }
+        
+        .table thead th {
+            border-top: none;
+            background: var(--light-bg);
+            color: var(--text-primary);
+            font-weight: 600;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            padding: 1rem;
+        }
+        
+        .table td {
+            padding: 1rem;
+            vertical-align: middle;
+            color: var(--text-primary);
+        }
+        
+        .table-hover tbody tr:hover {
+            background-color: var(--light-bg);
+        }
+        
+        /* Loading Skeleton */
+        .skeleton-loader {
+            background: linear-gradient(90deg, var(--border-color) 25%, var(--light-bg) 50%, var(--border-color) 75%);
+            background-size: 200% 100%;
+            animation: loading 1.5s infinite;
+            border-radius: 4px;
+            height: 20px;
+            margin: 10px 0;
+        }
+        
+        @keyframes loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        
+        /* Badge Styles - Shop specific */
+        .badge-finalized {
+            background-color: #059669;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-weight: 500;
+        }
+        
+        .badge-pending {
+            background-color: #f59e0b;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-weight: 500;
+        }
+        
+        .badge-draft {
+            background-color: #6b7280;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-weight: 500;
+        }
+        
+        .badge-approved {
+            background-color: #10b981;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-weight: 500;
+        }
+        
+        .badge-cancelled {
+            background-color: #ef4444;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-weight: 500;
+        }
+        
+        /* Floating Admin Button */
+        .floating-admin-btn {
+            position: fixed;
+            bottom: 80px;
+            right: 20px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: rgb(0, 140, 255);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.5rem;
+            box-shadow: 0 4px 15px rgba(0, 140, 255, 0.3);
+            transition: all 0.3s;
+            z-index: 1050;
+            text-decoration: none;
+            animation: pulse 2s infinite;
+        }
+        
+        .floating-admin-btn:hover {
+            transform: scale(1.1);
+            background: rgb(0, 100, 200);
+            color: white;
+        }
+        
+        /* Buttons - Shop specific */
+        .btn-primary {
+            background: linear-gradient(135deg, #059669 0%, #047857 100%);
+            border: none;
+            padding: 10px 25px;
             border-radius: 10px;
-            margin-bottom: 1.5rem;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #047857 0%, #059669 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(5, 150, 105, 0.4);
+        }
+        
+        .btn-outline-primary {
+            border: 1px solid var(--primary-color);
+            color: var(--primary-color);
+            padding: 0.6rem 1.5rem;
+            border-radius: 10px;
+            font-weight: 500;
+            transition: all 0.2s;
+            background: transparent;
+        }
+        
+        .btn-outline-primary:hover {
+            background: var(--primary-color);
+            color: white;
+        }
+        
+        .btn-success {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            border: none;
+        }
+        
+        /* Shop-specific styles */
+        .shop-card {
+            border-left: 4px solid #059669;
+        }
+        
+        .amount-positive {
+            color: #10b981;
+            font-weight: bold;
+        }
+        
+        .amount-negative {
+            color: #ef4444;
+            font-weight: bold;
+        }
+        
+        .amount-neutral {
+            color: #f59e0b;
+            font-weight: bold;
+        }
+        
+        /* Form styles */
+        .form-control:focus, .form-select:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.2rem rgba(5, 150, 105, 0.25);
+        }
+        
+        /* Inline formset styles */
+        .inline-formset {
+            background: var(--card-bg);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
             border: 1px solid var(--border-color);
         }
         
-        .breadcrumb-item a {
-            color: var(--primary-color);
-            text-decoration: none;
+        .inline-formset .formset-row {
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border-color);
         }
         
-        .breadcrumb-item.active {
-            color: var(--text-secondary);
+        .inline-formset .formset-row:last-child {
+            border-bottom: none;
+        }
+        
+        /* Print styles */
+        @media print {
+            .no-print, .sidebar, .footer, .btn, .navbar-notification, .theme-toggle, .admin-switch-btn, .floating-admin-btn {
+                display: none !important;
+            }
+            
+            .main-content {
+                left: 0 !important;
+                padding: 0 !important;
+            }
+            
+            .card {
+                box-shadow: none !important;
+                border: 1px solid #ddd !important;
+            }
         }
         
         /* Responsive */
@@ -479,9 +791,29 @@
                 padding: 0 1rem;
             }
             
+            .footer-content {
+                flex-direction: column;
+                gap: 5px;
+                text-align: center;
+            }
+            
             .footer-left p {
                 font-size: 0.8rem;
             }
+            
+            .stat-card {
+                margin-bottom: 1rem;
+            }
+        }
+        
+        /* Animation for loading */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.5s ease-out;
         }
     </style>
     
@@ -495,14 +827,23 @@
         </button>
         <div class="navbar-brand">
             <img src="{% static 'images/LOGO.jpg' %}" alt="FieldMax Logo" height="40" class="me-2" style="max-height: 40px; width: auto;">
-            FIELDMAX MANAGEMENT
+            FIELDMAX SHOPS
         </div>
 
         <div class="navbar-menu">
             <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
                 <i class="fas fa-moon"></i>
             </button>
-            
+
+            <!-- ADMIN SWITCH BUTTON - Only visible to superusers -->
+            {% if request.user.is_superuser %}
+            <a href="{% url 'staff:staff_dashboard' %}" class="admin-switch-btn">
+                <i class="fas fa-crown"></i>
+                <span>Admin Dashboard</span>
+                <span class="badge">SUPERUSER</span>
+            </a>
+            {% endif %}
+
             <a href="{% url 'staff:notifications_page' %}" class="navbar-notification" aria-label="Notifications">
                 <i class="far fa-bell"></i>
                 {% if notification_count > 0 %}
@@ -510,7 +851,6 @@
                 {% endif %}
             </a>
             
-            <!-- Added a spacer div to create distance -->
             <div style="width: 20px;"></div>
             
             <div class="navbar-user" id="userMenu" role="button" aria-haspopup="true" aria-expanded="false">
@@ -523,13 +863,11 @@
                         {% if request.user.is_superuser %}
                             Administrator
                         {% else %}
-                            {% with position=request.user|get_user_position %}
-                                {% if position %}
-                                    {{ position|position_display }}
-                                {% else %}
-                                    Staff
-                                {% endif %}
-                            {% endwith %}
+                            {% if request.user.position %}
+                                {{ request.user.position|title }}
+                            {% else %}
+                                Shop Manager
+                            {% endif %}
                         {% endif %}
                     </div>
                 </div>
@@ -539,131 +877,70 @@
 
     <!-- Fixed Sidebar -->
     <div class="sidebar" id="sidebar">
-        <div class="sidebar-nav">
-            <!-- HOME BUTTON -->
+        <div class="p-4">
+            <!-- Home Button -->
             <div class="sidebar-section">
                 <a href="{% url 'website:home' %}" class="btn btn-outline-primary w-100 mb-3">
                     <i class="fas fa-home me-2"></i> <span>WEBSITE PAGE</span>
                 </a>
             </div>
-
+            
             <!-- Main Navigation -->
             <div class="sidebar-section">
-                <div class="sidebar-section-title">MAIN DASHBOARD</div>
-                <nav class="nav flex-column" aria-label="Main navigation">
-                    <a class="nav-link {% if request.resolver_match.url_name == 'staff_dashboard' %}active{% endif %}" 
-                       href="{% url 'staff:staff_dashboard' %}">
-                        <i class="fas fa-tachometer-alt"></i> 
-                        <span>
-                            {% if request.user.is_superuser %}
-                                Overview Dashboard
-                            {% else %}
-                                {% get_dashboard_name request.user as dashboard_name %}
-                                {{ dashboard_name }}
-                            {% endif %}
-                        </span>
+                <div class="sidebar-section-title">MAIN</div>
+                <nav class="nav flex-column">
+                    <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'shops:dashboard' %}">
+                        <i class="fas fa-chart-line"></i> <span>Shop Dashboard</span>
+                    </a>
+                    <a class="nav-link {% if 'reports_list' in request.path %}active{% endif %}" href="{% url 'shops:reports_list' %}">
+                        <i class="fas fa-file-alt"></i> <span>All Reports</span>
+                    </a>
+                    <a class="nav-link {% if 'create_report' in request.path %}active{% endif %}" href="{% url 'shops:create_report' %}">
+                        <i class="fas fa-plus-circle"></i> <span>New Report</span>
+                    </a>
+                    <a class="nav-link {% if 'statistics' in request.path %}active{% endif %}" href="{% url 'shops:shop_statistics' %}">
+                        <i class="fas fa-chart-bar"></i> <span>Statistics</span>
                     </a>
                 </nav>
             </div>
 
-            <!-- Statistics Section -->
+            <!-- Shop Management -->
             <div class="sidebar-section">
-                <div class="sidebar-section-title">FIELDMAX STATISTICS</div>
-                <nav class="nav flex-column" aria-label="Statistics navigation">
-                    {% if request.user.is_superuser or request.user|has_role:'store_manager,inventory_manager,supervisor' %}
-                    <a class="nav-link {% if 'statistics' in request.path and 'store' in request.path %}active{% endif %}" 
-                       href="{% url 'inventory:store_statistics' %}">
-                        <i class="fas fa-chart-pie"></i> <span>Store Statistics</span>
+                <div class="sidebar-section-title">SHOP MANAGEMENT</div>
+                <nav class="nav flex-column">
+                    <a class="nav-link {% if 'branches' in request.path %}active{% endif %}" href="{% url 'shops:branches' %}">
+                        <i class="fas fa-store"></i> <span>Shop Branches</span>
                     </a>
-                    {% endif %}
-
-                    {% if request.user.is_superuser or request.user|has_role:'sales_agent,sales_manager,supervisor' %}
-                    <a class="nav-link {% if 'statistics' in request.path and 'sales' in request.path %}active{% endif %}" 
-                       href="{% url 'sales:sales_statistics' %}">
-                        <i class="fas fa-chart-line"></i> <span>Sales Statistics</span>
+                    <a class="nav-link {% if 'bank_accounts' in request.path %}active{% endif %}" href="{% url 'shops:bank_accounts' %}">
+                        <i class="fas fa-university"></i> <span>Bank Accounts</span>
                     </a>
-                    {% endif %}
-
-                    {% if request.user.is_superuser or request.user|has_role:'credit_manager,credit_officer,supervisor' %}
-                    <a class="nav-link {% if 'statistics' in request.path and 'credit' in request.path %}active{% endif %}" 
-                       href="{% url 'credit:credit_statistics' %}">
-                        <i class="fas fa-chart-bar"></i> <span>Credit Statistics</span>
+                    <a class="nav-link {% if 'mpesa_accounts' in request.path %}active{% endif %}" href="{% url 'shops:mpesa_accounts' %}">
+                        <i class="fas fa-mobile-alt"></i> <span>M-Pesa Accounts</span>
                     </a>
-                    {% endif %}
-
-                    {% if request.user.is_superuser or request.user|has_role:'finance_manager,supervisor,finance_officer' %}
-                    <a class="nav-link" href="{% url 'shops:dashboard' %}">
-                        <i class="fas fa-chart-line"></i> <span> Shop Reports</span>
-                    </a>
-                    {% endif %}
-
                 </nav>
             </div>
 
-            
-            <!-- Other Apps Section -->
+            <!-- Configuration -->
             <div class="sidebar-section">
-                <div class="sidebar-section-title">OTHER DASHBOARDS</div>
-                <nav class="nav flex-column" aria-label="Applications navigation">
-                    {% if request.user.is_superuser or request.user|has_role:'store_manager,supervisor,inventory_manager' %}
-                    <a class="nav-link" href="{% url 'inventory:dashboard' %}">
-                        <i class="fas fa-boxes"></i> <span>Store Dashboard</span>
-                    </a>
-                    {% endif %}
-                    
-                    {% if request.user.is_superuser or request.user|has_role:'sales_agent,sales_manager,supervisor,cashier' %}
-                    <a class="nav-link" href="{% url 'sales:sales_dashboard' %}">
-                        <i class="fas fa-shopping-cart"></i> <span>Sales Dashboard</span>
-                    </a>
-                    {% endif %}
-                    
-                    {% if request.user.is_superuser or request.user|has_role:'credit_manager,supervisor,credit_officer' %}
-                    <a class="nav-link" href="{% url 'credit:dashboard' %}">
-                        <i class="fas fa-credit-card"></i> <span>Credit Dashboard</span>
-                    </a>
-                    {% endif %}
-
-                    {% if request.user.is_superuser or request.user|has_role:'finance_manager,supervisor,finance_officer' %}
-                    <a class="nav-link" href="{% url 'finance:dashboard' %}">
-                        <i class="fas fa-chart-line"></i> <span>Finance Dashboard</span>
-                    </a>
-                    {% endif %}
-                </nav>
-            </div>
-
-            
-            <!-- Management Section -->
-            <div class="sidebar-section">
-                <div class="sidebar-section-title">USER MANAGEMENT</div>
-                <nav class="nav flex-column" aria-label="Management navigation">
-                    {% if request.user.is_superuser or request.user|has_role:'supervisor' %}
-                    <a class="nav-link {% if 'users' in request.path %}active{% endif %}" 
-                       href="{% url 'staff:user_list' %}">
-                        <i class="fas fa-users"></i> <span>Users details</span>
-                    </a>
-                    {% endif %}
-                    
-                    {% if request.user.is_superuser or request.user|has_role:'sales_agent,sales_manager,supervisor,credit_manager' %}
-                    <a class="nav-link {% if 'application' in request.path %}active{% endif %}" 
-                       href="{% url 'staff:application_list' %}">
-                        <i class="fas fa-file-alt"></i> <span>Staff Approval</span>
-                        {% if staff_onboarding_pending > 0 %}
-                        <span class="badge bg-warning text-dark">{{ staff_onboarding_pending }}</span>
-                        {% endif %}
-                    </a>
-                    {% endif %}
-
-                    <a class="nav-link" href="{% url 'staff:apply' %}" target="_blank">
-                        <i class="fas fa-user-plus"></i> <span>Application Form</span>
+                <div class="sidebar-section-title">CONFIGURATION</div>
+                <nav class="nav flex-column">
+                    <a class="nav-link {% if 'manage_choices' in request.path %}active{% endif %}" href="{% url 'shops:manage_choices' %}">
+                        <i class="fas fa-sliders-h"></i> <span>Dynamic Choices</span>
                     </a>
                 </nav>
             </div>
 
-            <!-- Logout Section (at bottom of sidebar) -->
+
+            <div class="text-white-100 small mt-3">
+                <p class="mb-1"><strong>FieldMax Shop System</strong></p>
+                <p class="mb-0">Version 1.0.0</p>   
+            </div>
+
+            <!-- Logout Section -->
             <div class="sidebar-section mt-4">
                 <form method="post" action="{% url 'staff:logout' %}" id="logoutForm">
                    {% csrf_token %}
-                   <button type="submit" class="nav-link logout-btn w-100 text-start" style="border: none;">
+                   <button type="submit" class="nav-link w-100 text-start" style="background: var(--danger-color); border: none; color: white; border-radius: 10px;">
                      <i class="fas fa-sign-out-alt"></i> <span>Logout</span>
                    </button>
                 </form>
@@ -671,19 +948,20 @@
         </div>
     </div>
 
-    <!-- Main Content Area - Ready for other HTMLs to extend -->
+    <!-- Main Content Area -->
     <div class="main-content" id="mainContent">
         <!-- Messages -->
         {% if messages %}
             {% for message in messages %}
                 <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                    <i class="fas fa-{% if message.tags == 'success' %}check-circle{% elif message.tags == 'error' %}exclamation-circle{% else %}info-circle{% endif %} me-2"></i>
                     {{ message }}
                     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                 </div>
             {% endfor %}
         {% endif %}
         
-        <!-- Child templates will insert their content here -->
+        <!-- Page specific content -->
         {% block content %}{% endblock %}
     </div>
 
@@ -691,7 +969,7 @@
     <footer class="footer">
         <div class="footer-content">
             <div class="footer-left">
-                <p class="mb-0">&copy; {% now "Y" %} FieldMax Staff System. All rights reserved.</p>
+                <p class="mb-0">&copy; {% now "Y" %} FieldMax Shop System. All rights reserved.</p>
             </div>
             <div class="footer-right">
                 <a href="{% url 'staff:powered_by' %}" target="_self" style="color: inherit; text-decoration: none;">
@@ -700,10 +978,20 @@
             </div>
         </div>
     </footer>
+
+    <!-- Floating Admin Button - Only for superusers -->
+    {% if request.user.is_superuser %}
+    <a href="{% url 'staff:staff_dashboard' %}" class="floating-admin-btn" data-bs-toggle="tooltip" title="Back to Admin Dashboard">
+        <i class="fas fa-crown"></i>
+    </a>
+    {% endif %}
     
     <!-- Scripts -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <script>
         $(document).ready(function() {
@@ -770,36 +1058,28 @@
             handleSidebar();
             $(window).resize(handleSidebar);
             
-            // Initialize DataTables with lazy loading (only if tables exist)
-            if ($('table.datatable').length) {
-                // Load DataTables dynamically only if needed
-                $.getScript("https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js")
-                    .done(function() {
-                        $.getScript("https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js")
-                            .done(function() {
-                                $('table.datatable').each(function() {
-                                    var $table = $(this);
-                                    
-                                    if ($.fn.DataTable.isDataTable(this)) {
-                                        $table.DataTable().destroy();
-                                    }
-                                    
-                                    $table.DataTable({
-                                        "pageLength": 25,
-                                        "language": {
-                                            "search": "Search:",
-                                            "lengthMenu": "Show _MENU_ entries",
-                                            "info": "Showing _START_ to _END_ of _TOTAL_ entries",
-                                            "infoEmpty": "Showing 0 to 0 of 0 entries",
-                                            "infoFiltered": "(filtered from _MAX_ total entries)",
-                                            "emptyTable": "No data available",
-                                            "zeroRecords": "No matching records found"
-                                        }
-                                    });
-                                });
-                            });
-                    });
-            }
+            // Initialize DataTables
+            $('table.datatable').each(function() {
+                var $table = $(this);
+                
+                if ($.fn.DataTable.isDataTable(this)) {
+                    $table.DataTable().destroy();
+                }
+                
+                $table.DataTable({
+                    "pageLength": 25,
+                    "language": {
+                        "search": "Search:",
+                        "lengthMenu": "Show _MENU_ entries",
+                        "info": "Showing _START_ to _END_ of _TOTAL_ entries",
+                        "infoEmpty": "Showing 0 to 0 of 0 entries",
+                        "infoFiltered": "(filtered from _MAX_ total entries)",
+                        "emptyTable": "No data available",
+                        "zeroRecords": "No matching records found"
+                    },
+                    "order": [[0, "desc"]]
+                });
+            });
             
             // Auto-hide alerts after 5 seconds
             setTimeout(function() {
@@ -812,6 +1092,9 @@
                     e.preventDefault();
                 }
             });
+            
+            // Add fade-in animation to main content
+            $('#mainContent').addClass('fade-in');
         });
     </script>
     

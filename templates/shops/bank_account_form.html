@@ -1,0 +1,113 @@
+{% extends 'shops/base.html' %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h2>
+                <i class="fas fa-university me-2"></i>{{ title }}
+            </h2>
+            <p class="text-muted">Add or edit bank account details for shop branches</p>
+        </div>
+        <div class="col-md-4 text-end">
+            <a href="{% url 'shops:bank_accounts' %}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left me-2"></i>Back to Bank Accounts
+            </a>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <form method="post">
+                {% csrf_token %}
+                
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="{{ form.shop.id_for_label }}" class="form-label">Shop Branch *</label>
+                        {{ form.shop }}
+                        {% if form.shop.errors %}
+                            <div class="text-danger small">{{ form.shop.errors }}</div>
+                        {% endif %}
+                        <small class="text-muted">Select the shop branch this bank account belongs to</small>
+                    </div>
+                    
+                    <div class="col-md-6 mb-3">
+                        <label for="{{ form.bank_name.id_for_label }}" class="form-label">Bank Name *</label>
+                        {{ form.bank_name }}
+                        {% if form.bank_name.errors %}
+                            <div class="text-danger small">{{ form.bank_name.errors }}</div>
+                        {% endif %}
+                        <small class="text-muted">Select or enter bank name</small>
+                    </div>
+                    
+                    <div class="col-md-6 mb-3">
+                        <label for="{{ form.account_name.id_for_label }}" class="form-label">Account Name *</label>
+                        {{ form.account_name }}
+                        {% if form.account_name.errors %}
+                            <div class="text-danger small">{{ form.account_name.errors }}</div>
+                        {% endif %}
+                        <small class="text-muted">Name on the bank account</small>
+                    </div>
+                    
+                    <div class="col-md-6 mb-3">
+                        <label for="{{ form.account_number.id_for_label }}" class="form-label">Account Number *</label>
+                        {{ form.account_number }}
+                        {% if form.account_number.errors %}
+                            <div class="text-danger small">{{ form.account_number.errors }}</div>
+                        {% endif %}
+                        <small class="text-muted">Bank account number</small>
+                    </div>
+                    
+                    <div class="col-md-6 mb-3">
+                        <label for="{{ form.opening_balance.id_for_label }}" class="form-label">Opening Balance (KES)</label>
+                        {{ form.opening_balance }}
+                        {% if form.opening_balance.errors %}
+                            <div class="text-danger small">{{ form.opening_balance.errors }}</div>
+                        {% endif %}
+                        <small class="text-muted">Initial balance when account was opened</small>
+                    </div>
+                    
+                    <div class="col-md-6 mb-3">
+                        <div class="form-check mt-4">
+                            {{ form.is_active }}
+                            <label for="{{ form.is_active.id_for_label }}" class="form-check-label">
+                                Active Account
+                            </label>
+                            {% if form.is_active.errors %}
+                                <div class="text-danger small">{{ form.is_active.errors }}</div>
+                            {% endif %}
+                            <small class="text-muted d-block">Inactive accounts won't appear in reports</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="text-end mt-3">
+                    <a href="{% url 'shops:bank_accounts' %}" class="btn btn-secondary">Cancel</a>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-2"></i>Save Bank Account
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Help Section -->
+    <div class="card mt-4">
+        <div class="card-header">
+            <h6 class="mb-0">
+                <i class="fas fa-info-circle me-2"></i>Need Help?
+            </h6>
+        </div>
+        <div class="card-body">
+            <ul class="mb-0">
+                <li>Make sure to add shop branches before adding bank accounts</li>
+                <li>Bank names can be managed under <a href="{% url 'shops:manage_choices' %}">Dynamic Choices</a></li>
+                <li>The opening balance will be used as the starting point for future reports</li>
+                <li>You can add multiple bank accounts for each shop branch</li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}

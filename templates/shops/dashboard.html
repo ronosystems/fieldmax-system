@@ -1,0 +1,540 @@
+{% extends 'shops/base.html' %}
+{% load humanize %}
+
+{% block title %}Shop Dashboard{% endblock %}
+
+{% block extra_css %}
+<style>
+    .quick-action-btn {
+        transition: all 0.3s ease;
+        border-radius: 12px;
+        padding: 15px;
+        text-align: center;
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        cursor: pointer;
+    }
+    
+    .quick-action-btn:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+        border-color: var(--primary-color);
+    }
+    
+    .quick-action-icon {
+        font-size: 2rem;
+        color: var(--primary-color);
+        margin-bottom: 10px;
+    }
+    
+    .report-card {
+        transition: all 0.3s ease;
+    }
+    
+    .report-card:hover {
+        transform: translateX(5px);
+        background: var(--light-bg);
+    }
+    
+    .shop-badge {
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 500;
+    }
+    
+    .shop-badge-active {
+        background: #10b981;
+        color: white;
+    }
+    
+    .shop-badge-inactive {
+        background: #6b7280;
+        color: white;
+    }
+    
+    .trend-up {
+        color: #10b981;
+    }
+    
+    .trend-down {
+        color: #ef4444;
+    }
+    
+    .chart-container {
+        position: relative;
+        height: 300px;
+        margin-top: 20px;
+    }
+    
+    .welcome-banner {
+        background: linear-gradient(135deg, #059669 0%, #047857 100%);
+        border-radius: 15px;
+        padding: 25px;
+        color: white;
+        margin-bottom: 25px;
+    }
+    
+    .welcome-banner h2 {
+        margin-bottom: 5px;
+    }
+    
+    .welcome-banner p {
+        opacity: 0.9;
+        margin-bottom: 0;
+    }
+    
+    .stats-row {
+        margin-bottom: 25px;
+    }
+    
+    .activity-timeline {
+        position: relative;
+        padding-left: 30px;
+    }
+    
+    .timeline-item {
+        position: relative;
+        padding-bottom: 20px;
+        border-left: 2px solid var(--border-color);
+        padding-left: 20px;
+        margin-left: 10px;
+    }
+    
+    .timeline-item:last-child {
+        border-left-color: transparent;
+    }
+    
+    .timeline-dot {
+        position: absolute;
+        left: -9px;
+        top: 0;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: var(--primary-color);
+        border: 2px solid var(--card-bg);
+    }
+    
+    .timeline-date {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        margin-bottom: 5px;
+    }
+    
+    .timeline-title {
+        font-weight: 600;
+        margin-bottom: 5px;
+    }
+    
+    .timeline-text {
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Welcome Banner -->
+    <div class="welcome-banner">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <h2>
+                    <i class="fas fa-store me-2"></i>
+                    Welcome back, {{ request.user.first_name|default:request.user.username }}!
+                </h2>
+                <p>Here's what's happening with your shops today.</p>
+            </div>
+            <div class="col-md-4 text-md-end mt-3 mt-md-0">
+                <a href="{% url 'shops:create_report' %}" class="btn btn-light">
+                    <i class="fas fa-plus-circle me-2"></i>New Daily Report
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Stats Cards -->
+    <div class="row stats-row">
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fas fa-store"></i>
+                </div>
+                <div class="stat-value">{{ total_shops }}</div>
+                <div class="stat-label">Active Shops</div>
+                <small class="text-muted">
+                    <i class="fas fa-building me-1"></i> Total Branches
+                </small>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fas fa-file-alt"></i>
+                </div>
+                <div class="stat-value">{{ reports_today }}</div>
+                <div class="stat-label">Reports Today</div>
+                <small class="text-muted">
+                    <i class="fas fa-calendar-day me-1"></i> {{ today|date:"F j, Y" }}
+                </small>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fas fa-chart-line"></i>
+                </div>
+                <div class="stat-value">KES {{ total_sales_today|floatformat:0|intcomma }}</div>
+                <div class="stat-label">Today's Sales</div>
+                <small class="text-muted">
+                    <i class="fas fa-arrow-up trend-up me-1"></i> Total revenue
+                </small>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fas fa-percent"></i>
+                </div>
+                <div class="stat-value">
+                    {% if reports_today > 0 %}
+                        {{ total_shops|add:reports_today|floatformat:0 }}%
+                    {% else %}
+                        0%
+                    {% endif %}
+                </div>
+                <div class="stat-label">Report Completion</div>
+                <small class="text-muted">
+                    <i class="fas fa-check-circle text-success me-1"></i> 
+                    {{ reports_today }}/{{ total_shops }} shops reported
+                </small>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Quick Actions -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-bolt me-2"></i>Quick Actions
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3 col-6 mb-3">
+                            <div class="quick-action-btn" onclick="window.location.href='{% url 'shops:create_report' %}'">
+                                <div class="quick-action-icon">
+                                    <i class="fas fa-plus-circle"></i>
+                                </div>
+                                <div class="fw-bold">New Report</div>
+                                <small class="text-muted">Submit daily report</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-6 mb-3">
+                            <div class="quick-action-btn" onclick="window.location.href='{% url 'shops:reports_list' %}'">
+                                <div class="quick-action-icon">
+                                    <i class="fas fa-list"></i>
+                                </div>
+                                <div class="fw-bold">View Reports</div>
+                                <small class="text-muted">All shop reports</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-6 mb-3">
+                            <div class="quick-action-btn" onclick="window.location.href='{% url 'shops:branches' %}'">
+                                <div class="quick-action-icon">
+                                    <i class="fas fa-store"></i>
+                                </div>
+                                <div class="fw-bold">Manage Shops</div>
+                                <small class="text-muted">Add or edit shops</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3 col-6 mb-3">
+                            <div class="quick-action-btn" onclick="window.location.href='{% url 'shops:shop_statistics' %}'">
+                                <div class="quick-action-icon">
+                                    <i class="fas fa-chart-bar"></i>
+                                </div>
+                                <div class="fw-bold">Statistics</div>
+                                <small class="text-muted">View analytics</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row">
+        <!-- Today's Reports -->
+        <div class="col-lg-7 mb-4">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-clipboard-list me-2"></i>Today's Reports
+                    </h5>
+                    <a href="{% url 'shops:reports_list' %}?from_date={{ today|date:'Y-m-d' }}&to_date={{ today|date:'Y-m-d' }}" class="btn btn-sm btn-outline-primary">
+                        View All <i class="fas fa-arrow-right ms-1"></i>
+                    </a>
+                </div>
+                <div class="card-body">
+                    {% if today_reports %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Shop</th>
+                                        <th>Sales</th>
+                                        <th>M-Pesa Float</th>
+                                        <th>M-Pesa Cash</th>
+                                        <th>Status</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for report in today_reports %}
+                                    <tr>
+                                        <td>
+                                            <strong>{{ report.shop.name }}</strong><br>
+                                            <small class="text-muted">{{ report.submitted_by.get_full_name|default:report.submitted_by.username }}</small>
+                                        </td>
+                                        <td>
+                                            <span class="fw-bold text-success">KES {{ report.shop_sales|floatformat:0|intcomma }}</span>
+                                        </td>
+                                        <td>KES {{ report.closing_mpesa_float|floatformat:0|intcomma }}</td>
+                                        <td>KES {{ report.closing_mpesa_cash|floatformat:0|intcomma }}</td>
+                                        <td>
+                                            {% if report.is_finalized %}
+                                                <span class="badge-finalized"><i class="fas fa-check-circle me-1"></i>Finalized</span>
+                                            {% else %}
+                                                <span class="badge-pending"><i class="fas fa-clock me-1"></i>Draft</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <a href="{% url 'shops:report_detail' report.id %}" class="btn btn-sm btn-outline-primary">
+                                                <i class="fas fa-eye"></i>
+                                            </a>
+                                            {% if not report.is_finalized %}
+                                            <a href="{% url 'shops:edit_report' report.id %}" class="btn btn-sm btn-outline-secondary">
+                                                <i class="fas fa-edit"></i>
+                                            </a>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-5">
+                            <i class="fas fa-file-alt fa-3x text-muted mb-3"></i>
+                            <p class="text-muted mb-3">No reports submitted today</p>
+                            <a href="{% url 'shops:create_report' %}" class="btn btn-primary">
+                                <i class="fas fa-plus-circle me-2"></i>Submit First Report
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Shop Status & Quick Stats -->
+        <div class="col-lg-5 mb-4">
+            <!-- Shop Status -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-store me-2"></i>Shop Status
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="list-group list-group-flush">
+                        {% for shop in shops %}
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <i class="fas fa-store me-2 text-primary"></i>
+                                <strong>{{ shop.name }}</strong>
+                                <br>
+                                <small class="text-muted">{{ shop.location }}</small>
+                            </div>
+                            <div>
+                                {% if shop.is_active %}
+                                    <span class="shop-badge shop-badge-active">
+                                        <i class="fas fa-check-circle me-1"></i>Active
+                                    </span>
+                                {% else %}
+                                    <span class="shop-badge shop-badge-inactive">
+                                        <i class="fas fa-times-circle me-1"></i>Inactive
+                                    </span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% empty %}
+                        <div class="text-center py-3">
+                            <p class="text-muted mb-0">No shops added yet</p>
+                            <a href="{% url 'shops:branches' %}" class="btn btn-sm btn-primary mt-2">
+                                <i class="fas fa-plus me-1"></i>Add Shop
+                            </a>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Recent Activity -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-history me-2"></i>Recent Activity
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="activity-timeline">
+                        {% for report in recent_reports %}
+                        <div class="timeline-item">
+                            <div class="timeline-dot"></div>
+                            <div class="timeline-date">
+                                {{ report.submission_time|date:"M d, H:i" }}
+                            </div>
+                            <div class="timeline-title">
+                                Report submitted for {{ report.shop.name }}
+                            </div>
+                            <div class="timeline-text">
+                                Sales: KES {{ report.shop_sales|floatformat:0|intcomma }} | 
+                                By: {{ report.submitted_by.get_full_name|default:report.submitted_by.username }}
+                            </div>
+                        </div>
+                        {% empty %}
+                        <div class="text-center py-3">
+                            <i class="fas fa-inbox fa-2x text-muted mb-2"></i>
+                            <p class="text-muted mb-0">No recent activity</p>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Weekly Sales Chart -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-chart-line me-2"></i>Weekly Sales Overview
+                    </h5>
+                    <div>
+                        <button class="btn btn-sm btn-outline-secondary" id="refreshChart">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="weeklySalesChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Weekly Sales Chart
+    function loadWeeklySales() {
+        $.ajax({
+            url: '{% url "shops:weekly_sales_data" %}',
+            method: 'GET',
+            success: function(response) {
+                if (response.success) {
+                    const ctx = document.getElementById('weeklySalesChart').getContext('2d');
+                    
+                    // Destroy existing chart if it exists
+                    if (window.salesChart) {
+                        window.salesChart.destroy();
+                    }
+                    
+                    window.salesChart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: response.days,
+                            datasets: [{
+                                label: 'Total Sales (KES)',
+                                data: response.sales,
+                                borderColor: '#059669',
+                                backgroundColor: 'rgba(5, 150, 105, 0.1)',
+                                borderWidth: 2,
+                                fill: true,
+                                tension: 0.4,
+                                pointBackgroundColor: '#059669',
+                                pointBorderColor: '#ffffff',
+                                pointBorderWidth: 2,
+                                pointRadius: 4,
+                                pointHoverRadius: 6
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    position: 'top',
+                                },
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            let label = context.dataset.label || '';
+                                            if (label) {
+                                                label += ': ';
+                                            }
+                                            label += 'KES ' + context.parsed.y.toLocaleString();
+                                            return label;
+                                        }
+                                    }
+                                }
+                            },
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    ticks: {
+                                        callback: function(value) {
+                                            return 'KES ' + value.toLocaleString();
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+            },
+            error: function() {
+                console.error('Failed to load weekly sales data');
+            }
+        });
+    }
+    
+    // Load chart on page load
+    loadWeeklySales();
+    
+    // Refresh chart button
+    $('#refreshChart').click(function() {
+        loadWeeklySales();
+        $(this).html('<i class="fas fa-spinner fa-spin"></i>');
+        setTimeout(() => {
+            $(this).html('<i class="fas fa-sync-alt"></i>');
+        }, 1000);
+    });
+    
+    // Auto-refresh every 5 minutes
+    setInterval(loadWeeklySales, 300000);
+});
+</script>
+{% endblock %}

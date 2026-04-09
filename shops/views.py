@@ -1,0 +1,928 @@
+# shops/views.py
+from django.shortcuts import render, get_object_or_404, redirect
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.contrib import messages
+from django.db import transaction
+from django.utils import timezone
+from django.core.paginator import Paginator
+from django.http import JsonResponse
+from django.db import models
+from decimal import Decimal
+
+from .models import (
+    ShopBranch, BankAccount, MpesaAccount, DailyShopReport, 
+    BankClosingBalance, ShopExpense, MpesaDailySummary, DynamicChoice
+)
+from .forms import (
+    ShopBranchForm, BankAccountForm, MpesaAccountForm, DailyShopReportForm,
+    BankClosingBalanceForm, ShopExpenseForm, MpesaDailySummaryForm, 
+    DynamicChoiceForm, BankClosingFormSet, ExpenseFormSet
+)
+
+
+def is_staff_or_admin(user):
+    """Check if user is staff or admin"""
+    return user.is_staff or user.is_superuser
+
+
+# ==================== DASHBOARD & REPORTS VIEWS ====================
+
+@login_required
+@user_passes_test(is_staff_or_admin)
+def shop_dashboard(request):
+    """Dashboard showing all shops and reports"""
+    shops = ShopBranch.objects.filter(is_active=True)
+    today = timezone.now().date()
+    
+    # Get today's reports
+    today_reports = DailyShopReport.objects.filter(report_date=today)
+    
+    # Calculate total sales for today
+    total_sales_today = today_reports.aggregate(
+        total=models.Sum('shop_sales')
+    )['total'] or 0
+    
+    # Get recent reports for activity timeline (last 5)
+    recent_reports = DailyShopReport.objects.all().order_by('-submission_time')[:5]
+    
+    context = {
+        'shops': shops,
+        'today_reports': today_reports,
+        'recent_reports': recent_reports,
+        'today': today,
+        'total_shops': shops.count(),
+        'reports_today': today_reports.count(),
+        'total_sales_today': total_sales_today,
+    }
+    return render(request, 'shops/dashboard.html', context)
+
+
+
+
+
+@login_required
+@user_passes_test(is_staff_or_admin)
+def add_branch(request):
+    """Add a new shop branch"""
+    if request.method == 'POST':
+        form = ShopBranchForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Shop branch added successfully!')
+            return redirect('shops:branches')
+    else:
+        form = ShopBranchForm()
+    
+    context = {
+        'form': form,
+        'title': 'Add Shop Branch',
+    }
+    return render(request, 'shops/add_branch.html', context)
+
+
+
+
+
+@login_required
+@user_passes_test(is_staff_or_admin)
+def create_daily_report(request):
+    """Create a new daily report for a shop"""
+    if request.method == 'POST':
+        form = DailyShopReportForm(request.POST)
+        
+        if form.is_valid():
+            try:
+                with transaction.atomic():
+                    # Save the main report FIRST
+                    report = form.save(commit=False)
+                    report.submitted_by = request.user
+                    report.total_expenses = 0
+                    report.total_closing_balance = 0
+                    report.save()  # CRITICAL: Save here to get primary key
+                    
+                    # Process bank accounts from POST data
+                    bank_created = False
+                    for key, value in request.POST.items():
+                        if key.startswith('bank_account_') and value:
+                            index = key.split('_')[-1]
+                            closing_balance_key = f'bank_closing_balance_{index}'
+                            closing_balance = request.POST.get(closing_balance_key)
+                            
+                            if closing_balance and float(closing_balance) > 0:
+                                try:
+                                    BankClosingBalance.objects.create(
+                                        daily_report=report,
+                                        bank_account_id=int(value),
+                                        closing_balance=Decimal(str(closing_balance))
+                                    )
+                                    bank_created = True
+                                except (ValueError, BankAccount.DoesNotExist) as e:
+                                    print(f"Error creating bank closing balance: {e}")
+                    
+                    # Process expenses from POST data
+                    expense_total = 0
+                    for key, value in request.POST.items():
+                        if key.startswith('expense_category_') and value:
+                            index = key.split('_')[-1]
+                            amount_key = f'expense_amount_{index}'
+                            description_key = f'expense_description_{index}'
+                            
+                            amount = request.POST.get(amount_key)
+                            description = request.POST.get(description_key, '')
+                            
+                            if amount and float(amount) > 0:
+                                try:
+                                    expense = ShopExpense.objects.create(
+                                        daily_report=report,
+                                        expense_category=value,
+                                        description=description,
+                                        amount=Decimal(str(amount)),
+                                        payment_method='cash'
+                                    )
+                                    expense_total += float(amount)
+                                except (ValueError, TypeError) as e:
+                                    print(f"Error creating expense: {e}")
+                    
+                    # Update report with totals
+                    report.total_expenses = expense_total
+                    
+                    # Calculate total closing balance (M-Pesa + Bank)
+                    mpesa_float = float(report.closing_mpesa_float) if report.closing_mpesa_float else 0
+                    mpesa_cash = float(report.closing_mpesa_cash) if report.closing_mpesa_cash else 0
+                    
+                    bank_total = BankClosingBalance.objects.filter(daily_report=report).aggregate(
+                        total=models.Sum('closing_balance')
+                    )['total'] or 0
+                    
+                    report.total_closing_balance = mpesa_float + mpesa_cash + float(bank_total)
+                    report.save()
+                    
+                    messages.success(request, f'Daily report for {report.shop.name} submitted successfully!')
+                    return redirect('shops:report_detail', report_id=report.id)
+                    
+            except Exception as e:
+                messages.error(request, f'Error saving report: {str(e)}')
+                # Log the full error for debugging
+                import traceback
+                print(traceback.format_exc())
+        else:
+            messages.error(request, 'Please correct the errors below.')
+    else:
+        form = DailyShopReportForm()
+    
+    context = {
+        'form': form,
+        'title': 'Create Daily Report',
+    }
+    return render(request, 'shops/report_form.html', context)
+
+
+
+
+
+@login_required
+@user_passes_test(is_staff_or_admin)
+def edit_daily_report(request, report_id):
+    """Edit an existing daily report"""
+    report = get_object_or_404(DailyShopReport, id=report_id)
+    
+    if report.is_finalized:
+        messages.warning(request, 'This report is finalized and cannot be edited.')
+        return redirect('shops:report_detail', report_id=report.id)
+    
+    if request.method == 'POST':
+        form = DailyShopReportForm(request.POST, instance=report)
+        
+        if form.is_valid():
+            try:
+                with transaction.atomic():
+                    # Save the main report
+                    report = form.save(commit=False)
+                    report.save()
+                    
+                    # Delete existing bank closings and recreate
+                    BankClosingBalance.objects.filter(daily_report=report).delete()
+                    
+                    # Process bank accounts from POST data
+                    for key, value in request.POST.items():
+                        if key.startswith('bank_account_') and value:
+                            index = key.split('_')[-1]
+                            closing_balance_key = f'bank_closing_balance_{index}'
+                            closing_balance = request.POST.get(closing_balance_key)
+                            
+                            if closing_balance and float(closing_balance) > 0:
+                                try:
+                                    BankClosingBalance.objects.create(
+                                        daily_report=report,
+                                        bank_account_id=int(value),
+                                        closing_balance=Decimal(str(closing_balance))
+                                    )
+                                except (ValueError, BankAccount.DoesNotExist) as e:
+                                    print(f"Error creating bank closing balance: {e}")
+                    
+                    # Delete existing expenses and recreate
+                    ShopExpense.objects.filter(daily_report=report).delete()
+                    
+                    # Process expenses from POST data
+                    expense_total = 0
+                    for key, value in request.POST.items():
+                        if key.startswith('expense_category_') and value:
+                            index = key.split('_')[-1]
+                            amount_key = f'expense_amount_{index}'
+                            description_key = f'expense_description_{index}'
+                            
+                            amount = request.POST.get(amount_key)
+                            description = request.POST.get(description_key, '')
+                            
+                            if amount and float(amount) > 0:
+                                try:
+                                    expense = ShopExpense.objects.create(
+                                        daily_report=report,
+                                        expense_category=value,
+                                        description=description,
+                                        amount=Decimal(str(amount)),
+                                        payment_method='cash'
+                                    )
+                                    expense_total += float(amount)
+                                except (ValueError, TypeError) as e:
+                                    print(f"Error creating expense: {e}")
+                    
+                    # Update report with totals
+                    report.total_expenses = expense_total
+                    
+                    # Calculate total closing balance (M-Pesa + Bank)
+                    mpesa_float = float(report.closing_mpesa_float) if report.closing_mpesa_float else 0
+                    mpesa_cash = float(report.closing_mpesa_cash) if report.closing_mpesa_cash else 0
+                    
+                    bank_total = BankClosingBalance.objects.filter(daily_report=report).aggregate(
+                        total=models.Sum('closing_balance')
+                    )['total'] or 0
+                    
+                    report.total_closing_balance = mpesa_float + mpesa_cash + float(bank_total)
+                    report.save()
+                    
+                    messages.success(request, f'Report for {report.shop.name} updated successfully!')
+                    return redirect('shops:report_detail', report_id=report.id)
+                    
+            except Exception as e:
+                messages.error(request, f'Error updating report: {str(e)}')
+                import traceback
+                print(traceback.format_exc())
+        else:
+            messages.error(request, 'Please correct the errors below.')
+    else:
+        form = DailyShopReportForm(instance=report)
+    
+    # Get existing data for the template
+    bank_closings = report.bank_closings.filter(is_active=True)
+    expenses = report.expenses.all()
+    
+    context = {
+        'form': form,
+        'report': report,
+        'bank_closings': bank_closings,
+        'expenses': expenses,
+        'title': 'Edit Daily Report',
+    }
+    return render(request, 'shops/report_form.html', context)
+
+
+@login_required
+def report_detail(request, report_id):
+    """View detailed report"""
+    from django.db.models import Sum
+    
+    report = get_object_or_404(DailyShopReport, id=report_id)
+    
+    # Get M-Pesa summary if exists
+    mpesa_summary = MpesaDailySummary.objects.filter(
+        shop=report.shop, 
+        report_date=report.report_date
+    ).first()
+    
+    # Get bank closings
+    bank_closings = report.bank_closings.filter(is_active=True)
+    
+    # Calculate bank total using Django's Sum aggregation
+    bank_total = bank_closings.aggregate(total=Sum('closing_balance'))['total'] or 0
+    
+    # Convert to float for proper display
+    bank_total = float(bank_total)
+    
+    # Calculate total M-Pesa
+    total_mpesa = float(report.closing_mpesa_float or 0) + float(report.closing_mpesa_cash or 0)
+    
+    # Calculate net profit
+    net_profit = float(report.shop_sales or 0) - float(report.total_expenses or 0)
+    
+    context = {
+        'report': report,
+        'bank_closings': bank_closings,
+        'bank_total': bank_total,  # This will be 2000.00
+        'total_mpesa': total_mpesa,
+        'net_profit': net_profit,
+        'expenses': report.expenses.all(),
+        'mpesa_summary': mpesa_summary,
+    }
+    return render(request, 'shops/report_detail.html', context)
+
+
+@login_required
+@user_passes_test(is_staff_or_admin)
+def finalize_report(request, report_id):
+    """Finalize a report (cannot be edited after finalization)"""
+    report = get_object_or_404(DailyShopReport, id=report_id)
+    
+    if request.method == 'POST':
+        report.is_finalized = True
+        report.save()
+        messages.success(request, f'Report for {report.report_date} has been finalized!')
+    
+    return redirect('shops:report_detail', report_id=report.id)
+
+
+@login_required
+def reports_list(request):
+    """List all reports with filtering"""
+    from django.db.models import Sum
+    
+    reports = DailyShopReport.objects.all()
+    
+    # Store original queryset for stats (before pagination)
+    all_reports = reports
+    
+    # Filter by shop
+    shop_id = request.GET.get('shop')
+    if shop_id:
+        reports = reports.filter(shop_id=shop_id)
+        all_reports = all_reports.filter(shop_id=shop_id)
+    
+    # Filter by date range
+    from_date = request.GET.get('from_date')
+    to_date = request.GET.get('to_date')
+    
+    if from_date:
+        reports = reports.filter(report_date__gte=from_date)
+        all_reports = all_reports.filter(report_date__gte=from_date)
+    if to_date:
+        reports = reports.filter(report_date__lte=to_date)
+        all_reports = all_reports.filter(report_date__lte=to_date)
+    
+    # Filter by finalized status
+    finalized = request.GET.get('finalized')
+    if finalized == 'true':
+        reports = reports.filter(is_finalized=True)
+        all_reports = all_reports.filter(is_finalized=True)
+    elif finalized == 'false':
+        reports = reports.filter(is_finalized=False)
+        all_reports = all_reports.filter(is_finalized=False)
+    
+    # Calculate statistics from the filtered queryset
+    finalized_count = all_reports.filter(is_finalized=True).count()
+    draft_count = all_reports.filter(is_finalized=False).count()
+    total_sales_value = all_reports.aggregate(total=Sum('shop_sales'))['total'] or 0
+    
+    # Pagination
+    paginator = Paginator(reports, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    context = {
+        'reports': page_obj,
+        'shops': ShopBranch.objects.filter(is_active=True),
+        'selected_shop': shop_id,
+        'from_date': from_date,
+        'to_date': to_date,
+        'finalized_filter': finalized,
+        'finalized_count': finalized_count,
+        'draft_count': draft_count,
+        'total_sales_value': total_sales_value,
+    }
+    return render(request, 'shops/reports_list.html', context)
+
+
+# ==================== SHOP BRANCH MANAGEMENT ====================
+
+@login_required
+@user_passes_test(is_staff_or_admin)
+def shop_branches(request):
+    """Manage shop branches"""
+    branches = ShopBranch.objects.all()
+    
+    if request.method == 'POST':
+        form = ShopBranchForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Shop branch added successfully!')
+            return redirect('shops:branches')
+    else:
+        form = ShopBranchForm()
+    
+    context = {
+        'branches': branches,
+        'form': form,
+    }
+    return render(request, 'shops/branches.html', context)
+
+
+@login_required
+@user_passes_test(is_staff_or_admin)
+def edit_shop_branch(request, shop_id):
+    """Edit shop branch"""
+    branch = get_object_or_404(ShopBranch, id=shop_id)
+    
+    if request.method == 'POST':
+        form = ShopBranchForm(request.POST, instance=branch)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Shop branch updated successfully!')
+            return redirect('shops:branches')
+    else:
+        form = ShopBranchForm(instance=branch)
+    
+    context = {
+        'form': form,
+        'branch': branch,
+    }
+    return render(request, 'shops/edit_branch.html', context)
+
+
+# ==================== BANK ACCOUNT MANAGEMENT ====================
+
+@login_required
+@user_passes_test(is_staff_or_admin)
+def bank_accounts(request):
+    """View all bank accounts"""
+    accounts = BankAccount.objects.all()
+    shops = ShopBranch.objects.filter(is_active=True)
+    
+    context = {
+        'accounts': accounts,
+        'shops': shops,
+    }
+    return render(request, 'shops/bank_accounts.html', context)
+
+
+@login_required
+@user_passes_test(is_staff_or_admin)
+def add_bank_account(request):
+    """Add a new bank account"""
+    if request.method == 'POST':
+        form = BankAccountForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Bank account added successfully!')
+            return redirect('shops:bank_accounts')
+    else:
+        form = BankAccountForm()
+    
+    context = {
+        'form': form,
+        'title': 'Add Bank Account',
+    }
+    return render(request, 'shops/bank_account_form.html', context)
+
+
+@login_required
+@user_passes_test(is_staff_or_admin)
+def edit_bank_account(request, account_id):
+    """Edit a bank account"""
+    account = get_object_or_404(BankAccount, id=account_id)
+    
+    if request.method == 'POST':
+        form = BankAccountForm(request.POST, instance=account)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Bank account updated successfully!')
+            return redirect('shops:bank_accounts')
+    else:
+        form = BankAccountForm(instance=account)
+    
+    context = {
+        'form': form,
+        'account': account,
+        'title': 'Edit Bank Account',
+    }
+    return render(request, 'shops/bank_account_form.html', context)
+
+
+# ==================== M-PESA ACCOUNT MANAGEMENT ====================
+
+@login_required
+@user_passes_test(is_staff_or_admin)
+def mpesa_accounts(request):
+    """View all M-Pesa accounts"""
+    accounts = MpesaAccount.objects.all()
+    shops = ShopBranch.objects.filter(is_active=True)
+    
+    context = {
+        'accounts': accounts,
+        'shops': shops,
+    }
+    return render(request, 'shops/mpesa_accounts.html', context)
+
+
+@login_required
+@user_passes_test(is_staff_or_admin)
+def add_mpesa_account(request):
+    """Add a new M-Pesa account"""
+    if request.method == 'POST':
+        form = MpesaAccountForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'M-Pesa account added successfully!')
+            return redirect('shops:mpesa_accounts')
+    else:
+        form = MpesaAccountForm()
+    
+    context = {
+        'form': form,
+        'title': 'Add M-Pesa Account',
+    }
+    return render(request, 'shops/mpesa_account_form.html', context)
+
+
+@login_required
+@user_passes_test(is_staff_or_admin)
+def edit_mpesa_account(request, account_id):
+    """Edit an M-Pesa account"""
+    account = get_object_or_404(MpesaAccount, id=account_id)
+    
+    if request.method == 'POST':
+        form = MpesaAccountForm(request.POST, instance=account)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'M-Pesa account updated successfully!')
+            return redirect('shops:mpesa_accounts')
+    else:
+        form = MpesaAccountForm(instance=account)
+    
+    context = {
+        'form': form,
+        'account': account,
+        'title': 'Edit M-Pesa Account',
+    }
+    return render(request, 'shops/mpesa_account_form.html', context)
+
+
+# ==================== M-PESA DAILY SUMMARY ====================
+
+@login_required
+@user_passes_test(is_staff_or_admin)
+def mpesa_daily_summary(request, report_id):
+    """Add or edit M-Pesa summary for a daily report"""
+    daily_report = get_object_or_404(DailyShopReport, id=report_id)
+    
+    # Check if summary already exists
+    summary, created = MpesaDailySummary.objects.get_or_create(
+        shop=daily_report.shop,
+        report_date=daily_report.report_date,
+        defaults={'daily_report': daily_report}
+    )
+    
+    if request.method == 'POST':
+        form = MpesaDailySummaryForm(request.POST, instance=summary)
+        if form.is_valid():
+            summary = form.save(commit=False)
+            summary.daily_report = daily_report
+            summary.save()
+            
+            # Update the daily report with M-Pesa closing balances
+            daily_report.closing_mpesa_float = summary.closing_float
+            daily_report.closing_mpesa_cash = summary.closing_cash
+            daily_report.save()
+            
+            messages.success(request, 'M-Pesa summary saved successfully!')
+            return redirect('shops:report_detail', report_id=report_id)
+    else:
+        form = MpesaDailySummaryForm(instance=summary)
+    
+    # Get M-Pesa float transactions for the day (optional - can be implemented later)
+    mpesa_transactions = []  # You can add MpesaFloatTransaction model if needed
+    
+    context = {
+        'form': form,
+        'daily_report': daily_report,
+        'summary': summary,
+        'mpesa_transactions': mpesa_transactions,
+    }
+    return render(request, 'shops/mpesa_summary_form.html', context)
+
+
+@login_required
+@user_passes_test(is_staff_or_admin)
+def reconcile_mpesa(request, summary_id):
+    """Reconcile M-Pesa summary"""
+    summary = get_object_or_404(MpesaDailySummary, id=summary_id)
+    
+    if request.method == 'POST':
+        # Calculate variances
+        summary.calculate_variances()
+        summary.is_reconciled = True
+        summary.reconciled_by = request.user
+        summary.reconciliation_date = timezone.now()
+        summary.save()
+        
+        messages.success(request, f'M-Pesa summary for {summary.report_date} reconciled successfully!')
+        return redirect('shops:report_detail', report_id=summary.daily_report.id)
+    
+    context = {
+        'summary': summary,
+    }
+    return render(request, 'shops/reconcile_mpesa.html', context)
+
+
+# ==================== DYNAMIC CHOICES MANAGEMENT ====================
+
+@login_required
+@user_passes_test(is_staff_or_admin)
+def manage_choices(request):
+    """Manage dynamic choices (bank names, expense categories, etc.)"""
+    if request.method == 'POST':
+        form = DynamicChoiceForm(request.POST)
+        if form.is_valid():
+            choice = form.save(commit=False)
+            choice.created_by = request.user
+            choice.save()
+            messages.success(request, f'Choice "{choice.value}" added successfully!')
+            return redirect('shops:manage_choices')
+    else:
+        form = DynamicChoiceForm()
+    
+    # Get all choices grouped by type
+    bank_choices = DynamicChoice.objects.filter(choice_type='bank_name', is_active=True)
+    mpesa_types = DynamicChoice.objects.filter(choice_type='mpesa_account_type', is_active=True)
+    expense_cats = DynamicChoice.objects.filter(choice_type='expense_category', is_active=True)
+    payment_methods = DynamicChoice.objects.filter(choice_type='payment_method', is_active=True)
+    
+    context = {
+        'form': form,
+        'bank_choices': bank_choices,
+        'mpesa_types': mpesa_types,
+        'expense_cats': expense_cats,
+        'payment_methods': payment_methods,
+    }
+    return render(request, 'shops/manage_choices.html', context)
+
+
+@login_required
+@user_passes_test(is_staff_or_admin)
+def delete_choice(request, choice_id):
+    """Soft delete a dynamic choice"""
+    choice = get_object_or_404(DynamicChoice, id=choice_id)
+    choice.is_active = False
+    choice.save()
+    messages.success(request, f'Choice "{choice.value}" deactivated successfully!')
+    return redirect('shops:manage_choices')
+
+
+# ==================== AJAX ENDPOINTS ====================
+
+@login_required
+def get_shop_banks(request, shop_id):
+    """AJAX endpoint to get bank accounts for a shop"""
+    try:
+        shop = get_object_or_404(ShopBranch, id=shop_id)
+        banks = shop.bank_accounts.filter(is_active=True)
+        
+        banks_data = [{
+            'id': bank.id,
+            'name': bank.bank_name,
+            'account_name': bank.account_name,
+            'account_number': bank.account_number,
+        } for bank in banks]
+        
+        return JsonResponse({'success': True, 'banks': banks_data})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@login_required
+def get_shop_mpesa_accounts(request, shop_id):
+    """AJAX endpoint to get M-Pesa accounts for a shop"""
+    try:
+        shop = get_object_or_404(ShopBranch, id=shop_id)
+        mpesa_accounts = shop.mpesa_accounts.filter(is_active=True)
+        
+        mpesa_data = [{
+            'id': account.id,
+            'name': account.account_name,
+            'number': account.account_number,
+            'type': account.account_type,
+            'phone': account.phone_number,
+        } for account in mpesa_accounts]
+        
+        return JsonResponse({'success': True, 'mpesa_accounts': mpesa_data})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@login_required
+def get_report_summary(request, report_id):
+    """AJAX endpoint to get report summary data for charts"""
+    try:
+        report = get_object_or_404(DailyShopReport, id=report_id)
+        
+        # Get bank closing totals
+        bank_closings = report.bank_closings.filter(is_active=True)
+        bank_data = [{
+            'bank': bc.bank_account.bank_name,
+            'balance': float(bc.closing_balance)
+        } for bc in bank_closings]
+        
+        # Get expense breakdown
+        expenses_by_category = report.expenses.values('expense_category').annotate(
+            total=models.Sum('amount')
+        )
+        expense_data = [{
+            'category': item['expense_category'],
+            'amount': float(item['total'])
+        } for item in expenses_by_category]
+        
+        data = {
+            'report_date': str(report.report_date),
+            'shop_name': report.shop.name,
+            'total_closing': float(report.total_closing_balance),
+            'total_expenses': float(report.total_expenses),
+            'shop_sales': float(report.shop_sales),
+            'mpesa_float': float(report.closing_mpesa_float),
+            'mpesa_cash': float(report.closing_mpesa_cash),
+            'bank_breakdown': bank_data,
+            'expense_breakdown': expense_data,
+        }
+        
+        return JsonResponse({'success': True, 'data': data})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@login_required
+def weekly_sales_data(request):
+    """AJAX endpoint for weekly sales chart data"""
+    try:
+        end_date = timezone.now().date()
+        start_date = end_date - timezone.timedelta(days=6)
+        
+        # Get sales data for last 7 days
+        sales_data = []
+        days = []
+        
+        for i in range(7):
+            current_date = start_date + timezone.timedelta(days=i)
+            days.append(current_date.strftime('%a, %b %d'))
+            
+            daily_total = DailyShopReport.objects.filter(
+                report_date=current_date,
+                is_finalized=True
+            ).aggregate(total=models.Sum('shop_sales'))['total'] or 0
+            
+            sales_data.append(float(daily_total))
+        
+        return JsonResponse({
+            'success': True,
+            'days': days,
+            'sales': sales_data
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        })
+
+
+# ==================== EXPORT AND REPORTING VIEWS ====================
+
+@login_required
+@user_passes_test(is_staff_or_admin)
+def export_reports_csv(request):
+    """Export filtered reports to CSV"""
+    import csv
+    from django.http import HttpResponse
+    
+    reports = DailyShopReport.objects.all()
+    
+    # Apply same filters as reports_list
+    shop_id = request.GET.get('shop')
+    if shop_id:
+        reports = reports.filter(shop_id=shop_id)
+    
+    from_date = request.GET.get('from_date')
+    to_date = request.GET.get('to_date')
+    
+    if from_date:
+        reports = reports.filter(report_date__gte=from_date)
+    if to_date:
+        reports = reports.filter(report_date__lte=to_date)
+    
+    # Create the HttpResponse object with CSV header
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="shop_reports.csv"'
+    
+    writer = csv.writer(response)
+    writer.writerow([
+        'Date', 'Shop', 'Submitted By', 'Shop Sales', 'M-Pesa Float', 
+        'M-Pesa Cash', 'Total Bank Balance', 'Total Expenses', 
+        'Total Closing Balance', 'Finalized'
+    ])
+    
+    for report in reports:
+        writer.writerow([
+            report.report_date,
+            report.shop.name,
+            report.submitted_by.username,
+            report.shop_sales,
+            report.closing_mpesa_float,
+            report.closing_mpesa_cash,
+            sum([bc.closing_balance for bc in report.bank_closings.all()]),
+            report.total_expenses,
+            report.total_closing_balance,
+            'Yes' if report.is_finalized else 'No'
+        ])
+    
+    return response
+
+
+# ==================== STATISTICS AND ANALYTICS ====================
+
+@login_required
+@user_passes_test(is_staff_or_admin)
+def shop_statistics(request):
+    """View statistics and analytics for shops"""
+    from django.db.models import Sum, Avg, Count
+    
+    # Get date range from request or default to last 30 days
+    end_date = timezone.now().date()
+    start_date = request.GET.get('start_date', (end_date - timezone.timedelta(days=30)).isoformat())
+    end_date = request.GET.get('end_date', end_date.isoformat())
+    
+    reports = DailyShopReport.objects.filter(
+        report_date__gte=start_date,
+        report_date__lte=end_date,
+        is_finalized=True
+    )
+    
+    # Overall statistics
+    total_reports = reports.count()
+    total_sales = reports.aggregate(total=Sum('shop_sales'))['total'] or 0
+    total_expenses = reports.aggregate(total=Sum('total_expenses'))['total'] or 0
+    avg_daily_sales = reports.aggregate(avg=Avg('shop_sales'))['avg'] or 0
+    
+    # Statistics by shop
+    shop_stats = []
+    for shop in ShopBranch.objects.filter(is_active=True):
+        shop_reports = reports.filter(shop=shop)
+        shop_stats.append({
+            'shop': shop,
+            'report_count': shop_reports.count(),
+            'total_sales': shop_reports.aggregate(total=Sum('shop_sales'))['total'] or 0,
+            'avg_sales': shop_reports.aggregate(avg=Avg('shop_sales'))['avg'] or 0,
+            'total_expenses': shop_reports.aggregate(total=Sum('total_expenses'))['total'] or 0,
+        })
+    
+    context = {
+        'start_date': start_date,
+        'end_date': end_date,
+        'total_reports': total_reports,
+        'total_sales': total_sales,
+        'total_expenses': total_expenses,
+        'avg_daily_sales': avg_daily_sales,
+        'shop_stats': shop_stats,
+        'net_profit': total_sales - total_expenses,
+    }
+    return render(request, 'shops/statistics.html', context)
+
+
+@login_required
+def expense_distribution(request):
+    """AJAX endpoint for expense distribution chart data"""
+    try:
+        from django.db.models import Sum
+        
+        start_date = request.GET.get('start_date')
+        end_date = request.GET.get('end_date')
+        
+        expenses = ShopExpense.objects.all()
+        
+        if start_date:
+            expenses = expenses.filter(daily_report__report_date__gte=start_date)
+        if end_date:
+            expenses = expenses.filter(daily_report__report_date__lte=end_date)
+        
+        # Group by category
+        expense_data = expenses.values('expense_category').annotate(
+            total=Sum('amount')
+        ).order_by('-total')
+        
+        categories = [item['expense_category'] for item in expense_data]
+        amounts = [float(item['total']) for item in expense_data]
+        
+        return JsonResponse({
+            'success': True,
+            'categories': categories,
+            'amounts': amounts
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        })

@@ -1,0 +1,462 @@
+{% extends 'shops/base.html' %}
+
+{% block title %}Manage Dynamic Choices{% endblock %}
+
+{% block extra_css %}
+<style>
+    .choice-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 10px;
+        margin-bottom: 20px;
+        overflow: hidden;
+    }
+    
+    .choice-header {
+        background: linear-gradient(135deg, #059669 0%, #047857 100%);
+        color: white;
+        padding: 15px 20px;
+        cursor: pointer;
+    }
+    
+    .choice-header h5 {
+        margin: 0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    
+    .choice-header i {
+        transition: transform 0.3s ease;
+    }
+    
+    .choice-header.collapsed i {
+        transform: rotate(-90deg);
+    }
+    
+    .choice-body {
+        padding: 20px;
+    }
+    
+    .choice-item {
+        background: var(--light-bg);
+        border-radius: 8px;
+        padding: 10px 15px;
+        margin-bottom: 10px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        transition: all 0.3s ease;
+    }
+    
+    .choice-item:hover {
+        transform: translateX(5px);
+        background: var(--border-color);
+    }
+    
+    .choice-value {
+        font-weight: 600;
+        font-size: 1rem;
+    }
+    
+    .choice-badge {
+        background: var(--primary-color);
+        color: white;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 0.7rem;
+        margin-left: 10px;
+    }
+    
+    .delete-choice-btn {
+        color: #ef4444;
+        transition: all 0.3s ease;
+        background: none;
+        border: none;
+        cursor: pointer;
+    }
+    
+    .delete-choice-btn:hover {
+        color: #dc2626;
+        transform: scale(1.1);
+    }
+    
+    .add-form {
+        background: var(--card-bg);
+        border: 2px dashed var(--border-color);
+        border-radius: 10px;
+        padding: 20px;
+        margin-top: 20px;
+    }
+    
+    .instruction-text {
+        background: #dbeafe;
+        border-left: 4px solid #3b82f6;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+    }
+    
+    .instruction-text i {
+        color: #3b82f6;
+        font-size: 1.2rem;
+        margin-right: 10px;
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 40px;
+        color: var(--text-secondary);
+    }
+    
+    .empty-state i {
+        font-size: 3rem;
+        margin-bottom: 15px;
+        opacity: 0.5;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h2>
+                <i class="fas fa-sliders-h me-2"></i>Manage Dynamic Choices
+            </h2>
+            <p class="text-muted">Add or manage bank names, M-Pesa account types, expense categories, and payment methods</p>
+        </div>
+    </div>
+
+    <!-- Instructions -->
+    <div class="instruction-text">
+        <i class="fas fa-lightbulb"></i>
+        <strong>How it works:</strong> Dynamic choices allow you to add custom values that appear in dropdown menus across the system. 
+        For example, add bank names like "KCB", "Equity", "Coop" and they will be available when adding bank accounts.
+        <a href="#" class="text-primary ms-2" data-bs-toggle="collapse" data-bs-target="#helpDetails">Learn more</a>
+        
+        <div id="helpDetails" class="collapse mt-2">
+            <small class="text-muted">
+                • Bank Names: Appear in bank account forms<br>
+                • M-Pesa Account Types: Appear when adding M-Pesa accounts (Till, Paybill, Agent, etc.)<br>
+                • Expense Categories: Appear when adding shop expenses<br>
+                • Payment Methods: Appear when recording expenses
+            </small>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <!-- Bank Names Section -->
+            <div class="choice-card">
+                <div class="choice-header" data-bs-toggle="collapse" data-bs-target="#bankChoices">
+                    <h5>
+                        <span>
+                            <i class="fas fa-university me-2"></i>Bank Names
+                            <span class="choice-badge">{{ bank_choices|length }} items</span>
+                        </span>
+                        <i class="fas fa-chevron-down"></i>
+                    </h5>
+                </div>
+                <div id="bankChoices" class="collapse show">
+                    <div class="choice-body">
+                        {% if bank_choices %}
+                            {% for choice in bank_choices %}
+                            <div class="choice-item">
+                                <div>
+                                    <span class="choice-value">{{ choice.value }}</span>
+                                    <small class="text-muted">Added by {{ choice.created_by.username|default:'System' }} on {{ choice.created_at|date:"M d, Y" }}</small>
+                                </div>
+                                <button class="delete-choice-btn" data-choice-id="{{ choice.id }}" data-choice-value="{{ choice.value }}">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="empty-state">
+                                <i class="fas fa-university"></i>
+                                <p>No bank names added yet.</p>
+                                <small class="text-muted">Use the form on the right to add your first bank name.</small>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- M-Pesa Account Types Section -->
+            <div class="choice-card">
+                <div class="choice-header collapsed" data-bs-toggle="collapse" data-bs-target="#mpesaChoices">
+                    <h5>
+                        <span>
+                            <i class="fas fa-mobile-alt me-2"></i>M-Pesa Account Types
+                            <span class="choice-badge">{{ mpesa_types|length }} items</span>
+                        </span>
+                        <i class="fas fa-chevron-down"></i>
+                    </h5>
+                </div>
+                <div id="mpesaChoices" class="collapse">
+                    <div class="choice-body">
+                        {% if mpesa_types %}
+                            {% for choice in mpesa_types %}
+                            <div class="choice-item">
+                                <div>
+                                    <span class="choice-value">{{ choice.value }}</span>
+                                    <small class="text-muted">Added by {{ choice.created_by.username|default:'System' }} on {{ choice.created_at|date:"M d, Y" }}</small>
+                                </div>
+                                <button class="delete-choice-btn" data-choice-id="{{ choice.id }}" data-choice-value="{{ choice.value }}">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="empty-state">
+                                <i class="fas fa-mobile-alt"></i>
+                                <p>No M-Pesa account types added yet.</p>
+                                <small class="text-muted">Add types like "Till", "Paybill", "Agent", "Business Account"</small>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Expense Categories Section -->
+            <div class="choice-card">
+                <div class="choice-header collapsed" data-bs-toggle="collapse" data-bs-target="#expenseChoices">
+                    <h5>
+                        <span>
+                            <i class="fas fa-receipt me-2"></i>Expense Categories
+                            <span class="choice-badge">{{ expense_cats|length }} items</span>
+                        </span>
+                        <i class="fas fa-chevron-down"></i>
+                    </h5>
+                </div>
+                <div id="expenseChoices" class="collapse">
+                    <div class="choice-body">
+                        {% if expense_cats %}
+                            {% for choice in expense_cats %}
+                            <div class="choice-item">
+                                <div>
+                                    <span class="choice-value">{{ choice.value }}</span>
+                                    <small class="text-muted">Added by {{ choice.created_by.username|default:'System' }} on {{ choice.created_at|date:"M d, Y" }}</small>
+                                </div>
+                                <button class="delete-choice-btn" data-choice-id="{{ choice.id }}" data-choice-value="{{ choice.value }}">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="empty-state">
+                                <i class="fas fa-receipt"></i>
+                                <p>No expense categories added yet.</p>
+                                <small class="text-muted">Add categories like "Purchase", "Transport", "Utilities", "Rent", "Salary"</small>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Payment Methods Section -->
+            <div class="choice-card">
+                <div class="choice-header collapsed" data-bs-toggle="collapse" data-bs-target="#paymentChoices">
+                    <h5>
+                        <span>
+                            <i class="fas fa-credit-card me-2"></i>Payment Methods
+                            <span class="choice-badge">{{ payment_methods|length }} items</span>
+                        </span>
+                        <i class="fas fa-chevron-down"></i>
+                    </h5>
+                </div>
+                <div id="paymentChoices" class="collapse">
+                    <div class="choice-body">
+                        {% if payment_methods %}
+                            {% for choice in payment_methods %}
+                            <div class="choice-item">
+                                <div>
+                                    <span class="choice-value">{{ choice.value }}</span>
+                                    <small class="text-muted">Added by {{ choice.created_by.username|default:'System' }} on {{ choice.created_at|date:"M d, Y" }}</small>
+                                </div>
+                                <button class="delete-choice-btn" data-choice-id="{{ choice.id }}" data-choice-value="{{ choice.value }}">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="empty-state">
+                                <i class="fas fa-credit-card"></i>
+                                <p>No payment methods added yet.</p>
+                                <small class="text-muted">Add methods like "Cash", "M-Pesa", "Bank Transfer", "Cheque"</small>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <!-- Add New Choice Form -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-plus-circle me-2"></i>Add New Choice
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" id="addChoiceForm">
+                        {% csrf_token %}
+                        
+                        <div class="mb-3">
+                            <label for="{{ form.choice_type.id_for_label }}" class="form-label">Choice Type *</label>
+                            {{ form.choice_type }}
+                            {% if form.choice_type.errors %}
+                                <div class="text-danger small">{{ form.choice_type.errors }}</div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="{{ form.value.id_for_label }}" class="form-label">Value *</label>
+                            {{ form.value }}
+                            {% if form.value.errors %}
+                                <div class="text-danger small">{{ form.value.errors }}</div>
+                            {% endif %}
+                            <small class="text-muted">Enter the value as it should appear in dropdowns</small>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="fas fa-save me-2"></i>Add Choice
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Quick Add Suggestions -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6 class="mb-0">
+                        <i class="fas fa-lightbulb me-2"></i>Quick Suggestions
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="mb-2">
+                        <strong>Bank Names:</strong>
+                        <div>
+                            <button class="btn btn-sm btn-outline-secondary quick-add-btn m-1" data-type="bank_name" data-value="KCB">KCB</button>
+                            <button class="btn btn-sm btn-outline-secondary quick-add-btn m-1" data-type="bank_name" data-value="Equity">Equity</button>
+                            <button class="btn btn-sm btn-outline-secondary quick-add-btn m-1" data-type="bank_name" data-value="Coop">Coop</button>
+                            <button class="btn btn-sm btn-outline-secondary quick-add-btn m-1" data-type="bank_name" data-value="ABS">ABS</button>
+                            <button class="btn btn-sm btn-outline-secondary quick-add-btn m-1" data-type="bank_name" data-value="Stanbic">Stanbic</button>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-2">
+                        <strong>M-Pesa Types:</strong>
+                        <div>
+                            <button class="btn btn-sm btn-outline-secondary quick-add-btn m-1" data-type="mpesa_account_type" data-value="Till">Till</button>
+                            <button class="btn btn-sm btn-outline-secondary quick-add-btn m-1" data-type="mpesa_account_type" data-value="Paybill">Paybill</button>
+                            <button class="btn btn-sm btn-outline-secondary quick-add-btn m-1" data-type="mpesa_account_type" data-value="Agent">Agent</button>
+                            <button class="btn btn-sm btn-outline-secondary quick-add-btn m-1" data-type="mpesa_account_type" data-value="Business">Business</button>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-2">
+                        <strong>Expense Categories:</strong>
+                        <div>
+                            <button class="btn btn-sm btn-outline-secondary quick-add-btn m-1" data-type="expense_category" data-value="Purchase">Purchase</button>
+                            <button class="btn btn-sm btn-outline-secondary quick-add-btn m-1" data-type="expense_category" data-value="Transport">Transport</button>
+                            <button class="btn btn-sm btn-outline-secondary quick-add-btn m-1" data-type="expense_category" data-value="Utilities">Utilities</button>
+                            <button class="btn btn-sm btn-outline-secondary quick-add-btn m-1" data-type="expense_category" data-value="Rent">Rent</button>
+                            <button class="btn btn-sm btn-outline-secondary quick-add-btn m-1" data-type="expense_category" data-value="Salary">Salary</button>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <strong>Payment Methods:</strong>
+                        <div>
+                            <button class="btn btn-sm btn-outline-secondary quick-add-btn m-1" data-type="payment_method" data-value="Cash">Cash</button>
+                            <button class="btn btn-sm btn-outline-secondary quick-add-btn m-1" data-type="payment_method" data-value="M-Pesa">M-Pesa</button>
+                            <button class="btn btn-sm btn-outline-secondary quick-add-btn m-1" data-type="payment_method" data-value="Bank Transfer">Bank Transfer</button>
+                            <button class="btn btn-sm btn-outline-secondary quick-add-btn m-1" data-type="payment_method" data-value="Cheque">Cheque</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Delete Choice</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete <strong id="deleteChoiceValue"></strong>?</p>
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    This action cannot be undone. The choice will be deactivated and removed from dropdowns.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form id="deleteForm" method="post">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">Yes, Delete</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Collapse/expand functionality with icon rotation
+    $('.choice-header').on('click', function() {
+        $(this).toggleClass('collapsed');
+    });
+    
+    // Delete choice functionality
+    $('.delete-choice-btn').click(function() {
+        var choiceId = $(this).data('choice-id');
+        var choiceValue = $(this).data('choice-value');
+        
+        $('#deleteChoiceValue').text(choiceValue);
+        $('#deleteForm').attr('action', '/shops/choices/delete/' + choiceId + '/');
+        $('#deleteModal').modal('show');
+    });
+    
+    // Quick add functionality
+    $('.quick-add-btn').click(function() {
+        var choiceType = $(this).data('type');
+        var choiceValue = $(this).data('value');
+        
+        $('#id_choice_type').val(choiceType);
+        $('#id_value').val(choiceValue);
+        $('#addChoiceForm').submit();
+    });
+    
+    // Form validation
+    $('#addChoiceForm').on('submit', function(e) {
+        var choiceType = $('#id_choice_type').val();
+        var value = $('#id_value').val().trim();
+        
+        if (!choiceType) {
+            e.preventDefault();
+            alert('Please select a choice type');
+            return false;
+        }
+        
+        if (!value) {
+            e.preventDefault();
+            alert('Please enter a value');
+            return false;
+        }
+        
+        return true;
+    });
+});
+</script>
+{% endblock %}

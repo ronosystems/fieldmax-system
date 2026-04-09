@@ -37,6 +37,7 @@ urlpatterns = [
     path('credit-officer-dashboard/', views.credit_officer_dashboard, name='credit_officer_dashboard'),
     path('customer-service-dashboard/', views.customer_service_dashboard, name='customer_service_dashboard'),
     path('finance-manager-dashboard/', views.finance_manager_dashboard, name='finance_manager_dashboard'),
+    path('mpesa-agent-dashboard/', views.mpesa_agent_dashboard, name='mpesa_agent_dashboard'),
     path('security-dashboard/', views.security_dashboard, name='security_dashboard'),
     path('cleaner-dashboard/', views.cleaner_dashboard, name='cleaner_dashboard'),
     

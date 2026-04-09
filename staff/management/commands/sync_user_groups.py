@@ -22,6 +22,7 @@ class Command(BaseCommand):
             'security': 'Security Officer',
             'cleaner': 'Cleaner',
             'assistant_manager': 'Assistant Manager',
+            'mpesa_agent': 'Mpesa Agent Dashboard',
         }
         
         self.stdout.write(self.style.NOTICE('Starting group synchronization...'))
