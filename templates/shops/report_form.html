@@ -86,6 +86,18 @@
         margin: 0;
         color: #374151;
     }
+    
+    .shop-info {
+        background: #e8f5e9;
+        padding: 10px 15px;
+        border-radius: 8px;
+        margin-bottom: 15px;
+    }
+    
+    .bank-select option:disabled {
+        color: #999;
+        background-color: #f5f5f5;
+    }
 </style>
 {% endblock %}
 
@@ -108,7 +120,7 @@
     <form method="post" id="reportForm">
         {% csrf_token %}
         
-        <!-- FIRST ROW: Shop Selection and Daily Sales (Side by Side) -->
+        <!-- FIRST ROW: Shop Selection and Daily Sales -->
         <div class="card mb-4">
             <div class="card-header">
                 <h5 class="mb-0"><i class="fas fa-store me-2"></i>Shop Information & Sales</h5>
@@ -116,14 +128,26 @@
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-6 mb-3">
-                        <label class="form-label fw-bold">Select Shop Branch *</label>
-                        {{ form.shop }}
-                        <small class="text-muted">Choose the shop branch for this report</small>
+                        <label class="form-label fw-bold">Shop Branch *</label>
+                        {% if user_can_select_shop %}
+                            {{ form.shop }}
+                            <small class="text-muted">Choose the shop branch for this report</small>
+                        {% else %}
+                            <input type="text" class="form-control" value="{{ assigned_shop.name }}" readonly disabled style="background-color: #f3f4f6;">
+                            <input type="hidden" name="shop" id="hidden_shop_id" value="{{ assigned_shop.id }}">
+                            <small class="text-muted">You are assigned to: {{ assigned_shop.name }}</small>
+                        {% endif %}
+                        {% if form.shop.errors %}
+                            <div class="text-danger small">{{ form.shop.errors }}</div>
+                        {% endif %}
                     </div>
                     <div class="col-md-6 mb-3">
                         <label class="form-label fw-bold">Report Date *</label>
                         {{ form.report_date }}
                         <small class="text-muted">Select the date of the report</small>
+                        {% if form.report_date.errors %}
+                            <div class="text-danger small">{{ form.report_date.errors }}</div>
+                        {% endif %}
                     </div>
                 </div>
                 <div class="row">
@@ -131,6 +155,9 @@
                         <label class="form-label fw-bold">Daily Shop Sales (KES) *</label>
                         {{ form.shop_sales }}
                         <small class="text-muted">Enter total sales for the day</small>
+                        {% if form.shop_sales.errors %}
+                            <div class="text-danger small">{{ form.shop_sales.errors }}</div>
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -161,7 +188,7 @@
         <div class="card mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0"><i class="fas fa-university me-2"></i>Bank Accounts</h5>
-                <button type="button" class="btn btn-sm btn-primary" onclick="addBankRow()">
+                <button type="button" class="btn btn-sm btn-primary" id="addBankBtn">
                     <i class="fas fa-plus me-1"></i> Add Bank Account
                 </button>
             </div>
@@ -172,14 +199,14 @@
                         <div class="row mb-2 bank-row" data-bank-id="{{ closing.bank_account.id }}" data-balance="{{ closing.closing_balance }}">
                             <div class="col-md-5">
                                 <select name="bank_account_{{ forloop.counter0 }}" class="form-control bank-select">
-                                    <option value="">Select Bank Account</option>
+                                    <option value="">-- Select Bank Account --</option>
                                 </select>
                             </div>
                             <div class="col-md-5">
                                 <input type="number" name="bank_closing_balance_{{ forloop.counter0 }}" class="form-control bank-balance" placeholder="Closing Balance" step="0.01" value="{{ closing.closing_balance }}">
                             </div>
                             <div class="col-md-2">
-                                <button type="button" class="btn btn-danger btn-sm delete-row" onclick="removeRow(this)">
+                                <button type="button" class="btn btn-danger btn-sm delete-row" onclick="removeBankRow(this)">
                                     <i class="fas fa-trash me-1"></i>Remove
                                 </button>
                             </div>
@@ -189,7 +216,7 @@
                 </div>
                 <div class="alert alert-info mt-3">
                     <i class="fas fa-info-circle me-2"></i>
-                    Add bank accounts that have balances to report. Leave empty if no bank balances.
+                    Add bank accounts that have balances to report. Once a bank is selected, it won't appear in other dropdowns.
                 </div>
             </div>
         </div>
@@ -198,7 +225,7 @@
         <div class="card mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0"><i class="fas fa-receipt me-2"></i>Expenses</h5>
-                <button type="button" class="btn btn-sm btn-primary" onclick="addExpenseRow()">
+                <button type="button" class="btn btn-sm btn-primary" id="addExpenseBtn">
                     <i class="fas fa-plus me-1"></i> Add Expense
                 </button>
             </div>
@@ -217,7 +244,7 @@
                                 <input type="number" name="expense_amount_{{ forloop.counter0 }}" class="form-control expense-amount" placeholder="Amount" step="0.01" value="{{ expense.amount }}">
                             </div>
                             <div class="col-md-2">
-                                <button type="button" class="btn btn-danger btn-sm delete-row" onclick="removeRow(this)">
+                                <button type="button" class="btn btn-danger btn-sm delete-row" onclick="removeExpenseRow(this)">
                                     <i class="fas fa-trash me-1"></i>Remove
                                 </button>
                             </div>
@@ -277,72 +304,200 @@
 let bankCount = {{ bank_closings|length|default:0 }};
 let expenseCount = {{ expenses|length|default:0 }};
 let banksData = {};
+let selectedBankIds = new Set();
 
-// Load banks when shop changes
-document.getElementById('id_shop').addEventListener('change', function() {
-    const shopId = this.value;
+// Function to get selected shop ID (works for both select and hidden input)
+function getSelectedShopId() {
+    // Try to get from select element (superuser)
+    const shopSelect = document.getElementById('id_shop');
+    if (shopSelect && shopSelect.value) {
+        return shopSelect.value;
+    }
+    
+    // Try to get from hidden input (non-superuser)
+    const hiddenShop = document.getElementById('hidden_shop_id');
+    if (hiddenShop && hiddenShop.value) {
+        return hiddenShop.value;
+    }
+    
+    return null;
+}
+
+// Function to update selected bank IDs from current form
+function updateSelectedBankIds() {
+    selectedBankIds.clear();
+    document.querySelectorAll('.bank-select').forEach(select => {
+        if (select.value && select.value !== '') {
+            selectedBankIds.add(select.value);
+        }
+    });
+}
+
+// Function to get available banks (exclude already selected ones)
+function getAvailableBanks(shopId, currentSelectElement = null) {
+    if (!shopId || !banksData[shopId]) return [];
+    
+    const currentValue = currentSelectElement ? currentSelectElement.value : null;
+    
+    return banksData[shopId].filter(bank => {
+        const bankId = bank.id.toString();
+        // Include bank if:
+        // 1. It's not selected elsewhere, OR
+        // 2. It's the current bank for this row (for editing)
+        return !selectedBankIds.has(bankId) || bankId === currentValue;
+    });
+}
+
+// Function to update all bank selects with available options
+function updateAllBankSelects() {
+    const shopId = getSelectedShopId();
+    if (!shopId || !banksData[shopId]) return;
+    
+    updateSelectedBankIds();
+    
+    document.querySelectorAll('.bank-select').forEach(select => {
+        const currentValue = select.value;
+        const availableBanks = getAvailableBanks(shopId, select);
+        
+        // Store current selection
+        const currentSelected = select.value;
+        
+        // Clear and rebuild options
+        select.innerHTML = '<option value="">-- Select Bank Account --</option>';
+        
+        availableBanks.forEach(bank => {
+            const option = document.createElement('option');
+            option.value = bank.id;
+            option.textContent = `${bank.name} - ${bank.account_name} (${bank.account_number})`;
+            if (currentSelected === bank.id.toString()) {
+                option.selected = true;
+            }
+            select.appendChild(option);
+        });
+        
+        // If current value is not in available banks (shouldn't happen), preserve it
+        if (currentSelected && !availableBanks.find(b => b.id.toString() === currentSelected)) {
+            const bank = banksData[shopId].find(b => b.id.toString() === currentSelected);
+            if (bank) {
+                const option = document.createElement('option');
+                option.value = bank.id;
+                option.textContent = `${bank.name} - ${bank.account_name} (${bank.account_number})`;
+                option.selected = true;
+                select.appendChild(option);
+            }
+        }
+    });
+}
+
+// Load banks for a specific shop
+function loadBanksForShop(shopId) {
     if (shopId) {
         fetch(`/shops/api/shop/${shopId}/banks/`)
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
                     banksData[shopId] = data.banks;
-                    // Update all bank selects
-                    document.querySelectorAll('.bank-select').forEach(select => {
-                        updateBankSelect(select, shopId);
-                    });
+                    updateAllBankSelects();
                 }
+            })
+            .catch(error => {
+                console.error('Error loading banks:', error);
             });
-    }
-});
-
-function updateBankSelect(selectElement, shopId) {
-    const currentValue = selectElement.getAttribute('data-bank-id') || selectElement.value;
-    selectElement.innerHTML = '<option value="">Select Bank Account</option>';
-    if (banksData[shopId]) {
-        banksData[shopId].forEach(bank => {
-            const option = document.createElement('option');
-            option.value = bank.id;
-            option.textContent = `${bank.name} - ${bank.account_name}`;
-            if (currentValue == bank.id) {
-                option.selected = true;
-            }
-            selectElement.appendChild(option);
-        });
     }
 }
 
-function addBankRow() {
-    const shopId = document.getElementById('id_shop').value;
+// For superusers - listen to shop select change
+const shopSelect = document.getElementById('id_shop');
+if (shopSelect) {
+    shopSelect.addEventListener('change', function() {
+        const shopId = this.value;
+        if (shopId) {
+            loadBanksForShop(shopId);
+        }
+    });
+}
+
+// For non-superusers - load banks on page load using hidden input
+const hiddenShopId = getSelectedShopId();
+if (hiddenShopId && !shopSelect) {
+    // Small delay to ensure DOM is ready
+    setTimeout(function() {
+        loadBanksForShop(hiddenShopId);
+    }, 100);
+}
+
+// Handle bank selection change
+function handleBankSelectionChange(selectElement) {
+    updateAllBankSelects();
+    calculateTotals();
+}
+
+// Add bank row
+document.getElementById('addBankBtn')?.addEventListener('click', function() {
+    const shopId = getSelectedShopId();
     const container = document.getElementById('bank-rows');
+    
+    if (!shopId) {
+        alert('Please select a shop first');
+        return;
+    }
+    
+    if (!banksData[shopId]) {
+        alert('Loading bank accounts. Please wait...');
+        return;
+    }
+    
+    // Get available banks (excluding already selected ones)
+    updateSelectedBankIds();
+    const availableBanks = banksData[shopId].filter(bank => !selectedBankIds.has(bank.id.toString()));
+    
+    if (availableBanks.length === 0) {
+        alert('All bank accounts have been added. No more banks available for this report.');
+        return;
+    }
+    
     const rowId = bankCount++;
     
-    let bankOptions = '<option value="">Select Bank Account</option>';
-    if (shopId && banksData[shopId]) {
-        banksData[shopId].forEach(bank => {
-            bankOptions += `<option value="${bank.id}">${bank.name} - ${bank.account_name}</option>`;
-        });
-    }
+    let bankOptions = '<option value="">-- Select Bank Account --</option>';
+    availableBanks.forEach(bank => {
+        bankOptions += `<option value="${bank.id}">${bank.name} - ${bank.account_name} (${bank.account_number})</option>`;
+    });
     
     const html = `
         <div class="row mb-2 bank-row" id="bank-row-${rowId}">
             <div class="col-md-5">
-                <select name="bank_account_${rowId}" class="form-control bank-select">${bankOptions}</select>
+                <select name="bank_account_${rowId}" class="form-control bank-select" onchange="handleBankSelectionChange(this)">
+                    ${bankOptions}
+                </select>
             </div>
             <div class="col-md-5">
-                <input type="number" name="bank_closing_balance_${rowId}" class="form-control bank-balance" placeholder="Closing Balance" step="0.01">
+                <input type="number" name="bank_closing_balance_${rowId}" class="form-control bank-balance" placeholder="Closing Balance" step="0.01" oninput="calculateTotals()">
             </div>
             <div class="col-md-2">
-                <button type="button" class="btn btn-danger btn-sm delete-row" onclick="removeRow(this)">
+                <button type="button" class="btn btn-danger btn-sm delete-row" onclick="removeBankRow(this)">
                     <i class="fas fa-trash me-1"></i>Remove
                 </button>
             </div>
         </div>
     `;
     container.insertAdjacentHTML('beforeend', html);
+    updateAllBankSelects();
+});
+
+// Remove bank row
+function removeBankRow(button) {
+    const row = button.closest('.bank-row');
+    const select = row.querySelector('.bank-select');
+    if (select && select.value) {
+        selectedBankIds.delete(select.value);
+    }
+    row.remove();
+    updateAllBankSelects();
+    calculateTotals();
 }
 
-function addExpenseRow() {
+// Add expense row
+document.getElementById('addExpenseBtn')?.addEventListener('click', function() {
     const container = document.getElementById('expense-rows');
     const rowId = expenseCount++;
     
@@ -355,23 +510,25 @@ function addExpenseRow() {
                 <input type="text" name="expense_description_${rowId}" class="form-control" placeholder="Description">
             </div>
             <div class="col-md-3">
-                <input type="number" name="expense_amount_${rowId}" class="form-control expense-amount" placeholder="Amount" step="0.01">
+                <input type="number" name="expense_amount_${rowId}" class="form-control expense-amount" placeholder="Amount" step="0.01" oninput="calculateTotals()">
             </div>
             <div class="col-md-2">
-                <button type="button" class="btn btn-danger btn-sm delete-row" onclick="removeRow(this)">
+                <button type="button" class="btn btn-danger btn-sm delete-row" onclick="removeExpenseRow(this)">
                     <i class="fas fa-trash me-1"></i>Remove
                 </button>
             </div>
         </div>
     `;
     container.insertAdjacentHTML('beforeend', html);
-}
+});
 
-function removeRow(button) {
-    button.closest('.row').remove();
+// Remove expense row
+function removeExpenseRow(button) {
+    button.closest('.expense-row').remove();
     calculateTotals();
 }
 
+// Calculate totals
 function calculateTotals() {
     let mpesaFloat = parseFloat(document.getElementById('id_closing_mpesa_float')?.value) || 0;
     let mpesaCash = parseFloat(document.getElementById('id_closing_mpesa_cash')?.value) || 0;
@@ -398,22 +555,28 @@ function calculateTotals() {
     document.getElementById('netPositionDisplay').style.color = netPosition >= 0 ? '#10b981' : '#ef4444';
 }
 
+// Initialize existing bank rows with data-bank-id attribute
+function initializeExistingBanks() {
+    document.querySelectorAll('.bank-row').forEach(row => {
+        const select = row.querySelector('.bank-select');
+        const bankId = row.getAttribute('data-bank-id');
+        if (bankId && select) {
+            select.setAttribute('data-bank-id', bankId);
+            // Add to selected set for editing
+            if (bankId) {
+                selectedBankIds.add(bankId);
+            }
+        }
+    });
+}
+
 // Event listeners
 document.getElementById('id_closing_mpesa_float')?.addEventListener('input', calculateTotals);
 document.getElementById('id_closing_mpesa_cash')?.addEventListener('input', calculateTotals);
 document.getElementById('id_shop_sales')?.addEventListener('input', calculateTotals);
-document.addEventListener('input', function(e) {
-    if (e.target.classList.contains('bank-balance') || e.target.classList.contains('expense-amount')) {
-        calculateTotals();
-    }
-});
 
-// Initialize
+// Initialize on page load
+initializeExistingBanks();
 calculateTotals();
-
-// Load banks on page load
-if (document.getElementById('id_shop').value) {
-    document.getElementById('id_shop').dispatchEvent(new Event('change'));
-}
 </script>
 {% endblock %}

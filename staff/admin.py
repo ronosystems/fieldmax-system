@@ -6,8 +6,10 @@ from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
 from django.contrib import messages
 from django.utils import timezone
+from django.shortcuts import render
 from .models import StaffApplication, Staff, OTPVerification, UserProfile, UserStatus
 from .utils.user_status import UserStatusManager
+from shops.models import ShopBranch
 
 User = get_user_model()
 
@@ -44,6 +46,83 @@ class StaffAdminForm(forms.ModelForm):
         if commit:
             instance.save()
         return instance
+
+
+# ============================================
+# Custom Action: Assign Shop to Selected Staff
+# ============================================
+def assign_shop_to_selected(modeladmin, request, queryset):
+    """Admin action to assign a shop to selected staff members"""
+    if request.method == 'POST' and 'assigned_shop' in request.POST:
+        shop_id = request.POST.get('assigned_shop')
+        if shop_id:
+            try:
+                shop = ShopBranch.objects.get(id=shop_id)
+                count = queryset.update(assigned_shop=shop)
+                modeladmin.message_user(
+                    request, 
+                    f'✅ Successfully assigned {count} staff member(s) to {shop.name}',
+                    messages.SUCCESS
+                )
+            except ShopBranch.DoesNotExist:
+                modeladmin.message_user(
+                    request, 
+                    '❌ Selected shop does not exist.',
+                    messages.ERROR
+                )
+        else:
+            modeladmin.message_user(
+                request, 
+                '❌ Please select a shop.',
+                messages.ERROR
+            )
+        return
+    else:
+        # Show intermediate page with shop selection
+        from django.shortcuts import render
+        shops = ShopBranch.objects.filter(is_active=True)
+        return render(request, 'admin/assign_shop_form.html', {
+            'shops': shops,
+            'staff_count': queryset.count(),
+            'staff_list': queryset,
+            'action': 'assign_shop_to_selected'
+        })
+
+assign_shop_to_selected.short_description = "✏️ Assign selected staff to a shop"
+
+
+# ============================================
+# Staff Admin (Combined)
+# ============================================
+@admin.register(Staff)
+class StaffAdmin(admin.ModelAdmin):
+    form = StaffAdminForm
+    list_display = ['staff_id', 'user', 'position', 'assigned_shop', 'is_identity_verified', 'created_at']
+    list_filter = ['is_identity_verified', 'position', 'assigned_shop']
+    search_fields = ['staff_id', 'user__username', 'user__email', 'id_number']
+    readonly_fields = ['created_at', 'updated_at']
+    actions = [assign_shop_to_selected]
+    
+    fieldsets = (
+        ('Staff Information', {
+            'fields': ('user', 'staff_id', 'id_number', 'position', 'department')
+        }),
+        ('Shop Assignment', {
+            'fields': ('assigned_shop',),
+            'description': 'Assign this staff member to a specific shop branch'
+        }),
+        ('Verification', {
+            'fields': ('is_identity_verified', 'verification_code', 'verification_sent_at', 
+                      'verification_submitted_at', 'verified_at', 'verified_by', 'verification_notes')
+        }),
+        ('Documents', {
+            'fields': ('id_front', 'id_back', 'passport_photo', 'live_photo')
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
 
 
 # ============================================
@@ -104,35 +183,6 @@ class StaffApplicationAdmin(admin.ModelAdmin):
             review_date=timezone.now()
         )
         self.message_user(request, f'{updated} applications marked under review.')
-
-
-# ============================================
-# Staff Admin
-# ============================================
-@admin.register(Staff)
-class StaffAdmin(admin.ModelAdmin):
-    form = StaffAdminForm
-    list_display = ['staff_id', 'user', 'position', 'is_identity_verified', 'created_at']
-    list_filter = ['is_identity_verified', 'position']
-    search_fields = ['staff_id', 'user__username', 'user__email']
-    readonly_fields = ['created_at', 'updated_at']
-    
-    fieldsets = (
-        ('Staff Information', {
-            'fields': ('user', 'staff_id', 'id_number', 'position', 'department')
-        }),
-        ('Verification', {
-            'fields': ('is_identity_verified', 'verification_code', 'verification_sent_at', 
-                      'verification_submitted_at', 'verified_at', 'verified_by', 'verification_notes')
-        }),
-        ('Documents', {
-            'fields': ('id_front', 'id_back', 'passport_photo', 'live_photo')
-        }),
-        ('Timestamps', {
-            'fields': ('created_at', 'updated_at'),
-            'classes': ('collapse',)
-        }),
-    )
 
 
 # ============================================
@@ -238,7 +288,9 @@ class CustomUserAdmin(BaseUserAdmin):
     activate_users.short_description = "Activate selected users"
 
 
+# ============================================
 # Unregister default User admin and register custom one
+# ============================================
 try:
     admin.site.unregister(User)
 except admin.sites.NotRegistered:

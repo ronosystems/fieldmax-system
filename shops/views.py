@@ -24,26 +24,47 @@ def is_staff_or_admin(user):
     """Check if user is staff or admin"""
     return user.is_staff or user.is_superuser
 
+def is_superuser(user):
+    """Check if user is superuser"""
+    return user.is_superuser
+
+def filter_by_user_queryset(request, queryset, user_field='submitted_by'):
+    """
+    Filter queryset based on user permissions:
+    - Superusers can see all data
+    - Regular users can only see their own data
+    """
+    if request.user.is_superuser:
+        return queryset
+    return queryset.filter(**{user_field: request.user})
+
 
 # ==================== DASHBOARD & REPORTS VIEWS ====================
 
 @login_required
 @user_passes_test(is_staff_or_admin)
 def shop_dashboard(request):
-    """Dashboard showing all shops and reports"""
+    """Dashboard showing shops and reports - filtered by user"""
     shops = ShopBranch.objects.filter(is_active=True)
     today = timezone.now().date()
     
-    # Get today's reports
-    today_reports = DailyShopReport.objects.filter(report_date=today)
-    
-    # Calculate total sales for today
-    total_sales_today = today_reports.aggregate(
-        total=models.Sum('shop_sales')
-    )['total'] or 0
-    
-    # Get recent reports for activity timeline (last 5)
-    recent_reports = DailyShopReport.objects.all().order_by('-submission_time')[:5]
+    # Filter reports based on user permissions
+    if request.user.is_superuser:
+        today_reports = DailyShopReport.objects.filter(report_date=today)
+        recent_reports = DailyShopReport.objects.all().order_by('-submission_time')[:5]
+        total_sales_today = today_reports.aggregate(total=models.Sum('shop_sales'))['total'] or 0
+        reports_today = today_reports.count()
+    else:
+        # Regular users only see their own reports
+        today_reports = DailyShopReport.objects.filter(
+            report_date=today,
+            submitted_by=request.user
+        )
+        recent_reports = DailyShopReport.objects.filter(
+            submitted_by=request.user
+        ).order_by('-submission_time')[:5]
+        total_sales_today = today_reports.aggregate(total=models.Sum('shop_sales'))['total'] or 0
+        reports_today = today_reports.count()
     
     context = {
         'shops': shops,
@@ -51,19 +72,20 @@ def shop_dashboard(request):
         'recent_reports': recent_reports,
         'today': today,
         'total_shops': shops.count(),
-        'reports_today': today_reports.count(),
+        'reports_today': reports_today,
         'total_sales_today': total_sales_today,
     }
     return render(request, 'shops/dashboard.html', context)
 
 
-
-
-
 @login_required
 @user_passes_test(is_staff_or_admin)
 def add_branch(request):
-    """Add a new shop branch"""
+    """Add a new shop branch - Superuser only"""
+    if not request.user.is_superuser:
+        messages.error(request, 'Only superusers can add shop branches.')
+        return redirect('shops:branches')
+    
     if request.method == 'POST':
         form = ShopBranchForm(request.POST)
         if form.is_valid():
@@ -83,25 +105,66 @@ def add_branch(request):
 
 
 
+
+
 @login_required
 @user_passes_test(is_staff_or_admin)
 def create_daily_report(request):
     """Create a new daily report for a shop"""
+    
+    # Get user's assigned shop (for non-superusers)
+    assigned_shop = None
+    user_can_select_shop = request.user.is_superuser
+    
+    if not user_can_select_shop:
+        # Get assigned shop from staff profile
+        if hasattr(request.user, 'staff_profile') and request.user.staff_profile:
+            assigned_shop = request.user.staff_profile.assigned_shop
+        
+        # If no assigned shop, try to get from recent reports
+        if not assigned_shop:
+            recent_report = DailyShopReport.objects.filter(
+                submitted_by=request.user
+            ).order_by('-report_date').first()
+            if recent_report:
+                assigned_shop = recent_report.shop
+    
     if request.method == 'POST':
         form = DailyShopReportForm(request.POST)
         
+        # For non-superusers, force the shop to their assigned shop
+        if not user_can_select_shop and assigned_shop:
+            form.data = form.data.copy()
+            form.data['shop'] = assigned_shop.id
+        
         if form.is_valid():
+            # Check if a report already exists for this shop and date
+            shop = form.cleaned_data.get('shop')
+            report_date = form.cleaned_data.get('report_date')
+            
+            existing_report = DailyShopReport.objects.filter(
+                shop=shop,
+                report_date=report_date
+            ).first()
+            
+            if existing_report:
+                messages.error(
+                    request, 
+                    f'A report already exists for {shop.name} on {report_date}. '
+                    f'Please edit the existing report instead.'
+                )
+                return redirect('shops:edit_report', report_id=existing_report.id)
+            
             try:
                 with transaction.atomic():
-                    # Save the main report FIRST
+                    # Save the main report
                     report = form.save(commit=False)
                     report.submitted_by = request.user
                     report.total_expenses = 0
                     report.total_closing_balance = 0
-                    report.save()  # CRITICAL: Save here to get primary key
+                    report.save()
                     
                     # Process bank accounts from POST data
-                    bank_created = False
                     for key, value in request.POST.items():
                         if key.startswith('bank_account_') and value:
                             index = key.split('_')[-1]
@@ -115,7 +178,6 @@ def create_daily_report(request):
                                         bank_account_id=int(value),
                                         closing_balance=Decimal(str(closing_balance))
                                     )
-                                    bank_created = True
                                 except (ValueError, BankAccount.DoesNotExist) as e:
                                     print(f"Error creating bank closing balance: {e}")
                     
@@ -146,7 +208,7 @@ def create_daily_report(request):
                     # Update report with totals
                     report.total_expenses = expense_total
                     
-                    # Calculate total closing balance (M-Pesa + Bank)
+                    # Calculate total closing balance
                     mpesa_float = float(report.closing_mpesa_float) if report.closing_mpesa_float else 0
                     mpesa_cash = float(report.closing_mpesa_cash) if report.closing_mpesa_cash else 0
                     
@@ -162,29 +224,46 @@ def create_daily_report(request):
                     
             except Exception as e:
                 messages.error(request, f'Error saving report: {str(e)}')
-                # Log the full error for debugging
                 import traceback
                 print(traceback.format_exc())
         else:
-            messages.error(request, 'Please correct the errors below.')
+            for field, errors in form.errors.items():
+                for error in errors:
+                    if field == '__all__':
+                        messages.error(request, error)
+                    else:
+                        messages.error(request, f'{field}: {error}')
     else:
         form = DailyShopReportForm()
+        # Pre-select shop for non-superusers
+        if not user_can_select_shop and assigned_shop:
+            form.fields['shop'].initial = assigned_shop.id
+            form.fields['shop'].widget.attrs['readonly'] = True
     
     context = {
         'form': form,
         'title': 'Create Daily Report',
+        'assigned_shop': assigned_shop,
+        'user_can_select_shop': user_can_select_shop,
     }
     return render(request, 'shops/report_form.html', context)
 
 
 
 
+    
+
 
 @login_required
 @user_passes_test(is_staff_or_admin)
 def edit_daily_report(request, report_id):
-    """Edit an existing daily report"""
+    """Edit an existing daily report - users can only edit their own reports"""
     report = get_object_or_404(DailyShopReport, id=report_id)
+    
+    # Check if user is allowed to edit this report
+    if not request.user.is_superuser and report.submitted_by != request.user:
+        messages.error(request, 'You can only edit your own reports.')
+        return redirect('shops:reports_list')
     
     if report.is_finalized:
         messages.warning(request, 'This report is finalized and cannot be edited.')
@@ -289,10 +368,15 @@ def edit_daily_report(request, report_id):
 
 @login_required
 def report_detail(request, report_id):
-    """View detailed report"""
+    """View detailed report - users can only view their own reports unless superuser"""
     from django.db.models import Sum
     
     report = get_object_or_404(DailyShopReport, id=report_id)
+    
+    # Check if user is allowed to view this report
+    if not request.user.is_superuser and report.submitted_by != request.user:
+        messages.error(request, 'You can only view your own reports.')
+        return redirect('shops:reports_list')
     
     # Get M-Pesa summary if exists
     mpesa_summary = MpesaDailySummary.objects.filter(
@@ -318,7 +402,7 @@ def report_detail(request, report_id):
     context = {
         'report': report,
         'bank_closings': bank_closings,
-        'bank_total': bank_total,  # This will be 2000.00
+        'bank_total': bank_total,
         'total_mpesa': total_mpesa,
         'net_profit': net_profit,
         'expenses': report.expenses.all(),
@@ -330,8 +414,13 @@ def report_detail(request, report_id):
 @login_required
 @user_passes_test(is_staff_or_admin)
 def finalize_report(request, report_id):
-    """Finalize a report (cannot be edited after finalization)"""
+    """Finalize a report - users can only finalize their own reports unless superuser"""
     report = get_object_or_404(DailyShopReport, id=report_id)
+    
+    # Check if user is allowed to finalize this report
+    if not request.user.is_superuser and report.submitted_by != request.user:
+        messages.error(request, 'You can only finalize your own reports.')
+        return redirect('shops:reports_list')
     
     if request.method == 'POST':
         report.is_finalized = True
@@ -343,19 +432,30 @@ def finalize_report(request, report_id):
 
 @login_required
 def reports_list(request):
-    """List all reports with filtering"""
+    """List all reports - filtered by user"""
     from django.db.models import Sum
     
-    reports = DailyShopReport.objects.all()
+    # Filter reports based on user permissions
+    if request.user.is_superuser:
+        reports = DailyShopReport.objects.all()
+    else:
+        reports = DailyShopReport.objects.filter(submitted_by=request.user)
     
     # Store original queryset for stats (before pagination)
     all_reports = reports
     
-    # Filter by shop
+    # Filter by shop (only if superuser or if user has access to shop)
     shop_id = request.GET.get('shop')
     if shop_id:
-        reports = reports.filter(shop_id=shop_id)
-        all_reports = all_reports.filter(shop_id=shop_id)
+        if request.user.is_superuser:
+            reports = reports.filter(shop_id=shop_id)
+            all_reports = all_reports.filter(shop_id=shop_id)
+        else:
+            # Regular users can only filter by shops they've submitted reports for
+            user_shops = reports.values_list('shop_id', flat=True).distinct()
+            if int(shop_id) in user_shops:
+                reports = reports.filter(shop_id=shop_id)
+                all_reports = all_reports.filter(shop_id=shop_id)
     
     # Filter by date range
     from_date = request.GET.get('from_date')
@@ -387,9 +487,19 @@ def reports_list(request):
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
     
+    # For shop filter dropdown - show only relevant shops
+    if request.user.is_superuser:
+        shops = ShopBranch.objects.filter(is_active=True)
+    else:
+        # Regular users see only shops they've submitted reports for
+        user_shop_ids = DailyShopReport.objects.filter(
+            submitted_by=request.user
+        ).values_list('shop_id', flat=True).distinct()
+        shops = ShopBranch.objects.filter(id__in=user_shop_ids, is_active=True)
+    
     context = {
         'reports': page_obj,
-        'shops': ShopBranch.objects.filter(is_active=True),
+        'shops': shops,
         'selected_shop': shop_id,
         'from_date': from_date,
         'to_date': to_date,
@@ -404,9 +514,9 @@ def reports_list(request):
 # ==================== SHOP BRANCH MANAGEMENT ====================
 
 @login_required
-@user_passes_test(is_staff_or_admin)
+@user_passes_test(is_superuser)
 def shop_branches(request):
-    """Manage shop branches"""
+    """Manage shop branches - Superuser only"""
     branches = ShopBranch.objects.all()
     
     if request.method == 'POST':
@@ -426,9 +536,9 @@ def shop_branches(request):
 
 
 @login_required
-@user_passes_test(is_staff_or_admin)
+@user_passes_test(is_superuser)
 def edit_shop_branch(request, shop_id):
-    """Edit shop branch"""
+    """Edit shop branch - Superuser only"""
     branch = get_object_or_404(ShopBranch, id=shop_id)
     
     if request.method == 'POST':
@@ -450,9 +560,9 @@ def edit_shop_branch(request, shop_id):
 # ==================== BANK ACCOUNT MANAGEMENT ====================
 
 @login_required
-@user_passes_test(is_staff_or_admin)
+@user_passes_test(is_superuser)
 def bank_accounts(request):
-    """View all bank accounts"""
+    """View all bank accounts - Superuser only"""
     accounts = BankAccount.objects.all()
     shops = ShopBranch.objects.filter(is_active=True)
     
@@ -464,9 +574,9 @@ def bank_accounts(request):
 
 
 @login_required
-@user_passes_test(is_staff_or_admin)
+@user_passes_test(is_superuser)
 def add_bank_account(request):
-    """Add a new bank account"""
+    """Add a new bank account - Superuser only"""
     if request.method == 'POST':
         form = BankAccountForm(request.POST)
         if form.is_valid():
@@ -484,9 +594,9 @@ def add_bank_account(request):
 
 
 @login_required
-@user_passes_test(is_staff_or_admin)
+@user_passes_test(is_superuser)
 def edit_bank_account(request, account_id):
-    """Edit a bank account"""
+    """Edit a bank account - Superuser only"""
     account = get_object_or_404(BankAccount, id=account_id)
     
     if request.method == 'POST':
@@ -509,9 +619,9 @@ def edit_bank_account(request, account_id):
 # ==================== M-PESA ACCOUNT MANAGEMENT ====================
 
 @login_required
-@user_passes_test(is_staff_or_admin)
+@user_passes_test(is_superuser)
 def mpesa_accounts(request):
-    """View all M-Pesa accounts"""
+    """View all M-Pesa accounts - Superuser only"""
     accounts = MpesaAccount.objects.all()
     shops = ShopBranch.objects.filter(is_active=True)
     
@@ -523,9 +633,9 @@ def mpesa_accounts(request):
 
 
 @login_required
-@user_passes_test(is_staff_or_admin)
+@user_passes_test(is_superuser)
 def add_mpesa_account(request):
-    """Add a new M-Pesa account"""
+    """Add a new M-Pesa account - Superuser only"""
     if request.method == 'POST':
         form = MpesaAccountForm(request.POST)
         if form.is_valid():
@@ -543,9 +653,9 @@ def add_mpesa_account(request):
 
 
 @login_required
-@user_passes_test(is_staff_or_admin)
+@user_passes_test(is_superuser)
 def edit_mpesa_account(request, account_id):
-    """Edit an M-Pesa account"""
+    """Edit an M-Pesa account - Superuser only"""
     account = get_object_or_404(MpesaAccount, id=account_id)
     
     if request.method == 'POST':
@@ -568,10 +678,15 @@ def edit_mpesa_account(request, account_id):
 # ==================== M-PESA DAILY SUMMARY ====================
 
 @login_required
-@user_passes_test(is_staff_or_admin)
+@user_passes_test(is_superuser)
 def mpesa_daily_summary(request, report_id):
-    """Add or edit M-Pesa summary for a daily report"""
+    """Add or edit M-Pesa summary for a daily report - Superuser only"""
     daily_report = get_object_or_404(DailyShopReport, id=report_id)
+    
+    # Check if user is allowed
+    if not request.user.is_superuser and daily_report.submitted_by != request.user:
+        messages.error(request, 'You can only manage summaries for your own reports.')
+        return redirect('shops:reports_list')
     
     # Check if summary already exists
     summary, created = MpesaDailySummary.objects.get_or_create(
@@ -597,23 +712,25 @@ def mpesa_daily_summary(request, report_id):
     else:
         form = MpesaDailySummaryForm(instance=summary)
     
-    # Get M-Pesa float transactions for the day (optional - can be implemented later)
-    mpesa_transactions = []  # You can add MpesaFloatTransaction model if needed
-    
     context = {
         'form': form,
         'daily_report': daily_report,
         'summary': summary,
-        'mpesa_transactions': mpesa_transactions,
+        'mpesa_transactions': [],
     }
     return render(request, 'shops/mpesa_summary_form.html', context)
 
 
 @login_required
-@user_passes_test(is_staff_or_admin)
+@user_passes_test(is_superuser)
 def reconcile_mpesa(request, summary_id):
-    """Reconcile M-Pesa summary"""
+    """Reconcile M-Pesa summary - Superuser only"""
     summary = get_object_or_404(MpesaDailySummary, id=summary_id)
+    
+    # Check permission
+    if not request.user.is_superuser and summary.daily_report.submitted_by != request.user:
+        messages.error(request, 'You can only reconcile your own summaries.')
+        return redirect('shops:reports_list')
     
     if request.method == 'POST':
         # Calculate variances
@@ -635,9 +752,9 @@ def reconcile_mpesa(request, summary_id):
 # ==================== DYNAMIC CHOICES MANAGEMENT ====================
 
 @login_required
-@user_passes_test(is_staff_or_admin)
+@user_passes_test(is_superuser)
 def manage_choices(request):
-    """Manage dynamic choices (bank names, expense categories, etc.)"""
+    """Manage dynamic choices - Superuser only"""
     if request.method == 'POST':
         form = DynamicChoiceForm(request.POST)
         if form.is_valid():
@@ -666,9 +783,9 @@ def manage_choices(request):
 
 
 @login_required
-@user_passes_test(is_staff_or_admin)
+@user_passes_test(is_superuser)
 def delete_choice(request, choice_id):
-    """Soft delete a dynamic choice"""
+    """Soft delete a dynamic choice - Superuser only"""
     choice = get_object_or_404(DynamicChoice, id=choice_id)
     choice.is_active = False
     choice.save()
@@ -723,6 +840,10 @@ def get_report_summary(request, report_id):
     try:
         report = get_object_or_404(DailyShopReport, id=report_id)
         
+        # Check permission
+        if not request.user.is_superuser and report.submitted_by != request.user:
+            return JsonResponse({'success': False, 'error': 'Unauthorized'}, status=403)
+        
         # Get bank closing totals
         bank_closings = report.bank_closings.filter(is_active=True)
         bank_data = [{
@@ -758,12 +879,12 @@ def get_report_summary(request, report_id):
 
 @login_required
 def weekly_sales_data(request):
-    """AJAX endpoint for weekly sales chart data"""
+    """AJAX endpoint for weekly sales chart data - filtered by user"""
     try:
         end_date = timezone.now().date()
         start_date = end_date - timezone.timedelta(days=6)
         
-        # Get sales data for last 7 days
+        # Get sales data for last 7 days - filtered by user
         sales_data = []
         days = []
         
@@ -771,10 +892,18 @@ def weekly_sales_data(request):
             current_date = start_date + timezone.timedelta(days=i)
             days.append(current_date.strftime('%a, %b %d'))
             
-            daily_total = DailyShopReport.objects.filter(
-                report_date=current_date,
-                is_finalized=True
-            ).aggregate(total=models.Sum('shop_sales'))['total'] or 0
+            # Filter reports based on user permissions
+            if request.user.is_superuser:
+                daily_total = DailyShopReport.objects.filter(
+                    report_date=current_date,
+                    is_finalized=True
+                ).aggregate(total=models.Sum('shop_sales'))['total'] or 0
+            else:
+                daily_total = DailyShopReport.objects.filter(
+                    report_date=current_date,
+                    is_finalized=True,
+                    submitted_by=request.user
+                ).aggregate(total=models.Sum('shop_sales'))['total'] or 0
             
             sales_data.append(float(daily_total))
         
@@ -793,9 +922,9 @@ def weekly_sales_data(request):
 # ==================== EXPORT AND REPORTING VIEWS ====================
 
 @login_required
-@user_passes_test(is_staff_or_admin)
+@user_passes_test(is_superuser)
 def export_reports_csv(request):
-    """Export filtered reports to CSV"""
+    """Export filtered reports to CSV - Superuser only"""
     import csv
     from django.http import HttpResponse
     
@@ -847,7 +976,7 @@ def export_reports_csv(request):
 @login_required
 @user_passes_test(is_staff_or_admin)
 def shop_statistics(request):
-    """View statistics and analytics for shops"""
+    """View statistics and analytics for shops - filtered by user"""
     from django.db.models import Sum, Avg, Count
     
     # Get date range from request or default to last 30 days
@@ -855,11 +984,20 @@ def shop_statistics(request):
     start_date = request.GET.get('start_date', (end_date - timezone.timedelta(days=30)).isoformat())
     end_date = request.GET.get('end_date', end_date.isoformat())
     
-    reports = DailyShopReport.objects.filter(
-        report_date__gte=start_date,
-        report_date__lte=end_date,
-        is_finalized=True
-    )
+    # Filter reports based on user permissions
+    if request.user.is_superuser:
+        reports = DailyShopReport.objects.filter(
+            report_date__gte=start_date,
+            report_date__lte=end_date,
+            is_finalized=True
+        )
+    else:
+        reports = DailyShopReport.objects.filter(
+            report_date__gte=start_date,
+            report_date__lte=end_date,
+            is_finalized=True,
+            submitted_by=request.user
+        )
     
     # Overall statistics
     total_reports = reports.count()
@@ -867,9 +1005,17 @@ def shop_statistics(request):
     total_expenses = reports.aggregate(total=Sum('total_expenses'))['total'] or 0
     avg_daily_sales = reports.aggregate(avg=Avg('shop_sales'))['avg'] or 0
     
-    # Statistics by shop
+    # Statistics by shop - only shops user has access to
+    if request.user.is_superuser:
+        shops = ShopBranch.objects.filter(is_active=True)
+    else:
+        user_shop_ids = DailyShopReport.objects.filter(
+            submitted_by=request.user
+        ).values_list('shop_id', flat=True).distinct()
+        shops = ShopBranch.objects.filter(id__in=user_shop_ids, is_active=True)
+    
     shop_stats = []
-    for shop in ShopBranch.objects.filter(is_active=True):
+    for shop in shops:
         shop_reports = reports.filter(shop=shop)
         shop_stats.append({
             'shop': shop,
@@ -894,14 +1040,20 @@ def shop_statistics(request):
 
 @login_required
 def expense_distribution(request):
-    """AJAX endpoint for expense distribution chart data"""
+    """AJAX endpoint for expense distribution chart data - filtered by user"""
     try:
         from django.db.models import Sum
         
         start_date = request.GET.get('start_date')
         end_date = request.GET.get('end_date')
         
-        expenses = ShopExpense.objects.all()
+        # Filter expenses based on user permissions
+        if request.user.is_superuser:
+            expenses = ShopExpense.objects.all()
+        else:
+            expenses = ShopExpense.objects.filter(
+                daily_report__submitted_by=request.user
+            )
         
         if start_date:
             expenses = expenses.filter(daily_report__report_date__gte=start_date)

@@ -145,6 +145,15 @@ class Staff(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
+    assigned_shop = models.ForeignKey(
+        'shops.ShopBranch',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='assigned_staff',
+        help_text="Shop branch assigned to this staff member"
+    )
+    
     def __str__(self):
         return f"{self.user.get_full_name()} - {self.staff_id}"
     

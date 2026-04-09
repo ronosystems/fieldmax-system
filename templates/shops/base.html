@@ -815,11 +815,177 @@
         .fade-in {
             animation: fadeIn 0.5s ease-out;
         }
+        
+        /* Superuser only indicator */
+        .superuser-only {
+            position: relative;
+        }
+        
+        .superuser-only::after {
+            content: "🔒";
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 0.7rem;
+            opacity: 0.6;
+        }
+        
+        .sidebar.collapsed .superuser-only::after {
+            display: none;
+        }
+        
+        /* ============================================
+           CENTERED POPUP ALERT STYLES
+           ============================================ */
+        .alert-container {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 9999;
+            min-width: 320px;
+            max-width: 450px;
+            pointer-events: none;
+        }
+        
+        .alert-custom {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 20px 25px;
+            box-shadow: 0 20px 35px -10px rgba(0, 0, 0, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            animation: slideInCenter 0.3s ease-out;
+            pointer-events: auto;
+            border-left: 5px solid;
+        }
+        
+        .alert-custom.alert-success {
+            border-left-color: #10b981;
+        }
+        
+        .alert-custom.alert-success i:first-child {
+            color: #10b981;
+        }
+        
+        .alert-custom.alert-error, .alert-custom.alert-danger {
+            border-left-color: #ef4444;
+        }
+        
+        .alert-custom.alert-error i:first-child, .alert-custom.alert-danger i:first-child {
+            color: #ef4444;
+        }
+        
+        .alert-custom.alert-warning {
+            border-left-color: #f59e0b;
+        }
+        
+        .alert-custom.alert-warning i:first-child {
+            color: #f59e0b;
+        }
+        
+        .alert-custom.alert-info {
+            border-left-color: #3b82f6;
+        }
+        
+        .alert-custom.alert-info i:first-child {
+            color: #3b82f6;
+        }
+        
+        .alert-icon {
+            font-size: 1.8rem;
+            flex-shrink: 0;
+        }
+        
+        .alert-content {
+            flex: 1;
+        }
+        
+        .alert-title {
+            font-weight: 700;
+            font-size: 1rem;
+            margin-bottom: 4px;
+            color: var(--text-primary);
+        }
+        
+        .alert-message {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+        
+        .alert-close {
+            background: none;
+            border: none;
+            font-size: 1.2rem;
+            cursor: pointer;
+            color: var(--text-secondary);
+            transition: all 0.2s;
+            padding: 0;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        
+        .alert-close:hover {
+            color: var(--danger-color);
+            background: rgba(239, 68, 68, 0.1);
+        }
+        
+        @keyframes slideInCenter {
+            from {
+                opacity: 0;
+                transform: translateY(-40px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        @keyframes slideOutCenter {
+            from {
+                opacity: 1;
+                transform: translateY(0);
+            }
+            to {
+                opacity: 0;
+                transform: translateY(-40px);
+            }
+        }
+        
+        .alert-custom.hide {
+            animation: slideOutCenter 0.3s ease-out forwards;
+        }
+        
+        @media (max-width: 768px) {
+            .alert-container {
+                min-width: 280px;
+                width: 90%;
+            }
+            
+            .alert-custom {
+                padding: 15px 20px;
+            }
+            
+            .alert-icon {
+                font-size: 1.4rem;
+            }
+        }
     </style>
     
     {% block extra_css %}{% endblock %}
 </head>
 <body data-theme="light">
+    <!-- Centered Popup Alert Container -->
+    <div id="alertContainer" class="alert-container"></div>
+
     <!-- Fixed Top Navbar -->
     <nav class="top-navbar" role="navigation" aria-label="Main navigation">
         <button class="sidebar-toggle" aria-label="Toggle sidebar menu" id="sidebarToggle">
@@ -866,7 +1032,7 @@
                             {% if request.user.position %}
                                 {{ request.user.position|title }}
                             {% else %}
-                                Shop Manager
+                                Mpesa Cashier
                             {% endif %}
                         {% endif %}
                     </div>
@@ -885,26 +1051,40 @@
                 </a>
             </div>
             
-            <!-- Main Navigation -->
-            <div class="sidebar-section">
-                <div class="sidebar-section-title">MAIN</div>
-                <nav class="nav flex-column">
-                    <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'shops:dashboard' %}">
-                        <i class="fas fa-chart-line"></i> <span>Shop Dashboard</span>
-                    </a>
-                    <a class="nav-link {% if 'reports_list' in request.path %}active{% endif %}" href="{% url 'shops:reports_list' %}">
-                        <i class="fas fa-file-alt"></i> <span>All Reports</span>
-                    </a>
-                    <a class="nav-link {% if 'create_report' in request.path %}active{% endif %}" href="{% url 'shops:create_report' %}">
-                        <i class="fas fa-plus-circle"></i> <span>New Report</span>
-                    </a>
-                    <a class="nav-link {% if 'statistics' in request.path %}active{% endif %}" href="{% url 'shops:shop_statistics' %}">
-                        <i class="fas fa-chart-bar"></i> <span>Statistics</span>
-                    </a>
-                </nav>
-            </div>
+<!-- Main Navigation -->
+<div class="sidebar-section">
+    <div class="sidebar-section-title">MAIN</div>
+    <nav class="nav flex-column">
+        <!-- Dynamic Dashboard Button - Shows different button based on current page -->
+        {% if request.resolver_match.url_name == 'dashboard' %}
+            <!-- On Shop Dashboard → Show button to go to Staff Dashboard -->
+            <a class="nav-link" href="{% url 'staff:staff_dashboard' %}">
+                <i class="fas fa-users-gear"></i> 
+                <span>Staff Dashboard</span>
+            </a>
+        {% else %}
+            <!-- On other pages → Show button to go to Shop Dashboard -->
+            <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'shops:dashboard' %}">
+                <i class="fas fa-chart-line"></i> 
+                <span>Shop Dashboard</span>
+            </a>
+        {% endif %}
+        
+        <!-- Regular navigation items -->
+        <a class="nav-link {% if 'reports_list' in request.path %}active{% endif %}" href="{% url 'shops:reports_list' %}">
+            <i class="fas fa-file-alt"></i> <span>All Reports</span>
+        </a>
+        <a class="nav-link {% if 'create_report' in request.path %}active{% endif %}" href="{% url 'shops:create_report' %}">
+            <i class="fas fa-plus-circle"></i> <span>New Report</span>
+        </a>
+        <a class="nav-link {% if 'statistics' in request.path %}active{% endif %}" href="{% url 'shops:shop_statistics' %}">
+            <i class="fas fa-chart-bar"></i> <span>Statistics</span>
+        </a>
+    </nav>
+</div>
 
-            <!-- Shop Management -->
+            <!-- Shop Management - SUPERUSER ONLY -->
+            {% if request.user.is_superuser %}
             <div class="sidebar-section">
                 <div class="sidebar-section-title">SHOP MANAGEMENT</div>
                 <nav class="nav flex-column">
@@ -920,7 +1100,7 @@
                 </nav>
             </div>
 
-            <!-- Configuration -->
+            <!-- Configuration - SUPERUSER ONLY -->
             <div class="sidebar-section">
                 <div class="sidebar-section-title">CONFIGURATION</div>
                 <nav class="nav flex-column">
@@ -929,6 +1109,7 @@
                     </a>
                 </nav>
             </div>
+            {% endif %}
 
 
             <div class="text-white-100 small mt-3">
@@ -937,30 +1118,16 @@
             </div>
 
             <!-- Logout Section -->
-            <div class="sidebar-section mt-4">
-                <form method="post" action="{% url 'staff:logout' %}" id="logoutForm">
-                   {% csrf_token %}
-                   <button type="submit" class="nav-link w-100 text-start" style="background: var(--danger-color); border: none; color: white; border-radius: 10px;">
-                     <i class="fas fa-sign-out-alt"></i> <span>Logout</span>
-                   </button>
-                </form>
-            </div>
+<div class="sidebar-section mt-4">
+    <a href="{% url 'staff:logout' %}" class="nav-link w-100 text-start" style="background: var(--danger-color); border: none; color: white; border-radius: 10px; display: block; text-align: left;" onclick="return confirm('Are you sure you want to logout?');">
+        <i class="fas fa-sign-out-alt me-2"></i> <span>Logout</span>
+    </a>
+</div>
         </div>
     </div>
 
     <!-- Main Content Area -->
     <div class="main-content" id="mainContent">
-        <!-- Messages -->
-        {% if messages %}
-            {% for message in messages %}
-                <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-                    <i class="fas fa-{% if message.tags == 'success' %}check-circle{% elif message.tags == 'error' %}exclamation-circle{% else %}info-circle{% endif %} me-2"></i>
-                    {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                </div>
-            {% endfor %}
-        {% endif %}
-        
         <!-- Page specific content -->
         {% block content %}{% endblock %}
     </div>
@@ -1081,21 +1248,83 @@
                 });
             });
             
-            // Auto-hide alerts after 5 seconds
-            setTimeout(function() {
-                $('.alert').fadeOut('slow');
-            }, 5000);
-            
-            // Logout confirmation
-            $('#logoutForm').submit(function(e) {
-                if (!confirm('Are you sure you want to logout?')) {
-                    e.preventDefault();
-                }
-            });
-            
             // Add fade-in animation to main content
             $('#mainContent').addClass('fade-in');
         });
+        
+        // ============================================
+        // CENTERED POPUP ALERT FUNCTION
+        // ============================================
+        function showAlert(message, type = 'success', title = null) {
+            const alertContainer = document.getElementById('alertContainer');
+            if (!alertContainer) return;
+            
+            // Define icons and titles based on type
+            const config = {
+                success: { icon: 'fas fa-check-circle', title: title || 'Success!', bgClass: 'alert-success' },
+                error: { icon: 'fas fa-exclamation-circle', title: title || 'Error!', bgClass: 'alert-error' },
+                danger: { icon: 'fas fa-exclamation-triangle', title: title || 'Error!', bgClass: 'alert-danger' },
+                warning: { icon: 'fas fa-exclamation-triangle', title: title || 'Warning!', bgClass: 'alert-warning' },
+                info: { icon: 'fas fa-info-circle', title: title || 'Information', bgClass: 'alert-info' }
+            };
+            
+            // Map Django message tags to our types
+            let mappedType = type;
+            if (type === 'error') mappedType = 'error';
+            if (type === 'danger') mappedType = 'danger';
+            
+            const selectedConfig = config[mappedType] || config.success;
+            
+            // Create alert HTML
+            const alertHtml = `
+                <div class="alert-custom ${selectedConfig.bgClass}" id="popupAlert">
+                    <div class="alert-icon">
+                        <i class="${selectedConfig.icon}"></i>
+                    </div>
+                    <div class="alert-content">
+                        <div class="alert-title">${selectedConfig.title}</div>
+                        <div class="alert-message">${escapeHtml(message)}</div>
+                    </div>
+                    <button class="alert-close" onclick="closeAlert()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `;
+            
+            // Clear existing alerts and add new one
+            alertContainer.innerHTML = alertHtml;
+            
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                closeAlert();
+            }, 5000);
+        }
+        
+        function closeAlert() {
+            const alert = document.getElementById('popupAlert');
+            if (alert) {
+                alert.classList.add('hide');
+                setTimeout(() => {
+                    const container = document.getElementById('alertContainer');
+                    if (container) {
+                        container.innerHTML = '';
+                    }
+                }, 300);
+            }
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // Convert Django messages to centered popups
+        {% if messages %}
+            {% for message in messages %}
+                showAlert("{{ message|escapejs }}", "{{ message.tags }}");
+            {% endfor %}
+        {% endif %}
     </script>
     
     {% block extra_js %}{% endblock %}
