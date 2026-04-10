@@ -5,6 +5,7 @@
 
 {% block extra_css %}
 <style>
+    /* Theme-aware styles using CSS variables */
     .quick-action-btn {
         transition: all 0.3s ease;
         border-radius: 12px;
@@ -78,6 +79,15 @@
     .welcome-banner h2 {
         margin-bottom: 5px;
     }
+
+    .stat-icon {
+        font-size: 2rem;
+        opacity: 0.3;
+        position: absolute;
+        right: 20px;
+        bottom: 15px;
+        color: var(--text-light);
+    }
     
     .welcome-banner p {
         opacity: 0.9;
@@ -125,6 +135,7 @@
     .timeline-title {
         font-weight: 600;
         margin-bottom: 5px;
+        color: var(--text-primary);
     }
     
     .timeline-text {
@@ -136,6 +147,78 @@
         font-size: 2rem;
         font-weight: bold;
         color: #10b981;
+    }
+    
+    .expense-amount {
+        color: #f59e0b;
+        font-weight: bold;
+    }
+    
+    /* Stat card theme support */
+    .stat-card {
+        position: relative;
+        background: #ffffff;
+        border: 1px solid var(--border-color);
+        border-radius: 15px;
+        padding: 20px;
+        margin-bottom: 20px;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px -5px rgb(0, 0, 0);
+    }
+    
+    .stat-value {
+        font-size: 1.8rem;
+        font-weight: bold;
+        margin-bottom: 5px;
+        color: var(--text-primary);
+    }
+    
+    .stat-label {
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: var(--text-secondary);
+    }
+    
+    /* Dark mode specific adjustments */
+    [data-theme="dark"] .quick-action-btn {
+        border-color: var(--border-color);
+    }
+    
+    [data-theme="dark"] .quick-action-btn:hover {
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+    }
+    
+    [data-theme="dark"] .stat-card:hover {
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+    }
+    
+    [data-theme="dark"] .welcome-banner {
+        background: linear-gradient(135deg, #047857 0%, #065f46 100%);
+    }
+    
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+        .stat-value {
+            font-size: 1.3rem;
+        }
+        
+        .stat-icon {
+            font-size: 1.5rem;
+            opacity: 0.2;
+        }
+        
+        .quick-action-btn {
+            padding: 10px;
+        }
+        
+        .quick-action-icon {
+            font-size: 1.5rem;
+        }
     }
 </style>
 {% endblock %}
@@ -150,17 +233,19 @@
                     <i class="fas fa-store me-2"></i>
                     Welcome back, {{ request.user.first_name|default:request.user.username }}!
                 </h2>
-                <p>Here's what's happening with your shops today.</p>
+                <p>Have you submitted your daily report today?</p>
             </div>
             <div class="col-md-4 text-md-end mt-3 mt-md-0">
                 <a href="{% url 'shops:create_report' %}" class="btn btn-light">
-                    <i class="fas fa-plus-circle me-2"></i>New Daily Report
+                    <i class="fas fa-plus-circle me-2"></i>Add New Report
                 </a>
             </div>
         </div>
     </div>
     
-    <!-- Stats Cards -->
+    <!-- Stats Cards - Different for Superusers and Regular Users -->
+    {% if request.user.is_superuser %}
+    <!-- SUPERUSER STATS CARDS -->
     <div class="row stats-row">
         <div class="col-xl-3 col-md-6 mb-3">
             <div class="stat-card">
@@ -222,6 +307,53 @@
         </div>
     </div>
     
+    {% else %}
+    <!-- REGULAR USER STATS CARDS -->
+    <div class="row stats-row">
+        <!-- Own Shop Status / Location -->
+        <div class="col-md-4 mb-3">
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fas fa-store"></i>
+                </div>
+                <div class="stat-value">{{ assigned_shop.name|default:"Not Assigned" }}</div>
+                <div class="stat-label">Your Shop</div>
+                <small class="text-muted">
+                    <i class="fas fa-map-marker-alt me-1"></i> {{ assigned_shop.location|default:"No location" }}
+                </small>
+            </div>
+        </div>
+        
+        <!-- Total Monthly Transactions -->
+        <div class="col-md-4 mb-3">
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fas fa-exchange-alt"></i>
+                </div>
+                <div class="stat-value transaction-count">{{ monthly_transactions|floatformat:0|intcomma }}</div>
+                <div class="stat-label">Monthly Transactions</div>
+                <small class="text-muted">
+                    <i class="fas fa-calendar-alt me-1"></i> This month
+                </small>
+            </div>
+        </div>
+        
+        <!-- Total Monthly Expenses -->
+        <div class="col-md-4 mb-3">
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fas fa-money-bill-wave"></i>
+                </div>
+                <div class="stat-value expense-amount">KES {{ monthly_expenses|floatformat:0|intcomma }}</div>
+                <div class="stat-label">Monthly Expenses</div>
+                <small class="text-muted">
+                    <i class="fas fa-calendar-alt me-1"></i> This month
+                </small>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
     <!-- Quick Actions -->
     <div class="row mb-4">
         <div class="col-12">
@@ -272,157 +404,6 @@
                                 <small class="text-muted">View analytics</small>
                             </div>
                         </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="row">
-        <!-- Today's Reports -->
-        <div class="col-lg-7 mb-4">
-            <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">
-                        <i class="fas fa-clipboard-list me-2"></i>Today's Reports
-                    </h5>
-                    <a href="{% url 'shops:reports_list' %}?from_date={{ today|date:'Y-m-d' }}&to_date={{ today|date:'Y-m-d' }}" class="btn btn-sm btn-outline-primary">
-                        View All <i class="fas fa-arrow-right ms-1"></i>
-                    </a>
-                </div>
-                <div class="card-body">
-                    {% if today_reports %}
-                        <div class="table-responsive">
-                            <table class="table table-hover">
-                                <thead>
-                                    <tr>
-                                        <th>Shop</th>
-                                        <th>Transactions</th>
-                                        <th>M-Pesa Float</th>
-                                        <th>M-Pesa Cash</th>
-                                        <th>Status</th>
-                                        <th>Action</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for report in today_reports %}
-                                    <tr>
-                                        <td>
-                                            <strong>{{ report.shop.name }}</strong><br>
-                                            <small class="text-muted">{{ report.submitted_by.get_full_name|default:report.submitted_by.username }}</small>
-                                         </div>
-                                        <td>
-                                            <span class="fw-bold text-success">{{ report.shop_sales|floatformat:0|intcomma }}</span>
-                                        </div>
-                                        <td>KES {{ report.closing_mpesa_float|floatformat:0|intcomma }} </div>
-                                        <td>KES {{ report.closing_mpesa_cash|floatformat:0|intcomma }} </div>
-                                        <td>
-                                            {% if report.is_finalized %}
-                                                <span class="badge-finalized"><i class="fas fa-check-circle me-1"></i>Finalized</span>
-                                            {% else %}
-                                                <span class="badge-pending"><i class="fas fa-clock me-1"></i>Draft</span>
-                                            {% endif %}
-                                        </div>
-                                        <td>
-                                            <a href="{% url 'shops:report_detail' report.id %}" class="btn btn-sm btn-outline-primary">
-                                                <i class="fas fa-eye"></i>
-                                            </a>
-                                            {% if not report.is_finalized %}
-                                            <a href="{% url 'shops:edit_report' report.id %}" class="btn btn-sm btn-outline-secondary">
-                                                <i class="fas fa-edit"></i>
-                                            </a>
-                                            {% endif %}
-                                        </div>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                    {% else %}
-                        <div class="text-center py-5">
-                            <i class="fas fa-file-alt fa-3x text-muted mb-3"></i>
-                            <p class="text-muted mb-3">No reports submitted today</p>
-                            <a href="{% url 'shops:create_report' %}" class="btn btn-primary">
-                                <i class="fas fa-plus-circle me-2"></i>Submit First Report
-                            </a>
-                        </div>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-        
-        <!-- Shop Status & Quick Stats -->
-        <div class="col-lg-5 mb-4">
-            <!-- Shop Status -->
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h5 class="mb-0">
-                        <i class="fas fa-store me-2"></i>Shop Status
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <div class="list-group list-group-flush">
-                        {% for shop in shops %}
-                        <div class="list-group-item d-flex justify-content-between align-items-center">
-                            <div>
-                                <i class="fas fa-store me-2 text-primary"></i>
-                                <strong>{{ shop.name }}</strong>
-                                <br>
-                                <small class="text-muted">{{ shop.location }}</small>
-                            </div>
-                            <div>
-                                {% if shop.is_active %}
-                                    <span class="shop-badge shop-badge-active">
-                                        <i class="fas fa-check-circle me-1"></i>Active
-                                    </span>
-                                {% else %}
-                                    <span class="shop-badge shop-badge-inactive">
-                                        <i class="fas fa-times-circle me-1"></i>Inactive
-                                    </span>
-                                {% endif %}
-                            </div>
-                        </div>
-                        {% empty %}
-                        <div class="text-center py-3">
-                            <p class="text-muted mb-0">No shops added yet</p>
-                            <a href="{% url 'shops:branches' %}" class="btn btn-sm btn-primary mt-2">
-                                <i class="fas fa-plus me-1"></i>Add Shop
-                            </a>
-                        </div>
-                        {% endfor %}
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Recent Activity -->
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">
-                        <i class="fas fa-history me-2"></i>Recent Activity
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <div class="activity-timeline">
-                        {% for report in recent_reports %}
-                        <div class="timeline-item">
-                            <div class="timeline-dot"></div>
-                            <div class="timeline-date">
-                                {{ report.submission_time|date:"M d, H:i" }}
-                            </div>
-                            <div class="timeline-title">
-                                Report submitted for {{ report.shop.name }}
-                            </div>
-                            <div class="timeline-text">
-                                Transactions: {{ report.shop_sales|floatformat:0|intcomma }} | 
-                                By: {{ report.submitted_by.get_full_name|default:report.submitted_by.username }}
-                            </div>
-                        </div>
-                        {% empty %}
-                        <div class="text-center py-3">
-                            <i class="fas fa-inbox fa-2x text-muted mb-2"></i>
-                            <p class="text-muted mb-0">No recent activity</p>
-                        </div>
-                        {% endfor %}
                     </div>
                 </div>
             </div>

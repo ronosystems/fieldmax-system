@@ -45,15 +45,28 @@ def filter_by_user_queryset(request, queryset, user_field='submitted_by'):
 @user_passes_test(is_staff_or_admin)
 def shop_dashboard(request):
     """Dashboard showing shops and reports - filtered by user"""
+    from django.db.models import Sum
+    from django.utils import timezone
+    from datetime import timedelta
+    
     shops = ShopBranch.objects.filter(is_active=True)
     today = timezone.now().date()
+    month_ago = today - timedelta(days=30)
+    
+    # Get user's assigned shop for regular users
+    assigned_shop = None
+    if not request.user.is_superuser:
+        if hasattr(request.user, 'staff_profile') and request.user.staff_profile:
+            assigned_shop = request.user.staff_profile.assigned_shop
     
     # Filter reports based on user permissions
     if request.user.is_superuser:
         today_reports = DailyShopReport.objects.filter(report_date=today)
         recent_reports = DailyShopReport.objects.all().order_by('-submission_time')[:5]
-        total_transactions_today = today_reports.aggregate(total=models.Sum('shop_sales'))['total'] or 0
+        total_transactions_today = today_reports.aggregate(total=Sum('shop_sales'))['total'] or 0
         reports_today = today_reports.count()
+        monthly_transactions = 0
+        monthly_expenses = 0
     else:
         # Regular users only see their own reports
         today_reports = DailyShopReport.objects.filter(
@@ -63,8 +76,17 @@ def shop_dashboard(request):
         recent_reports = DailyShopReport.objects.filter(
             submitted_by=request.user
         ).order_by('-submission_time')[:5]
-        total_transactions_today = today_reports.aggregate(total=models.Sum('shop_sales'))['total'] or 0
+        total_transactions_today = today_reports.aggregate(total=Sum('shop_sales'))['total'] or 0
         reports_today = today_reports.count()
+        
+        # Calculate monthly transactions and expenses for regular user
+        monthly_reports = DailyShopReport.objects.filter(
+            submitted_by=request.user,
+            report_date__gte=month_ago,
+            report_date__lte=today
+        )
+        monthly_transactions = monthly_reports.aggregate(total=Sum('shop_sales'))['total'] or 0
+        monthly_expenses = monthly_reports.aggregate(total=Sum('total_expenses'))['total'] or 0
     
     context = {
         'shops': shops,
@@ -73,10 +95,12 @@ def shop_dashboard(request):
         'today': today,
         'total_shops': shops.count(),
         'reports_today': reports_today,
-        'total_transactions_today': int(total_transactions_today),  
+        'total_transactions_today': int(total_transactions_today),
+        'assigned_shop': assigned_shop,
+        'monthly_transactions': int(monthly_transactions) if not request.user.is_superuser else 0,
+        'monthly_expenses': float(monthly_expenses) if not request.user.is_superuser else 0,
     }
     return render(request, 'shops/dashboard.html', context)
-
 
 
 
