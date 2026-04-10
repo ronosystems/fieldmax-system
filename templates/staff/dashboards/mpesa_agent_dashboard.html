@@ -321,25 +321,45 @@
 
 
 
-    <!-- ======== REGULAR USER (M-PESA AGENT) VIEW ========= -->
-     
-    <div class="welcome-banner">
-        <div class="row align-items-center">
-            <div class="col-md-12 text-center">
-                <h2>
-                    <i class="fas fa-mobile-alt me-2"></i>
-                    M-Pesa Agent Dashboard
-                </h2>
-                <p>Welcome back, {{ request.user.first_name|default:request.user.username }}!</p>
-                <p class="mb-0">Please use the form below to submit your daily reports.</p>
-                <div class="mt-4">
-                    <a href="{% url 'shops:create_report' %}" class="btn btn-light btn-lg">
-                        <i class="fas fa-plus me-2"></i>Add New Report
-                    </a>
-                </div>
+ <!-- ======== REGULAR USER (M-PESA AGENT) VIEW ========= -->
+{% load tz %}
+{% now "H" as current_hour %}
+
+<div class="welcome-banner">
+    <div class="row align-items-center">
+        <div class="col-md-12 text-center">
+            <h2>
+                {% if current_hour|add:"0" >= 5 and current_hour|add:"0" < 12 %}
+                    <i class="fas fa-coffee me-2"></i>
+                    Good Morning, {{ request.user.first_name|default:request.user.username }}!
+                    <small class="d-block" style="font-size: 0.9rem;">Rise and shine! Ready for today's reports?</small>
+                {% elif current_hour|add:"0" >= 12 and current_hour|add:"0" < 17 %}
+                    <i class="fas fa-sun me-2"></i>
+                    Good Afternoon, {{ request.user.first_name|default:request.user.username }}!
+                    <small class="d-block" style="font-size: 0.9rem;">Hope you're having a productive day!</small>
+                {% elif current_hour|add:"0" >= 17 and current_hour|add:"0" < 20 %}
+                    <i class="fas fa-cloud-sun me-2"></i>
+                    Good Evening, {{ request.user.first_name|default:request.user.username }}!
+                    <small class="d-block" style="font-size: 0.9rem;">Time to wrap up today's reports.</small>
+                {% elif current_hour|add:"0" >= 20 and current_hour|add:"0" < 24 %}
+                    <i class="fas fa-moon me-2"></i>
+                    Good Evening, {{ request.user.first_name|default:request.user.username }}!
+                    <small class="d-block" style="font-size: 0.9rem;">Working late? Don't forget to submit your report.</small>
+                {% else %}
+                    <i class="fas fa-star-and-crescent me-2"></i>
+                    Good Night, {{ request.user.first_name|default:request.user.username }}!
+                    <small class="d-block" style="font-size: 0.9rem;">Rest well and report tomorrow.</small>
+                {% endif %}
+            </h2>
+            <p class="mb-0">Please use the form below to submit your daily reports.</p>
+            <div class="mt-4">
+                <a href="{% url 'shops:create_report' %}" class="btn btn-light btn-lg">
+                    <i class="fas fa-plus-circle me-2"></i>Add New Report
+                </a>
             </div>
         </div>
     </div>
-    {% endif %}
+</div>
+{% endif %}
 </div>
 {% endblock %}

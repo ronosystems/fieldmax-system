@@ -369,26 +369,45 @@
     </div>
     
     {% else %}
-    <!-- ==================== REGULAR USER VIEW - Only Welcome Banner ==================== -->
-    <div class="welcome-banner">
-        <div class="row align-items-center">
-            <div class="col-md-12 text-center">
-                <h2>
-                    Mpesa Shop Dashboard
-                </h2>
-                <p class="mb-2">Hello, {{ request.user.first_name|default:request.user.username }}!</p>
-                <p class="mb-0">Please use the navigation menu to access your reports.</p>
-                <div class="mt-4">
-                    <a href="{% url 'shops:create_report' %}" class="btn btn-light btn-lg me-2">
-                        <i class="fas fa-plus-circle me-2"></i>Submit Report
-                    </a>
-                    <a href="{% url 'shops:reports_list' %}" class="btn btn-outline-light btn-lg">
-                        <i class="fas fa-list me-2"></i>View Reports
-                    </a>
-                </div>
+<!-- ==================== REGULAR USER VIEW - Only Welcome Banner ==================== -->
+{% load tz %}
+{% now "H" as current_hour %}
+
+<div class="welcome-banner">
+    <div class="row align-items-center">
+        <div class="col-md-12 text-center">
+            <h2>
+                {% if current_hour|add:"0" >= 5 and current_hour|add:"0" < 12 %}
+                    <i class="fas fa-coffee me-2"></i>
+                    Good Morning, {{ request.user.first_name|default:request.user.username }}!
+                    <small class="d-block" style="font-size: 0.9rem; opacity: 0.9;">Rise and shine! Ready to check your reports?</small>
+                {% elif current_hour|add:"0" >= 12 and current_hour|add:"0" < 17 %}
+                    <i class="fas fa-sun me-2"></i>
+                    Good Afternoon, {{ request.user.first_name|default:request.user.username }}!
+                    <small class="d-block" style="font-size: 0.9rem; opacity: 0.9;">Hope you're having a productive day!</small>
+                {% elif current_hour|add:"0" >= 17 and current_hour|add:"0" < 20 %}
+                    <i class="fas fa-cloud-sun me-2"></i>
+                    Good Evening, {{ request.user.first_name|default:request.user.username }}!
+                    <small class="d-block" style="font-size: 0.9rem; opacity: 0.9;">Time to review today's reports.</small>
+                {% elif current_hour|add:"0" >= 20 and current_hour|add:"0" < 24 %}
+                    <i class="fas fa-moon me-2"></i>
+                    Good Evening, {{ request.user.first_name|default:request.user.username }}!
+                    <small class="d-block" style="font-size: 0.9rem; opacity: 0.9;">Working late? Check your reports.</small>
+                {% else %}
+                    <i class="fas fa-star-and-crescent me-2"></i>
+                    Good Night, {{ request.user.first_name|default:request.user.username }}!
+                    <small class="d-block" style="font-size: 0.9rem; opacity: 0.9;">Rest well and check reports tomorrow.</small>
+                {% endif %}
+            </h2>
+            <p class="mb-0">Please use the navigation below to see your reports.</p>
+            <div class="mt-4">
+                <a href="{% url 'shops:reports_list' %}" class="btn btn-outline-light btn-lg">
+                    <i class="fas fa-list me-2"></i>View Reports
+                </a>
             </div>
         </div>
     </div>
+</div>
     {% endif %}
 </div>
 {% endblock %}
