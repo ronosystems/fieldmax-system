@@ -117,10 +117,34 @@ def get_previous_closing_balance(request):
             report_date = datetime.strptime(report_date, '%Y-%m-%d').date()
             previous_date = report_date - timedelta(days=1)
             
-            previous_report = DailyShopReport.objects.filter(
-                shop_id=shop_id,
-                report_date=previous_date
-            ).first()
+            # For regular users, only show their own reports
+            if request.user.is_superuser:
+                previous_report = DailyShopReport.objects.filter(
+                    shop_id=shop_id,
+                    report_date=previous_date
+                ).first()
+                
+                # If no report on exact previous date, get most recent before selected date
+                if not previous_report:
+                    previous_report = DailyShopReport.objects.filter(
+                        shop_id=shop_id,
+                        report_date__lt=report_date
+                    ).order_by('-report_date').first()
+            else:
+                # For regular users, ONLY get THEIR reports
+                previous_report = DailyShopReport.objects.filter(
+                    shop_id=shop_id,
+                    report_date=previous_date,
+                    submitted_by=request.user
+                ).first()
+                
+                # If no report on exact previous date, get their most recent report before selected date
+                if not previous_report:
+                    previous_report = DailyShopReport.objects.filter(
+                        shop_id=shop_id,
+                        report_date__lt=report_date,
+                        submitted_by=request.user
+                    ).order_by('-report_date').first()
             
             closing_balance = float(previous_report.total_closing_balance) if previous_report else 0
             
@@ -352,6 +376,7 @@ def edit_daily_report(request, report_id):
     # Get user's assigned shop (for non-superusers)
     assigned_shop = None
     user_can_select_shop = request.user.is_superuser
+    previous_net_balance = 0
     
     if not user_can_select_shop:
         # Get assigned shop from staff profile
@@ -463,6 +488,7 @@ def edit_daily_report(request, report_id):
         'title': 'Edit Daily Report',
         'assigned_shop': assigned_shop,
         'user_can_select_shop': user_can_select_shop,
+        'previous_net_balance': float(previous_net_balance), 
     }
     return render(request, 'shops/report_form.html', context)
 

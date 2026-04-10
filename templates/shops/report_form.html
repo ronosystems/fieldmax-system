@@ -134,7 +134,7 @@
                             <small class="text-muted d-block">Select shop branch</small>
                         {% else %}
                             <input type="text" class="form-control readonly-field" value="{{ assigned_shop.name }} - {{ assigned_shop.location }}" readonly disabled>
-                            <input type="hidden" name="shop" id="hidden_shop_id" value="{{ assigned_shop.id }} {{assigned_shop.location}}">
+                            <input type="hidden" name="shop" id="hidden_shop_id" value="{{ assigned_shop.id }}">
                             <small class="text-muted d-block">Your Shop Branch</small>
                         {% endif %}
                         {% if form.shop.errors %}
@@ -327,6 +327,7 @@ let selectedBankIds = new Set();
 let previousClosing = parseFloat(document.getElementById('previous_closing_balance')?.value) || 0;
 
 // Function to get selected shop ID (works for both select and hidden input)
+// Function to get selected shop ID (works for both select and hidden input)
 function getSelectedShopId() {
     const shopSelect = document.getElementById('id_shop');
     if (shopSelect && shopSelect.value) {
@@ -334,7 +335,13 @@ function getSelectedShopId() {
     }
     const hiddenShop = document.getElementById('hidden_shop_id');
     if (hiddenShop && hiddenShop.value) {
-        return hiddenShop.value;
+        // Parse the value to get just the ID (in case there's extra text)
+        const value = hiddenShop.value;
+        // If it's a number, return it, otherwise try to extract number
+        if (!isNaN(parseInt(value))) {
+            return parseInt(value);
+        }
+        return value.split(' ')[0]; // Get first part if there are spaces
     }
     return null;
 }
@@ -354,17 +361,28 @@ function updatePreviousClosingDisplay(value) {
 
 // Fetch previous closing balance
 function fetchPreviousClosingBalance(shopId, reportDate) {
+    console.log('Fetching previous closing for shop:', shopId, 'date:', reportDate);
     if (shopId && reportDate) {
         fetch(`/shops/api/previous-closing/?shop_id=${shopId}&report_date=${reportDate}`)
             .then(response => response.json())
             .then(data => {
+                console.log('Response:', data);
                 if (data.success) {
                     previousClosing = data.closing_balance;
                     updatePreviousClosingDisplay(previousClosing);
                     calculateTotals();
+                } else {
+                    console.error('Error in response:', data.error);
+                    // If no previous report, set to 0
+                    previousClosing = 0;
+                    updatePreviousClosingDisplay(0);
                 }
             })
-            .catch(error => console.error('Error fetching previous closing:', error));
+            .catch(error => {
+                console.error('Error fetching previous closing:', error);
+                previousClosing = 0;
+                updatePreviousClosingDisplay(0);
+            });
     }
 }
 
@@ -450,18 +468,26 @@ if (shopSelect) {
     });
 }
 
-// For non-superusers - load banks on page load
+// For non-superusers - load banks on page load AND fetch previous closing
 const hiddenShopId = getSelectedShopId();
 if (hiddenShopId && !shopSelect) {
-    setTimeout(() => loadBanksForShop(hiddenShopId), 100);
+    setTimeout(() => {
+        loadBanksForShop(hiddenShopId);
+        // Also fetch previous closing for the initial date if available
+        const initialDate = document.getElementById('id_report_date')?.value;
+        if (initialDate) {
+            fetchPreviousClosingBalance(hiddenShopId, initialDate);
+        }
+    }, 100);
 }
 
-// Listen to date changes
+// Listen to date changes - THIS IS CRITICAL FOR REGULAR USERS
 const reportDateInput = document.getElementById('id_report_date');
 if (reportDateInput) {
     reportDateInput.addEventListener('change', function() {
         const shopId = getSelectedShopId();
         if (shopId && this.value) {
+            console.log('Date changed, fetching previous closing for shop:', shopId, 'date:', this.value);
             fetchPreviousClosingBalance(shopId, this.value);
         }
     });
