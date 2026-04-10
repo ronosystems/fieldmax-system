@@ -7,7 +7,7 @@
 <style>
     .formset-row {
         background: var(--card-bg);
-        border: 1px solid var(--border-color);
+        border: #000000;
         border-radius: 10px;
         padding: 15px;
         margin-bottom: 15px;
@@ -16,7 +16,7 @@
     }
     
     .formset-row:hover {
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        box-shadow: 0 2px 8px rgb(0, 0, 0);
     }
     
     .delete-row {
@@ -63,7 +63,7 @@
     .btn-add {
         background: var(--primary-color);
         color: white;
-        border: none;
+        border: #000000;
         padding: 5px 15px;
         border-radius: 5px;
         cursor: pointer;
@@ -95,7 +95,7 @@
     }
     
     .bank-select option:disabled {
-        color: #999;
+        color: #000000;
         background-color: #f5f5f5;
     }
 </style>
@@ -123,7 +123,7 @@
         <!-- FIRST ROW: Shop Selection and Daily Transactions -->
         <div class="card mb-4">
             <div class="card-header">
-                <h5 class="mb-0"><i class="fas fa-store me-2"></i>Shop Information & M-Pesa Transactions</h5>
+                <h5 class="mb-0"><i class="fas fa-store me-2"></i>REPORT</h5>
             </div>
             <div class="card-body">
                 <div class="row">
@@ -133,9 +133,8 @@
                             {{ form.shop }}
                             <small class="text-muted">Choose the shop branch for this report</small>
                         {% else %}
-                            <input type="text" class="form-control" value="{{ assigned_shop.name }}" readonly disabled style="background-color: #f3f4f6;">
+                            <input type="text" class="form-control" value="{{ assigned_shop.name }}" readonly disabled style="background-color: #04cdff;">
                             <input type="hidden" name="shop" id="hidden_shop_id" value="{{ assigned_shop.id }}">
-                            <small class="text-muted">You are assigned to: {{ assigned_shop.name }}</small>
                         {% endif %}
                         {% if form.shop.errors %}
                             <div class="text-danger small">{{ form.shop.errors }}</div>
@@ -156,7 +155,7 @@
                             <i class="fas fa-exchange-alt me-1"></i> Total M-Pesa Transactions *
                         </label>
                         {{ form.shop_sales }}
-                        <small class="text-muted">Enter total number of M-Pesa transactions done today (e.g., 50)</small>
+                        <small class="text-muted">Total transactions done today</small>
                         {% if form.shop_sales.errors %}
                             <div class="text-danger small">{{ form.shop_sales.errors }}</div>
                         {% endif %}
@@ -168,20 +167,20 @@
         <!-- M-Pesa Closing Balances -->
         <div class="card mb-4">
             <div class="card-header">
-                <h5 class="mb-0"><i class="fas fa-mobile-alt me-2"></i>M-Pesa Closing Balances</h5>
+                <h5 class="mb-0"><i class="fas fa-mobile-alt me-2"></i>MPESA</h5>
             </div>
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-6 mb-3">
                         <label class="form-label">Closing M-Pesa Float (KES)</label>
                         {{ form.closing_mpesa_float }}
-                        <small class="text-muted">Current M-Pesa float balance</small>
+                        <small class="text-muted">M-Pesa float balance</small>
                     </div>
                     <div class="col-md-6 mb-3">
                         <label class="form-label">Closing M-Pesa Cash (KES)</label>
                         {{ form.closing_mpesa_cash }}
-                        <small class="text-muted">Physical cash from M-Pesa operations</small>
-                    </div>
+                        <small class="text-muted">M-Pesa cash balance</small>
+                    </div> 
                 </div>
             </div>
         </div>
@@ -189,7 +188,7 @@
         <!-- Bank Accounts Section -->
         <div class="card mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0"><i class="fas fa-university me-2"></i>Bank Accounts</h5>
+                <h5 class="mb-0"><i class="fas fa-university me-2"></i>BANK</h5>
                 <button type="button" class="btn btn-sm btn-primary" id="addBankBtn">
                     <i class="fas fa-plus me-1"></i> Add Bank Account
                 </button>
@@ -216,17 +215,13 @@
                         {% endfor %}
                     {% endif %}
                 </div>
-                <div class="alert alert-info mt-3">
-                    <i class="fas fa-info-circle me-2"></i>
-                    Add bank accounts that have balances to report. Once a bank is selected, it won't appear in other dropdowns.
-                </div>
             </div>
         </div>
 
         <!-- Expenses Section -->
         <div class="card mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0"><i class="fas fa-receipt me-2"></i>Expenses</h5>
+                <h5 class="mb-0"><i class="fas fa-receipt me-2"></i>EXPENSES</h5>
                 <button type="button" class="btn btn-sm btn-primary" id="addExpenseBtn">
                     <i class="fas fa-plus me-1"></i> Add Expense
                 </button>
@@ -237,10 +232,7 @@
                         {% for expense in expenses %}
                         <div class="row mb-2 expense-row">
                             <div class="col-md-3">
-                                <input type="text" name="expense_category_{{ forloop.counter0 }}" class="form-control" placeholder="Category" value="{{ expense.expense_category }}">
-                            </div>
-                            <div class="col-md-4">
-                                <input type="text" name="expense_description_{{ forloop.counter0 }}" class="form-control" placeholder="Description" value="{{ expense.description }}">
+                                <input type="text" name="expense_description_{{ forloop.counter0 }}" class="form-control" placeholder="Description" value="{{ expense.expense_description|default:'' }}">
                             </div>
                             <div class="col-md-3">
                                 <input type="number" name="expense_amount_{{ forloop.counter0 }}" class="form-control expense-amount" placeholder="Amount" step="0.01" value="{{ expense.amount }}">
@@ -254,21 +246,17 @@
                         {% endfor %}
                     {% endif %}
                 </div>
-                <div class="alert alert-info mt-3">
-                    <i class="fas fa-info-circle me-2"></i>
-                    Expenses are optional. Add any expenses incurred during the day.
-                </div>
             </div>
         </div>
 
         <!-- Notes -->
         <div class="card mb-4">
             <div class="card-header">
-                <h5 class="mb-0"><i class="fas fa-sticky-note me-2"></i>Additional Notes</h5>
+                <h5 class="mb-0"><i class="fas fa-sticky-note me-2"></i>NOTES</h5>
             </div>
             <div class="card-body">
                 {{ form.notes }}
-                <small class="text-muted">Any additional information about the report</small>
+                <small class="text-muted">Additional information about the report</small>
             </div>
         </div>
 
@@ -286,7 +274,7 @@
                     <small class="text-muted">All expenses</small>
                 </div>
                 <div class="col-md-4 text-center">
-                    <p><i class="fas fa-chart-line me-2"></i>Net Position</p>
+                    <p><i class="fas fa-chart-line me-2"></i>Net Position Balance</p>
                     <h4 id="netPositionDisplay">0.00</h4>
                     <small class="text-muted">Closing Balance - Expenses</small>
                 </div>
@@ -508,9 +496,6 @@ document.getElementById('addExpenseBtn')?.addEventListener('click', function() {
     
     const html = `
         <div class="row mb-2 expense-row" id="expense-row-${rowId}">
-            <div class="col-md-3">
-                <input type="text" name="expense_category_${rowId}" class="form-control" placeholder="Category">
-            </div>
             <div class="col-md-4">
                 <input type="text" name="expense_description_${rowId}" class="form-control" placeholder="Description">
             </div>

@@ -83,8 +83,6 @@ class MpesaAccountForm(forms.ModelForm):
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
 
-
-
 class DailyShopReportForm(forms.ModelForm):
     class Meta:
         model = DailyShopReport
@@ -120,36 +118,17 @@ class DailyShopReportForm(forms.ModelForm):
 class ShopExpenseForm(forms.ModelForm):
     class Meta:
         model = ShopExpense
-        fields = ['expense_category', 'description', 'amount', 'payment_method', 'receipt_number']
+        fields = ['description', 'amount'] 
         widgets = {
-            'expense_category': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g., Transport, Utilities'}),
             'description': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Description of expense'}),
             'amount': forms.NumberInput(attrs={'class': 'form-control expense-amount', 'step': '0.01', 'placeholder': '0.00'}),
-            'payment_method': forms.Select(attrs={'class': 'form-control'}),
-            'receipt_number': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Receipt number (optional)'}),
         }
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Make all expense fields optional
-        for field in self.fields:
-            self.fields[field].required = False
-        
-        # Set specific help texts
-        self.fields['expense_category'].required = False
+        # Make fields optional
         self.fields['description'].required = False
         self.fields['amount'].required = False
-        self.fields['payment_method'].required = False
-        self.fields['receipt_number'].required = False
-    
-    class Meta:
-        model = ShopExpense
-        fields = ['expense_category', 'description', 'amount', 'payment_method', 'receipt_number']
-        widgets = {
-            'description': forms.TextInput(attrs={'class': 'form-control'}),
-            'amount': forms.NumberInput(attrs={'class': 'form-control expense-amount', 'step': '0.01'}),
-            'receipt_number': forms.TextInput(attrs={'class': 'form-control'}),
-        }
 
 class BankClosingBalanceForm(forms.ModelForm):
     class Meta:
@@ -165,8 +144,6 @@ class BankClosingBalanceForm(forms.ModelForm):
         # Make bank account fields optional
         self.fields['bank_account'].required = False
         self.fields['closing_balance'].required = False
-
-
 
 class MpesaDailySummaryForm(forms.ModelForm):
     class Meta:
@@ -188,18 +165,18 @@ BankClosingFormSet = inlineformset_factory(
     extra=1, 
     can_delete=True,
     can_delete_extra=True,
-    min_num=0,  # Allow zero forms
-    validate_min=False  # Don't require minimum number of forms
+    min_num=0,
+    validate_min=False
 )
 
 ExpenseFormSet = inlineformset_factory(
     DailyShopReport, 
     ShopExpense,
     form=ShopExpenseForm,
-    fields=['expense_category', 'description', 'amount', 'payment_method', 'receipt_number'],
+    fields=['description', 'amount'],
     extra=1, 
     can_delete=True,
     can_delete_extra=True,
-    min_num=0,  # Allow zero forms
-    validate_min=False  # Don't require minimum number of forms
+    min_num=0,
+    validate_min=False
 )

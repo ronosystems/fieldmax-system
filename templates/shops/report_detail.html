@@ -50,15 +50,21 @@
     
     .status-badge {
         display: inline-block;
-        padding: 5px 15px;
+        padding: 20px 60px;
         border-radius: 20px;
-        font-size: 0.85rem;
-        font-weight: 500;
+        font-size: 2rem;
+        font-weight: 1200;
+    }
+    
+    .header-status {
+        display: inline-block;
+        margin-right: right;
+        vertical-align: middle;
     }
     
     .status-finalized {
-        background: #10b981;
-        color: white;
+        background: #ffffff;
+        color: rgb(0, 0, 0);
     }
     
     .status-draft {
@@ -143,6 +149,12 @@
         margin-bottom: 0;
         opacity: 0.9;
     }
+    
+    .header-status {
+        display: inline-block;
+        margin-left: 15px;
+        vertical-align: middle;
+    }
 </style>
 {% endblock %}
 
@@ -151,21 +163,21 @@
     <!-- Report Header -->
     <div class="report-header">
         <div class="row align-items-center">
-            <div class="col-md-8">
+            <div class="col-md-12">
                 <h2>
                     <i class="fas fa-file-alt me-2"></i>
                     Daily Shop Report
+                    <span class="header-status">
+                        <span class="status-badge {% if report.is_finalized %}status-finalized{% else %}status-draft{% endif %}">
+                            {% if report.is_finalized %}
+                                <i class="fas fa-check-circle me-1"></i>FINALIZED
+                            {% else %}
+                                <i class="fas fa-edit me-1"></i>DRAFT
+                            {% endif %}
+                        </span>
+                    </span>
                 </h2>
                 <p>{{ report.shop.name }} | {{ report.report_date|date:"l, F d, Y" }}</p>
-            </div>
-            <div class="col-md-4 text-md-end mt-3 mt-md-0">
-                <div class="status-badge {% if report.is_finalized %}status-finalized{% else %}status-draft{% endif %}">
-                    {% if report.is_finalized %}
-                        <i class="fas fa-check-circle me-1"></i>FINALIZED
-                    {% else %}
-                        <i class="fas fa-edit me-1"></i>DRAFT
-                    {% endif %}
-                </div>
             </div>
         </div>
     </div>
@@ -181,12 +193,15 @@
                 <a href="{% url 'shops:edit_report' report.id %}" class="btn btn-warning">
                     <i class="fas fa-edit me-2"></i>Edit Report
                 </a>
+                <!-- Finalize Button - Only visible to superusers -->
+                {% if request.user.is_superuser %}
                 <form method="post" action="{% url 'shops:finalize_report' report.id %}" class="d-inline">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-success" onclick="return confirm('Are you sure you want to finalize this report? Once finalized, it cannot be edited or deleted.');">
                         <i class="fas fa-lock me-2"></i>Finalize Report
                     </button>
                 </form>
+                {% endif %}
                 {% endif %}
                 <button onclick="window.print()" class="btn btn-primary">
                     <i class="fas fa-print me-2"></i>Print Report
@@ -360,14 +375,12 @@
                         <table class="table table-hover table-expense">
                             <thead>
                                 <tr>
-                                    <th>Category</th>
                                     <th>Description</th>
                                     <th class="text-end">Amount (KES)</th>
                                 </thead>
                             <tbody>
                                 {% for expense in expenses %}
                                 <tr>
-                                    <td>{{ expense.expense_category }}</div>
                                     <td>{{ expense.description|default:"-" }}</div>
                                     <td class="text-end">KES {{ expense.amount|floatformat:2|intcomma }}</div>
                                 </tr>
@@ -375,7 +388,7 @@
                             </tbody>
                             <tfoot>
                                 <tr class="table-active">
-                                    <td colspan="2"><strong>Total Expenses</strong></div>
+                                    <td colspan="1"><strong>Total Expenses</strong></div>
                                     <td class="text-end"><strong>KES {{ report.total_expenses|floatformat:2|intcomma }}</strong></div>
                                 </tr>
                             </tfoot>
@@ -414,27 +427,35 @@
                 <div class="card-body">
                     <table class="table table-borderless">
                         <tr>
-                            <td width="50%"><strong>Submitted By:</strong></div>
+                            <td width="50%"><strong>Submitted By:</strong></td>
                             <td>{{ report.submitted_by.get_full_name|default:report.submitted_by.username }}</div>
                         </tr>
                         <tr>
                             <td><strong>Submission Time:</strong></div>
                             <td>{{ report.submission_time|date:"F d, Y H:i:s" }}</div>
                         </tr>
+                        {% if report.is_finalized %}
                         <tr>
-                            <td><strong>Last Modified:</strong></div>
-                            <td>{{ report.last_modified|date:"F d, Y H:i:s" }}</div>
-                        </tr>
-                        <tr>
-                            <td><strong>Status:</strong></div>
+                            <td><strong>Finalized By:</strong></div>
                             <td>
-                                {% if report.is_finalized %}
-                                    <span class="status-finalized">Finalized</span>
+                                {% if report.finalized_by %}
+                                    {{ report.finalized_by.get_full_name|default:report.finalized_by.username }}
                                 {% else %}
-                                    <span class="status-draft">Draft</span>
+                                    {{ report.submitted_by.get_full_name|default:report.submitted_by.username }}
                                 {% endif %}
                             </div>
                         </tr>
+                        <tr>
+                            <td><strong>Finalized At:</strong></div>
+                            <td>
+                                {% if report.finalized_at %}
+                                    {{ report.finalized_at|date:"F d, Y H:i:s" }}
+                                {% else %}
+                                    {{ report.last_modified|date:"F d, Y H:i:s" }}
+                                {% endif %}
+                            </div>
+                        </tr>
+                        {% endif %}
                     </table>
                 </div>
             </div>

@@ -110,8 +110,6 @@ def add_branch(request):
 
 
 
-
-
 @login_required
 @user_passes_test(is_staff_or_admin)
 def create_daily_report(request):
@@ -186,23 +184,20 @@ def create_daily_report(request):
                                 except (ValueError, BankAccount.DoesNotExist) as e:
                                     print(f"Error creating bank closing balance: {e}")
                     
-                    # Process expenses from POST data
+                    # Process expenses from POST data (updated for new format)
                     expense_total = 0
                     for key, value in request.POST.items():
-                        if key.startswith('expense_category_') and value:
+                        if key.startswith('expense_description_') and value:
                             index = key.split('_')[-1]
                             amount_key = f'expense_amount_{index}'
-                            description_key = f'expense_description_{index}'
-                            
                             amount = request.POST.get(amount_key)
-                            description = request.POST.get(description_key, '')
                             
                             if amount and float(amount) > 0:
                                 try:
                                     expense = ShopExpense.objects.create(
                                         daily_report=report,
-                                        expense_category=value,
-                                        description=description,
+                                        expense_category='Other',  # Default category since removed from form
+                                        description=value,
                                         amount=Decimal(str(amount)),
                                         payment_method='cash'
                                     )
@@ -224,7 +219,6 @@ def create_daily_report(request):
                     report.total_closing_balance = mpesa_float + mpesa_cash + float(bank_total)
                     report.save()
                     
-                    # Success message - updated to reflect transactions instead of sales
                     messages.success(
                         request, 
                         f'Daily report for {report.shop.name} submitted successfully! '
@@ -260,7 +254,6 @@ def create_daily_report(request):
 
 
 
-    
 
 
 @login_required
@@ -308,26 +301,23 @@ def edit_daily_report(request, report_id):
                                 except (ValueError, BankAccount.DoesNotExist) as e:
                                     print(f"Error creating bank closing balance: {e}")
                     
-                    # Delete existing expenses and recreate
+                    # Delete existing expenses and recreate (updated for new format)
                     ShopExpense.objects.filter(daily_report=report).delete()
                     
                     # Process expenses from POST data
                     expense_total = 0
                     for key, value in request.POST.items():
-                        if key.startswith('expense_category_') and value:
+                        if key.startswith('expense_description_') and value:
                             index = key.split('_')[-1]
                             amount_key = f'expense_amount_{index}'
-                            description_key = f'expense_description_{index}'
-                            
                             amount = request.POST.get(amount_key)
-                            description = request.POST.get(description_key, '')
                             
                             if amount and float(amount) > 0:
                                 try:
                                     expense = ShopExpense.objects.create(
                                         daily_report=report,
-                                        expense_category=value,
-                                        description=description,
+                                        expense_category='Other',  # Default category
+                                        description=value,
                                         amount=Decimal(str(amount)),
                                         payment_method='cash'
                                     )
@@ -338,7 +328,7 @@ def edit_daily_report(request, report_id):
                     # Update report with totals
                     report.total_expenses = expense_total
                     
-                    # Calculate total closing balance (M-Pesa + Bank)
+                    # Calculate total closing balance
                     mpesa_float = float(report.closing_mpesa_float) if report.closing_mpesa_float else 0
                     mpesa_cash = float(report.closing_mpesa_cash) if report.closing_mpesa_cash else 0
                     
@@ -426,7 +416,7 @@ def report_detail(request, report_id):
 @login_required
 @user_passes_test(is_staff_or_admin)
 def finalize_report(request, report_id):
-    """Finalize a report - users can only finalize their own reports unless superuser"""
+    """Finalize a report (cannot be edited after finalization)"""
     report = get_object_or_404(DailyShopReport, id=report_id)
     
     # Check if user is allowed to finalize this report
@@ -436,6 +426,8 @@ def finalize_report(request, report_id):
     
     if request.method == 'POST':
         report.is_finalized = True
+        report.finalized_by = request.user  # Track who finalized
+        report.finalized_at = timezone.now()  # Track when it was finalized
         report.save()
         messages.success(request, f'Report for {report.report_date} has been finalized!')
     

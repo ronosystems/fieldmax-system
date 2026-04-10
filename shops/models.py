@@ -92,9 +92,19 @@ class DailyShopReport(models.Model):
     """Main daily report for each shop"""
     shop = models.ForeignKey(ShopBranch, on_delete=models.CASCADE, related_name='daily_reports')
     report_date = models.DateField()
-    submitted_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    submitted_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='submitted_reports')
     submission_time = models.DateTimeField(auto_now_add=True)
     last_modified = models.DateTimeField(auto_now=True)
+    
+    # Add these new fields for finalization tracking
+    finalized_by = models.ForeignKey(
+        User, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='finalized_reports'
+    )
+    finalized_at = models.DateTimeField(null=True, blank=True)
     
     # M-Pesa closing balances
     closing_mpesa_float = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name="Closing M-Pesa Float")
@@ -134,11 +144,9 @@ class DailyShopReport(models.Model):
             self.total_closing_balance = 0
         return self.total_closing_balance
 
-
     def save(self, *args, **kwargs):
         self.calculate_totals()
         super().save(*args, **kwargs)
-
 
 # ==================== BANK CLOSING BALANCE MODEL ====================
 
@@ -157,15 +165,13 @@ class BankClosingBalance(models.Model):
         return f"{self.daily_report} - {self.bank_account.bank_name}: {self.closing_balance}"
 
 
-# ==================== SHOP EXPENSE MODEL ====================
-
 class ShopExpense(models.Model):
     """Individual expenses for a daily report"""
     daily_report = models.ForeignKey(DailyShopReport, on_delete=models.CASCADE, related_name='expenses')
-    expense_category = models.CharField(max_length=100)  # Dynamic - added via frontend
+    expense_category = models.CharField(max_length=100, blank=True, null=True)
     description = models.CharField(max_length=200)
     amount = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
-    payment_method = models.CharField(max_length=50, default='cash')  # cash, mpesa, bank
+    payment_method = models.CharField(max_length=50, default='cash', blank=True)
     receipt_number = models.CharField(max_length=50, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     
@@ -173,7 +179,9 @@ class ShopExpense(models.Model):
         ordering = ['-created_at']
     
     def __str__(self):
-        return f"{self.daily_report} - {self.expense_category}: {self.amount}"
+        if self.description:
+            return f"{self.daily_report} - {self.description}: {self.amount}"
+        return f"{self.daily_report} - Expense: {self.amount}"
 
 
 # ==================== M-PESA DAILY SUMMARY MODEL ====================
