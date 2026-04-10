@@ -144,7 +144,7 @@
     
     .stat-icon {
         font-size: 2rem;
-        opacity: 5;
+        opacity: 0.3;
         position: absolute;
         right: 20px;
         bottom: 15px;
@@ -162,13 +162,21 @@
         font-size: 0.85rem;
         text-transform: uppercase;
         letter-spacing: 1px;
-        opacity: 5;
+        opacity: 0.9;
+    }
+    
+    .text-muted {
+        color: #6c757d;
+        font-size: 0.75rem;
     }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container-fluid">
+    {% if request.user.is_superuser %}
+    <!-- SUPERUSER VIEW - Everything visible -->
+    
     <!-- Welcome Banner -->
     <div class="welcome-banner">
         <div class="row align-items-center">
@@ -246,8 +254,6 @@
         </div>
     </div>
     
-    <!-- Stats Cards - Different for Superusers and Regular Users -->
-    {% if request.user.is_superuser %}
     <!-- SUPERUSER STATS CARDS -->
     <div class="row stats-row">
         <div class="col-xl-3 col-md-6 mb-3">
@@ -311,47 +317,21 @@
     </div>
     
     {% else %}
-    <!-- REGULAR USER STATS CARDS -->
-    <div class="row stats-row">
-        <!-- Own Shop Status / Location -->
-        <div class="col-md-4 mb-3">
-            <div class="stat-card" style="position: relative;">
-                <div class="stat-icon">
-                    <i class="fas fa-store"></i>
-                </div>
-                <div class="stat-value">{{ assigned_shop.name|default:"Not Assigned" }}</div>
-                <div class="stat-label">Your Shop</div>
-                <small class="text-muted">
-                    <i class="fas fa-map-marker-alt me-1"></i> {{ assigned_shop.location|default:"No location" }}
-                </small>
+    <!-- REGULAR USER (M-PESA AGENT) VIEW - Only welcome banner -->
+    <div class="welcome-banner">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <h2>
+                    <i class="fas fa-mobile-alt me-2"></i>
+                    M-Pesa Agent Dashboard
+                </h2>
+                <p>Welcome back, {{ request.user.first_name|default:request.user.username }}!</p>
+                <p class="mb-0">Manage your daily M-Pesa shop reports and transactions.</p>
             </div>
-        </div>
-        
-        <!-- Total Monthly Transactions -->
-        <div class="col-md-4 mb-3">
-            <div class="stat-card" style="position: relative;">
-                <div class="stat-icon">
-                    <i class="fas fa-exchange-alt"></i>
-                </div>
-                <div class="stat-value transaction-count">{{ monthly_transactions|floatformat:0|intcomma }}</div>
-                <div class="stat-label">Monthly Transactions</div>
-                <small class="text-muted">
-                    <i class="fas fa-calendar-alt me-1"></i> This month
-                </small>
-            </div>
-        </div>
-        
-        <!-- Total Monthly Expenses -->
-        <div class="col-md-4 mb-3">
-            <div class="stat-card" style="position: relative;">
-                <div class="stat-icon">
-                    <i class="fas fa-money-bill-wave"></i>
-                </div>
-                <div class="stat-value expense-amount">KES {{ monthly_expenses|floatformat:0|intcomma }}</div>
-                <div class="stat-label">Monthly Expenses</div>
-                <small class="text-muted">
-                    <i class="fas fa-calendar-alt me-1"></i> This month
-                </small>
+            <div class="col-md-4 text-md-end mt-3 mt-md-0">
+                <a href="{% url 'shops:create_report' %}" class="btn btn-submit-report">
+                    <i class="fas fa-plus-circle me-2"></i>Submit Daily Report
+                </a>
             </div>
         </div>
     </div>
