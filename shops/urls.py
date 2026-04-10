@@ -45,4 +45,5 @@ urlpatterns = [
     path('api/weekly-transactions/', views.weekly_transactions_data, name='weekly_transactions_data'),
     path('api/report/<int:report_id>/summary/', views.get_report_summary, name='get_report_summary'),
     path('api/expense-distribution/', views.expense_distribution, name='expense_distribution'),
+    path('api/previous-closing/', views.get_previous_closing_balance, name='previous_closing'),
 ]

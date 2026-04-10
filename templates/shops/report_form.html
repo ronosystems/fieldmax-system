@@ -98,6 +98,18 @@
         color: #000000;
         background-color: #f5f5f5;
     }
+    
+    .input-group-text {
+        background: #059669;
+        color: white;
+        font-weight: bold;
+    }
+    
+    .readonly-field {
+        background-color: #e8f5e9;
+        font-weight: bold;
+        font-size: 1.1rem;
+    }
 </style>
 {% endblock %}
 
@@ -120,42 +132,58 @@
     <form method="post" id="reportForm">
         {% csrf_token %}
         
-        <!-- FIRST ROW: Shop Selection and Daily Transactions -->
+        <!-- FIRST ROW: Shop Selection and Daily Transactions - RESTYLED -->
         <div class="card mb-4">
             <div class="card-header">
                 <h5 class="mb-0"><i class="fas fa-store me-2"></i>REPORT</h5>
             </div>
             <div class="card-body">
-                <div class="row">
-                    <div class="col-md-6 mb-3">
+                <!-- Row 1: Shop and Date side by side -->
+                <div class="row mb-3">
+                    <div class="col-md-6 mb-2">
                         <label class="form-label fw-bold">Shop Branch *</label>
                         {% if user_can_select_shop %}
                             {{ form.shop }}
-                            <small class="text-muted">Choose the shop branch for this report</small>
+                            <small class="text-muted d-block">Choose the shop branch for this report</small>
                         {% else %}
-                            <input type="text" class="form-control" value="{{ assigned_shop.name }}" readonly disabled style="background-color: #04cdff;">
+                            <input type="text" class="form-control readonly-field" value="{{ assigned_shop.name }}" readonly disabled>
                             <input type="hidden" name="shop" id="hidden_shop_id" value="{{ assigned_shop.id }}">
+                            <small class="text-muted d-block">You are assigned to: {{ assigned_shop.name }}</small>
                         {% endif %}
                         {% if form.shop.errors %}
                             <div class="text-danger small">{{ form.shop.errors }}</div>
                         {% endif %}
                     </div>
-                    <div class="col-md-6 mb-3">
+                    <div class="col-md-6 mb-2">
                         <label class="form-label fw-bold">Report Date *</label>
                         {{ form.report_date }}
-                        <small class="text-muted">Select the date of the report</small>
+                        <small class="text-muted d-block">Select the date of the report</small>
                         {% if form.report_date.errors %}
                             <div class="text-danger small">{{ form.report_date.errors }}</div>
                         {% endif %}
                     </div>
                 </div>
+                
+                <!-- Row 2: Previous Closing Balance and Transactions side by side -->
                 <div class="row">
-                    <div class="col-md-12 mb-3">
+                    <div class="col-md-6 mb-2">
+                        <label class="form-label fw-bold">
+                            <i class="fas fa-chart-line me-1"></i> Previous Day Closing Balance
+                        </label>
+                        <div class="input-group">
+                            <span class="input-group-text">KES</span>
+                            <input type="text" id="previousClosingInput" class="form-control readonly-field" readonly 
+                                   value="{% if previous_net_balance %}KES {{ previous_net_balance|floatformat:2|intcomma }}{% else %}KES 0.00{% endif %}">
+                        </div>
+                        <small class="text-muted d-block">Auto-loaded from previous day's report</small>
+                        <input type="hidden" id="previous_closing_balance" value="{{ previous_net_balance|default:0 }}">
+                    </div>
+                    <div class="col-md-6 mb-2">
                         <label class="form-label fw-bold">
                             <i class="fas fa-exchange-alt me-1"></i> Total M-Pesa Transactions *
                         </label>
                         {{ form.shop_sales }}
-                        <small class="text-muted">Total transactions done today</small>
+                        <small class="text-muted d-block">Enter total number of transactions done today (e.g., 50)</small>
                         {% if form.shop_sales.errors %}
                             <div class="text-danger small">{{ form.shop_sales.errors }}</div>
                         {% endif %}
@@ -230,11 +258,11 @@
                 <div id="expense-rows">
                     {% if expenses %}
                         {% for expense in expenses %}
-                        <div class="row mb-2 expense-row">
-                            <div class="col-md-3">
-                                <input type="text" name="expense_description_{{ forloop.counter0 }}" class="form-control" placeholder="Description" value="{{ expense.expense_description|default:'' }}">
+                        <div class="row mb-2 expense-row" data-expense-id="{{ expense.id }}">
+                            <div class="col-md-5">
+                                <input type="text" name="expense_description_{{ forloop.counter0 }}" class="form-control" placeholder="Description of expense" value="{{ expense.description }}">
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-5">
                                 <input type="number" name="expense_amount_{{ forloop.counter0 }}" class="form-control expense-amount" placeholder="Amount" step="0.01" value="{{ expense.amount }}">
                             </div>
                             <div class="col-md-2">
@@ -263,20 +291,31 @@
         <!-- Summary -->
         <div class="summary-card">
             <div class="row">
-                <div class="col-md-4 text-center">
-                    <p><i class="fas fa-chart-pie me-2"></i>Total Closing Balance</p>
-                    <h4 id="totalClosingDisplay">0.00</h4>
+                <div class="col-md-3 text-center">
+                    <p><i class="fas fa-chart-line me-2"></i>Previous Closing</p>
+                    <h4 id="previousClosingDisplay">
+                        {% if previous_net_balance %}
+                            KES {{ previous_net_balance|floatformat:2|intcomma }}
+                        {% else %}
+                            KES 0.00
+                        {% endif %}
+                    </h4>
+                    <small class="text-muted">Yesterday's closing balance</small>
+                </div>
+                <div class="col-md-3 text-center">
+                    <p><i class="fas fa-chart-pie me-2"></i>Today's Closing</p>
+                    <h4 id="totalClosingDisplay">KES 0.00</h4>
                     <small class="text-muted">Float + Cash + Bank</small>
                 </div>
-                <div class="col-md-4 text-center">
-                    <p><i class="fas fa-money-bill-wave me-2"></i>Total Expenses</p>
-                    <h4 id="totalExpensesDisplay">0.00</h4>
+                <div class="col-md-3 text-center">
+                    <p><i class="fas fa-money-bill-wave me-2"></i>Today's Expenses</p>
+                    <h4 id="totalExpensesDisplay">KES 0.00</h4>
                     <small class="text-muted">All expenses</small>
                 </div>
-                <div class="col-md-4 text-center">
-                    <p><i class="fas fa-chart-line me-2"></i>Net Position Balance</p>
-                    <h4 id="netPositionDisplay">0.00</h4>
-                    <small class="text-muted">Closing Balance - Expenses</small>
+                <div class="col-md-3 text-center">
+                    <p><i class="fas fa-chart-line me-2"></i>Net Position</p>
+                    <h4 id="netPositionDisplay">KES 0.00</h4>
+                    <small class="text-muted">Previous Closing - Today's Expenses</small>
                 </div>
             </div>
         </div>
@@ -298,22 +337,48 @@ let bankCount = {{ bank_closings|length|default:0 }};
 let expenseCount = {{ expenses|length|default:0 }};
 let banksData = {};
 let selectedBankIds = new Set();
+let previousClosing = parseFloat(document.getElementById('previous_closing_balance')?.value) || 0;
 
 // Function to get selected shop ID (works for both select and hidden input)
 function getSelectedShopId() {
-    // Try to get from select element (superuser)
     const shopSelect = document.getElementById('id_shop');
     if (shopSelect && shopSelect.value) {
         return shopSelect.value;
     }
-    
-    // Try to get from hidden input (non-superuser)
     const hiddenShop = document.getElementById('hidden_shop_id');
     if (hiddenShop && hiddenShop.value) {
         return hiddenShop.value;
     }
-    
     return null;
+}
+
+// Update previous closing display
+function updatePreviousClosingDisplay(value) {
+    const displayInput = document.getElementById('previousClosingInput');
+    const displayH4 = document.getElementById('previousClosingDisplay');
+    if (displayInput) {
+        displayInput.value = 'KES ' + value.toLocaleString('en-KE', {minimumFractionDigits: 2});
+    }
+    if (displayH4) {
+        displayH4.innerText = 'KES ' + value.toLocaleString('en-KE', {minimumFractionDigits: 2});
+    }
+    document.getElementById('previous_closing_balance').value = value;
+}
+
+// Fetch previous closing balance
+function fetchPreviousClosingBalance(shopId, reportDate) {
+    if (shopId && reportDate) {
+        fetch(`/shops/api/previous-closing/?shop_id=${shopId}&report_date=${reportDate}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    previousClosing = data.closing_balance;
+                    updatePreviousClosingDisplay(previousClosing);
+                    calculateTotals();
+                }
+            })
+            .catch(error => console.error('Error fetching previous closing:', error));
+    }
 }
 
 // Function to update selected bank IDs from current form
@@ -329,14 +394,9 @@ function updateSelectedBankIds() {
 // Function to get available banks (exclude already selected ones)
 function getAvailableBanks(shopId, currentSelectElement = null) {
     if (!shopId || !banksData[shopId]) return [];
-    
     const currentValue = currentSelectElement ? currentSelectElement.value : null;
-    
     return banksData[shopId].filter(bank => {
         const bankId = bank.id.toString();
-        // Include bank if:
-        // 1. It's not selected elsewhere, OR
-        // 2. It's the current bank for this row (for editing)
         return !selectedBankIds.has(bankId) || bankId === currentValue;
     });
 }
@@ -345,19 +405,12 @@ function getAvailableBanks(shopId, currentSelectElement = null) {
 function updateAllBankSelects() {
     const shopId = getSelectedShopId();
     if (!shopId || !banksData[shopId]) return;
-    
     updateSelectedBankIds();
-    
     document.querySelectorAll('.bank-select').forEach(select => {
         const currentValue = select.value;
         const availableBanks = getAvailableBanks(shopId, select);
-        
-        // Store current selection
         const currentSelected = select.value;
-        
-        // Clear and rebuild options
         select.innerHTML = '<option value="">-- Select Bank Account --</option>';
-        
         availableBanks.forEach(bank => {
             const option = document.createElement('option');
             option.value = bank.id;
@@ -367,8 +420,6 @@ function updateAllBankSelects() {
             }
             select.appendChild(option);
         });
-        
-        // If current value is not in available banks (shouldn't happen), preserve it
         if (currentSelected && !availableBanks.find(b => b.id.toString() === currentSelected)) {
             const bank = banksData[shopId].find(b => b.id.toString() === currentSelected);
             if (bank) {
@@ -393,9 +444,7 @@ function loadBanksForShop(shopId) {
                     updateAllBankSelects();
                 }
             })
-            .catch(error => {
-                console.error('Error loading banks:', error);
-            });
+            .catch(error => console.error('Error loading banks:', error));
     }
 }
 
@@ -404,19 +453,31 @@ const shopSelect = document.getElementById('id_shop');
 if (shopSelect) {
     shopSelect.addEventListener('change', function() {
         const shopId = this.value;
+        const reportDate = document.getElementById('id_report_date')?.value;
         if (shopId) {
             loadBanksForShop(shopId);
+            if (reportDate) {
+                fetchPreviousClosingBalance(shopId, reportDate);
+            }
         }
     });
 }
 
-// For non-superusers - load banks on page load using hidden input
+// For non-superusers - load banks on page load
 const hiddenShopId = getSelectedShopId();
 if (hiddenShopId && !shopSelect) {
-    // Small delay to ensure DOM is ready
-    setTimeout(function() {
-        loadBanksForShop(hiddenShopId);
-    }, 100);
+    setTimeout(() => loadBanksForShop(hiddenShopId), 100);
+}
+
+// Listen to date changes
+const reportDateInput = document.getElementById('id_report_date');
+if (reportDateInput) {
+    reportDateInput.addEventListener('change', function() {
+        const shopId = getSelectedShopId();
+        if (shopId && this.value) {
+            fetchPreviousClosingBalance(shopId, this.value);
+        }
+    });
 }
 
 // Handle bank selection change
@@ -429,33 +490,25 @@ function handleBankSelectionChange(selectElement) {
 document.getElementById('addBankBtn')?.addEventListener('click', function() {
     const shopId = getSelectedShopId();
     const container = document.getElementById('bank-rows');
-    
     if (!shopId) {
         alert('Please select a shop first');
         return;
     }
-    
     if (!banksData[shopId]) {
         alert('Loading bank accounts. Please wait...');
         return;
     }
-    
-    // Get available banks (excluding already selected ones)
     updateSelectedBankIds();
     const availableBanks = banksData[shopId].filter(bank => !selectedBankIds.has(bank.id.toString()));
-    
     if (availableBanks.length === 0) {
         alert('All bank accounts have been added. No more banks available for this report.');
         return;
     }
-    
     const rowId = bankCount++;
-    
     let bankOptions = '<option value="">-- Select Bank Account --</option>';
     availableBanks.forEach(bank => {
         bankOptions += `<option value="${bank.id}">${bank.name} - ${bank.account_name} (${bank.account_number})</option>`;
     });
-    
     const html = `
         <div class="row mb-2 bank-row" id="bank-row-${rowId}">
             <div class="col-md-5">
@@ -493,13 +546,12 @@ function removeBankRow(button) {
 document.getElementById('addExpenseBtn')?.addEventListener('click', function() {
     const container = document.getElementById('expense-rows');
     const rowId = expenseCount++;
-    
     const html = `
         <div class="row mb-2 expense-row" id="expense-row-${rowId}">
-            <div class="col-md-4">
-                <input type="text" name="expense_description_${rowId}" class="form-control" placeholder="Description">
+            <div class="col-md-5">
+                <input type="text" name="expense_description_${rowId}" class="form-control" placeholder="Description of expense">
             </div>
-            <div class="col-md-3">
+            <div class="col-md-5">
                 <input type="number" name="expense_amount_${rowId}" class="form-control expense-amount" placeholder="Amount" step="0.01" oninput="calculateTotals()">
             </div>
             <div class="col-md-2">
@@ -518,59 +570,55 @@ function removeExpenseRow(button) {
     calculateTotals();
 }
 
-// Calculate totals - FIXED VERSION
+// Calculate totals
 function calculateTotals() {
-    // Get M-Pesa values
     let mpesaFloat = parseFloat(document.getElementById('id_closing_mpesa_float')?.value) || 0;
     let mpesaCash = parseFloat(document.getElementById('id_closing_mpesa_cash')?.value) || 0;
     
-    // Calculate bank total
     let bankTotal = 0;
     document.querySelectorAll('.bank-balance').forEach(input => {
         bankTotal += parseFloat(input.value) || 0;
     });
     
-    // Calculate total closing balance (M-Pesa Float + M-Pesa Cash + Bank Total)
-    let totalClosing = mpesaFloat + mpesaCash + bankTotal;
-    document.getElementById('totalClosingDisplay').innerText = totalClosing.toLocaleString('en-KE', {minimumFractionDigits: 2});
+    let todayClosing = mpesaFloat + mpesaCash + bankTotal;
+    document.getElementById('totalClosingDisplay').innerText = 'KES ' + todayClosing.toLocaleString('en-KE', {minimumFractionDigits: 2});
     
-    // Calculate total expenses
     let totalExpenses = 0;
     document.querySelectorAll('.expense-amount').forEach(input => {
         totalExpenses += parseFloat(input.value) || 0;
     });
-    document.getElementById('totalExpensesDisplay').innerText = totalExpenses.toLocaleString('en-KE', {minimumFractionDigits: 2});
+    document.getElementById('totalExpensesDisplay').innerText = 'KES ' + totalExpenses.toLocaleString('en-KE', {minimumFractionDigits: 2});
     
-    // Calculate Net Position = Total Closing Balance - Total Expenses
-    let netPosition = totalClosing - totalExpenses;
-    let netDisplay = netPosition.toLocaleString('en-KE', {minimumFractionDigits: 2});
+    // Net Position = Previous Closing - Today's Expenses
+    let netPosition = previousClosing - totalExpenses;
+    let netDisplay = 'KES ' + netPosition.toLocaleString('en-KE', {minimumFractionDigits: 2});
     document.getElementById('netPositionDisplay').innerText = netDisplay;
     document.getElementById('netPositionDisplay').style.color = netPosition >= 0 ? '#10b981' : '#ef4444';
     
-    // Optional: Log for debugging
-    console.log({
-        mpesaFloat: mpesaFloat,
-        mpesaCash: mpesaCash,
-        bankTotal: bankTotal,
-        totalClosing: totalClosing,
-        totalExpenses: totalExpenses,
-        netPosition: netPosition
-    });
+    console.log({ previousClosing, mpesaFloat, mpesaCash, bankTotal, todayClosing, totalExpenses, netPosition });
 }
 
-// Initialize existing bank rows with data-bank-id attribute
+// Initialize existing bank rows
 function initializeExistingBanks() {
     document.querySelectorAll('.bank-row').forEach(row => {
         const select = row.querySelector('.bank-select');
         const bankId = row.getAttribute('data-bank-id');
+        const balance = row.getAttribute('data-balance');
         if (bankId && select) {
             select.setAttribute('data-bank-id', bankId);
-            // Add to selected set for editing
-            if (bankId) {
-                selectedBankIds.add(bankId);
+            selectedBankIds.add(bankId);
+            const balanceInput = row.querySelector('.bank-balance');
+            if (balanceInput && balance) {
+                balanceInput.value = balance;
             }
         }
     });
+}
+
+// Initialize existing expense rows
+function initializeExistingExpenses() {
+    expenseCount = document.querySelectorAll('.expense-row').length;
+    bankCount = document.querySelectorAll('.bank-row').length;
 }
 
 // Event listeners
@@ -585,6 +633,13 @@ document.addEventListener('input', function(e) {
 
 // Initialize on page load
 initializeExistingBanks();
+initializeExistingExpenses();
 calculateTotals();
+
+// Load banks on page load if shop is already selected
+const initialShopId = getSelectedShopId();
+if (initialShopId) {
+    loadBanksForShop(initialShopId);
+}
 </script>
 {% endblock %}

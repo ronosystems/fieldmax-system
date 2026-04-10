@@ -1,4 +1,7 @@
 # shop/models.py
+from datetime import timezone
+from datetime import timedelta
+from django.utils import timezone 
 from django.db import models
 from django.contrib.auth.models import User
 from django.core.validators import MinValueValidator
@@ -147,6 +150,22 @@ class DailyShopReport(models.Model):
     def save(self, *args, **kwargs):
         self.calculate_totals()
         super().save(*args, **kwargs)
+
+    def get_previous_day_report(self):
+        """Get the report for the previous day for the same shop"""
+        previous_date = self.report_date - timezone.timedelta(days=1)
+        return DailyShopReport.objects.filter(
+            shop=self.shop,
+            report_date=previous_date
+        ).first()
+
+    def get_opening_balance(self):
+        """Get the opening balance (previous day's closing balance)"""
+        previous_report = self.get_previous_day_report()
+        if previous_report:
+            return previous_report.total_closing_balance
+        return 0  # First day, no previous balance
+
 
 # ==================== BANK CLOSING BALANCE MODEL ====================
 

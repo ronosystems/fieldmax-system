@@ -210,55 +210,63 @@
         </div>
     </div>
 
-    <!-- Summary Cards - New Layout -->
-    <div class="row mb-4">
-        <div class="col-md-3">
-            <div class="info-card text-center">
-                <div class="info-label">
-                    <i class="fas fa-mobile-alt me-1"></i>Total M-Pesa Balance
-                </div>
-                <div class="info-value-large">
-                    KES {{ total_mpesa|floatformat:2|intcomma }}
-                </div>
-                <small class="text-muted">Float + Cash</small>
+<!-- Summary Cards - Updated Layout -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="info-card text-center">
+            <div class="info-label">
+                <i class="fas fa-chart-line me-1"></i>Opening Balance
             </div>
-        </div>
-        <div class="col-md-3">
-            <div class="info-card text-center">
-                <div class="info-label">
-                    <i class="fas fa-university me-1"></i>Total Bank Balance
-                </div>
-                <div class="info-value-large">
-                    KES {{ bank_total|floatformat:2|intcomma }}
-                </div>
-                <small class="text-muted">All bank accounts</small>
+            <div class="info-value-large">
+                KES {{ opening_balance|floatformat:2|intcomma }}
             </div>
-        </div>
-        <div class="col-md-3">
-            <div class="info-card text-center">
-                <div class="info-label">
-                    <i class="fas fa-receipt me-1"></i>Total Day Expenses
-                </div>
-                <div class="info-value-large {% if report.total_expenses > 0 %}amount-negative{% endif %}">
-                    KES {{ report.total_expenses|floatformat:2|intcomma }}
-                </div>
-                <small class="text-muted">All expenses</small>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="info-card text-center">
-                <div class="info-label">
-                    <i class="fas fa-chart-pie me-1"></i>Total Closing Balance
-                </div>
-                {% with closing_total=total_mpesa|add:bank_total|add:report.total_expenses %}
-                <div class="info-value-large {% if closing_total >= 0 %}amount-positive{% else %}amount-negative{% endif %}">
-                    KES {{ closing_total|floatformat:2|intcomma }}
-                </div>
-                {% endwith %}
-                <small class="text-muted">M-Pesa + Bank - Expenses</small>
-            </div>
+            <small class="text-muted">Previous day's closing balance</small>
         </div>
     </div>
+    <div class="col-md-3">
+        <div class="info-card text-center">
+            <div class="info-label">
+                <i class="fas fa-receipt me-1"></i>Today's Expenses
+            </div>
+            <div class="info-value-large {% if report.total_expenses > 0 %}amount-negative{% endif %}">
+                KES {{ report.total_expenses|floatformat:2|intcomma }}
+            </div>
+            <small class="text-muted">All expenses today</small>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="info-card text-center">
+            <div class="info-label">
+                <i class="fas fa-chart-pie me-1"></i>Net Position
+            </div>
+            <div class="info-value-large {% if net_position >= 0 %}amount-positive{% else %}amount-negative{% endif %}">
+                KES {{ net_position|floatformat:2|intcomma }}
+            </div>
+            <small class="text-muted">Opening Balance - Expenses</small>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="info-card text-center">
+            <div class="info-label">
+                <i class="fas fa-chart-line me-1"></i>Today's Closing Balance
+            </div>
+            <div class="info-value-large">
+                KES {{ report.total_closing_balance|floatformat:2|intcomma }}
+            </div>
+            <small class="text-muted">Float + Cash + Bank</small>
+        </div>
+    </div>
+</div>
+
+<!-- Show previous day info if available -->
+{% if previous_report %}
+<div class="alert alert-info mb-4">
+    <i class="fas fa-info-circle me-2"></i>
+    <strong>Previous Day Reference:</strong> 
+    Closing balance from {{ previous_report.report_date|date:"F d, Y" }} was 
+    <strong>KES {{ previous_report.total_closing_balance|floatformat:2|intcomma }}</strong>
+</div>
+{% endif %}
 
     <!-- Additional Info: M-Pesa Transactions -->
     <div class="row mb-4">

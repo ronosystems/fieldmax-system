@@ -81,6 +81,60 @@ def shop_dashboard(request):
 
 
 
+@login_required
+def get_previous_closing_balance(request):
+    """AJAX endpoint to get previous day's closing balance"""
+    try:
+        shop_id = request.GET.get('shop_id')
+        report_date = request.GET.get('report_date')
+        
+        if shop_id and report_date:
+            from datetime import datetime, timedelta
+            report_date = datetime.strptime(report_date, '%Y-%m-%d').date()
+            previous_date = report_date - timedelta(days=1)
+            
+            previous_report = DailyShopReport.objects.filter(
+                shop_id=shop_id,
+                report_date=previous_date
+            ).first()
+            
+            closing_balance = float(previous_report.total_closing_balance) if previous_report else 0
+            
+            return JsonResponse({
+                'success': True,
+                'closing_balance': closing_balance,
+                'has_previous': previous_report is not None
+            })
+        return JsonResponse({'success': False, 'error': 'Missing parameters'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+
+
+
+
+def get_running_balance(reports):
+    """Calculate running balance for a series of reports"""
+    running_balance = 0
+    balances = []
+    dates = []
+    
+    for report in reports.order_by('report_date'):
+        opening = running_balance
+        net_change = report.total_closing_balance - running_balance
+        balances.append({
+            'date': report.report_date,
+            'opening': opening,
+            'closing': report.total_closing_balance,
+            'expenses': report.total_expenses,
+            'net_change': net_change
+        })
+        running_balance = report.total_closing_balance
+        dates.append(report.report_date)
+    
+    return balances, dates
+
 
 
 
@@ -271,8 +325,26 @@ def edit_daily_report(request, report_id):
         messages.warning(request, 'This report is finalized and cannot be edited.')
         return redirect('shops:report_detail', report_id=report.id)
     
+    # Get user's assigned shop (for non-superusers)
+    assigned_shop = None
+    user_can_select_shop = request.user.is_superuser
+    
+    if not user_can_select_shop:
+        # Get assigned shop from staff profile
+        if hasattr(request.user, 'staff_profile') and request.user.staff_profile:
+            assigned_shop = request.user.staff_profile.assigned_shop
+        
+        # If no assigned shop, use the report's shop
+        if not assigned_shop:
+            assigned_shop = report.shop
+    
     if request.method == 'POST':
         form = DailyShopReportForm(request.POST, instance=report)
+        
+        # For non-superusers, force the shop to their assigned shop
+        if not user_can_select_shop and assigned_shop:
+            form.data = form.data.copy()
+            form.data['shop'] = assigned_shop.id
         
         if form.is_valid():
             try:
@@ -301,7 +373,7 @@ def edit_daily_report(request, report_id):
                                 except (ValueError, BankAccount.DoesNotExist) as e:
                                     print(f"Error creating bank closing balance: {e}")
                     
-                    # Delete existing expenses and recreate (updated for new format)
+                    # Delete existing expenses and recreate
                     ShopExpense.objects.filter(daily_report=report).delete()
                     
                     # Process expenses from POST data
@@ -316,7 +388,7 @@ def edit_daily_report(request, report_id):
                                 try:
                                     expense = ShopExpense.objects.create(
                                         daily_report=report,
-                                        expense_category='Other',  # Default category
+                                        expense_category='Other',
                                         description=value,
                                         amount=Decimal(str(amount)),
                                         payment_method='cash'
@@ -350,8 +422,12 @@ def edit_daily_report(request, report_id):
             messages.error(request, 'Please correct the errors below.')
     else:
         form = DailyShopReportForm(instance=report)
+        # For non-superusers, make the shop field readonly and pre-select
+        if not user_can_select_shop and assigned_shop:
+            form.fields['shop'].initial = assigned_shop.id
+            form.fields['shop'].widget.attrs['readonly'] = True
     
-    # Get existing data for the template
+    # Get existing data for the template - IMPORTANT: Pass these to template
     bank_closings = report.bank_closings.filter(is_active=True)
     expenses = report.expenses.all()
     
@@ -361,6 +437,8 @@ def edit_daily_report(request, report_id):
         'bank_closings': bank_closings,
         'expenses': expenses,
         'title': 'Edit Daily Report',
+        'assigned_shop': assigned_shop,
+        'user_can_select_shop': user_can_select_shop,
     }
     return render(request, 'shops/report_form.html', context)
 
@@ -380,6 +458,13 @@ def report_detail(request, report_id):
         messages.error(request, 'You can only view your own reports.')
         return redirect('shops:reports_list')
     
+    # Get previous day's report for opening balance
+    previous_report = report.get_previous_day_report()
+    opening_balance = previous_report.total_closing_balance if previous_report else 0
+    
+    # Calculate net position = Opening Balance - Today's Expenses
+    net_position = opening_balance - report.total_expenses
+    
     # Get M-Pesa summary if exists
     mpesa_summary = MpesaDailySummary.objects.filter(
         shop=report.shop, 
@@ -389,28 +474,27 @@ def report_detail(request, report_id):
     # Get bank closings
     bank_closings = report.bank_closings.filter(is_active=True)
     
-    # Calculate bank total using Django's Sum aggregation
+    # Calculate bank total
     bank_total = bank_closings.aggregate(total=Sum('closing_balance'))['total'] or 0
-    
-    # Convert to float for proper display
     bank_total = float(bank_total)
     
     # Calculate total M-Pesa
     total_mpesa = float(report.closing_mpesa_float or 0) + float(report.closing_mpesa_cash or 0)
-    
-    # Calculate net profit
-    net_profit = float(report.shop_sales or 0) - float(report.total_expenses or 0)
     
     context = {
         'report': report,
         'bank_closings': bank_closings,
         'bank_total': bank_total,
         'total_mpesa': total_mpesa,
-        'net_profit': net_profit,
+        'net_position': net_position,  # Changed from net_profit
+        'opening_balance': opening_balance,  # New
+        'previous_report': previous_report,  # New
         'expenses': report.expenses.all(),
         'mpesa_summary': mpesa_summary,
     }
     return render(request, 'shops/report_detail.html', context)
+
+
 
 
 @login_required
