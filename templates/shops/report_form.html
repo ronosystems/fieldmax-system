@@ -115,19 +115,6 @@
 
 {% block content %}
 <div class="container-fluid">
-    <div class="row mb-4">
-        <div class="col-md-8">
-            <h2>
-                <i class="fas fa-file-alt me-2"></i>{{ title }}
-            </h2>
-            <p class="text-muted">Fill in the daily report details for the shop</p>
-        </div>
-        <div class="col-md-4 text-end">
-            <a href="{% url 'shops:dashboard' %}" class="btn btn-secondary">
-                <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
-            </a>
-        </div>
-    </div>
 
     <form method="post" id="reportForm">
         {% csrf_token %}
@@ -144,20 +131,20 @@
                         <label class="form-label fw-bold">Shop Branch *</label>
                         {% if user_can_select_shop %}
                             {{ form.shop }}
-                            <small class="text-muted d-block">Choose the shop branch for this report</small>
+                            <small class="text-muted d-block">Select shop branch</small>
                         {% else %}
-                            <input type="text" class="form-control readonly-field" value="{{ assigned_shop.name }}" readonly disabled>
-                            <input type="hidden" name="shop" id="hidden_shop_id" value="{{ assigned_shop.id }}">
-                            <small class="text-muted d-block">You are assigned to: {{ assigned_shop.name }}</small>
+                            <input type="text" class="form-control readonly-field" value="{{ assigned_shop.name }} - {{ assigned_shop.location }}" readonly disabled>
+                            <input type="hidden" name="shop" id="hidden_shop_id" value="{{ assigned_shop.id }} {{assigned_shop.location}}">
+                            <small class="text-muted d-block">Your Shop Branch</small>
                         {% endif %}
                         {% if form.shop.errors %}
                             <div class="text-danger small">{{ form.shop.errors }}</div>
                         {% endif %}
                     </div>
                     <div class="col-md-6 mb-2">
-                        <label class="form-label fw-bold">Report Date *</label>
+                        <label class="form-label fw-bold">Select Report Date *</label>
                         {{ form.report_date }}
-                        <small class="text-muted d-block">Select the date of the report</small>
+                        <small class="text-muted d-block">Select Report Date</small>
                         {% if form.report_date.errors %}
                             <div class="text-danger small">{{ form.report_date.errors }}</div>
                         {% endif %}
@@ -168,22 +155,22 @@
                 <div class="row">
                     <div class="col-md-6 mb-2">
                         <label class="form-label fw-bold">
-                            <i class="fas fa-chart-line me-1"></i> Previous Closing Balance
+                            <i class="fas fa-chart-line me-1"></i> Closing Balance
                         </label>
                         <div class="input-group">
                             <span class="input-group-text">KES</span>
                             <input type="text" id="previousClosingInput" class="form-control readonly-field" readonly 
                                    value="{% if previous_net_balance %}KES {{ previous_net_balance|floatformat:2|intcomma }}{% else %}KES 0.00{% endif %}">
                         </div>
-                        <small class="text-muted d-block">From previous day's report</small>
+                        <small class="text-muted d-block">Previous Closing Balance</small>
                         <input type="hidden" id="previous_closing_balance" value="{{ previous_net_balance|default:0 }}">
                     </div>
                     <div class="col-md-6 mb-2">
                         <label class="form-label fw-bold">
-                            <i class="fas fa-exchange-alt me-1"></i> Total M-Pesa Transactions *
+                            <i class="fas fa-exchange-alt me-1"></i> M-Pesa Transactions *
                         </label>
                         {{ form.shop_sales }}
-                        <small class="text-muted d-block">Transactions done today</small>
+                        <small class="text-muted d-block">Transactions Done Today</small>
                         {% if form.shop_sales.errors %}
                             <div class="text-danger small">{{ form.shop_sales.errors }}</div>
                         {% endif %}
