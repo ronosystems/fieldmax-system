@@ -3312,61 +3312,89 @@ def mpesa_agent_dashboard(request):
     week_ago = today - timedelta(days=7)
     month_ago = today - timedelta(days=30)
     
-    # Get the agent's shop branch from staff profile
-    shop_branch = None
-    if hasattr(request.user, 'staff_profile') and request.user.staff_profile:
-        shop_branch = request.user.staff_profile.assigned_shop
-    
-    # Get statistics for the agent's OWN reports (filtered by submitted_by)
-    if shop_branch:
-        # Today's report (only this agent's report)
+    # SUPERUSER: See all data
+    if request.user.is_superuser:
+        # Today's report for any shop
         today_report = DailyShopReport.objects.filter(
-            shop=shop_branch,
-            report_date=today,
-            submitted_by=request.user  # Only this agent's reports
+            report_date=today
         ).first()
         
-        # Weekly sales (only this agent's reports)
-        weekly_sales = DailyShopReport.objects.filter(
-            shop=shop_branch,
+        # Weekly transactions (all shops, all agents)
+        weekly_transactions = DailyShopReport.objects.filter(
             report_date__gte=week_ago,
-            report_date__lte=today,
-            submitted_by=request.user  # Only this agent's reports
+            report_date__lte=today
         ).aggregate(total=Sum('shop_sales'))['total'] or 0
         
-        # Monthly sales (only this agent's reports)
-        monthly_sales = DailyShopReport.objects.filter(
-            shop=shop_branch,
+        # Monthly transactions (all shops, all agents)
+        monthly_transactions = DailyShopReport.objects.filter(
             report_date__gte=month_ago,
-            report_date__lte=today,
-            submitted_by=request.user  # Only this agent's reports
+            report_date__lte=today
         ).aggregate(total=Sum('shop_sales'))['total'] or 0
         
-        # Total reports submitted by this agent
-        total_reports = DailyShopReport.objects.filter(
-            shop=shop_branch,
-            submitted_by=request.user  # Only this agent's reports
-        ).count()
+        # Total reports (all shops, all agents)
+        total_reports = DailyShopReport.objects.all().count()
         
-        # Recent reports submitted by this agent
-        recent_reports = DailyShopReport.objects.filter(
-            shop=shop_branch,
-            submitted_by=request.user  # Only this agent's reports
-        ).order_by('-report_date')[:5]
+        # Recent reports (all shops, all agents)
+        recent_reports = DailyShopReport.objects.all().order_by('-report_date')[:5]
+        
+        shop_branch = None  # No specific shop for superuser
         
     else:
-        today_report = None
-        weekly_sales = 0
-        monthly_sales = 0
-        total_reports = 0
-        recent_reports = []
+        # REGULAR M-PESA AGENT: See only their assigned shop's data
+        # Get the agent's shop branch from staff profile
+        shop_branch = None
+        if hasattr(request.user, 'staff_profile') and request.user.staff_profile:
+            shop_branch = request.user.staff_profile.assigned_shop
+        
+        # Get statistics for the agent's OWN reports (filtered by submitted_by)
+        if shop_branch:
+            # Today's report (only this agent's report)
+            today_report = DailyShopReport.objects.filter(
+                shop=shop_branch,
+                report_date=today,
+                submitted_by=request.user
+            ).first()
+            
+            # Weekly transactions (only this agent's reports)
+            weekly_transactions = DailyShopReport.objects.filter(
+                shop=shop_branch,
+                report_date__gte=week_ago,
+                report_date__lte=today,
+                submitted_by=request.user
+            ).aggregate(total=Sum('shop_sales'))['total'] or 0
+            
+            # Monthly transactions (only this agent's reports)
+            monthly_transactions = DailyShopReport.objects.filter(
+                shop=shop_branch,
+                report_date__gte=month_ago,
+                report_date__lte=today,
+                submitted_by=request.user
+            ).aggregate(total=Sum('shop_sales'))['total'] or 0
+            
+            # Total reports submitted by this agent
+            total_reports = DailyShopReport.objects.filter(
+                shop=shop_branch,
+                submitted_by=request.user
+            ).count()
+            
+            # Recent reports submitted by this agent
+            recent_reports = DailyShopReport.objects.filter(
+                shop=shop_branch,
+                submitted_by=request.user
+            ).order_by('-report_date')[:5]
+        else:
+            today_report = None
+            weekly_transactions = 0
+            monthly_transactions = 0
+            total_reports = 0
+            recent_reports = []
     
     context = {
         'shop_branch': shop_branch,
         'today_report': today_report,
         'today': today,
-        'weekly_sales': weekly_sales,
-        'monthly_sales': monthly_sales,
+        'weekly_transactions': int(weekly_transactions),
+        'monthly_transactions': int(monthly_transactions),
         'total_reports': total_reports,
         'recent_reports': recent_reports,
         'has_report_today': today_report is not None,

@@ -43,7 +43,7 @@
     }
     
     .info-value-large {
-        font-size: 2rem;
+        font-size: 1.8rem;
         font-weight: bold;
         color: var(--primary-color);
     }
@@ -119,6 +119,30 @@
     .action-buttons .btn {
         margin-right: 5px;
     }
+    
+    .transaction-count {
+        font-size: 1.8rem;
+        font-weight: bold;
+        color: #10b981;
+    }
+    
+    .summary-card-custom {
+        background: linear-gradient(135deg, #059669 0%, #047857 100%);
+        color: white;
+        border-radius: 15px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    
+    .summary-card-custom h4 {
+        font-size: 1.5rem;
+        margin-bottom: 5px;
+    }
+    
+    .summary-card-custom p {
+        margin-bottom: 0;
+        opacity: 0.9;
+    }
 </style>
 {% endblock %}
 
@@ -171,32 +195,71 @@
         </div>
     </div>
 
-    <!-- Summary Cards -->
+    <!-- Summary Cards - New Layout -->
     <div class="row mb-4">
         <div class="col-md-3">
             <div class="info-card text-center">
-                <div class="info-label">Total Shop Sales</div>
-                <div class="info-value-large">KES {{ report.shop_sales|floatformat:2|intcomma }}</div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="info-card text-center">
-                <div class="info-label">Total Expenses</div>
-                <div class="info-value-large">KES {{ report.total_expenses|floatformat:2|intcomma }}</div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="info-card text-center">
-                <div class="info-label">Net Profit/Loss</div>
-                <div class="info-value-large {% if net_profit >= 0 %}amount-positive{% else %}amount-negative{% endif %}">
-                    KES {{ net_profit|floatformat:2|intcomma }}
+                <div class="info-label">
+                    <i class="fas fa-mobile-alt me-1"></i>Total M-Pesa Balance
                 </div>
+                <div class="info-value-large">
+                    KES {{ total_mpesa|floatformat:2|intcomma }}
+                </div>
+                <small class="text-muted">Float + Cash</small>
             </div>
         </div>
         <div class="col-md-3">
             <div class="info-card text-center">
-                <div class="info-label">Total Closing Balance</div>
-                <div class="info-value-large">KES {{ report.total_closing_balance|floatformat:2|intcomma }}</div>
+                <div class="info-label">
+                    <i class="fas fa-university me-1"></i>Total Bank Balance
+                </div>
+                <div class="info-value-large">
+                    KES {{ bank_total|floatformat:2|intcomma }}
+                </div>
+                <small class="text-muted">All bank accounts</small>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="info-card text-center">
+                <div class="info-label">
+                    <i class="fas fa-receipt me-1"></i>Total Day Expenses
+                </div>
+                <div class="info-value-large {% if report.total_expenses > 0 %}amount-negative{% endif %}">
+                    KES {{ report.total_expenses|floatformat:2|intcomma }}
+                </div>
+                <small class="text-muted">All expenses</small>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="info-card text-center">
+                <div class="info-label">
+                    <i class="fas fa-chart-pie me-1"></i>Total Closing Balance
+                </div>
+                {% with closing_total=total_mpesa|add:bank_total|add:report.total_expenses %}
+                <div class="info-value-large {% if closing_total >= 0 %}amount-positive{% else %}amount-negative{% endif %}">
+                    KES {{ closing_total|floatformat:2|intcomma }}
+                </div>
+                {% endwith %}
+                <small class="text-muted">M-Pesa + Bank - Expenses</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Additional Info: M-Pesa Transactions -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="summary-card-custom">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <p class="mb-0">
+                            <i class="fas fa-exchange-alt me-2"></i>
+                            <strong>Total M-Pesa Transactions Today:</strong>
+                        </p>
+                    </div>
+                    <div class="col-md-4 text-md-end">
+                        <h3 class="mb-0">{{ report.shop_sales|floatformat:0|intcomma }}</h3>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

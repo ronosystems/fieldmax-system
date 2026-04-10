@@ -42,6 +42,7 @@ urlpatterns = [
     path('api/shop/<int:shop_id>/banks/', views.get_shop_banks, name='get_shop_banks'),
     path('api/shop/<int:shop_id>/mpesa-accounts/', views.get_shop_mpesa_accounts, name='get_shop_mpesa'),
     path('api/weekly-sales/', views.weekly_sales_data, name='weekly_sales_data'),
+    path('api/weekly-transactions/', views.weekly_transactions_data, name='weekly_transactions_data'),
     path('api/report/<int:report_id>/summary/', views.get_report_summary, name='get_report_summary'),
     path('api/expense-distribution/', views.expense_distribution, name='expense_distribution'),
 ]

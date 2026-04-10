@@ -83,7 +83,7 @@ class MpesaAccountForm(forms.ModelForm):
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
 
-# In shops/forms.py
+
 
 class DailyShopReportForm(forms.ModelForm):
     class Meta:
@@ -94,9 +94,19 @@ class DailyShopReportForm(forms.ModelForm):
             'report_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
             'closing_mpesa_float': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
             'closing_mpesa_cash': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
-            'shop_sales': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'shop_sales': forms.NumberInput(attrs={'class': 'form-control', 'step': '1', 'placeholder': 'Number of transactions (e.g., 50)'}),
             'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
         }
+    
+    def clean_shop_sales(self):
+        shop_sales = self.cleaned_data.get('shop_sales')
+        if shop_sales is not None:
+            # Ensure it's a whole number (transaction count)
+            if shop_sales < 0:
+                raise forms.ValidationError("Transaction count cannot be negative.")
+            if shop_sales > 10000:
+                raise forms.ValidationError("Transaction count seems too high. Please verify.")
+        return shop_sales
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -104,6 +114,8 @@ class DailyShopReportForm(forms.ModelForm):
         self.fields['closing_mpesa_float'].required = False
         self.fields['closing_mpesa_cash'].required = False
         self.fields['shop_sales'].required = False
+
+
 
 class ShopExpenseForm(forms.ModelForm):
     class Meta:

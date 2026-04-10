@@ -131,6 +131,12 @@
         font-size: 0.85rem;
         color: var(--text-secondary);
     }
+    
+    .transaction-count {
+        font-size: 2rem;
+        font-weight: bold;
+        color: #10b981;
+    }
 </style>
 {% endblock %}
 
@@ -185,12 +191,12 @@
         <div class="col-xl-3 col-md-6 mb-3">
             <div class="stat-card">
                 <div class="stat-icon">
-                    <i class="fas fa-chart-line"></i>
+                    <i class="fas fa-exchange-alt"></i>
                 </div>
-                <div class="stat-value">KES {{ total_sales_today|floatformat:0|intcomma }}</div>
-                <div class="stat-label">Today's Sales</div>
+                <div class="stat-value transaction-count">{{ total_transactions_today|floatformat:0|intcomma }}</div>
+                <div class="stat-label">Today's Transactions</div>
                 <small class="text-muted">
-                    <i class="fas fa-arrow-up trend-up me-1"></i> Total revenue
+                    <i class="fas fa-arrow-up trend-up me-1"></i> M-Pesa transactions
                 </small>
             </div>
         </div>
@@ -201,8 +207,8 @@
                     <i class="fas fa-percent"></i>
                 </div>
                 <div class="stat-value">
-                    {% if reports_today > 0 %}
-                        {{ total_shops|add:reports_today|floatformat:0 }}%
+                    {% if total_shops > 0 %}
+                        {{ reports_today|floatformat:0 }}%
                     {% else %}
                         0%
                     {% endif %}
@@ -245,6 +251,8 @@
                                 <small class="text-muted">All shop reports</small>
                             </div>
                         </div>
+                        <!-- Manage Shops - Only visible to superusers -->
+                        {% if request.user.is_superuser %}
                         <div class="col-md-3 col-6 mb-3">
                             <div class="quick-action-btn" onclick="window.location.href='{% url 'shops:branches' %}'">
                                 <div class="quick-action-icon">
@@ -254,6 +262,7 @@
                                 <small class="text-muted">Add or edit shops</small>
                             </div>
                         </div>
+                        {% endif %}
                         <div class="col-md-3 col-6 mb-3">
                             <div class="quick-action-btn" onclick="window.location.href='{% url 'shops:shop_statistics' %}'">
                                 <div class="quick-action-icon">
@@ -288,7 +297,7 @@
                                 <thead>
                                     <tr>
                                         <th>Shop</th>
-                                        <th>Sales</th>
+                                        <th>Transactions</th>
                                         <th>M-Pesa Float</th>
                                         <th>M-Pesa Cash</th>
                                         <th>Status</th>
@@ -301,19 +310,19 @@
                                         <td>
                                             <strong>{{ report.shop.name }}</strong><br>
                                             <small class="text-muted">{{ report.submitted_by.get_full_name|default:report.submitted_by.username }}</small>
-                                        </td>
+                                         </div>
                                         <td>
-                                            <span class="fw-bold text-success">KES {{ report.shop_sales|floatformat:0|intcomma }}</span>
-                                        </td>
-                                        <td>KES {{ report.closing_mpesa_float|floatformat:0|intcomma }}</td>
-                                        <td>KES {{ report.closing_mpesa_cash|floatformat:0|intcomma }}</td>
+                                            <span class="fw-bold text-success">{{ report.shop_sales|floatformat:0|intcomma }}</span>
+                                        </div>
+                                        <td>KES {{ report.closing_mpesa_float|floatformat:0|intcomma }} </div>
+                                        <td>KES {{ report.closing_mpesa_cash|floatformat:0|intcomma }} </div>
                                         <td>
                                             {% if report.is_finalized %}
                                                 <span class="badge-finalized"><i class="fas fa-check-circle me-1"></i>Finalized</span>
                                             {% else %}
                                                 <span class="badge-pending"><i class="fas fa-clock me-1"></i>Draft</span>
                                             {% endif %}
-                                        </td>
+                                        </div>
                                         <td>
                                             <a href="{% url 'shops:report_detail' report.id %}" class="btn btn-sm btn-outline-primary">
                                                 <i class="fas fa-eye"></i>
@@ -323,7 +332,7 @@
                                                 <i class="fas fa-edit"></i>
                                             </a>
                                             {% endif %}
-                                        </td>
+                                        </div>
                                     </tr>
                                     {% endfor %}
                                 </tbody>
@@ -404,7 +413,7 @@
                                 Report submitted for {{ report.shop.name }}
                             </div>
                             <div class="timeline-text">
-                                Sales: KES {{ report.shop_sales|floatformat:0|intcomma }} | 
+                                Transactions: {{ report.shop_sales|floatformat:0|intcomma }} | 
                                 By: {{ report.submitted_by.get_full_name|default:report.submitted_by.username }}
                             </div>
                         </div>
@@ -420,13 +429,13 @@
         </div>
     </div>
     
-    <!-- Weekly Sales Chart -->
+    <!-- Weekly Transactions Chart -->
     <div class="row">
         <div class="col-12">
             <div class="card">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">
-                        <i class="fas fa-chart-line me-2"></i>Weekly Sales Overview
+                        <i class="fas fa-chart-line me-2"></i>Weekly Transactions Overview
                     </h5>
                     <div>
                         <button class="btn btn-sm btn-outline-secondary" id="refreshChart">
@@ -436,7 +445,7 @@
                 </div>
                 <div class="card-body">
                     <div class="chart-container">
-                        <canvas id="weeklySalesChart"></canvas>
+                        <canvas id="weeklyTransactionsChart"></canvas>
                     </div>
                 </div>
             </div>
@@ -448,27 +457,27 @@
 {% block extra_js %}
 <script>
 $(document).ready(function() {
-    // Weekly Sales Chart
-    function loadWeeklySales() {
+    // Weekly Transactions Chart
+    function loadWeeklyTransactions() {
         $.ajax({
-            url: '{% url "shops:weekly_sales_data" %}',
+            url: '{% url "shops:weekly_transactions_data" %}',
             method: 'GET',
             success: function(response) {
                 if (response.success) {
-                    const ctx = document.getElementById('weeklySalesChart').getContext('2d');
+                    const ctx = document.getElementById('weeklyTransactionsChart').getContext('2d');
                     
                     // Destroy existing chart if it exists
-                    if (window.salesChart) {
-                        window.salesChart.destroy();
+                    if (window.transactionsChart) {
+                        window.transactionsChart.destroy();
                     }
                     
-                    window.salesChart = new Chart(ctx, {
+                    window.transactionsChart = new Chart(ctx, {
                         type: 'line',
                         data: {
                             labels: response.days,
                             datasets: [{
-                                label: 'Total Sales (KES)',
-                                data: response.sales,
+                                label: 'M-Pesa Transactions',
+                                data: response.transactions,
                                 borderColor: '#059669',
                                 backgroundColor: 'rgba(5, 150, 105, 0.1)',
                                 borderWidth: 2,
@@ -495,7 +504,7 @@ $(document).ready(function() {
                                             if (label) {
                                                 label += ': ';
                                             }
-                                            label += 'KES ' + context.parsed.y.toLocaleString();
+                                            label += context.parsed.y.toLocaleString() + ' transactions';
                                             return label;
                                         }
                                     }
@@ -505,8 +514,9 @@ $(document).ready(function() {
                                 y: {
                                     beginAtZero: true,
                                     ticks: {
+                                        stepSize: 1,
                                         callback: function(value) {
-                                            return 'KES ' + value.toLocaleString();
+                                            return value.toLocaleString() + ' transactions';
                                         }
                                     }
                                 }
@@ -516,17 +526,17 @@ $(document).ready(function() {
                 }
             },
             error: function() {
-                console.error('Failed to load weekly sales data');
+                console.error('Failed to load weekly transactions data');
             }
         });
     }
     
     // Load chart on page load
-    loadWeeklySales();
+    loadWeeklyTransactions();
     
     // Refresh chart button
     $('#refreshChart').click(function() {
-        loadWeeklySales();
+        loadWeeklyTransactions();
         $(this).html('<i class="fas fa-spinner fa-spin"></i>');
         setTimeout(() => {
             $(this).html('<i class="fas fa-sync-alt"></i>');
@@ -534,7 +544,7 @@ $(document).ready(function() {
     });
     
     // Auto-refresh every 5 minutes
-    setInterval(loadWeeklySales, 300000);
+    setInterval(loadWeeklyTransactions, 300000);
 });
 </script>
 {% endblock %}

@@ -52,7 +52,7 @@ def shop_dashboard(request):
     if request.user.is_superuser:
         today_reports = DailyShopReport.objects.filter(report_date=today)
         recent_reports = DailyShopReport.objects.all().order_by('-submission_time')[:5]
-        total_sales_today = today_reports.aggregate(total=models.Sum('shop_sales'))['total'] or 0
+        total_transactions_today = today_reports.aggregate(total=models.Sum('shop_sales'))['total'] or 0
         reports_today = today_reports.count()
     else:
         # Regular users only see their own reports
@@ -63,7 +63,7 @@ def shop_dashboard(request):
         recent_reports = DailyShopReport.objects.filter(
             submitted_by=request.user
         ).order_by('-submission_time')[:5]
-        total_sales_today = today_reports.aggregate(total=models.Sum('shop_sales'))['total'] or 0
+        total_transactions_today = today_reports.aggregate(total=models.Sum('shop_sales'))['total'] or 0
         reports_today = today_reports.count()
     
     context = {
@@ -73,9 +73,15 @@ def shop_dashboard(request):
         'today': today,
         'total_shops': shops.count(),
         'reports_today': reports_today,
-        'total_sales_today': total_sales_today,
+        'total_transactions_today': int(total_transactions_today),  
     }
     return render(request, 'shops/dashboard.html', context)
+
+
+
+
+
+
 
 
 @login_required
@@ -100,7 +106,6 @@ def add_branch(request):
         'title': 'Add Shop Branch',
     }
     return render(request, 'shops/add_branch.html', context)
-
 
 
 
@@ -219,7 +224,12 @@ def create_daily_report(request):
                     report.total_closing_balance = mpesa_float + mpesa_cash + float(bank_total)
                     report.save()
                     
-                    messages.success(request, f'Daily report for {report.shop.name} submitted successfully!')
+                    # Success message - updated to reflect transactions instead of sales
+                    messages.success(
+                        request, 
+                        f'Daily report for {report.shop.name} submitted successfully! '
+                        f'Total transactions recorded: {int(report.shop_sales):,}'
+                    )
                     return redirect('shops:report_detail', report_id=report.id)
                     
             except Exception as e:
@@ -247,7 +257,6 @@ def create_daily_report(request):
         'user_can_select_shop': user_can_select_shop,
     }
     return render(request, 'shops/report_form.html', context)
-
 
 
 
@@ -364,6 +373,9 @@ def edit_daily_report(request, report_id):
         'title': 'Edit Daily Report',
     }
     return render(request, 'shops/report_form.html', context)
+
+
+
 
 
 @login_required
@@ -919,6 +931,53 @@ def weekly_sales_data(request):
         })
 
 
+
+
+# shops/views.py - Add this function
+
+@login_required
+def weekly_transactions_data(request):
+    """AJAX endpoint for weekly transactions chart data"""
+    try:
+        end_date = timezone.now().date()
+        start_date = end_date - timezone.timedelta(days=6)
+        
+        # Get transaction data for last 7 days
+        transactions_data = []
+        days = []
+        
+        # Apply user filter (non-superusers only see their own data)
+        if request.user.is_superuser:
+            reports = DailyShopReport.objects.all()
+        else:
+            reports = DailyShopReport.objects.filter(submitted_by=request.user)
+        
+        for i in range(7):
+            current_date = start_date + timezone.timedelta(days=i)
+            days.append(current_date.strftime('%a, %b %d'))
+            
+            daily_total = reports.filter(
+                report_date=current_date,
+                is_finalized=True
+            ).aggregate(total=models.Sum('shop_sales'))['total'] or 0
+            
+            transactions_data.append(float(daily_total))
+        
+        return JsonResponse({
+            'success': True,
+            'days': days,
+            'transactions': transactions_data
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        })
+
+
+
+
+
 # ==================== EXPORT AND REPORTING VIEWS ====================
 
 @login_required
@@ -1001,9 +1060,9 @@ def shop_statistics(request):
     
     # Overall statistics
     total_reports = reports.count()
-    total_sales = reports.aggregate(total=Sum('shop_sales'))['total'] or 0
+    total_transactions = reports.aggregate(total=Sum('shop_sales'))['total'] or 0
     total_expenses = reports.aggregate(total=Sum('total_expenses'))['total'] or 0
-    avg_daily_sales = reports.aggregate(avg=Avg('shop_sales'))['avg'] or 0
+    avg_transactions = reports.aggregate(avg=Avg('shop_sales'))['avg'] or 0
     
     # Statistics by shop - only shops user has access to
     if request.user.is_superuser:
@@ -1020,8 +1079,8 @@ def shop_statistics(request):
         shop_stats.append({
             'shop': shop,
             'report_count': shop_reports.count(),
-            'total_sales': shop_reports.aggregate(total=Sum('shop_sales'))['total'] or 0,
-            'avg_sales': shop_reports.aggregate(avg=Avg('shop_sales'))['avg'] or 0,
+            'total_transactions': shop_reports.aggregate(total=Sum('shop_sales'))['total'] or 0,
+            'avg_transactions': shop_reports.aggregate(avg=Avg('shop_sales'))['avg'] or 0,
             'total_expenses': shop_reports.aggregate(total=Sum('total_expenses'))['total'] or 0,
         })
     
@@ -1029,11 +1088,10 @@ def shop_statistics(request):
         'start_date': start_date,
         'end_date': end_date,
         'total_reports': total_reports,
-        'total_sales': total_sales,
+        'total_transactions': total_transactions,
         'total_expenses': total_expenses,
-        'avg_daily_sales': avg_daily_sales,
+        'avg_transactions': avg_transactions,
         'shop_stats': shop_stats,
-        'net_profit': total_sales - total_expenses,
     }
     return render(request, 'shops/statistics.html', context)
 

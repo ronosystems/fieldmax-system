@@ -120,10 +120,10 @@
     <form method="post" id="reportForm">
         {% csrf_token %}
         
-        <!-- FIRST ROW: Shop Selection and Daily Sales -->
+        <!-- FIRST ROW: Shop Selection and Daily Transactions -->
         <div class="card mb-4">
             <div class="card-header">
-                <h5 class="mb-0"><i class="fas fa-store me-2"></i>Shop Information & Sales</h5>
+                <h5 class="mb-0"><i class="fas fa-store me-2"></i>Shop Information & M-Pesa Transactions</h5>
             </div>
             <div class="card-body">
                 <div class="row">
@@ -152,9 +152,11 @@
                 </div>
                 <div class="row">
                     <div class="col-md-12 mb-3">
-                        <label class="form-label fw-bold">Daily Shop Sales (KES) *</label>
+                        <label class="form-label fw-bold">
+                            <i class="fas fa-exchange-alt me-1"></i> Total M-Pesa Transactions *
+                        </label>
                         {{ form.shop_sales }}
-                        <small class="text-muted">Enter total sales for the day</small>
+                        <small class="text-muted">Enter total number of M-Pesa transactions done today (e.g., 50)</small>
                         {% if form.shop_sales.errors %}
                             <div class="text-danger small">{{ form.shop_sales.errors }}</div>
                         {% endif %}
@@ -276,14 +278,17 @@
                 <div class="col-md-4 text-center">
                     <p><i class="fas fa-chart-pie me-2"></i>Total Closing Balance</p>
                     <h4 id="totalClosingDisplay">0.00</h4>
+                    <small class="text-muted">Float + Cash + Bank</small>
                 </div>
                 <div class="col-md-4 text-center">
                     <p><i class="fas fa-money-bill-wave me-2"></i>Total Expenses</p>
                     <h4 id="totalExpensesDisplay">0.00</h4>
+                    <small class="text-muted">All expenses</small>
                 </div>
                 <div class="col-md-4 text-center">
                     <p><i class="fas fa-chart-line me-2"></i>Net Position</p>
                     <h4 id="netPositionDisplay">0.00</h4>
+                    <small class="text-muted">Closing Balance - Expenses</small>
                 </div>
             </div>
         </div>
@@ -528,31 +533,44 @@ function removeExpenseRow(button) {
     calculateTotals();
 }
 
-// Calculate totals
+// Calculate totals - FIXED VERSION
 function calculateTotals() {
+    // Get M-Pesa values
     let mpesaFloat = parseFloat(document.getElementById('id_closing_mpesa_float')?.value) || 0;
     let mpesaCash = parseFloat(document.getElementById('id_closing_mpesa_cash')?.value) || 0;
     
+    // Calculate bank total
     let bankTotal = 0;
     document.querySelectorAll('.bank-balance').forEach(input => {
         bankTotal += parseFloat(input.value) || 0;
     });
     
+    // Calculate total closing balance (M-Pesa Float + M-Pesa Cash + Bank Total)
     let totalClosing = mpesaFloat + mpesaCash + bankTotal;
     document.getElementById('totalClosingDisplay').innerText = totalClosing.toLocaleString('en-KE', {minimumFractionDigits: 2});
     
+    // Calculate total expenses
     let totalExpenses = 0;
     document.querySelectorAll('.expense-amount').forEach(input => {
         totalExpenses += parseFloat(input.value) || 0;
     });
-    
     document.getElementById('totalExpensesDisplay').innerText = totalExpenses.toLocaleString('en-KE', {minimumFractionDigits: 2});
     
-    let shopSales = parseFloat(document.getElementById('id_shop_sales')?.value) || 0;
-    let netPosition = shopSales - totalExpenses;
+    // Calculate Net Position = Total Closing Balance - Total Expenses
+    let netPosition = totalClosing - totalExpenses;
     let netDisplay = netPosition.toLocaleString('en-KE', {minimumFractionDigits: 2});
     document.getElementById('netPositionDisplay').innerText = netDisplay;
     document.getElementById('netPositionDisplay').style.color = netPosition >= 0 ? '#10b981' : '#ef4444';
+    
+    // Optional: Log for debugging
+    console.log({
+        mpesaFloat: mpesaFloat,
+        mpesaCash: mpesaCash,
+        bankTotal: bankTotal,
+        totalClosing: totalClosing,
+        totalExpenses: totalExpenses,
+        netPosition: netPosition
+    });
 }
 
 // Initialize existing bank rows with data-bank-id attribute
@@ -574,6 +592,11 @@ function initializeExistingBanks() {
 document.getElementById('id_closing_mpesa_float')?.addEventListener('input', calculateTotals);
 document.getElementById('id_closing_mpesa_cash')?.addEventListener('input', calculateTotals);
 document.getElementById('id_shop_sales')?.addEventListener('input', calculateTotals);
+document.addEventListener('input', function(e) {
+    if (e.target.classList.contains('bank-balance') || e.target.classList.contains('expense-amount')) {
+        calculateTotals();
+    }
+});
 
 // Initialize on page load
 initializeExistingBanks();

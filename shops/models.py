@@ -100,8 +100,13 @@ class DailyShopReport(models.Model):
     closing_mpesa_float = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name="Closing M-Pesa Float")
     closing_mpesa_cash = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name="Closing M-Pesa Cash")
     
-    # Shop Sales
-    shop_sales = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name="Daily Shop Sales")
+    # Shop transactions
+    shop_sales = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2, 
+        default=0, 
+        verbose_name="Total M-Pesa Transactions" 
+    )
     
     # Totals (auto-calculated)
     total_closing_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)
