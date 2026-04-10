@@ -157,7 +157,7 @@
     /* Stat card theme support */
     .stat-card {
         position: relative;
-        background: #ffffff;
+        background: var(--card-bg);
         border: 1px solid var(--border-color);
         border-radius: 15px;
         padding: 20px;
@@ -167,7 +167,7 @@
     
     .stat-card:hover {
         transform: translateY(-5px);
-        box-shadow: 0 10px 25px -5px rgb(0, 0, 0);
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
     }
     
     .stat-value {
@@ -225,27 +225,10 @@
 
 {% block content %}
 <div class="container-fluid">
-    <!-- Welcome Banner -->
-    <div class="welcome-banner">
-        <div class="row align-items-center">
-            <div class="col-md-8">
-                <h2>
-                    <i class="fas fa-store me-2"></i>
-                    Welcome back, {{ request.user.first_name|default:request.user.username }}!
-                </h2>
-                <p>Have you submitted your daily report today?</p>
-            </div>
-            <div class="col-md-4 text-md-end mt-3 mt-md-0">
-                <a href="{% url 'shops:create_report' %}" class="btn btn-light">
-                    <i class="fas fa-plus-circle me-2"></i>Add New Report
-                </a>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Stats Cards - Different for Superusers and Regular Users -->
     {% if request.user.is_superuser %}
-    <!-- SUPERUSER STATS CARDS -->
+    <!-- ==================== SUPERUSER VIEW - Everything ==================== -->
+    
+    <!-- Stats Cards -->
     <div class="row stats-row">
         <div class="col-xl-3 col-md-6 mb-3">
             <div class="stat-card">
@@ -307,53 +290,6 @@
         </div>
     </div>
     
-    {% else %}
-    <!-- REGULAR USER STATS CARDS -->
-    <div class="row stats-row">
-        <!-- Own Shop Status / Location -->
-        <div class="col-md-4 mb-3">
-            <div class="stat-card">
-                <div class="stat-icon">
-                    <i class="fas fa-store"></i>
-                </div>
-                <div class="stat-value">{{ assigned_shop.name|default:"Not Assigned" }}</div>
-                <div class="stat-label">Your Shop</div>
-                <small class="text-muted">
-                    <i class="fas fa-map-marker-alt me-1"></i> {{ assigned_shop.location|default:"No location" }}
-                </small>
-            </div>
-        </div>
-        
-        <!-- Total Monthly Transactions -->
-        <div class="col-md-4 mb-3">
-            <div class="stat-card">
-                <div class="stat-icon">
-                    <i class="fas fa-exchange-alt"></i>
-                </div>
-                <div class="stat-value transaction-count">{{ monthly_transactions|floatformat:0|intcomma }}</div>
-                <div class="stat-label">Monthly Transactions</div>
-                <small class="text-muted">
-                    <i class="fas fa-calendar-alt me-1"></i> This month
-                </small>
-            </div>
-        </div>
-        
-        <!-- Total Monthly Expenses -->
-        <div class="col-md-4 mb-3">
-            <div class="stat-card">
-                <div class="stat-icon">
-                    <i class="fas fa-money-bill-wave"></i>
-                </div>
-                <div class="stat-value expense-amount">KES {{ monthly_expenses|floatformat:0|intcomma }}</div>
-                <div class="stat-label">Monthly Expenses</div>
-                <small class="text-muted">
-                    <i class="fas fa-calendar-alt me-1"></i> This month
-                </small>
-            </div>
-        </div>
-    </div>
-    {% endif %}
-    
     <!-- Quick Actions -->
     <div class="row mb-4">
         <div class="col-12">
@@ -383,8 +319,6 @@
                                 <small class="text-muted">All shop reports</small>
                             </div>
                         </div>
-                        <!-- Manage Shops - Only visible to superusers -->
-                        {% if request.user.is_superuser %}
                         <div class="col-md-3 col-6 mb-3">
                             <div class="quick-action-btn" onclick="window.location.href='{% url 'shops:branches' %}'">
                                 <div class="quick-action-icon">
@@ -394,7 +328,6 @@
                                 <small class="text-muted">Add or edit shops</small>
                             </div>
                         </div>
-                        {% endif %}
                         <div class="col-md-3 col-6 mb-3">
                             <div class="quick-action-btn" onclick="window.location.href='{% url 'shops:shop_statistics' %}'">
                                 <div class="quick-action-icon">
@@ -432,12 +365,38 @@
             </div>
         </div>
     </div>
+    
+    {% else %}
+    <!-- ==================== REGULAR USER VIEW - Only Welcome Banner ==================== -->
+    <div class="welcome-banner">
+        <div class="row align-items-center">
+            <div class="col-md-12 text-center">
+                <h2>
+                    <i class="fas fa-store me-2"></i>
+                    Welcome to Mpesa Shop Dashboard
+                </h2>
+                <p class="mb-2">Hello, {{ request.user.first_name|default:request.user.username }}!</p>
+                <p class="mb-0">Please use the navigation menu to access your reports.</p>
+                <div class="mt-4">
+                    <a href="{% url 'shops:create_report' %}" class="btn btn-light btn-lg me-2">
+                        <i class="fas fa-plus-circle me-2"></i>Submit Report
+                    </a>
+                    <a href="{% url 'shops:reports_list' %}" class="btn btn-outline-light btn-lg">
+                        <i class="fas fa-list me-2"></i>View Reports
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
 $(document).ready(function() {
+    // Only load chart for superusers
+    {% if request.user.is_superuser %}
     // Weekly Transactions Chart
     function loadWeeklyTransactions() {
         $.ajax({
@@ -526,6 +485,7 @@ $(document).ready(function() {
     
     // Auto-refresh every 5 minutes
     setInterval(loadWeeklyTransactions, 300000);
+    {% endif %}
 });
 </script>
 {% endblock %}

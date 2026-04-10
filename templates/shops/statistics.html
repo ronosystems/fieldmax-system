@@ -5,101 +5,316 @@
 
 {% block extra_css %}
 <style>
+    /* Professional Stats Cards */
     .stats-card {
-        background: linear-gradient(135deg, var(--card-bg) 0%, var(--card-bg) 100%);
-        border-radius: 15px;
-        padding: 20px;
-        margin-bottom: 20px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-        border-left: 4px solid var(--primary-color);
+        background: var(--card-bg);
+        border-radius: 20px;
+        padding: 24px;
+        margin-bottom: 24px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        border: 1px solid var(--border-color);
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .stats-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+    }
+    
+    .stats-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 4px;
+        height: 100%;
+        background: linear-gradient(135deg, #059669 0%, #047857 100%);
     }
     
     .stats-card h3 {
-        font-size: 2rem;
-        font-weight: bold;
-        margin-bottom: 5px;
-        color: var(--primary-color);
+        font-size: 2.2rem;
+        font-weight: 700;
+        margin-bottom: 8px;
+        color: var(--text-primary);
     }
     
     .stats-card p {
         margin-bottom: 0;
         color: var(--text-secondary);
+        font-weight: 500;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
     
-    .chart-container {
-        position: relative;
-        height: 400px;
-        margin-bottom: 30px;
+    .stats-icon {
+        position: absolute;
+        right: 20px;
+        top: 20px;
+        font-size: 2.5rem;
+        opacity: 0.12;
+        color: var(--primary-color);
     }
     
+    /* Date Filter Form */
     .date-filter-form {
         background: var(--card-bg);
-        padding: 20px;
-        border-radius: 10px;
-        margin-bottom: 20px;
+        padding: 24px;
+        border-radius: 20px;
+        margin-bottom: 24px;
         border: 1px solid var(--border-color);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
     }
     
+    .date-filter-form .form-label {
+        font-weight: 600;
+        margin-bottom: 8px;
+        color: var(--text-primary);
+    }
+    
+    .date-filter-form .form-control {
+        border-radius: 12px;
+        border: 1px solid var(--border-color);
+        padding: 10px 14px;
+    }
+    
+    .date-filter-form .form-control:focus {
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1);
+    }
+    
+    /* Chart Container */
+    .chart-container {
+        position: relative;
+        height: 350px;
+        margin-top: 20px;
+    }
+    
+    /* Transaction Count Styling */
     .transaction-count {
-        font-size: 2rem;
-        font-weight: bold;
+        font-size: 2.2rem;
+        font-weight: 700;
         color: #10b981;
     }
     
     .expense-amount {
+        font-size: 2.2rem;
+        font-weight: 700;
         color: #f59e0b;
-        font-weight: bold;
     }
     
+    /* Badge Styles */
     .badge-excellent {
-        background-color: #10b981;
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
         color: white;
-        padding: 5px 10px;
-        border-radius: 20px;
+        padding: 6px 14px;
+        border-radius: 30px;
         font-size: 0.75rem;
-        font-weight: 500;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
     }
     
     .badge-good {
-        background-color: #3b82f6;
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
         color: white;
-        padding: 5px 10px;
-        border-radius: 20px;
+        padding: 6px 14px;
+        border-radius: 30px;
         font-size: 0.75rem;
-        font-weight: 500;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
     }
     
     .badge-fair {
-        background-color: #f59e0b;
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
         color: white;
-        padding: 5px 10px;
-        border-radius: 20px;
+        padding: 6px 14px;
+        border-radius: 30px;
         font-size: 0.75rem;
-        font-weight: 500;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
     }
     
     .badge-poor {
-        background-color: #ef4444;
+        background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
         color: white;
-        padding: 5px 10px;
-        border-radius: 20px;
+        padding: 6px 14px;
+        border-radius: 30px;
         font-size: 0.75rem;
-        font-weight: 500;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    
+    /* Table Styles */
+    .table {
+        margin-bottom: 0;
+    }
+    
+    .table thead th {
+        background: var(--light-bg);
+        border-bottom: 2px solid var(--border-color);
+        padding: 14px 16px;
+        font-weight: 600;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--text-secondary);
+    }
+    
+    .table tbody td {
+        padding: 14px 16px;
+        vertical-align: middle;
+        border-bottom: 1px solid var(--border-color);
+    }
+    
+    .table tbody tr:hover {
+        background: var(--light-bg);
+    }
+    
+    /* Alert Styles */
+    .alert {
+        border-radius: 16px;
+        border: none;
+        padding: 16px 20px;
+        margin-bottom: 16px;
+    }
+    
+    .alert-success {
+        background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+        color: #065f46;
+        border-left: 4px solid #10b981;
+    }
+    
+    .alert-warning {
+        background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+        color: #92400e;
+        border-left: 4px solid #f59e0b;
+    }
+    
+    .alert-info {
+        background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+        color: #1e40af;
+        border-left: 4px solid #3b82f6;
+    }
+    
+    /* Section Title */
+    .section-title {
+        font-size: 1.2rem;
+        font-weight: 700;
+        margin-bottom: 20px;
+        padding-bottom: 12px;
+        border-bottom: 2px solid var(--primary-color);
+        display: inline-block;
+        color: var(--text-primary);
+    }
+    
+    /* Card Header */
+    .card-header-custom {
+        background: transparent;
+        border-bottom: 2px solid var(--border-color);
+        padding: 18px 24px;
+        font-weight: 700;
+        font-size: 1.1rem;
+    }
+    
+    /* 2-Column Layout */
+    .two-column-layout {
+        display: flex;
+        gap: 24px;
+        flex-wrap: wrap;
+    }
+    
+    .left-column {
+        flex: 1;
+        min-width: 300px;
+    }
+    
+    .right-column {
+        flex: 1;
+        min-width: 300px;
+    }
+    
+    /* Responsive */
+    @media (max-width: 992px) {
+        .two-column-layout {
+            flex-direction: column;
+        }
+        
+        .stats-card h3 {
+            font-size: 1.5rem;
+        }
+        
+        .stats-icon {
+            font-size: 1.8rem;
+        }
+        
+        .chart-container {
+            height: 250px;
+        }
+    }
+    
+    /* Dark Mode Adjustments */
+    [data-theme="dark"] .stats-card {
+        background: var(--card-bg);
+        border-color: var(--border-color);
+    }
+    
+    [data-theme="dark"] .alert-success {
+        background: linear-gradient(135deg, #022c22 0%, #064e3b 100%);
+        color: #34d399;
+    }
+    
+    [data-theme="dark"] .alert-warning {
+        background: linear-gradient(135deg, #451a03 0%, #78350f 100%);
+        color: #fbbf24;
+    }
+    
+    [data-theme="dark"] .alert-info {
+        background: linear-gradient(135deg, #172554 0%, #1e3a8a 100%);
+        color: #60a5fa;
+    }
+    
+    /* Print Styles */
+    @media print {
+        .no-print, .btn, .date-filter-form {
+            display: none !important;
+        }
+        
+        .stats-card {
+            break-inside: avoid;
+            box-shadow: none;
+            border: 1px solid #ddd;
+        }
+        
+        .chart-container {
+            break-inside: avoid;
+        }
     }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container-fluid">
+    <!-- Header -->
     <div class="row mb-4">
         <div class="col-md-8">
-            <h2>
-                <i class="fas fa-chart-line me-2"></i>Shop Statistics & Analytics
+            <h2 class="fw-bold">
+                <i class="fas fa-chart-line me-2" style="color: var(--primary-color);"></i>
+                Statistics & Analytics
             </h2>
             <p class="text-muted">Comprehensive analysis of M-Pesa transactions and financial metrics</p>
         </div>
-        <div class="col-md-4 text-end">
-            <button onclick="window.print()" class="btn btn-secondary">
+        <div class="col-md-4 text-md-end">
+            <button onclick="window.print()" class="btn btn-outline-secondary">
                 <i class="fas fa-print me-2"></i>Print Report
             </button>
         </div>
@@ -109,47 +324,55 @@
     <div class="date-filter-form">
         <form method="get" class="row g-3" id="filterForm">
             <div class="col-md-4">
-                <label for="start_date" class="form-label">Start Date</label>
+                <label for="start_date" class="form-label">
+                    <i class="fas fa-calendar-alt me-1"></i>Start Date
+                </label>
                 <input type="date" name="start_date" id="start_date" class="form-control" value="{{ start_date }}">
             </div>
             <div class="col-md-4">
-                <label for="end_date" class="form-label">End Date</label>
+                <label for="end_date" class="form-label">
+                    <i class="fas fa-calendar-check me-1"></i>End Date
+                </label>
                 <input type="date" name="end_date" id="end_date" class="form-control" value="{{ end_date }}">
             </div>
             <div class="col-md-4">
                 <label class="form-label">&nbsp;</label>
-                <button type="submit" class="btn btn-primary d-block w-100">
+                <button type="submit" class="btn btn-primary w-100">
                     <i class="fas fa-chart-line me-2"></i>Update Statistics
                 </button>
             </div>
         </form>
     </div>
 
-    <!-- Key Metrics Cards -->
+    <!-- Key Metrics Cards - 3 Columns -->
     <div class="row">
         <div class="col-md-4">
-            <div class="stats-card text-center">
-                <i class="fas fa-file-alt fa-2x mb-2" style="color: var(--primary-color);"></i>
+            <div class="stats-card">
+                <div class="stats-icon">
+                    <i class="fas fa-file-alt"></i>
+                </div>
                 <h3>{{ total_reports|intcomma }}</h3>
                 <p>Total Reports</p>
                 <small class="text-muted">All reports submitted</small>
             </div>
         </div>
         <div class="col-md-4">
-            <div class="stats-card text-center">
-                <i class="fas fa-exchange-alt fa-2x mb-2" style="color: #10b981;"></i>
+            <div class="stats-card">
+                <div class="stats-icon">
+                    <i class="fas fa-exchange-alt"></i>
+                </div>
                 <h3 class="transaction-count">{{ total_transactions|default:0|floatformat:0|intcomma }}</h3>
                 <p>Total Transactions</p>
                 {% if total_reports > 0 %}
-                <small class="text-muted d-block mt-1">
-                    Avg: {{ total_transactions|default:0|floatformat:0|intcomma }} per report
-                </small>
+                <small class="text-muted">Avg: {{ total_transactions|default:0|floatformat:0|intcomma }} per report</small>
                 {% endif %}
             </div>
         </div>
         <div class="col-md-4">
-            <div class="stats-card text-center">
-                <i class="fas fa-money-bill-wave fa-2x mb-2" style="color: #f59e0b;"></i>
+            <div class="stats-card">
+                <div class="stats-icon">
+                    <i class="fas fa-money-bill-wave"></i>
+                </div>
                 <h3 class="expense-amount">KES {{ total_expenses|floatformat:0|intcomma }}</h3>
                 <p>Total Expenses</p>
                 <small class="text-muted">Sum of all expenses</small>
@@ -157,112 +380,111 @@
         </div>
     </div>
 
-    <!-- Transaction Trend Chart -->
-    <div class="card mb-4">
-        <div class="card-header">
-            <h5 class="mb-0">
-                <i class="fas fa-chart-line me-2"></i>M-Pesa Transaction Trend
-            </h5>
-        </div>
-        <div class="card-body">
-            <div class="chart-container">
-                <canvas id="transactionTrendChart"></canvas>
-            </div>
-        </div>
-    </div>
-
-    <!-- Shop Performance Table -->
-    <div class="card mb-4">
-        <div class="card-header">
-            <h5 class="mb-0">
-                <i class="fas fa-store me-2"></i>Shop Performance Breakdown
-            </h5>
-        </div>
-        <div class="card-body">
-            {% if shop_stats %}
-            <div class="table-responsive">
-                <table class="table table-hover datatable">
-                    <thead>
-                        <tr>
-                            <th>Shop Branch</th>
-                            <th>Reports</th>
-                            <th>Total Transactions</th>
-                            <th>Avg Daily Transactions</th>
-                            <th>Total Expenses (KES)</th>
-                            <th>Performance</th>
-                        </thead>
-                        <tbody>
-                            {% for stat in shop_stats %}
-                            <tr>
-                                <td>
-                                    <strong>{{ stat.shop.name }}</strong><br>
-                                    <small class="text-muted">{{ stat.shop.location }}</small>
-                                 </div>
-                                <td class="text-center">{{ stat.report_count|intcomma }}</div>
-                                <td class="text-end transaction-count">{{ stat.total_transactions|floatformat:0|intcomma }}</div>
-                                <td class="text-end">{{ stat.avg_transactions|floatformat:0|intcomma }}</div>
-                                <td class="text-end expense-amount">KES {{ stat.total_expenses|floatformat:0|intcomma }}</div>
-                                <td>
-                                    {% if stat.total_transactions >= 1000 %}
-                                        <span class="badge-excellent">
-                                            <i class="fas fa-chart-line me-1"></i>Excellent
-                                        </span>
-                                    {% elif stat.total_transactions >= 500 %}
-                                        <span class="badge-good">
-                                            <i class="fas fa-chart-line me-1"></i>Good
-                                        </span>
-                                    {% elif stat.total_transactions >= 100 %}
-                                        <span class="badge-fair">
-                                            <i class="fas fa-chart-line me-1"></i>Fair
-                                        </span>
-                                    {% else %}
-                                        <span class="badge-poor">
-                                            <i class="fas fa-chart-line me-1"></i>Poor
-                                        </span>
-                                    {% endif %}
-                                 </div>
-                             </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            {% else %}
-                <div class="text-center py-5">
-                    <i class="fas fa-chart-bar fa-3x text-muted mb-3"></i>
-                    <p class="text-muted">No statistics available for the selected period.</p>
-                    <p class="text-muted small">Try adjusting the date range or add some reports first.</p>
-                </div>
-            {% endif %}
-        </div>
-    </div>
-
-    <!-- Expense Distribution Chart -->
-    <div class="row">
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">
-                        <i class="fas fa-chart-pie me-2"></i>Expense Distribution
-                    </h5>
+    <!-- 2-Column Professional Layout -->
+    <div class="two-column-layout">
+        <!-- LEFT COLUMN -->
+        <div class="left-column">
+            <!-- Transaction Trend Chart -->
+            <div class="card mb-4">
+                <div class="card-header-custom">
+                    <i class="fas fa-chart-line me-2" style="color: var(--primary-color);"></i>
+                    M-Pesa Transaction Trend
                 </div>
                 <div class="card-body">
-                    <div class="chart-container" style="height: 300px;">
+                    <div class="chart-container">
+                        <canvas id="transactionTrendChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Expense Distribution Chart -->
+            <div class="card mb-4">
+                <div class="card-header-custom">
+                    <i class="fas fa-chart-pie me-2" style="color: var(--primary-color);"></i>
+                    Expense Distribution
+                </div>
+                <div class="card-body">
+                    <div class="chart-container" style="height: 350px;">
                         <canvas id="expenseChart"></canvas>
                     </div>
                 </div>
             </div>
         </div>
-        
-        <div class="col-md-6">
+
+        <!-- RIGHT COLUMN -->
+        <div class="right-column">
+            <!-- Shop Performance Table -->
+            <div class="card mb-4">
+                <div class="card-header-custom">
+                    <i class="fas fa-store me-2" style="color: var(--primary-color);"></i>
+                    Shop Performance Breakdown
+                </div>
+                <div class="card-body">
+                    {% if shop_stats %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Shop Branch</th>
+                                    <th>Reports</th>
+                                    <th>Transactions</th>
+                                    <th>Avg Daily</th>
+                                    <th>Expenses (KES)</th>
+                                    <th>Performance</th>
+                                </thead>
+                                <tbody>
+                                    {% for stat in shop_stats %}
+                                    <tr>
+                                        <td>
+                                            <strong>{{ stat.shop.name }}</strong><br>
+                                            <small class="text-muted">{{ stat.shop.location }}</small>
+                                        </td>
+                                        <td class="text-center">{{ stat.report_count|intcomma }}</td>
+                                        <td class="text-end fw-bold text-success">{{ stat.total_transactions|floatformat:0|intcomma }}</td>
+                                        <td class="text-end">{{ stat.avg_transactions|floatformat:0|intcomma }}</td>
+                                        <td class="text-end text-warning fw-bold">KES {{ stat.total_expenses|floatformat:0|intcomma }}</td>
+                                        <td>
+                                            {% if stat.total_transactions >= 1000 %}
+                                                <span class="badge-excellent">
+                                                    <i class="fas fa-chart-line me-1"></i>Excellent
+                                                </span>
+                                            {% elif stat.total_transactions >= 500 %}
+                                                <span class="badge-good">
+                                                    <i class="fas fa-chart-line me-1"></i>Good
+                                                </span>
+                                            {% elif stat.total_transactions >= 100 %}
+                                                <span class="badge-fair">
+                                                    <i class="fas fa-chart-line me-1"></i>Fair
+                                                </span>
+                                            {% else %}
+                                                <span class="badge-poor">
+                                                    <i class="fas fa-chart-line me-1"></i>Poor
+                                                </span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-5">
+                            <i class="fas fa-chart-bar fa-3x text-muted mb-3"></i>
+                            <p class="text-muted">No statistics available for the selected period.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Insights & Recommendations -->
             <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">
-                        <i class="fas fa-lightbulb me-2"></i>Insights & Recommendations
-                    </h5>
+                <div class="card-header-custom">
+                    <i class="fas fa-lightbulb me-2" style="color: var(--primary-color);"></i>
+                    Insights & Recommendations
                 </div>
                 <div class="card-body">
                     <div class="alert alert-success">
-                        <i class="fas fa-check-circle me-2"></i>
+                        <i class="fas fa-trophy me-2"></i>
                         <strong>Top Performer:</strong>
                         {% if shop_stats %}
                             {% with top_shop=shop_stats|dictsortreversed:"total_transactions"|first %}
@@ -274,54 +496,61 @@
                     </div>
                     
                     <div class="alert alert-warning">
-                        <i class="fas fa-exclamation-triangle me-2"></i>
-                        <strong>Expense Alert:</strong>
-                        {% if total_expenses > 50000 %}
-                            Expenses are high (KES {{ total_expenses|floatformat:0|intcomma }}). Consider reviewing operational costs.
+                        <i class="fas fa-chart-line me-2"></i>
+                        <strong>Performance Insight:</strong>
+                        {% if avg_transactions < 100 %}
+                            Transaction volume is low. Focus on increasing customer engagement.
+                        {% elif avg_transactions < 500 %}
+                            Good transaction volume. Consider expanding services.
                         {% else %}
-                            Expense management is good at KES {{ total_expenses|floatformat:0|intcomma }}.
+                            Excellent transaction volume! Maintain current performance.
                         {% endif %}
                     </div>
                     
                     <div class="alert alert-info">
-                        <i class="fas fa-chart-line me-2"></i>
-                        <strong>Recommendation:</strong>
-                        {% if avg_transactions < 100 %}
-                            Focus on increasing M-Pesa transactions through promotions and better customer service.
-                        {% elif avg_transactions < 500 %}
-                            Good transaction volume. Consider expanding services to increase revenue.
+                        <i class="fas fa-chart-pie me-2"></i>
+                        <strong>Expense Analysis:</strong>
+                        {% if total_expenses > 50000 %}
+                            Expenses are high (KES {{ total_expenses|floatformat:0|intcomma }}). Review operational costs.
                         {% else %}
-                            Excellent transaction volume! Maintain current performance and explore expansion opportunities.
+                            Expense management is optimal at KES {{ total_expenses|floatformat:0|intcomma }}.
                         {% endif %}
                     </div>
                     
-                    <div class="mt-3">
-                        <h6>Key Metrics Summary:</h6>
-                        <ul class="mb-0">
-                            <li>Total Shops: <strong>{{ shop_stats|length }}</strong></li>
-                            <li>Total Reports: <strong>{{ total_reports|floatformat:0 }} reports</strong></li>
-                            <li>Average Transactions per Report: <strong>
-                                {% if total_reports > 0 %}
-                                    {{ total_transactions|floatformat:0|intcomma }}
-                                {% else %}
-                                    0
-                                {% endif %}
-                            </strong></li>
-                            <li>Average Expenses per Report: <strong>
-                                {% if total_reports > 0 %}
-                                    KES {% widthratio total_expenses total_reports 1|intcomma %}
-                                {% else %}
-                                    KES 0
-                                {% endif %}
-                            </strong></li>
-                            <li>Transaction to Expense Ratio: <strong>
-                                {% if total_expenses > 0 %}
-                                    1 transaction per KES {% widthratio total_expenses total_transactions 1|intcomma %}
-                                {% else %}
-                                    N/A
-                                {% endif %}
-                            </strong></li>
-                        </ul>
+                    <div class="mt-4 pt-2">
+                        <h6 class="fw-bold mb-3">
+                            <i class="fas fa-chart-simple me-2"></i>Key Metrics Summary
+                        </h6>
+                        <div class="row">
+                            <div class="col-6 mb-2">
+                                <small class="text-muted">Total Shops:</small>
+                                <div class="fw-bold">{{ shop_stats|length }}</div>
+                            </div>
+                            <div class="col-6 mb-2">
+                                <small class="text-muted">Total Reports:</small>
+                                <div class="fw-bold">{{ total_reports|floatformat:0 }}</div>
+                            </div>
+                            <div class="col-6 mb-2">
+                                <small class="text-muted">Avg Transactions/Report:</small>
+                                <div class="fw-bold">
+                                    {% if total_reports > 0 %}
+                                        {{ total_transactions|floatformat:0|intcomma }}
+                                    {% else %}
+                                        0
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-6 mb-2">
+                                <small class="text-muted">Avg Expenses/Report:</small>
+                                <div class="fw-bold">
+                                    {% if total_reports > 0 %}
+                                        KES {% widthratio total_expenses total_reports 1|intcomma %}
+                                    {% else %}
+                                        KES 0
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -362,15 +591,15 @@ $(document).ready(function() {
                                 label: 'Daily M-Pesa Transactions',
                                 data: response.transactions,
                                 borderColor: '#059669',
-                                backgroundColor: 'rgba(5, 150, 105, 0.1)',
-                                borderWidth: 2,
+                                backgroundColor: 'rgba(5, 150, 105, 0.05)',
+                                borderWidth: 3,
                                 fill: true,
                                 tension: 0.4,
                                 pointBackgroundColor: '#059669',
                                 pointBorderColor: '#ffffff',
                                 pointBorderWidth: 2,
-                                pointRadius: 4,
-                                pointHoverRadius: 6
+                                pointRadius: 5,
+                                pointHoverRadius: 7
                             }]
                         },
                         options: {
@@ -379,8 +608,14 @@ $(document).ready(function() {
                             plugins: {
                                 legend: {
                                     position: 'top',
+                                    labels: {
+                                        usePointStyle: true,
+                                        boxWidth: 10
+                                    }
                                 },
                                 tooltip: {
+                                    backgroundColor: 'rgba(0,0,0,0.8)',
+                                    padding: 12,
                                     callbacks: {
                                         label: function(context) {
                                             return context.parsed.y.toLocaleString() + ' transactions';
@@ -391,11 +626,19 @@ $(document).ready(function() {
                             scales: {
                                 y: {
                                     beginAtZero: true,
+                                    grid: {
+                                        color: 'rgba(0,0,0,0.05)'
+                                    },
                                     ticks: {
                                         stepSize: 1,
                                         callback: function(value) {
                                             return value.toLocaleString();
                                         }
+                                    }
+                                },
+                                x: {
+                                    grid: {
+                                        display: false
                                     }
                                 }
                             }
@@ -445,7 +688,8 @@ $(document).ready(function() {
                                     '#8b5cf6',
                                     '#ec489a'
                                 ],
-                                borderWidth: 0
+                                borderWidth: 0,
+                                hoverOffset: 10
                             }]
                         },
                         options: {
@@ -454,8 +698,17 @@ $(document).ready(function() {
                             plugins: {
                                 legend: {
                                     position: 'bottom',
+                                    labels: {
+                                        padding: 15,
+                                        usePointStyle: true,
+                                        font: {
+                                            size: 11
+                                        }
+                                    }
                                 },
                                 tooltip: {
+                                    backgroundColor: 'rgba(0,0,0,0.8)',
+                                    padding: 12,
                                     callbacks: {
                                         label: function(context) {
                                             var label = context.label || '';
