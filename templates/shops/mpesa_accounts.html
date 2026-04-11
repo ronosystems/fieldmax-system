@@ -5,41 +5,11 @@
 
 {% block extra_css %}
 <style>
-    .account-card {
-        background: var(--card-bg);
-        border: 1px solid var(--border-color);
-        border-radius: 10px;
-        padding: 15px;
-        margin-bottom: 15px;
-        transition: all 0.3s ease;
-        cursor: pointer;
-    }
-    
-    .account-card:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-        border-color: var(--primary-color);
-    }
-    
-    .account-icon {
-        width: 50px;
-        height: 50px;
-        background: linear-gradient(135deg, #059669 0%, #047857 100%);
-        border-radius: 10px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-        font-size: 1.5rem;
-    }
-    
     .account-type {
-        padding: 3px 8px;
-        border-radius: 15px;
+        padding: 4px 10px;
+        border-radius: 20px;
         font-size: 0.7rem;
         font-weight: 600;
-        background: #e5e7eb;
-        color: #374151;
         display: inline-block;
     }
     
@@ -58,10 +28,67 @@
         color: #92400e;
     }
     
+    .account-type-business {
+        background: #e0e7ff;
+        color: #3730a3;
+    }
+    
     .phone-number {
         font-family: monospace;
-        font-size: 1.1rem;
         font-weight: 600;
+    }
+    
+    .table-actions {
+        white-space: nowrap;
+    }
+    
+    .badge-active {
+        background-color: #10b981;
+        color: white;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 0.7rem;
+        font-weight: 500;
+    }
+    
+    .badge-inactive {
+        background-color: #6b7280;
+        color: white;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 0.7rem;
+        font-weight: 500;
+    }
+    
+    .table-hover tbody tr:hover {
+        background-color: var(--light-bg);
+    }
+    
+    .stat-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 15px;
+        padding: 20px;
+        margin-bottom: 20px;
+        transition: transform 0.3s ease;
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+    }
+    
+    .stat-card h3 {
+        font-size: 2rem;
+        font-weight: bold;
+        margin-bottom: 5px;
+        color: var(--primary-color);
+    }
+    
+    .stat-label {
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        color: var(--text-secondary);
     }
 </style>
 {% endblock %}
@@ -79,6 +106,38 @@
             <a href="{% url 'shops:add_mpesa_account' %}" class="btn btn-primary">
                 <i class="fas fa-plus-circle me-2"></i>Add M-Pesa Account
             </a>
+        </div>
+    </div>
+
+    <!-- Statistics Summary -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="stat-card text-center">
+                <i class="fas fa-mobile-alt fa-2x mb-2" style="color: var(--primary-color);"></i>
+                <h3>{{ accounts|length }}</h3>
+                <div class="stat-label">Total Accounts</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card text-center">
+                <i class="fas fa-check-circle fa-2x mb-2" style="color: #10b981;"></i>
+                <h3>{{ accounts|dictsort:"is_active"|slice:":-1"|length }}</h3>
+                <div class="stat-label">Active Accounts</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card text-center">
+                <i class="fas fa-store fa-2x mb-2" style="color: #f59e0b;"></i>
+                <h3>{{ shops|length }}</h3>
+                <div class="stat-label">Shop Branches</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card text-center">
+                <i class="fas fa-chart-line fa-2x mb-2" style="color: #3b82f6;"></i>
+                <h3 id="uniqueTypesCount">0</h3>
+                <div class="stat-label">Account Types</div>
+            </div>
         </div>
     </div>
 
@@ -122,100 +181,70 @@
         </div>
     </div>
 
-    <!-- M-Pesa Accounts Grid -->
+    <!-- M-Pesa Accounts Table -->
     {% if accounts %}
-    <div class="row" id="accountsGrid">
-        {% for account in accounts %}
-        <div class="col-md-6 col-lg-4 mb-3 account-item" 
-             data-shop-id="{{ account.shop.id }}" 
-             data-account-type="{{ account.account_type }}"
-             data-status="{% if account.is_active %}active{% else %}inactive{% endif %}">
-            <div class="account-card">
-                <div class="d-flex justify-content-between align-items-start mb-3">
-                    <div class="account-icon">
-                        <i class="fas fa-mobile-alt"></i>
-                    </div>
-                    <div>
-                        {% if account.is_active %}
-                            <span class="badge-finalized">
-                                <i class="fas fa-check-circle me-1"></i>Active
-                            </span>
-                        {% else %}
-                            <span class="badge-pending">
-                                <i class="fas fa-times-circle me-1"></i>Inactive
-                            </span>
-                        {% endif %}
-                    </div>
-                </div>
-                
-                <h5 class="mb-1">{{ account.account_name }}</h5>
-                <p class="text-muted small mb-2">{{ account.shop.name }}</p>
-                
-                <div class="mb-2">
-                    <span class="account-type account-type-{{ account.account_type|lower }}">
-                        {{ account.account_type }}
-                    </span>
-                </div>
-                
-                <div class="mt-3">
-                    <div class="row">
-                        <div class="col-6">
-                            <small class="text-muted d-block">Account Number</small>
-                            <strong class="phone-number">{{ account.account_number }}</strong>
-                        </div>
-                        <div class="col-6">
-                            <small class="text-muted d-block">Phone Number</small>
-                            <strong>{{ account.phone_number }}</strong>
-                        </div>
-                    </div>
-                </div>
-                
-                <hr class="my-3">
-                
-                <div class="d-flex justify-content-between">
-                    <small class="text-muted">
-                        <i class="fas fa-calendar me-1"></i>
-                        Added: {{ account.created_date|date:"M d, Y" }}
-                    </small>
-                    <div>
-                        <a href="{% url 'shops:edit_mpesa_account' account.id %}" class="btn btn-sm btn-outline-primary">
-                            <i class="fas fa-edit"></i> Edit
-                        </a>
-                    </div>
-                </div>
-            </div>
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">M-Pesa Accounts List</h5>
         </div>
-        {% endfor %}
-    </div>
-    
-    <!-- Statistics Summary -->
-    <div class="row mt-4">
-        <div class="col-md-3">
-            <div class="stat-card text-center">
-                <i class="fas fa-mobile-alt fa-2x mb-2" style="color: var(--primary-color);"></i>
-                <h3>{{ accounts|length }}</h3>
-                <div class="stat-label">Total Accounts</div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="stat-card text-center">
-                <i class="fas fa-check-circle fa-2x mb-2" style="color: #10b981;"></i>
-                <h3 id="activeCount">{{ accounts|length }}</h3>
-                <div class="stat-label">Active Accounts</div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="stat-card text-center">
-                <i class="fas fa-store fa-2x mb-2" style="color: #f59e0b;"></i>
-                <h3>{{ shops|length }}</h3>
-                <div class="stat-label">Shop Branches</div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="stat-card text-center">
-                <i class="fas fa-chart-line fa-2x mb-2" style="color: #3b82f6;"></i>
-                <h3 id="uniqueTypesCount">0</h3>
-                <div class="stat-label">Account Types</div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover" id="mpesaAccountsTable">
+                    <thead>
+                        <tr>
+                            <th>Shop Branch</th>
+                            <th>Account Name</th>
+                            <th>Account Number</th>
+                            <th>Account Type</th>
+                            <th>Phone Number</th>
+                            <th>Status</th>
+                            <th>Created Date</th>
+                            <th>Actions</th>
+                        </thead>
+                        <tbody>
+                            {% for account in accounts %}
+                            <tr class="account-item" 
+                                data-shop-id="{{ account.shop.id }}" 
+                                data-account-type="{{ account.account_type }}"
+                                data-status="{% if account.is_active %}active{% else %}inactive{% endif %}">
+                                <td>
+                                    <strong>{{ account.shop.name }}</strong><br>
+                                    <small class="text-muted">{{ account.shop.code }}</small>
+                                </td>
+                                <td>{{ account.account_name }}</td>
+                                <td>
+                                    <span class="phone-number">{{ account.account_number }}</span>
+                                </td>
+                                <td>
+                                    <span class="account-type account-type-{{ account.account_type|lower }}">
+                                        {{ account.account_type }}
+                                    </span>
+                                </td>
+                                <td>{{ account.phone_number }}</td>
+                                <td>
+                                    {% if account.is_active %}
+                                        <span class="badge-active">
+                                            <i class="fas fa-check-circle me-1"></i>Active
+                                        </span>
+                                    {% else %}
+                                        <span class="badge-inactive">
+                                            <i class="fas fa-times-circle me-1"></i>Inactive
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <small>{{ account.created_date|date:"M d, Y" }}</small>
+                                </td>
+                                <td class="table-actions">
+                                    <a href="{% url 'shops:edit_mpesa_account' account.id %}" class="btn btn-sm btn-outline-primary" title="Edit">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
@@ -232,52 +261,42 @@
     </div>
     {% endif %}
 </div>
-
-<!-- Help Section -->
-<div class="card mt-4">
-    <div class="card-header">
-        <h6 class="mb-0">
-            <i class="fas fa-info-circle me-2"></i>About M-Pesa Accounts
-        </h6>
-    </div>
-    <div class="card-body">
-        <div class="row">
-            <div class="col-md-6">
-                <h6><i class="fas fa-till me-2"></i>Till Numbers</h6>
-                <p class="small text-muted">For business receiving payments from customers via M-Pesa. Used for daily sales collection.</p>
-                
-                <h6><i class="fas fa-receipt me-2"></i>Paybill Numbers</h6>
-                <p class="small text-muted">For businesses with multiple branches or departments. Allows payment tracking with account numbers.</p>
-            </div>
-            <div class="col-md-6">
-                <h6><i class="fas fa-user-tie me-2"></i>Agent Lines</h6>
-                <p class="small text-muted">For M-Pesa agent operations including deposits, withdrawals, and float management.</p>
-                
-                <h6><i class="fas fa-building me-2"></i>Business Accounts</h6>
-                <p class="small text-muted">Standard business accounts for company operations and bill payments.</p>
-            </div>
-        </div>
-    </div>
-</div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
 $(document).ready(function() {
-    // Function to update statistics
-    function updateStatistics() {
-        var visibleAccounts = $('.account-item:visible');
-        var activeAccounts = visibleAccounts.filter('[data-status="active"]').length;
+    // Initialize DataTable
+    var table = $('#mpesaAccountsTable').DataTable({
+        "pageLength": 25,
+        "language": {
+            "search": "Search Accounts:",
+            "lengthMenu": "Show _MENU_ accounts",
+            "info": "Showing _START_ to _END_ of _TOTAL_ accounts",
+            "infoEmpty": "Showing 0 to 0 of 0 accounts",
+            "infoFiltered": "(filtered from _MAX_ total accounts)",
+            "emptyTable": "No M-Pesa accounts found",
+            "zeroRecords": "No matching accounts found"
+        },
+        "order": [[0, "asc"]],
+        "columnDefs": [
+            { "orderable": true, "targets": [0, 1, 2, 3, 4, 5, 6] },
+            { "orderable": false, "targets": [7] }
+        ]
+    });
+    
+    // Function to update unique types count
+    function updateUniqueTypesCount() {
+        var visibleRows = $('.account-item:visible');
         var uniqueTypes = new Set();
         
-        visibleAccounts.each(function() {
+        visibleRows.each(function() {
             var type = $(this).data('account-type');
             if (type) {
                 uniqueTypes.add(type);
             }
         });
         
-        $('#activeCount').text(activeAccounts);
         $('#uniqueTypesCount').text(uniqueTypes.size);
     }
     
@@ -294,7 +313,8 @@ $(document).ready(function() {
             }
         });
         
-        updateStatistics();
+        table.draw();
+        updateUniqueTypesCount();
     });
     
     // Account type filter
@@ -304,7 +324,6 @@ $(document).ready(function() {
         $('.account-item').each(function() {
             var itemType = $(this).data('account-type');
             if (type === 'all' || itemType === type) {
-                // Also respect shop filter
                 var shopId = $('#shopFilter').val();
                 var itemShopId = $(this).data('shop-id');
                 if (shopId === 'all' || itemShopId == shopId) {
@@ -317,7 +336,8 @@ $(document).ready(function() {
             }
         });
         
-        updateStatistics();
+        table.draw();
+        updateUniqueTypesCount();
     });
     
     // Status filter
@@ -327,7 +347,6 @@ $(document).ready(function() {
         $('.account-item').each(function() {
             var itemStatus = $(this).data('status');
             if (status === 'all' || itemStatus === status) {
-                // Also respect other filters
                 var shopId = $('#shopFilter').val();
                 var type = $('#typeFilter').val();
                 var itemShopId = $(this).data('shop-id');
@@ -346,36 +365,22 @@ $(document).ready(function() {
             }
         });
         
-        updateStatistics();
+        table.draw();
+        updateUniqueTypesCount();
     });
     
-    // Reset filters button (optional - add if needed)
+    // Reset filters button
     $('#resetFilters').click(function() {
         $('#shopFilter').val('all');
         $('#typeFilter').val('all');
         $('#statusFilter').val('all');
         $('.account-item').show();
-        updateStatistics();
+        table.search('').columns().search('').draw();
+        updateUniqueTypesCount();
     });
     
-    // Initial statistics
-    updateStatistics();
-    
-    // Search functionality
-    $('#searchAccounts').on('keyup', function() {
-        var searchTerm = $(this).val().toLowerCase();
-        
-        $('.account-card').each(function() {
-            var cardText = $(this).text().toLowerCase();
-            if (cardText.indexOf(searchTerm) > -1) {
-                $(this).closest('.account-item').show();
-            } else {
-                $(this).closest('.account-item').hide();
-            }
-        });
-        
-        updateStatistics();
-    });
+    // Initial unique types count
+    updateUniqueTypesCount();
 });
 </script>
 {% endblock %}
