@@ -3,7 +3,8 @@ from django.contrib import admin
 from django.utils.html import format_html
 from django.urls import reverse
 from django.utils import timezone
-from django.db.models import Sum, Count
+from django.db.models import Sum, Count, Q
+from django.contrib import messages
 from .models import (
     Sale, SaleItem, SaleCounter, SaleReversal, 
     FiscalReceipt, Customer, LoyaltyTransaction, LoyaltySettings
@@ -188,17 +189,20 @@ class FiscalReceiptAdmin(admin.ModelAdmin):
 
 
 # ============================================
-# CUSTOMER ADMIN
+# CUSTOMER MANAGEMENT ADMIN
 # ============================================
 @admin.register(Customer)
 class CustomerAdmin(admin.ModelAdmin):
     list_display = ['full_name', 'phone_number', 'email', 'tier_badge', 
                     'points_display', 'total_spent_display', 'total_purchases', 
-                    'last_purchase', 'is_active']
-    list_filter = ['tier', 'is_active', 'created_at']
+                    'last_purchase', 'is_active', 'registered_by']
+    list_filter = ['tier', 'is_active', 'created_at', 'registered_by']
     search_fields = ['phone_number', 'full_name', 'email', 'id_number']
     readonly_fields = ['created_at', 'updated_at', 'points_summary', 
-                       'transaction_history_link', 'purchase_stats']
+                       'transaction_history_link', 'purchase_stats', 'registered_by']
+    list_editable = ['is_active']
+    list_per_page = 25
+    date_hierarchy = 'created_at'
     
     fieldsets = (
         ('Basic Information', {
@@ -304,7 +308,12 @@ class CustomerAdmin(admin.ModelAdmin):
         )
     transaction_history_link.short_description = "Transactions"
     
-    actions = ['activate_customers', 'deactivate_customers', 'reset_points']
+    def save_model(self, request, obj, form, change):
+        if not change:  # New customer being created
+            obj.registered_by = request.user
+        super().save_model(request, obj, form, change)
+    
+    actions = ['activate_customers', 'deactivate_customers', 'reset_points', 'export_customers_csv']
     
     def activate_customers(self, request, queryset):
         updated = queryset.update(is_active=True)
@@ -322,6 +331,34 @@ class CustomerAdmin(admin.ModelAdmin):
             customer.save()
         self.message_user(request, f'{queryset.count()} customers points reset to 0.')
     reset_points.short_description = "Reset points to 0"
+    
+    def export_customers_csv(self, request, queryset):
+        import csv
+        from django.http import HttpResponse
+        
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="customers_export.csv"'
+        
+        writer = csv.writer(response)
+        writer.writerow(['Phone', 'Name', 'Email', 'Tier', 'Points Balance', 
+                        'Total Spent', 'Total Purchases', 'Status', 'Registered Date'])
+        
+        for customer in queryset:
+            writer.writerow([
+                customer.phone_number,
+                customer.full_name,
+                customer.email or '',
+                customer.get_tier_display(),
+                customer.points_balance,
+                f"{customer.total_spent:.2f}",
+                customer.total_purchases,
+                'Active' if customer.is_active else 'Inactive',
+                customer.created_at.strftime('%Y-%m-%d')
+            ])
+        
+        self.message_user(request, f'Exported {queryset.count()} customers to CSV.')
+        return response
+    export_customers_csv.short_description = "Export selected customers to CSV"
 
 
 # ============================================
@@ -335,6 +372,8 @@ class LoyaltyTransactionAdmin(admin.ModelAdmin):
     search_fields = ['customer__phone_number', 'customer__full_name', 'description']
     readonly_fields = ['customer', 'sale', 'points', 'transaction_type', 
                       'description', 'created_at', 'created_by']
+    list_per_page = 25
+    date_hierarchy = 'created_at'
     
     fieldsets = (
         ('Transaction Details', {
