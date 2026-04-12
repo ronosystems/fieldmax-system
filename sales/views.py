@@ -998,11 +998,14 @@ def search_products(request):
     try:
         from inventory.models import Product
         
-        # Base queryset - only show available products with stock
+        # Base queryset - only show available products
+        # For single items, only show those that are NOT sold
+        # For bulk items, only show those with quantity > 0
         queryset = Product.objects.filter(
-            status='available',
-            quantity__gt=0,
             is_active=True
+        ).filter(
+            Q(category__is_single_item=False, quantity__gt=0) |  # Bulk items with stock
+            Q(category__is_single_item=True, status='available', quantity__gt=0)  # Single items available
         )
         
         if query and len(query) >= 2:
@@ -1015,6 +1018,14 @@ def search_products(request):
                 Q(sku_value__icontains=query) |
                 Q(barcode__icontains=query)
             )
+        
+        # Exclude products already in active sales (for single items)
+        from sales.models import SaleItem
+        sold_single_items = SaleItem.objects.filter(
+            sale__is_reversed=False
+        ).values_list('product_id', flat=True).distinct()
+        
+        queryset = queryset.exclude(id__in=sold_single_items)
         
         # Limit to 30 results for performance
         results = queryset[:30]
@@ -1783,15 +1794,31 @@ def get_product_details(request, product_code):
         
         # Check if single item is already sold
         if product.category.is_single_item:
-            if product.status == 'sold' or product.quantity <= 0:
+            # Check status
+            if product.status == 'sold':
                 return JsonResponse({
                     'success': False,
                     'error': 'This item has already been sold'
                 })
+            
+            # Check quantity
             if product.quantity <= 0:
                 return JsonResponse({
                     'success': False,
                     'error': 'Product out of stock'
+                })
+            
+            # Check if already in an active sale
+            from sales.models import SaleItem
+            active_sale_exists = SaleItem.objects.filter(
+                product=product,
+                sale__is_reversed=False
+            ).exists()
+            
+            if active_sale_exists:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'This item has already been sold in another transaction'
                 })
         else:
             # Bulk items check quantity
@@ -1861,20 +1888,34 @@ def add_to_cart(request):
                 })
             
             # ============================================
-            # FIXED: Check if single item is already sold in an ACTIVE sale
+            # FIX: Check if single item is already sold
             # ============================================
             if product.category and product.category.is_single_item:
-                # Check if already sold in an active sale (not reversed)
+                # Check if the product is already marked as sold
+                if product.status == 'sold':
+                    return JsonResponse({
+                        'success': False,
+                        'error': f'❌ {product.display_name} has already been sold and cannot be added to cart.'
+                    })
+                
+                # Check if quantity is 0 or less
+                if product.quantity <= 0:
+                    return JsonResponse({
+                        'success': False,
+                        'error': f'❌ {product.display_name} is out of stock and cannot be sold.'
+                    })
+                
+                # Check if already sold in an ACTIVE sale (not reversed)
                 from sales.models import SaleItem
                 active_sale_exists = SaleItem.objects.filter(
                     product=product,
-                    sale__is_reversed=False  # Only check non-reversed sales
+                    sale__is_reversed=False
                 ).exists()
                 
                 if active_sale_exists:
                     return JsonResponse({
                         'success': False,
-                        'error': f'This item ({product.display_name}) has already been sold and cannot be added to cart'
+                        'error': f'❌ {product.display_name} (SKU: {product.sku_value}) has already been sold in another transaction!'
                     })
                 
                 # Check if already in cart
@@ -1883,10 +1924,10 @@ def add_to_cart(request):
                     if item.get('product_code') == product_code:
                         return JsonResponse({
                             'success': False,
-                            'error': 'This item is already in the cart'
+                            'error': f'❌ {product.display_name} is already in the cart'
                         })
                 
-                # Check if quantity is more than 1 for single items
+                # Single items must have quantity = 1
                 if quantity != 1:
                     return JsonResponse({
                         'success': False,

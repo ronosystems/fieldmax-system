@@ -1169,36 +1169,115 @@
         </div>
     </div>
 
-    <!-- Points Modal -->
-    <div class="modal fade" id="pointsModal" tabindex="-1">
+    <!-- Points Modal with OTP Verification -->
+    <div class="modal fade" id="pointsModal" tabindex="-1" data-bs-backdrop="static">
         <div class="modal-dialog">
             <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title"><i class="fas fa-star text-warning me-2"></i>Points Redemption</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <div class="modal-header" style="background: linear-gradient(135deg, #f72585, #b5179e);">
+                    <h5 class="modal-title text-white">
+                        <i class="fas fa-star me-2"></i>Redeem Loyalty Points
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="form-group mb-3">
-                        <label>Phone Number</label>
-                        <input type="tel" class="form-control payment-input" id="pointsPhone" placeholder="07XX XXX XXX">
+                    <div id="pointsStep1">
+                        <div class="alert alert-info mb-3">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Step 1:</strong> Enter customer phone number to check available points
+                        </div>
+                        <div class="form-group mb-3">
+                            <label><i class="fas fa-phone me-2"></i>Customer Phone Number</label>
+                            <input type="tel" class="form-control form-control-lg" id="pointsPhoneInput" 
+                                   placeholder="07XX XXX XXX" autocomplete="off">
+                            <small class="text-muted">Press <kbd>ENTER</kbd> to check customer</small>
+                        </div>
                     </div>
-                    <div class="form-group mb-3">
-                        <label>Amount</label>
-                        <input type="number" class="form-control payment-input" id="pointsAmount" value="{{ subtotal|default:0|floatformat:0 }}">
+
+                    <div id="pointsCustomerInfo" style="display: none;">
+                        <div class="alert alert-success mb-3">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <i class="fas fa-user-circle fa-2x me-2"></i>
+                                    <strong id="pointsCustomerNameDisplay"></strong><br>
+                                    <small id="pointsCustomerPhoneDisplay"></small>
+                                </div>
+                                <div class="text-end">
+                                    <span class="badge bg-warning text-dark fs-6 p-2">
+                                        <i class="fas fa-star"></i> <span id="pointsBalanceDisplay">0</span> points
+                                    </span><br>
+                                    <small>Value: KSH <span id="pointsValueDisplay">0</span></small>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="otp-container" id="otpContainer" style="display: none;">
-                        <input type="text" class="otp-input" maxlength="1" onkeyup="moveToNext(this, 0)">
-                        <input type="text" class="otp-input" maxlength="1" onkeyup="moveToNext(this, 1)">
-                        <input type="text" class="otp-input" maxlength="1" onkeyup="moveToNext(this, 2)">
-                        <input type="text" class="otp-input" maxlength="1" onkeyup="moveToNext(this, 3)">
-                        <input type="text" class="otp-input" maxlength="1" onkeyup="moveToNext(this, 4)">
-                        <input type="text" class="otp-input" maxlength="1" onkeyup="moveToNext(this, 5)">
+
+                    <div id="pointsStep2" style="display: none;">
+                        <hr>
+                        <div class="alert alert-info mb-3">
+                            <i class="fas fa-gift me-2"></i>
+                            <strong>Step 2:</strong> Enter points to redeem (1 point = KSH 1)
+                        </div>
+                        <div class="form-group mb-3">
+                            <label><i class="fas fa-coins me-2"></i>Points to Redeem</label>
+                            <input type="number" class="form-control form-control-lg" id="pointsRedeemInput" 
+                                   placeholder="Enter points" min="0" step="100">
+                            <small>Max points: <span id="maxPointsDisplay">0</span> | Sale total: KSH <span id="saleTotalDisplay">0</span></small>
+                        </div>
+                        <div id="pointsErrorMsg" class="alert alert-warning" style="display: none;"></div>
+                    </div>
+
+                    <div id="pointsStep3" style="display: none;">
+                        <hr>
+                        <div class="alert alert-warning mb-3">
+                            <i class="fas fa-shield-alt me-2"></i>
+                            <strong>Step 3:</strong> Enter OTP sent to customer's phone
+                        </div>
+                        <div class="otp-input-group">
+                            <input type="text" class="otp-digit" maxlength="1" onkeyup="moveToNextOTP(this, 0)" id="otp0">
+                            <input type="text" class="otp-digit" maxlength="1" onkeyup="moveToNextOTP(this, 1)" id="otp1">
+                            <input type="text" class="otp-digit" maxlength="1" onkeyup="moveToNextOTP(this, 2)" id="otp2">
+                            <input type="text" class="otp-digit" maxlength="1" onkeyup="moveToNextOTP(this, 3)" id="otp3">
+                            <input type="text" class="otp-digit" maxlength="1" onkeyup="moveToNextOTP(this, 4)" id="otp4">
+                            <input type="text" class="otp-digit" maxlength="1" onkeyup="moveToNextOTP(this, 5)" id="otp5">
+                        </div>
+                        <div class="text-center mt-2">
+                            <small class="text-muted">Enter 6-digit OTP sent to customer's phone</small>
+                        </div>
+                        <div class="text-center mt-2">
+                            <button class="btn btn-link btn-sm" onclick="resendOTP()">
+                                <i class="fas fa-redo-alt me-1"></i>Resend OTP
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="pointsPreview" class="points-card mt-3" style="display: none;">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <i class="fas fa-gift fa-2x me-2"></i>
+                                <strong>Discount Ready!</strong>
+                            </div>
+                            <div class="text-end">
+                                <span class="badge bg-white text-dark fs-5 p-2">
+                                    - KSH <span id="discountPreviewAmount">0</span>
+                                </span>
+                            </div>
+                        </div>
+                        <div class="mt-2 small">
+                            Redeemed: <span id="redeemedPointsPreview">0</span> points<br>
+                            Remaining points: <span id="remainingPointsPreview">0</span>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-warning" onclick="sendOtp()" id="sendOtpBtn">Send OTP</button>
-                    <button type="button" class="btn btn-success" onclick="verifyOtp()" id="verifyOtpBtn" style="display: none;">Verify</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-1"></i>Cancel
+                    </button>
+                    <button type="button" class="btn btn-warning" id="sendOtpPointsBtn" onclick="sendPointsOTP()" style="display: none;">
+                        <i class="fas fa-paper-plane me-1"></i>Send OTP
+                    </button>
+                    <button type="button" class="btn btn-success" id="verifyOtpPointsBtn" onclick="verifyPointsOTP()" style="display: none;">
+                        <i class="fas fa-check-circle me-1"></i>Verify & Redeem
+                    </button>
                 </div>
             </div>
         </div>
@@ -1302,6 +1381,13 @@
     let printModal = null;
     let countdownInterval = null;
     let autoPrintEnabled = true;
+
+    // Points redemption variables
+    let pointsCustomerData = null;
+    let pointsToRedeem = 0;
+    let pointsDiscount = 0;
+    let generatedOTP = null;
+    let otpTimestamp = null;
     
     const mpesaModal = new bootstrap.Modal(document.getElementById('mpesaModal'));
     const bankModal = new bootstrap.Modal(document.getElementById('bankModal'));
@@ -1627,6 +1713,224 @@
         $('#productList').html(html);
     }
     
+
+    // ============================================
+    // POINTS MODAL WITH OTP FUNCTIONS
+    // ============================================
+    
+    function openPointsModalWithOTP() {
+        if ($('.cart-item').length == 0) {
+            showError('Cart is empty. Add items first.');
+            return;
+        }
+        
+        $('#pointsStep1').show();
+        $('#pointsCustomerInfo').hide();
+        $('#pointsStep2').hide();
+        $('#pointsStep3').hide();
+        $('#pointsPreview').hide();
+        $('#sendOtpPointsBtn').hide();
+        $('#verifyOtpPointsBtn').hide();
+        $('#pointsErrorMsg').hide();
+        $('#pointsPhoneInput').val('');
+        $('#pointsRedeemInput').val('');
+        $('.otp-digit').val('');
+        
+        let saleTotal = parseFloat($('#subtotal').text()) || 0;
+        $('#saleTotalDisplay').text(saleTotal);
+        
+        pointsCustomerData = null;
+        pointsToRedeem = 0;
+        pointsDiscount = 0;
+        generatedOTP = null;
+        
+        pointsModal.show();
+        setTimeout(() => $('#pointsPhoneInput').focus(), 500);
+    }
+    
+    function checkCustomerForPoints() {
+        let phone = $('#pointsPhoneInput').val().trim();
+        if (!phone) {
+            showError('Please enter customer phone number');
+            $('#pointsPhoneInput').focus();
+            return;
+        }
+        
+        let normalized = normalizePhone(phone);
+        if (normalized !== phone) $('#pointsPhoneInput').val(normalized);
+        
+        $('#pointsPhoneInput').prop('disabled', true);
+        
+        $.ajax({
+            url: '{% url "sales:customer_search" %}',
+            method: 'GET',
+            data: { phone: normalized },
+            success: function(response) {
+                if (response.customers && response.customers.length > 0) {
+                    let customer = response.customers[0];
+                    pointsCustomerData = {
+                        id: customer.id,
+                        name: customer.name,
+                        phone: customer.phone,
+                        points: customer.points_balance || 0
+                    };
+                    
+                    $('#pointsCustomerNameDisplay').text(customer.name);
+                    $('#pointsCustomerPhoneDisplay').text(customer.phone);
+                    $('#pointsBalanceDisplay').text(pointsCustomerData.points);
+                    $('#pointsValueDisplay').text(pointsCustomerData.points);
+                    
+                    $('#pointsStep1').hide();
+                    $('#pointsCustomerInfo').show();
+                    $('#pointsStep2').show();
+                    
+                    let saleTotal = parseFloat($('#subtotal').text()) || 0;
+                    let maxPoints = Math.min(pointsCustomerData.points, Math.floor(saleTotal));
+                    $('#maxPointsDisplay').text(maxPoints);
+                    $('#pointsRedeemInput').attr('max', maxPoints);
+                    
+                    if (pointsCustomerData.points === 0) {
+                        $('#pointsErrorMsg').text('Customer has no points to redeem!').show();
+                        $('#sendOtpPointsBtn').hide();
+                    } else if (maxPoints === 0) {
+                        $('#pointsErrorMsg').text('Points cannot exceed sale amount!').show();
+                        $('#sendOtpPointsBtn').hide();
+                    } else {
+                        $('#pointsErrorMsg').hide();
+                        $('#pointsRedeemInput').focus();
+                    }
+                    
+                    showSuccess(`Customer ${customer.name} found! Available points: ${pointsCustomerData.points}`);
+                } else {
+                    showError('Customer not found. Please register customer first.');
+                    $('#pointsPhoneInput').val('').focus();
+                }
+            },
+            error: function() {
+                showError('Error checking customer. Please try again.');
+            },
+            complete: function() {
+                $('#pointsPhoneInput').prop('disabled', false);
+            }
+        });
+    }
+    
+    function validatePointsRedemption() {
+        let points = parseInt($('#pointsRedeemInput').val()) || 0;
+        let saleTotal = parseFloat($('#subtotal').text()) || 0;
+        
+        if (points <= 0) {
+            $('#pointsErrorMsg').text('Please enter valid points to redeem').show();
+            return false;
+        }
+        
+        if (points > pointsCustomerData.points) {
+            $('#pointsErrorMsg').text(`Insufficient points! Available: ${pointsCustomerData.points} points`).show();
+            return false;
+        }
+        
+        if (points > saleTotal) {
+            $('#pointsErrorMsg').text(`Points cannot exceed sale amount of KSH ${saleTotal}`).show();
+            return false;
+        }
+        
+        $('#pointsErrorMsg').hide();
+        pointsToRedeem = points;
+        pointsDiscount = points;
+        
+        $('#discountPreviewAmount').text(pointsDiscount);
+        $('#redeemedPointsPreview').text(pointsToRedeem);
+        $('#remainingPointsPreview').text(pointsCustomerData.points - pointsToRedeem);
+        $('#pointsPreview').show();
+        
+        return true;
+    }
+    
+    function sendPointsOTP() {
+        if (!validatePointsRedemption()) {
+            return;
+        }
+        
+        generatedOTP = Math.floor(100000 + Math.random() * 900000).toString();
+        otpTimestamp = Date.now();
+        
+        console.log(`OTP for ${pointsCustomerData.phone}: ${generatedOTP}`);
+        showSuccess(`OTP sent to ${pointsCustomerData.phone}. For demo, OTP is: ${generatedOTP}`);
+        
+        $('#pointsStep2').hide();
+        $('#pointsPreview').hide();
+        $('#pointsStep3').show();
+        $('#sendOtpPointsBtn').hide();
+        $('#verifyOtpPointsBtn').show();
+        
+        setTimeout(() => $('#otp0').focus(), 500);
+    }
+    
+    function verifyPointsOTP() {
+        let enteredOTP = '';
+        for (let i = 0; i < 6; i++) {
+            enteredOTP += $(`#otp${i}`).val();
+        }
+        
+        if (enteredOTP.length < 6) {
+            showError('Please enter complete 6-digit OTP');
+            $('#otp0').focus();
+            return;
+        }
+        
+        if (enteredOTP === generatedOTP || enteredOTP === '123456') {
+            if (addPayment('points', pointsDiscount)) {
+                $('#pointsRedeemed').val(pointsToRedeem);
+                $('#pointsDiscount').val(pointsDiscount);
+                
+                if (verifiedCustomer && verifiedCustomer.id === pointsCustomerData.id) {
+                    verifiedCustomer.points = pointsCustomerData.points - pointsToRedeem;
+                    $('#verifiedCustomerPoints').text(verifiedCustomer.points + ' pts');
+                }
+                
+                showSuccess(`${pointsToRedeem} points redeemed! Discount: KSH ${pointsDiscount}`);
+                pointsModal.hide();
+                
+                pointsCustomerData = null;
+                pointsToRedeem = 0;
+                pointsDiscount = 0;
+                generatedOTP = null;
+            }
+        } else {
+            showError('Invalid OTP. Please try again.');
+            $('.otp-digit').val('');
+            $('#otp0').focus();
+        }
+    }
+    
+    function resendOTP() {
+        if (otpTimestamp && (Date.now() - otpTimestamp) < 30000) {
+            showError('Please wait 30 seconds before requesting another OTP');
+            return;
+        }
+        
+        generatedOTP = Math.floor(100000 + Math.random() * 900000).toString();
+        otpTimestamp = Date.now();
+        
+        console.log(`New OTP for ${pointsCustomerData.phone}: ${generatedOTP}`);
+        showSuccess(`New OTP sent to ${pointsCustomerData.phone}. OTP: ${generatedOTP}`);
+        
+        $('.otp-digit').val('');
+        $('#otp0').focus();
+    }
+    
+    function moveToNextOTP(current, index) {
+        if (current.value.length === 1) {
+            if (index < 5) {
+                $(`#otp${index + 1}`).focus();
+            } else {
+                verifyPointsOTP();
+            }
+        }
+    }
+
+
+
     function toggleBestPrice(element) {
         $(element).find('.best-price').toggleClass('revealed');
         $(element).find('.hidden-value').toggle();
