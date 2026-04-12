@@ -11,6 +11,7 @@ urlpatterns = [
     path('report/<int:report_id>/', views.report_detail, name='report_detail'),
     path('report/<int:report_id>/edit/', views.edit_daily_report, name='edit_report'),
     path('report/<int:report_id>/finalize/', views.finalize_report, name='finalize_report'),
+    path('report/<int:report_id>/unfinalize/', views.unfinalize_report, name='unfinalize_report'),
     path('report/<int:report_id>/mpesa-summary/', views.mpesa_daily_summary, name='mpesa_summary'),
     
     # Shop Management

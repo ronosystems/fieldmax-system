@@ -568,6 +568,36 @@ def finalize_report(request, report_id):
     return redirect('shops:report_detail', report_id=report.id)
 
 
+
+
+@login_required
+@user_passes_test(is_superuser)  # Only superusers can unfinalize
+def unfinalize_report(request, report_id):
+    """Revert a finalized report back to draft (can be edited again)"""
+    report = get_object_or_404(DailyShopReport, id=report_id)
+    
+    # Check if user is allowed to unfinalize this report
+    if not request.user.is_superuser:
+        messages.error(request, 'Only superusers can revert finalized reports.')
+        return redirect('shops:report_detail', report_id=report.id)
+    
+    if not report.is_finalized:
+        messages.warning(request, 'This report is already in draft status.')
+        return redirect('shops:report_detail', report_id=report.id)
+    
+    if request.method == 'POST':
+        report.is_finalized = False
+        report.finalized_by = None
+        report.finalized_at = None
+        report.save()
+        messages.success(request, f'Report for {report.report_date} has been reverted to draft and can now be edited.')
+    
+    return redirect('shops:report_detail', report_id=report.id)
+
+
+
+
+
 @login_required
 def reports_list(request):
     """List all reports - filtered by user"""

@@ -118,6 +118,11 @@
         color: white;
     }
     
+    .info-header {
+        background: linear-gradient(135deg, #00ffff 0%, #00d9ff 100%);
+        color: white;
+    }
+    
     .action-buttons {
         display: flex;
         gap: 10px;
@@ -182,34 +187,49 @@
         </div>
     </div>
 
-    <!-- Action Buttons -->
-    <div class="row mb-4 no-print">
-        <div class="col-12">
-            <div class="action-buttons">
-                <a href="{% url 'shops:reports_list' %}" class="btn btn-secondary">
-                    <i class="fas fa-arrow-left me-2"></i>Back to Reports
-                </a>
-                {% if not report.is_finalized %}
+<!-- Action Buttons -->
+<div class="row mb-4 no-print">
+    <div class="col-12">
+        <div class="action-buttons">
+            <a href="{% url 'shops:reports_list' %}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left me-2"></i>Back to Reports
+            </a>
+            
+            {% if not report.is_finalized %}
+                <!-- Edit Button - Only for draft reports -->
                 <a href="{% url 'shops:edit_report' report.id %}" class="btn btn-warning">
                     <i class="fas fa-edit me-2"></i>Edit Report
                 </a>
 
-                <!-- Finalize Button - Only visible to superusers -->
+                <!-- Finalize Button - Only visible to superusers for draft reports -->
                 {% if request.user.is_superuser %}
                 <form method="post" action="{% url 'shops:finalize_report' report.id %}" class="d-inline">
                     {% csrf_token %}
-                    <button type="submit" class="btn btn-success" onclick="return confirm('Are you sure you want to approve this report? Once approved, it cannot be edited or deleted.');">
+                    <button type="submit" class="btn btn-success" onclick="return confirm('ACCEPT TO FINAL STATE ✅.');">
                         <i class="fas fa-lock me-2"></i>Approve Report
                     </button>
                 </form>
                 {% endif %}
+                
+            {% else %}
+                <!-- Report is finalized - Show Revert to Draft button for superusers -->
+                {% if request.user.is_superuser %}
+                <form method="post" action="{% url 'shops:unfinalize_report' report.id %}" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-warning" onclick="return confirm('ACCEPT FOR EDITS ✍️.');">
+                        <i class="fas fa-undo me-2"></i>Revert to Edit
+                    </button>
+                </form>
                 {% endif %}
-                <button onclick="window.print()" class="btn btn-primary">
-                    <i class="fas fa-print me-2"></i>Print Report
-                </button>
-            </div>
+            {% endif %}
+            
+            <!-- Print Button - Always visible -->
+            <button onclick="window.print()" class="btn btn-primary">
+                <i class="fas fa-print me-2"></i>Print Report
+            </button>
         </div>
     </div>
+</div>
 
 <!-- Summary Cards - Updated Layout -->
 <div class="row mb-4">
@@ -363,6 +383,7 @@
                     </div>
                     {% else %}
                     <div class="text-center py-3">
+                        <i class="fas fa-check-circle text-success fa-2x mb-2"></i>
                         <p class="text-muted mb-0">No bank balances recorded for this report.</p>
                     </div>
                     {% endif %}
@@ -426,48 +447,48 @@
             </div>
             {% endif %}
             
-            <!-- Report Info -->
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">
-                        <i class="fas fa-info-circle me-2"></i>Report Information
-                    </h5>
+<!-- Report Info -->
+<div class="card">
+    <div class="card-header info-header">
+        <h5 class="mb-0">
+            <i class="fas fa-info-circle me-2"></i>Report Information
+        </h5>
+    </div>
+    <div class="card-body">
+        <table class="table table-borderless">
+            <tr>
+                <td width="50%"><strong>Submitted By:</strong></td>
+                <td>{{ report.submitted_by.get_full_name|default:report.submitted_by.username }}</div>
+            </tr>
+            <tr>
+                <td><strong>Submission Time:</strong></div>
+                <td>{{ report.submission_time|date:"F d, Y H:i:s" }}</div>
+            </tr>
+            {% if report.is_finalized %}
+            <tr>
+                <td><strong>Approved By:</strong></div>
+                <td>
+                    {% if report.finalized_by %}
+                        {{ report.finalized_by.get_full_name|default:report.finalized_by.username }}
+                    {% else %}
+                        {{ report.submitted_by.get_full_name|default:report.submitted_by.username }}
+                    {% endif %}
                 </div>
-                <div class="card-body">
-                    <table class="table table-borderless">
-                        <tr>
-                            <td width="50%"><strong>Submitted By:</strong></td>
-                            <td>{{ report.submitted_by.get_full_name|default:report.submitted_by.username }}</div>
-                        </tr>
-                        <tr>
-                            <td><strong>Submission Time:</strong></div>
-                            <td>{{ report.submission_time|date:"F d, Y H:i:s" }}</div>
-                        </tr>
-                        {% if report.is_finalized %}
-                        <tr>
-                            <td><strong>Approved By:</strong></div>
-                            <td>
-                                {% if report.finalized_by %}
-                                    {{ report.finalized_by.get_full_name|default:report.finalized_by.username }}
-                                {% else %}
-                                    {{ report.submitted_by.get_full_name|default:report.submitted_by.username }}
-                                {% endif %}
-                            </div>
-                        </tr>
-                        <tr>
-                            <td><strong>Approved At:</strong></div>
-                            <td>
-                                {% if report.finalized_at %}
-                                    {{ report.finalized_at|date:"F d, Y H:i:s" }}
-                                {% else %}
-                                    {{ report.last_modified|date:"F d, Y H:i:s" }}
-                                {% endif %}
-                            </div>
-                        </tr>
-                        {% endif %}
-                    </table>
+            </tr>
+            <tr>
+                <td><strong>Approved At:</strong></div>
+                <td>
+                    {% if report.finalized_at %}
+                        {{ report.finalized_at|date:"F d, Y H:i:s" }}
+                    {% else %}
+                        {{ report.last_modified|date:"F d, Y H:i:s" }}
+                    {% endif %}
                 </div>
-            </div>
+            </tr>
+            {% endif %}
+        </table>
+    </div>
+</div>
         </div>
     </div>
 </div>
