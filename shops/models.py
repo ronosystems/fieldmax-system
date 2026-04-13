@@ -1,4 +1,3 @@
-# shop/models.py
 from datetime import timezone
 from datetime import timedelta
 from django.utils import timezone 
@@ -151,9 +150,22 @@ class DailyShopReport(models.Model):
         self.calculate_totals()
         super().save(*args, **kwargs)
 
+    def get_shop_previous_closing_balance(self):
+        """
+        Get the previous closing balance for the SHOP (not user-specific)
+        This is used for opening balance calculations
+        """
+        previous_report = DailyShopReport.objects.filter(
+            shop=self.shop,
+            report_date__lt=self.report_date
+        ).order_by('-report_date').first()
+    
+        return previous_report.total_closing_balance if previous_report else Decimal('0.00')
+
     def get_previous_day_report(self):
         """Get the report for the previous day for the same shop"""
-        previous_date = self.report_date - timezone.timedelta(days=1)
+        from datetime import timedelta
+        previous_date = self.report_date - timedelta(days=1)
         return DailyShopReport.objects.filter(
             shop=self.shop,
             report_date=previous_date
@@ -164,7 +176,24 @@ class DailyShopReport(models.Model):
         previous_report = self.get_previous_day_report()
         if previous_report:
             return previous_report.total_closing_balance
-        return 0  # First day, no previous balance
+        return Decimal('0.00')  # First day, no previous balance
+    
+    @property
+    def total_mpesa_closing(self):
+        """Get total M-PESA closing balance (float + cash)"""
+        return (self.closing_mpesa_float or 0) + (self.closing_mpesa_cash or 0)
+    
+    @property
+    def total_bank_closing(self):
+        """Get total bank closing balance"""
+        return self.bank_closings.filter(is_active=True).aggregate(
+            total=models.Sum('closing_balance')
+        )['total'] or 0
+    
+    @property
+    def net_position(self):
+        """Net Position = Current Day (M-PESA Float + M-PESA Cash + All Bank Balances)"""
+        return self.total_mpesa_closing + self.total_bank_closing
 
 
 # ==================== BANK CLOSING BALANCE MODEL ====================

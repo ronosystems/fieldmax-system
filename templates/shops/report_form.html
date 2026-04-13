@@ -119,13 +119,12 @@
     <form method="post" id="reportForm">
         {% csrf_token %}
         
-        <!-- FIRST ROW: Shop Selection and Daily Transactions - RESTYLED -->
+        <!-- FIRST ROW: Shop Selection and Daily Transactions -->
         <div class="card mb-4">
             <div class="card-header">
                 <h5 class="mb-0"><i class="fas fa-store me-2"></i>REPORT</h5>
             </div>
             <div class="card-body">
-                <!-- Row 1: Shop and Date side by side -->
                 <div class="row mb-3">
                     <div class="col-md-6 mb-2">
                         <label class="form-label fw-bold">Shop Branch *</label>
@@ -151,18 +150,17 @@
                     </div>
                 </div>
                 
-                <!-- Row 2: Previous Closing Balance and Transactions side by side -->
                 <div class="row">
                     <div class="col-md-6 mb-2">
                         <label class="form-label fw-bold">
-                            <i class="fas fa-chart-line me-1"></i> Closing Balance
+                            <i class="fas fa-chart-line me-1"></i> Previous Closing Balance
                         </label>
                         <div class="input-group">
                             <span class="input-group-text">KES</span>
                             <input type="text" id="previousClosingInput" class="form-control readonly-field" readonly 
                                    value="{% if previous_net_balance %}KES {{ previous_net_balance|floatformat:2|intcomma }}{% else %}KES 0.00{% endif %}">
                         </div>
-                        <small class="text-muted d-block">Previous Closing Balance</small>
+                        <small class="text-muted d-block">Yesterday's Shop Closing Balance</small>
                         <input type="hidden" id="previous_closing_balance" value="{{ previous_net_balance|default:0 }}">
                     </div>
                     <div class="col-md-6 mb-2">
@@ -182,19 +180,19 @@
         <!-- M-Pesa Closing Balances -->
         <div class="card mb-4">
             <div class="card-header">
-                <h5 class="mb-0"><i class="fas fa-mobile-alt me-2"></i>MPESA</h5>
+                <h5 class="mb-0"><i class="fas fa-mobile-alt me-2"></i>MPESA CLOSING BALANCES</h5>
             </div>
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-6 mb-3">
                         <label class="form-label">Closing M-Pesa Float (KES)</label>
                         {{ form.closing_mpesa_float }}
-                        <small class="text-muted">M-Pesa float balance</small>
+                        <small class="text-muted">M-Pesa float balance at closing</small>
                     </div>
                     <div class="col-md-6 mb-3">
                         <label class="form-label">Closing M-Pesa Cash (KES)</label>
                         {{ form.closing_mpesa_cash }}
-                        <small class="text-muted">M-Pesa cash balance</small>
+                        <small class="text-muted">M-Pesa cash balance at closing</small>
                     </div> 
                 </div>
             </div>
@@ -203,7 +201,7 @@
         <!-- Bank Accounts Section -->
         <div class="card mb-4">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0"><i class="fas fa-university me-2"></i>BANK</h5>
+                <h5 class="mb-0"><i class="fas fa-university me-2"></i>BANK CLOSING BALANCES</h5>
                 <button type="button" class="btn btn-sm btn-primary" id="addBankBtn">
                     <i class="fas fa-plus me-1"></i> Add Bank Account
                 </button>
@@ -275,11 +273,11 @@
             </div>
         </div>
 
-        <!-- Summary -->
+        <!-- SUMMARY SECTION - WITH NET DEFICIT CALCULATION -->
         <div class="summary-card">
             <div class="row">
-                <div class="col-md-3 text-center">
-                    <p><i class="fas fa-chart-line me-2"></i>Previous Closing</p>
+                <div class="col-md-4 text-center">
+                    <p><i class="fas fa-chart-line me-2"></i>PREVIOUS CLOSING (NET POSITION)</p>
                     <h4 id="previousClosingDisplay">
                         {% if previous_net_balance %}
                             KES {{ previous_net_balance|floatformat:2|intcomma }}
@@ -287,22 +285,26 @@
                             KES 0.00
                         {% endif %}
                     </h4>
-                    <small class="text-muted">Yesterday's closing balance</small>
+                    <small>Yesterday's Shop Closing Balance</small>
                 </div>
-                <div class="col-md-3 text-center">
-                    <p><i class="fas fa-chart-pie me-2"></i>Today's Totals</p>
-                    <h4 id="totalClosingDisplay">KES 0.00</h4>
-                    <small class="text-muted">Today's Total Balance</small>
-                </div>
-                <div class="col-md-3 text-center">
-                    <p><i class="fas fa-money-bill-wave me-2"></i>Today's Expenses</p>
+                <div class="col-md-4 text-center">
+                    <p><i class="fas fa-chart-line me-2"></i>NET POSITION (TODAY CLOSING)</p>
+                    <h4 id="netPositionDisplay" style="color: #10b981;">KES 0.00</h4>
+                    <small>= Today's Total (M-PESA + Banks)</small>
+                </div>             
+                <div class="col-md-4 text-center">
+                    <p><i class="fas fa-receipt me-2"></i>TODAY ALL EXPENSES</p>
                     <h4 id="totalExpensesDisplay">KES 0.00</h4>
-                    <small class="text-muted">Today's Total Expenses</small>
+                    <small>Total Expenses Today</small>
                 </div>
-                <div class="col-md-3 text-center">
-                    <p><i class="fas fa-chart-line me-2"></i>Net Position</p>
-                    <h4 id="netPositionDisplay">KES 0.00</h4>
-                    <small class="text-muted">Today's Closing Balance</small>
+            </div>
+            <div class="row mt-4">
+                <div class="col-md-12 text-center">
+                    <div class="bg-dark p-3 rounded" style="background: rgba(0,0,0,0.2) !important;">
+                        <p><i class="fas fa-exclamation-triangle me-2"></i><strong>NET DEFICIT / SURPLUS</strong></p>
+                        <h2 id="netDeficitDisplay" style="font-size: 2.5rem; font-weight: bold;">KES 0.00</h2>
+                        <small>= Previous Closing (Net Position) - Today's Net Position</small>
+                    </div>
                 </div>
             </div>
         </div>
@@ -327,7 +329,6 @@ let selectedBankIds = new Set();
 let previousClosing = parseFloat(document.getElementById('previous_closing_balance')?.value) || 0;
 
 // Function to get selected shop ID (works for both select and hidden input)
-// Function to get selected shop ID (works for both select and hidden input)
 function getSelectedShopId() {
     const shopSelect = document.getElementById('id_shop');
     if (shopSelect && shopSelect.value) {
@@ -335,13 +336,11 @@ function getSelectedShopId() {
     }
     const hiddenShop = document.getElementById('hidden_shop_id');
     if (hiddenShop && hiddenShop.value) {
-        // Parse the value to get just the ID (in case there's extra text)
         const value = hiddenShop.value;
-        // If it's a number, return it, otherwise try to extract number
         if (!isNaN(parseInt(value))) {
             return parseInt(value);
         }
-        return value.split(' ')[0]; // Get first part if there are spaces
+        return value.split(' ')[0];
     }
     return null;
 }
@@ -357,6 +356,8 @@ function updatePreviousClosingDisplay(value) {
         displayH4.innerText = 'KES ' + value.toLocaleString('en-KE', {minimumFractionDigits: 2});
     }
     document.getElementById('previous_closing_balance').value = value;
+    previousClosing = value;
+    calculateTotals(); // Recalculate when previous closing changes
 }
 
 // Fetch previous closing balance
@@ -370,10 +371,8 @@ function fetchPreviousClosingBalance(shopId, reportDate) {
                 if (data.success) {
                     previousClosing = data.closing_balance;
                     updatePreviousClosingDisplay(previousClosing);
-                    calculateTotals();
                 } else {
                     console.error('Error in response:', data.error);
-                    // If no previous report, set to 0
                     previousClosing = 0;
                     updatePreviousClosingDisplay(0);
                 }
@@ -473,7 +472,6 @@ const hiddenShopId = getSelectedShopId();
 if (hiddenShopId && !shopSelect) {
     setTimeout(() => {
         loadBanksForShop(hiddenShopId);
-        // Also fetch previous closing for the initial date if available
         const initialDate = document.getElementById('id_report_date')?.value;
         if (initialDate) {
             fetchPreviousClosingBalance(hiddenShopId, initialDate);
@@ -481,7 +479,7 @@ if (hiddenShopId && !shopSelect) {
     }, 100);
 }
 
-// Listen to date changes - THIS IS CRITICAL FOR REGULAR USERS
+// Listen to date changes
 const reportDateInput = document.getElementById('id_report_date');
 if (reportDateInput) {
     reportDateInput.addEventListener('change', function() {
@@ -583,35 +581,85 @@ function removeExpenseRow(button) {
     calculateTotals();
 }
 
-// Calculate totals
+// ============================================
+// CALCULATIONS WITH NET DEFICIT
+// Net Position = Today's Total (M-PESA Float + M-PESA Cash + All Banks)
+// Net Deficit = Previous Closing - Today's Net Position
+// ============================================
 function calculateTotals() {
+    // Get M-PESA values
     let mpesaFloat = parseFloat(document.getElementById('id_closing_mpesa_float')?.value) || 0;
     let mpesaCash = parseFloat(document.getElementById('id_closing_mpesa_cash')?.value) || 0;
+    let mpesaTotal = mpesaFloat + mpesaCash;
     
+    // Get Bank totals
     let bankTotal = 0;
     document.querySelectorAll('.bank-balance').forEach(input => {
         bankTotal += parseFloat(input.value) || 0;
     });
     
-    let todayClosing = mpesaFloat + mpesaCash + bankTotal;
-    document.getElementById('totalClosingDisplay').innerText = 'KES ' + todayClosing.toLocaleString('en-KE', {minimumFractionDigits: 2});
+    // TODAY'S NET POSITION = M-PESA Total + Bank Total
+    let todayNetPosition = mpesaTotal + bankTotal;
     
+    // Get Expenses
     let totalExpenses = 0;
     document.querySelectorAll('.expense-amount').forEach(input => {
         totalExpenses += parseFloat(input.value) || 0;
     });
+    
+    // Get Previous Closing from hidden field
+    let previousClosingValue = parseFloat(document.getElementById('previous_closing_balance')?.value) || 0;
+    
+    // Calculate NET DEFICIT = Previous Closing - Today's Net Position
+    let netDeficit = previousClosingValue - todayNetPosition;
+    let absoluteDeficit = Math.abs(netDeficit);
+    
+    // UPDATE DISPLAYS
+    // Total Expenses Display
     document.getElementById('totalExpensesDisplay').innerText = 'KES ' + totalExpenses.toLocaleString('en-KE', {minimumFractionDigits: 2});
     
-    // Net Position = Previous Closing - Today's Expenses
-    let netPosition = previousClosing - totalExpenses;
-    let netDisplay = 'KES ' + netPosition.toLocaleString('en-KE', {minimumFractionDigits: 2});
-    document.getElementById('netPositionDisplay').innerText = netDisplay;
-    document.getElementById('netPositionDisplay').style.color = netPosition >= 0 ? '#10b981' : '#ef4444';
+    // Today's Net Position Display
+    document.getElementById('netPositionDisplay').innerText = 'KES ' + todayNetPosition.toLocaleString('en-KE', {minimumFractionDigits: 2});
     
-    console.log({ previousClosing, mpesaFloat, mpesaCash, bankTotal, todayClosing, totalExpenses, netPosition });
+    // NET DEFICIT / SURPLUS Display
+    let deficitDisplay = document.getElementById('netDeficitDisplay');
+    let deficitTitle = document.querySelector('#netDeficitDisplay').closest('.bg-dark').querySelector('p strong');
+    let deficitSmall = document.querySelector('#netDeficitDisplay').closest('.bg-dark').querySelector('small');
+    
+    if (netDeficit > 0) {
+        // Deficit - Lost money compared to yesterday
+        deficitDisplay.innerHTML = 'KES ' + absoluteDeficit.toLocaleString('en-KE', {minimumFractionDigits: 2});
+        deficitDisplay.style.color = '#ef4444';
+        if (deficitTitle) deficitTitle.innerHTML = 'NET DEFICIT';
+        if (deficitSmall) deficitSmall.innerHTML = '= Previous Closing - Today\'s Net Position (Loss of KES ' + absoluteDeficit.toLocaleString() + ')';
+    } else if (netDeficit < 0) {
+        // Surplus - Gained money compared to yesterday
+        deficitDisplay.innerHTML = 'KES ' + absoluteDeficit.toLocaleString('en-KE', {minimumFractionDigits: 2});
+        deficitDisplay.style.color = '#10b981';
+        if (deficitTitle) deficitTitle.innerHTML = 'NET SURPLUS';
+        if (deficitSmall) deficitSmall.innerHTML = '= Today\'s Net Position - Previous Closing (Gain of KES ' + absoluteDeficit.toLocaleString() + ')';
+    } else {
+        // Equal - No change
+        deficitDisplay.innerHTML = 'KES 0.00';
+        deficitDisplay.style.color = '#f59e0b';
+        if (deficitTitle) deficitTitle.innerHTML = 'NET CHANGE';
+        if (deficitSmall) deficitSmall.innerHTML = '= No change from yesterday';
+    }
+    
+    console.log({
+        previousClosing: previousClosingValue,
+        mpesaFloat: mpesaFloat,
+        mpesaCash: mpesaCash,
+        mpesaTotal: mpesaTotal,
+        bankTotal: bankTotal,
+        todayNetPosition: todayNetPosition,
+        totalExpenses: totalExpenses,
+        netDeficit: netDeficit,
+        absoluteDeficit: absoluteDeficit
+    });
 }
 
-// Initialize existing bank rows
+// Initialize existing banks
 function initializeExistingBanks() {
     document.querySelectorAll('.bank-row').forEach(row => {
         const select = row.querySelector('.bank-select');
