@@ -61,6 +61,31 @@
         color: #10b981;
         font-weight: bold;
     }
+    
+    /* Superuser submitted report styling */
+    .superuser-report {
+        background-color: rgba(16, 185, 129, 0.08) !important;
+        border-left: 3px solid #10b981;
+    }
+    
+    .superuser-report:hover {
+        background-color: rgba(16, 185, 129, 0.15) !important;
+    }
+    
+    .superuser-badge {
+        background: #10b981;
+        color: white;
+        font-size: 0.7rem;
+        padding: 2px 8px;
+        border-radius: 20px;
+        margin-left: 6px;
+        display: inline-block;
+        font-weight: 500;
+    }
+    
+    .superuser-badge i {
+        font-size: 0.65rem;
+    }
 </style>
 {% endblock %}
 
@@ -193,32 +218,38 @@
                         </thead>
                         <tbody>
                             {% for report in reports %}
-                            <tr>
+                            <tr class="{% if report.submitted_by.is_superuser %}superuser-report{% endif %}">
                                 <td data-order="{{ report.report_date|date:'Y-m-d' }}">
                                     <strong>{{ report.report_date|date:"M d, Y" }}</strong>
-                                 </div>
-                                <td>
+                                 </td>
+                                 <td>
                                     <strong>{{ report.shop.name }}</strong><br>
                                     <small class="text-muted">{{ report.shop.code }}</small>
-                                 </div>
-                                <td>
-                                    {{ report.submitted_by.get_full_name|default:report.submitted_by.username }}<br>
+                                 </td>
+                                 <td>
+                                    {{ report.submitted_by.get_full_name|default:report.submitted_by.username }}
+                                    {% if report.submitted_by.is_superuser %}
+                                        <span class="superuser-badge">
+                                            <i class="fas fa-crown me-1"></i>Admin
+                                        </span>
+                                    {% endif %}
+                                    <br>
                                     <small class="text-muted">{{ report.submission_time|date:"H:i" }}</small>
-                                 </div>
+                                 </td>
                                 <td class="text-end">
                                     <span class="fw-bold transaction-count">{{ report.shop_sales|floatformat:0|intcomma }}</span>
-                                 </div>
-                                <td class="text-end">KES {{ report.closing_mpesa_float|floatformat:2|intcomma }} </div>
-                                <td class="text-end">KES {{ report.closing_mpesa_cash|floatformat:2|intcomma }} </div>
+                                 </td>
+                                <td class="text-end">KES {{ report.closing_mpesa_float|floatformat:2|intcomma }}</td>
+                                <td class="text-end">KES {{ report.closing_mpesa_cash|floatformat:2|intcomma }}</td>
                                 <td class="text-end">
                                     {% with bank_total=report.bank_closings.all|dictsortreversed:"closing_balance"|first %}
                                         KES {{ bank_total.closing_balance|default:0|floatformat:2|intcomma }}
                                     {% endwith %}
-                                 </div>
-                                <td class="text-end">KES {{ report.total_expenses|floatformat:2|intcomma }} </div>
+                                 </td>
+                                <td class="text-end">KES {{ report.total_expenses|floatformat:2|intcomma }}</td>
                                 <td class="text-end">
                                     <span class="fw-bold">KES {{ report.total_closing_balance|floatformat:2|intcomma }}</span>
-                                 </div>
+                                 </td>
                                 <td>
                                     {% if report.is_finalized %}
                                         <span class="status-finalized">
@@ -229,15 +260,15 @@
                                             <i class="fas fa-edit me-1"></i>PENDING
                                         </span>
                                     {% endif %}
-                                 </div>
+                                 </td>
                                 <td>
                                     <div class="btn-group" role="group">
                                         <a href="{% url 'shops:report_detail' report.id %}" class="btn btn-sm btn-outline-primary" title="View">
                                             <i class="fas fa-eye"></i>
                                         </a>
                                     </div>
-                                 </div>
-                             </tr>
+                                 </td>
+                              </tr>
                             {% endfor %}
                         </tbody>
                     </table>
