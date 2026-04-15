@@ -2755,3 +2755,285 @@ def credit_company_payments_dashboard(request):
     }
     
     return render(request, 'finance/credit_company_payments.html', context)
+
+
+
+
+
+
+
+@login_required
+def expenses_detail(request, transaction_id):
+    """View detailed expense information"""
+    from decimal import Decimal
+    
+    expense_data = {}
+    related_transactions = []
+    
+    if transaction_id.startswith('salary_'):
+        salary_id = transaction_id.replace('salary_', '')
+        try:
+            salary = Salary.objects.select_related('staff', 'paid_by', 'created_by').get(id=salary_id)
+            expense_data = {
+                'id': f'salary_{salary.id}',
+                'date': salary.paid_date or salary.created_at,
+                'source': 'salary',
+                'description': f"Salary payment - {salary.staff.get_full_name() or salary.staff.username} - {salary.get_month_display()} {salary.year}",
+                'amount': salary.total_amount,
+                'reference': salary.payment_reference or f"SAL-{salary.id}",
+                'payment_method': 'bank' if salary.payment_reference else 'cash',
+                'created_by': salary.paid_by or salary.created_by,
+                'created_at': salary.created_at,
+                'updated_at': salary.updated_at,  # ✅ Salary has updated_at
+                'notes': salary.notes,
+                'salary_data': {
+                    'staff_name': salary.staff.get_full_name() or salary.staff.username,
+                    'period': f"{salary.get_month_display()} {salary.year}",
+                    'base_salary': salary.base_salary,
+                    'bonus': salary.bonus,
+                    'deductions': salary.deductions,
+                    'total_amount': salary.total_amount,
+                }
+            }
+        except Salary.DoesNotExist:
+            messages.error(request, 'Salary record not found')
+            return redirect('finance:financial_expenses')
+            
+    elif transaction_id.startswith('commission_'):
+        commission_id = transaction_id.replace('commission_', '')
+        try:
+            commission = SellerCommission.objects.select_related(
+                'seller', 'paid_by', 'transaction',
+                'transaction__customer', 'transaction__product'
+            ).get(id=commission_id)
+            expense_data = {
+                'id': f'commission_{commission.id}',
+                'date': commission.paid_date or commission.created_at,
+                'source': 'commission',
+                'description': f"Commission payment - {commission.seller.get_full_name() or commission.seller.username} - {commission.transaction.transaction_id}",
+                'amount': commission.amount,
+                'reference': commission.payment_reference or f"COMM-{commission.id}",
+                'payment_method': commission.payment_method or 'bank',
+                'created_by': commission.paid_by,
+                'created_at': commission.created_at,
+                'updated_at': getattr(commission, 'updated_at', commission.created_at),  # ✅ Safe fallback
+                'notes': commission.notes,
+                'commission_data': {
+                    'seller_name': commission.seller.get_full_name() or commission.seller.username,
+                    'transaction_id': commission.transaction.transaction_id,
+                    'customer_name': commission.transaction.customer.full_name,
+                    'product_name': commission.transaction.product.name,
+                    'sale_amount': commission.transaction.ceiling_price,
+                    'commission_rate': (commission.amount / commission.transaction.ceiling_price * 100) if commission.transaction.ceiling_price > 0 else 0,
+                }
+            }
+        except SellerCommission.DoesNotExist:
+            messages.error(request, 'Commission record not found')
+            return redirect('finance:financial_expenses')
+            
+    elif transaction_id.startswith('account_'):
+        account_id = transaction_id.replace('account_', '')
+        try:
+            acc_trans = AccountTransaction.objects.select_related('created_by').get(id=account_id)
+            expense_data = {
+                'id': f'account_{acc_trans.id}',
+                'date': acc_trans.transaction_date,
+                'source': f"{acc_trans.account_type}_account",
+                'description': acc_trans.description,
+                'amount': acc_trans.amount,
+                'reference': acc_trans.reference or f"ACC-{acc_trans.id}",
+                'payment_method': acc_trans.account_type,
+                'created_by': acc_trans.created_by,
+                'created_at': acc_trans.created_at,
+                # ❌ AccountTransaction has NO updated_at field - don't include it
+                'notes': acc_trans.notes,
+            }
+        except AccountTransaction.DoesNotExist:
+            messages.error(request, 'Account transaction not found')
+            return redirect('finance:financial_expenses')
+    
+    else:
+        messages.error(request, 'Invalid expense record')
+        return redirect('finance:financial_expenses')
+    
+    # Get related transactions (same date or same source)
+    if expense_data:
+        expense_date = expense_data['date']
+        if hasattr(expense_date, 'date'):
+            expense_date = expense_date.date()
+        
+        # Find other expenses on the same day
+        all_transactions = []
+        
+        # Get salaries on same day
+        salaries = Salary.objects.filter(
+            paid_date__date=expense_date,
+            status='paid'
+        )
+        if expense_data.get('source') == 'salary':
+            current_id = expense_data.get('id', '').replace('salary_', '')
+            if current_id.isdigit():
+                salaries = salaries.exclude(id=int(current_id))
+        
+        for sal in salaries[:5]:
+            all_transactions.append({
+                'date': sal.paid_date,
+                'description': f"Salary - {sal.staff.get_full_name() or sal.staff.username} - {sal.get_month_display()} {sal.year}",
+                'amount': sal.total_amount,
+                'type': 'expense'
+            })
+        
+        # Get commissions on same day
+        commissions = SellerCommission.objects.filter(
+            paid_date__date=expense_date,
+            status='paid'
+        )
+        if expense_data.get('source') == 'commission':
+            current_id = expense_data.get('id', '').replace('commission_', '')
+            if current_id.isdigit():
+                commissions = commissions.exclude(id=int(current_id))
+        
+        for comm in commissions[:5]:
+            all_transactions.append({
+                'date': comm.paid_date,
+                'description': f"Commission - {comm.seller.get_full_name() or comm.seller.username} - {comm.transaction.transaction_id}",
+                'amount': comm.amount,
+                'type': 'expense'
+            })
+        
+        # Get account expenses on same day
+        account_expenses = AccountTransaction.objects.filter(
+            transaction_date__date=expense_date,
+            transaction_type='expense'
+        )
+        if expense_data.get('source', '').endswith('_account'):
+            current_id = expense_data.get('id', '').replace('account_', '')
+            if current_id.isdigit():
+                account_expenses = account_expenses.exclude(id=int(current_id))
+        
+        for acc_exp in account_expenses[:5]:
+            all_transactions.append({
+                'date': acc_exp.transaction_date,
+                'description': acc_exp.description,
+                'amount': acc_exp.amount,
+                'type': 'expense'
+            })
+        
+        # Sort by amount descending
+        all_transactions.sort(key=lambda x: x['amount'], reverse=True)
+        related_transactions = all_transactions[:5]
+    
+    context = {
+        'expense': expense_data,
+        'related_transactions': related_transactions,
+    }
+    
+    return render(request, 'finance/expenses_detail.html', context)
+
+
+
+@login_required
+def income_detail(request, transaction_id):
+    """View detailed income information"""
+    
+    income_data = {}
+    
+    if transaction_id.startswith('sale_'):
+        sale_id = transaction_id.replace('sale_', '')
+        try:
+            from sales.models import Sale
+            sale = Sale.objects.select_related('seller').get(sale_id=sale_id)
+            income_data = {
+                'id': f'sale_{sale.sale_id}',
+                'date': sale.sale_date,
+                'source': 'sales',
+                'description': f"Sale {sale.sale_id} - {sale.buyer_name or 'Walk-in Customer'}",
+                'amount': sale.total_amount,
+                'reference': sale.sale_id,
+                'created_by': sale.seller,
+                'created_at': sale.sale_date,
+                'payment_method': sale.payment_method,
+                'items_count': sale.items.count(),
+                'sale_data': {
+                    'buyer_name': sale.buyer_name or 'Walk-in Customer',
+                    'buyer_phone': sale.buyer_phone or 'N/A',
+                    'buyer_id_number': sale.buyer_id_number or 'N/A',
+                    'total_items': sale.items.count(),
+                    'payment_method': sale.payment_method,
+                    'subtotal': sale.subtotal,
+                    'tax_amount': sale.tax_amount,
+                    'amount_paid': sale.amount_paid,
+                    'change': sale.change,
+                    'balance': sale.balance,
+                    'etr_receipt_number': sale.etr_receipt_number or 'Not issued',
+                    'is_credit': sale.is_credit,
+                    'credit_sale_id': sale.credit_sale_id or 'N/A',
+                    'points_redeemed': sale.points_redeemed,
+                    'points_discount': sale.points_discount,
+                }
+            }
+        except Exception as e:
+            messages.error(request, f'Sale record not found: {str(e)}')
+            return redirect('finance:financial_income')
+            
+    elif transaction_id.startswith('credit_'):
+        credit_id = transaction_id.replace('credit_', '')
+        try:
+            from credit.models import CreditTransaction
+            credit = CreditTransaction.objects.select_related('dealer', 'customer', 'credit_company').get(transaction_id=credit_id)
+            income_data = {
+                'id': f'credit_{credit.transaction_id}',
+                'date': credit.paid_date or credit.transaction_date,
+                'source': 'credit_sales',
+                'description': f"Credit Sale {credit.transaction_id} - {credit.customer.full_name} ({credit.credit_company.name})",
+                'amount': credit.ceiling_price,
+                'reference': credit.transaction_id,
+                'created_by': credit.dealer,
+                'created_at': credit.transaction_date,
+                'payment_method': 'Credit',
+                'credit_data': {
+                    'customer_name': credit.customer.full_name,
+                    'customer_phone': credit.customer.phone if hasattr(credit.customer, 'phone') else 'N/A',
+                    'company_name': credit.credit_company.name,
+                    'product_name': credit.product.name,
+                    'quantity': credit.quantity,
+                    'paid_date': credit.paid_date,
+                    'transaction_date': credit.transaction_date,
+                    'ceiling_price': credit.ceiling_price,
+                    'commission_amount': credit.commission_amount,
+                    'commission_status': credit.get_commission_status_display(),
+                }
+            }
+        except Exception as e:
+            messages.error(request, f'Credit record not found: {str(e)}')
+            return redirect('finance:financial_income')
+            
+    elif transaction_id.startswith('account_'):
+        account_id = transaction_id.replace('account_', '')
+        try:
+            acc_trans = AccountTransaction.objects.select_related('created_by').get(id=account_id)
+            income_data = {
+                'id': f'account_{acc_trans.id}',
+                'date': acc_trans.transaction_date,
+                'source': f"{acc_trans.account_type}_account",
+                'description': acc_trans.description,
+                'amount': acc_trans.amount,
+                'reference': acc_trans.reference or f"ACC-{acc_trans.id}",
+                'created_by': acc_trans.created_by,
+                'created_at': acc_trans.created_at,
+                'payment_method': acc_trans.account_type,
+                'notes': acc_trans.notes,
+            }
+        except AccountTransaction.DoesNotExist:
+            messages.error(request, 'Account transaction not found')
+            return redirect('finance:financial_income')
+    
+    else:
+        messages.error(request, 'Invalid income record')
+        return redirect('finance:financial_income')
+    
+    context = {
+        'income': income_data,
+    }
+    
+    return render(request, 'finance/income_detail.html', context)

@@ -11,7 +11,7 @@
         <a href="{% url 'finance:salary_list' %}" class="btn btn-outline-primary me-2">
             <i class="fas fa-money-bill-wave me-2"></i>Salaries
         </a>
-        <a href="{% url 'finance:commission_pay_list' %}" class="btn btn-outline-success">
+        <a href="{% url 'finance:commission_pay_list' %}" class="btn btn-outline-success me-2">
             <i class="fas fa-hand-holding-usd me-2"></i>Commissions
         </a>
         <a href="{% url 'finance:add_account_transaction' %}" class="btn btn-primary">
@@ -128,7 +128,7 @@
                      </thead>
                 <tbody>
                     {% for transaction in transactions %}
-                    <tr>
+                    <tr onclick="redirectToDetail('{{ transaction.id }}', '{{ transaction.transaction_type }}')" style="cursor: pointer;" class="transaction-row">
                         <td class="text-nowrap">{{ transaction.transaction_date|date:"Y-m-d" }}</td>
                         <td>
                             {% if transaction.source == 'salary' %}
@@ -162,7 +162,7 @@
                             {% else %}
                                 <span class="badge bg-secondary">{{ transaction.source|title }}</span>
                             {% endif %}
-                        </td>
+                         </td>
                         <td>
                             {% if transaction.transaction_type == 'income' %}
                                 <span class="badge bg-success">Income</span>
@@ -171,25 +171,25 @@
                             {% else %}
                                 <span class="badge bg-secondary">{{ transaction.transaction_type|title }}</span>
                             {% endif %}
-                        </td>
+                         </td>
                         <td>
-                            <div class="fw-bold">{{ transaction.description }}</div>
+                            <div class="fw-bold">{{ transaction.description|truncatechars:60 }}</div>
                             {% if transaction.notes %}
-                            <small class="text-muted">{{ transaction.notes|truncatechars:50 }}</small>
+                            <small class="text-muted">{{ transaction.notes|truncatechars:40 }}</small>
                             {% endif %}
-                        </td>
+                         </td>
                         <td class="fw-bold {% if transaction.transaction_type == 'income' %}text-success{% else %}text-danger{% endif %}">
                             {% if transaction.transaction_type == 'income' %}
                                 + KES {{ transaction.amount|floatformat:2|intcomma }}
                             {% else %}
                                 - KES {{ transaction.amount|floatformat:2|intcomma }}
                             {% endif %}
-                        </td>
+                         </td>
                         <td><code>{{ transaction.reference|default:"—" }}</code></td>
                         <td>
                             <small>{{ transaction.created_by.get_full_name|default:transaction.created_by.username|default:"System" }}</small>
-                        </td>
-                    </tr>
+                         </td>
+                     </tr>
                     {% empty %}
                     <tr>
                         <td colspan="7" class="text-center py-5">
@@ -317,6 +317,36 @@
         font-size: 0.8rem;
     }
     
+    .transaction-row {
+        transition: background-color 0.2s ease;
+    }
+    
+    .transaction-row:hover {
+        background-color: #f8f9fa !important;
+    }
+    
+    [data-theme="dark"] .transaction-row:hover {
+        background-color: rgba(255, 255, 255, 0.05) !important;
+    }
+    
+    [data-theme="dark"] .stat-card {
+        background: var(--sidebar-solid);
+        color: white;
+    }
+    
+    [data-theme="dark"] .stat-value {
+        color: white;
+    }
+    
+    [data-theme="dark"] .stat-label {
+        color: #adb5bd;
+    }
+    
+    [data-theme="dark"] code {
+        background: var(--sidebar-dark);
+        color: #e9ecef;
+    }
+    
     @media (max-width: 768px) {
         .table-responsive {
             font-size: 0.85rem;
@@ -332,6 +362,11 @@
         
         .stat-icon {
             font-size: 32px;
+        }
+        
+        .badge {
+            font-size: 0.7rem;
+            padding: 0.25rem 0.5rem;
         }
     }
 </style>
@@ -353,5 +388,27 @@ document.getElementById('date_from')?.addEventListener('change', function() {
 document.getElementById('date_to')?.addEventListener('change', function() {
     this.form.submit();
 });
+
+// Redirect to appropriate detail page based on transaction type and source
+function redirectToDetail(transactionId, transactionType) {
+    if (!transactionId) return;
+    
+    // Check if it's an expense (salary, commission, or account expense)
+    if (transactionId.startsWith('salary_') || 
+        transactionId.startsWith('commission_') || 
+        (transactionId.startsWith('account_') && transactionType === 'expense')) {
+        window.location.href = "{% url 'finance:expenses_detail' 'PLACEHOLDER' %}".replace('PLACEHOLDER', transactionId);
+    }
+    // Check if it's income (sales, credit_sales, or account income)
+    else if (transactionId.startsWith('sale_') || 
+             transactionId.startsWith('credit_') || 
+             (transactionId.startsWith('account_') && transactionType === 'income')) {
+        window.location.href = "{% url 'finance:income_detail' 'PLACEHOLDER' %}".replace('PLACEHOLDER', transactionId);
+    }
+    // Fallback for other types
+    else {
+        console.log('No detail view available for:', transactionId);
+    }
+}
 </script>
 {% endblock %}

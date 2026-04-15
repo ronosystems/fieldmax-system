@@ -64,7 +64,9 @@ urlpatterns = [
     # INCOME AND EXPENSE
     # ============================================
     path('income/', views.financial_income, name='financial_income'),
+    path('income/<str:transaction_id>/', views.income_detail, name='income_detail'),
     path('expenses/', views.financial_expenses, name='financial_expenses'),
+    path('expenses/<str:transaction_id>/', views.expenses_detail, name='expenses_detail'),
     
     # ============================================
     # FINANCE ACCOUNTS

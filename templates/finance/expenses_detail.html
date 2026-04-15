@@ -1,0 +1,380 @@
+{% extends 'finance/base.html' %}
+{% load humanize %}
+{% load static %}
+
+{% block title %}Expense Details - FieldMax Finance{% endblock %}
+
+{% block page_icon %}fa-receipt{% endblock %}
+{% block page_title %}Expense Details{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'finance:dashboard' %}">Dashboard</a></li>
+<li class="breadcrumb-item"><a href="{% url 'finance:financial_expenses' %}">Expenses</a></li>
+<li class="breadcrumb-item active">Expense Details</li>
+{% endblock %}
+
+{% block content %}
+<div class="expense-detail">
+    <!-- Back Button -->
+    <div class="mb-3">
+        <a href="{% url 'finance:financial_expenses' %}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left me-2"></i>Back to Expenses
+        </a>
+    </div>
+
+    <!-- Expense Header Card -->
+    <div class="card-custom mb-4">
+        <div class="card-header-custom d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <i class="fas fa-info-circle me-2"></i>Expense Information
+            </h5>
+            <span class="badge {% if expense.source == 'salary' %}bg-primary{% elif expense.source == 'commission' %}bg-success{% else %}bg-secondary{% endif %}">
+                {{ expense.source|title }}
+            </span>
+        </div>
+        <div class="card-body-custom">
+            <div class="row">
+                <div class="col-md-6">
+                    <table class="table table-borderless">
+                        <tr>
+                            <th style="width: 150px;">Date:</th>
+                            <td><strong>{{ expense.date|date:"d M Y H:i" }}</strong></td>
+                        </tr>
+                        <tr>
+                            <th>Category:</th>
+                            <td>
+                                {% if expense.source == 'salary' %}
+                                    <i class="fas fa-user-tie me-1"></i> Salary
+                                {% elif expense.source == 'commission' %}
+                                    <i class="fas fa-percent me-1"></i> Commission
+                                {% else %}
+                                    <i class="fas fa-receipt me-1"></i> {{ expense.source|title }}
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Amount:</th>
+                            <td class="text-danger fw-bold fs-4">- KES {{ expense.amount|floatformat:2|intcomma }}</td>
+                        </tr>
+                        <tr>
+                            <th>Reference:</th>
+                            <td><code>{{ expense.reference|default:"-" }}</code></td>
+                        </tr>
+                    </table>
+                </div>
+                <div class="col-md-6">
+                    <table class="table table-borderless">
+                        <tr>
+                            <th style="width: 150px;">Payment Method:</th>
+                            <td>
+                                {% if expense.payment_method %}
+                                    {% if expense.payment_method == 'cash' %}
+                                        <i class="fas fa-money-bill-wave me-1"></i> Cash
+                                    {% elif expense.payment_method == 'bank' %}
+                                        <i class="fas fa-university me-1"></i> Bank
+                                    {% elif expense.payment_method == 'mpesa' %}
+                                        <i class="fas fa-mobile-alt me-1"></i> M-Pesa
+                                    {% else %}
+                                        {{ expense.payment_method|title }}
+                                    {% endif %}
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Created By:</th>
+                            <td>{{ expense.created_by.get_full_name|default:expense.created_by.username|default:"System" }}</td>
+                        </tr>
+                        <tr>
+                            <th>Created At:</th>
+                            <td>{{ expense.created_at|date:"d M Y H:i:s" }}</td>
+                        </tr>
+                        {% if expense.updated_at %}
+                        <tr>
+                            <th>Updated At:</th>
+                            <td>{{ expense.updated_at|date:"d M Y H:i:s" }}</td>
+                        </tr>
+                        {% endif %}
+                    </table>
+                </div>
+            </div>
+            
+            {% if expense.description or expense.notes %}
+            <div class="row mt-3">
+                <div class="col-12">
+                    <hr>
+                    <h6><i class="fas fa-file-alt me-2"></i>Description</h6>
+                    <p class="text-muted">{{ expense.description|default:"No description provided" }}</p>
+                    
+                    {% if expense.notes %}
+                    <h6><i class="fas fa-sticky-note me-2"></i>Notes</h6>
+                    <p class="text-muted">{{ expense.notes|linebreaks }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Source Specific Details -->
+    {% if expense.source == 'salary' and expense.salary_data %}
+    <div class="card-custom mb-4">
+        <div class="card-header-custom">
+            <h5 class="mb-0"><i class="fas fa-user-tie me-2"></i>Salary Details</h5>
+        </div>
+        <div class="card-body-custom">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="info-box">
+                        <label>Staff Name</label>
+                        <p class="fw-bold">{{ expense.salary_data.staff_name }}</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="info-box">
+                        <label>Period</label>
+                        <p class="fw-bold">{{ expense.salary_data.period }}</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="info-box">
+                        <label>Base Salary</label>
+                        <p class="fw-bold">KES {{ expense.salary_data.base_salary|floatformat:2|intcomma }}</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="info-box">
+                        <label>Bonus</label>
+                        <p class="fw-bold text-success">+ KES {{ expense.salary_data.bonus|floatformat:2|intcomma }}</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="info-box">
+                        <label>Deductions</label>
+                        <p class="fw-bold text-danger">- KES {{ expense.salary_data.deductions|floatformat:2|intcomma }}</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="info-box">
+                        <label>Total Amount</label>
+                        <p class="fw-bold text-primary">KES {{ expense.salary_data.total_amount|floatformat:2|intcomma }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if expense.source == 'commission' and expense.commission_data %}
+    <div class="card-custom mb-4">
+        <div class="card-header-custom">
+            <h5 class="mb-0"><i class="fas fa-percent me-2"></i>Commission Details</h5>
+        </div>
+        <div class="card-body-custom">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="info-box">
+                        <label>Seller</label>
+                        <p class="fw-bold">{{ expense.commission_data.seller_name }}</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="info-box">
+                        <label>Transaction ID</label>
+                        <p class="fw-bold">{{ expense.commission_data.transaction_id }}</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="info-box">
+                        <label>Customer</label>
+                        <p class="fw-bold">{{ expense.commission_data.customer_name }}</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="info-box">
+                        <label>Product</label>
+                        <p class="fw-bold">{{ expense.commission_data.product_name }}</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="info-box">
+                        <label>Sale Amount</label>
+                        <p class="fw-bold">KES {{ expense.commission_data.sale_amount|floatformat:2|intcomma }}</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="info-box">
+                        <label>Commission Rate</label>
+                        <p class="fw-bold">{{ expense.commission_data.commission_rate|default:"N/A" }}%</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Related Transactions -->
+    {% if related_transactions %}
+    <div class="card-custom">
+        <div class="card-header-custom">
+            <h5 class="mb-0"><i class="fas fa-link me-2"></i>Related Transactions</h5>
+        </div>
+        <div class="card-body-custom p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Description</th>
+                            <th class="text-end">Amount</th>
+                        </thead>
+                        <tbody>
+                            {% for trans in related_transactions %}
+                            <tr>
+                                <td>{{ trans.date|date:"d M Y H:i" }}</td>
+                                <td>{{ trans.description|truncatechars:60 }}</td>
+                                <td class="text-end {% if trans.type == 'expense' %}text-danger{% else %}text-success{% endif %}">
+                                    {% if trans.type == 'expense' %}-{% endif %} KES {{ trans.amount|floatformat:2|intcomma }}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .card-custom {
+        background: white;
+        border-radius: 10px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        overflow: hidden;
+    }
+    
+    .card-header-custom {
+        background: #f8f9fa;
+        padding: 15px 20px;
+        border-bottom: 1px solid #dee2e6;
+    }
+    
+    .card-body-custom {
+        padding: 20px;
+    }
+    
+    .info-box {
+        background: #f8f9fa;
+        padding: 12px 15px;
+        border-radius: 8px;
+        margin-bottom: 10px;
+    }
+    
+    .info-box label {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        color: #6c757d;
+        margin-bottom: 5px;
+        display: block;
+    }
+    
+    .info-box p {
+        margin-bottom: 0;
+        font-size: 1rem;
+    }
+    
+    .table-borderless th,
+    .table-borderless td {
+        padding: 8px 0;
+        border: none;
+    }
+    
+    .table-borderless th {
+        font-size: 0.85rem;
+        color: #6c757d;
+        font-weight: 500;
+    }
+    
+    .badge {
+        padding: 5px 12px;
+        font-size: 0.75rem;
+        border-radius: 20px;
+    }
+    
+    .badge.bg-primary {
+        background-color: #007bff !important;
+    }
+    
+    .badge.bg-success {
+        background-color: #28a745 !important;
+    }
+    
+    .badge.bg-secondary {
+        background-color: #6c757d !important;
+    }
+    
+    .btn-secondary {
+        background: #6c757d;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 6px;
+        color: white;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+    }
+    
+    .btn-secondary:hover {
+        background: #5a6268;
+        color: white;
+    }
+    
+    [data-theme="dark"] .card-custom {
+        background: var(--sidebar-solid);
+    }
+    
+    [data-theme="dark"] .card-header-custom {
+        background: var(--sidebar-dark);
+        border-bottom-color: #495057;
+    }
+    
+    [data-theme="dark"] .info-box {
+        background: var(--sidebar-dark);
+    }
+    
+    [data-theme="dark"] .info-box label {
+        color: #adb5bd;
+    }
+    
+    [data-theme="dark"] .info-box p {
+        color: #e9ecef;
+    }
+    
+    [data-theme="dark"] .table-borderless th {
+        color: #adb5bd;
+    }
+    
+    [data-theme="dark"] .table-borderless td {
+        color: #e9ecef;
+    }
+    
+    @media (max-width: 768px) {
+        .card-body-custom {
+            padding: 15px;
+        }
+        
+        .info-box {
+            padding: 10px 12px;
+        }
+        
+        .info-box p {
+            font-size: 0.9rem;
+        }
+    }
+</style>
+{% endblock %}
