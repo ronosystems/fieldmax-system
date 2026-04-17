@@ -2112,8 +2112,9 @@ def financial_income(request):
     # Sales Income
     sales = Sale.objects.filter(is_reversed=False).select_related('seller')
     for sale in sales:
+        # Keep the original sale_id with # for database lookup
         transactions.append({
-            'id': f'sale_{sale.sale_id}',
+            'id': f'sale_{sale.sale_id}',  # Keep the original ID with #
             'date': sale.sale_date,
             'source': 'sales',
             'description': f"Sale {sale.sale_id} - {sale.buyer_name or 'Walk-in Customer'}",
@@ -2125,10 +2126,11 @@ def financial_income(request):
         })
     
     # Credit Sales Income
-    credit_sales = CreditTransaction.objects.filter(payment_status='paid').select_related('dealer', 'customer')
+    credit_sales = CreditTransaction.objects.filter(payment_status='paid').select_related('dealer', 'customer', 'credit_company')
     for credit in credit_sales:
+        # Keep the original transaction_id with # for database lookup
         transactions.append({
-            'id': f'credit_{credit.transaction_id}',
+            'id': f'credit_{credit.transaction_id}',  # Keep the original ID with #
             'date': credit.paid_date or credit.transaction_date,
             'source': 'credit_sales',
             'description': f"Credit Sale {credit.transaction_id} - {credit.customer.full_name} ({credit.credit_company.name})",
@@ -2214,6 +2216,10 @@ def financial_income(request):
     }
     
     return render(request, 'finance/financial_income.html', context)
+
+
+
+    
 
 
 @login_required
@@ -2932,17 +2938,74 @@ def expenses_detail(request, transaction_id):
 
 
 
+
+
+
 @login_required
 def income_detail(request, transaction_id):
     """View detailed income information"""
     
     income_data = {}
     
-    if transaction_id.startswith('sale_'):
-        sale_id = transaction_id.replace('sale_', '')
+    # Handle credit sale IDs
+    if transaction_id.startswith('credit_'):
+        # Remove 'credit_' prefix to get the actual transaction_id
+        actual_id = transaction_id.replace('credit_', '')
+        
+        try:
+            from credit.models import CreditTransaction
+            credit = CreditTransaction.objects.select_related(
+                'dealer', 'customer', 'credit_company', 'product'
+            ).get(transaction_id=actual_id)
+            
+            income_data = {
+                'id': f'credit_{credit.transaction_id}',
+                'date': credit.paid_date or credit.transaction_date,
+                'source': 'credit_sales',
+                'description': f"Credit Sale {credit.transaction_id} - {credit.customer.full_name} ({credit.credit_company.name})",
+                'amount': credit.ceiling_price,
+                'reference': credit.transaction_id,
+                'created_by': credit.dealer,
+                'created_at': credit.transaction_date,
+                'payment_method': 'Credit',
+                'credit_data': {
+                    'customer_name': credit.customer.full_name,
+                    'customer_phone': credit.customer.phone_number,
+                    'customer_id': credit.customer.id_number,
+                    'company_name': credit.credit_company.name,
+                    'product_name': credit.product.name,
+                    'product_code': credit.product.product_code,
+                    'quantity': getattr(credit, 'quantity', 1),
+                    'paid_date': credit.paid_date,
+                    'transaction_date': credit.transaction_date,
+                    'ceiling_price': credit.ceiling_price,
+                    'commission_amount': credit.commission_amount,
+                    'commission_status': credit.get_commission_status_display(),
+                    'down_payment': getattr(credit, 'down_payment', 0),
+                    'total_paid': getattr(credit, 'total_paid', credit.partial_payment_amount if hasattr(credit, 'partial_payment_amount') else 0),
+                    'balance': getattr(credit, 'remaining_balance', (credit.ceiling_price - (credit.partial_payment_amount if hasattr(credit, 'partial_payment_amount') else 0))),
+                    'payment_status': credit.get_payment_status_display(),
+                    'payment_reference': credit.payment_reference,
+                    'etr_receipt_number': credit.etr_receipt_number,
+                }
+            }
+            
+        except CreditTransaction.DoesNotExist:
+            messages.error(request, f'Credit record not found with ID: {actual_id}')
+            return redirect('finance:financial_income')
+        except Exception as e:
+            messages.error(request, f'Error: {str(e)}')
+            return redirect('finance:financial_income')
+    
+    # Handle sale IDs
+    elif transaction_id.startswith('sale_'):
+        # Remove 'sale_' prefix to get the actual sale_id
+        actual_id = transaction_id.replace('sale_', '')
+        
         try:
             from sales.models import Sale
-            sale = Sale.objects.select_related('seller').get(sale_id=sale_id)
+            sale = Sale.objects.select_related('seller').get(sale_id=actual_id)
+            
             income_data = {
                 'id': f'sale_{sale.sale_id}',
                 'date': sale.sale_date,
@@ -2972,42 +3035,15 @@ def income_detail(request, transaction_id):
                     'points_discount': sale.points_discount,
                 }
             }
-        except Exception as e:
-            messages.error(request, f'Sale record not found: {str(e)}')
-            return redirect('finance:financial_income')
             
-    elif transaction_id.startswith('credit_'):
-        credit_id = transaction_id.replace('credit_', '')
-        try:
-            from credit.models import CreditTransaction
-            credit = CreditTransaction.objects.select_related('dealer', 'customer', 'credit_company').get(transaction_id=credit_id)
-            income_data = {
-                'id': f'credit_{credit.transaction_id}',
-                'date': credit.paid_date or credit.transaction_date,
-                'source': 'credit_sales',
-                'description': f"Credit Sale {credit.transaction_id} - {credit.customer.full_name} ({credit.credit_company.name})",
-                'amount': credit.ceiling_price,
-                'reference': credit.transaction_id,
-                'created_by': credit.dealer,
-                'created_at': credit.transaction_date,
-                'payment_method': 'Credit',
-                'credit_data': {
-                    'customer_name': credit.customer.full_name,
-                    'customer_phone': credit.customer.phone if hasattr(credit.customer, 'phone') else 'N/A',
-                    'company_name': credit.credit_company.name,
-                    'product_name': credit.product.name,
-                    'quantity': credit.quantity,
-                    'paid_date': credit.paid_date,
-                    'transaction_date': credit.transaction_date,
-                    'ceiling_price': credit.ceiling_price,
-                    'commission_amount': credit.commission_amount,
-                    'commission_status': credit.get_commission_status_display(),
-                }
-            }
-        except Exception as e:
-            messages.error(request, f'Credit record not found: {str(e)}')
+        except Sale.DoesNotExist:
+            messages.error(request, f'Sale record not found with ID: {actual_id}')
             return redirect('finance:financial_income')
-            
+        except Exception as e:
+            messages.error(request, f'Error: {str(e)}')
+            return redirect('finance:financial_income')
+    
+    # Handle account transactions
     elif transaction_id.startswith('account_'):
         account_id = transaction_id.replace('account_', '')
         try:

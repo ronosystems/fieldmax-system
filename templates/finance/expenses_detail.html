@@ -1,6 +1,7 @@
 {% extends 'finance/base.html' %}
 {% load humanize %}
 {% load static %}
+{% load finance_extras %}
 
 {% block title %}Expense Details - FieldMax Finance{% endblock %}
 
@@ -100,17 +101,34 @@
                 </div>
             </div>
             
-            {% if expense.description or expense.notes %}
+            {% if expense.description %}
             <div class="row mt-3">
                 <div class="col-12">
                     <hr>
                     <h6><i class="fas fa-file-alt me-2"></i>Description</h6>
                     <p class="text-muted">{{ expense.description|default:"No description provided" }}</p>
-                    
-                    {% if expense.notes %}
-                    <h6><i class="fas fa-sticky-note me-2"></i>Notes</h6>
-                    <p class="text-muted">{{ expense.notes|linebreaks }}</p>
-                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+            
+            {% if expense.notes %}
+            <div class="row">
+                <div class="col-12">
+                    <h6 class="mt-3"><i class="fas fa-sticky-note me-2"></i>Notes</h6>
+                    <!-- Notes section with white background and each line on its own row -->
+                    <div class="notes-ruled-container">
+                        <div class="notes-content">
+                            {% with notes_lines=expense.notes|splitlines %}
+                                {% for line in notes_lines %}
+                                    {% if line.strip %}
+                                        <div class="note-line">{{ line }}</div>
+                                    {% else %}
+                                        <div class="note-line"><br></div>
+                                    {% endif %}
+                                {% endfor %}
+                            {% endwith %}
+                        </div>
+                    </div>
                 </div>
             </div>
             {% endif %}
@@ -228,20 +246,20 @@
                             <th>Date</th>
                             <th>Description</th>
                             <th class="text-end">Amount</th>
-                        </thead>
-                        <tbody>
-                            {% for trans in related_transactions %}
-                            <tr>
-                                <td>{{ trans.date|date:"d M Y H:i" }}</td>
-                                <td>{{ trans.description|truncatechars:60 }}</td>
-                                <td class="text-end {% if trans.type == 'expense' %}text-danger{% else %}text-success{% endif %}">
-                                    {% if trans.type == 'expense' %}-{% endif %} KES {{ trans.amount|floatformat:2|intcomma }}
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for trans in related_transactions %}
+                        <tr>
+                            <td>{{ trans.date|date:"d M Y H:i" }}</td>
+                            <td>{{ trans.description|truncatechars:60 }}</td>
+                            <td class="text-end {% if trans.type == 'expense' %}text-danger{% else %}text-success{% endif %}">
+                                {% if trans.type == 'expense' %}-{% endif %} KES {{ trans.amount|floatformat:2|intcomma }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
@@ -268,6 +286,44 @@
     .card-body-custom {
         padding: 20px;
         border-radius: 20px;
+    }
+    
+    /* Notes section with white background and each content on its own line */
+    .notes-ruled-container {
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        margin-top: 10px;
+        overflow: hidden;
+    }
+    
+    .notes-content {
+        background: repeating-linear-gradient(
+            transparent,
+            transparent 35px,
+            #e0e0e0 35px,
+            #e0e0e0 36px
+        );
+        padding: 0;
+        font-family: monospace;
+        font-size: 14px;
+        color: #333;
+        max-height: 400px;
+        overflow-y: auto;
+    }
+    
+    .note-line {
+        padding: 8px 15px;
+        min-height: 36px;
+        line-height: 20px;
+        border-bottom: none;
+        margin: 0;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+    }
+    
+    .note-line:hover {
+        background: rgba(0, 0, 0, 0.05);
     }
     
     .info-box {
@@ -376,6 +432,25 @@
         color: #e9ecef;
     }
     
+    [data-theme="dark"] .notes-ruled-container {
+        background: #2d2d2d;
+        border-color: #555;
+    }
+    
+    [data-theme="dark"] .notes-content {
+        background: repeating-linear-gradient(
+            transparent,
+            transparent 35px,
+            #444 35px,
+            #444 36px
+        );
+        color: #e0e0e0;
+    }
+    
+    [data-theme="dark"] .note-line:hover {
+        background: rgba(255, 255, 255, 0.05);
+    }
+    
     @media (max-width: 768px) {
         .card-body-custom {
             padding: 15px;
@@ -387,6 +462,30 @@
         
         .info-box p {
             font-size: 0.9rem;
+        }
+        
+        .notes-content {
+            background: repeating-linear-gradient(
+                transparent,
+                transparent 30px,
+                #e0e0e0 30px,
+                #e0e0e0 31px
+            );
+        }
+        
+        .note-line {
+            padding: 6px 12px;
+            min-height: 31px;
+            font-size: 12px;
+        }
+        
+        [data-theme="dark"] .notes-content {
+            background: repeating-linear-gradient(
+                transparent,
+                transparent 30px,
+                #444 30px,
+                #444 31px
+            );
         }
     }
 </style>
