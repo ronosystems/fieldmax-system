@@ -110,6 +110,7 @@ class DailyShopReport(models.Model):
     
     # M-Pesa closing balances
     closing_mpesa_float = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name="Closing M-Pesa Float")
+    closing_airtel_float = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name="Closing Airtel Float")
     closing_mpesa_cash = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name="Closing M-Pesa Cash")
     
     # Shop transactions
@@ -141,7 +142,7 @@ class DailyShopReport(models.Model):
         try:
             bank_closings = self.bank_closings.filter(is_active=True)
             bank_total = sum([float(bc.closing_balance) for bc in bank_closings])
-            self.total_closing_balance = float(self.closing_mpesa_float or 0) + float(self.closing_mpesa_cash or 0) + bank_total
+            self.total_closing_balance = float(self.closing_mpesa_float or 0) + float(self.closing_airtel_float or 0) + float(self.closing_mpesa_cash or 0) + bank_total
         except:
             self.total_closing_balance = 0
         return self.total_closing_balance

@@ -199,6 +199,9 @@ def add_branch(request):
 
 
 
+
+
+
 @login_required
 @user_passes_test(is_staff_or_admin)
 def create_daily_report(request):
@@ -311,15 +314,17 @@ def create_daily_report(request):
                     # Update report with totals
                     report.total_expenses = expense_total
                     
-                    # Calculate total closing balance
+                    # Calculate total closing balance (including Airtel)
                     mpesa_float = float(report.closing_mpesa_float) if report.closing_mpesa_float else 0
                     mpesa_cash = float(report.closing_mpesa_cash) if report.closing_mpesa_cash else 0
+                    airtel_float = float(report.closing_airtel_float) if report.closing_airtel_float else 0
                     
                     bank_total = BankClosingBalance.objects.filter(daily_report=report).aggregate(
                         total=models.Sum('closing_balance')
                     )['total'] or 0
                     
-                    report.total_closing_balance = mpesa_float + mpesa_cash + float(bank_total)
+                    # Update total to include Airtel
+                    report.total_closing_balance = mpesa_float + mpesa_cash + airtel_float + float(bank_total)
                     report.save()
                     
                     messages.success(
@@ -347,18 +352,25 @@ def create_daily_report(request):
             form.fields['shop'].initial = assigned_shop.id
             form.fields['shop'].widget.attrs['readonly'] = True
     
+    # Get previous net balance for the shop (for display)
+    previous_net_balance = 0
+    if assigned_shop:
+        last_report = DailyShopReport.objects.filter(
+            shop=assigned_shop
+        ).order_by('-report_date').first()
+        if last_report:
+            previous_net_balance = float(last_report.total_closing_balance)
+    
     context = {
         'form': form,
         'title': 'Create Daily Report',
         'assigned_shop': assigned_shop,
         'user_can_select_shop': user_can_select_shop,
         'previous_closing_balance': previous_closing_balance,
+        'previous_net_balance': previous_net_balance,
         'previous_report_date': previous_report_date,
     }
     return render(request, 'shops/report_form.html', context)
-
-
-
 
 
 @login_required
@@ -389,6 +401,15 @@ def edit_daily_report(request, report_id):
         # If no assigned shop, use the report's shop
         if not assigned_shop:
             assigned_shop = report.shop
+    
+    # Get previous day's closing balance for the shop
+    previous_report = DailyShopReport.objects.filter(
+        shop=report.shop,
+        report_date__lt=report.report_date
+    ).order_by('-report_date').first()
+    
+    if previous_report:
+        previous_net_balance = float(previous_report.total_closing_balance)
     
     if request.method == 'POST':
         form = DailyShopReportForm(request.POST, instance=report)
@@ -452,15 +473,17 @@ def edit_daily_report(request, report_id):
                     # Update report with totals
                     report.total_expenses = expense_total
                     
-                    # Calculate total closing balance
+                    # Calculate total closing balance (including Airtel)
                     mpesa_float = float(report.closing_mpesa_float) if report.closing_mpesa_float else 0
                     mpesa_cash = float(report.closing_mpesa_cash) if report.closing_mpesa_cash else 0
+                    airtel_float = float(report.closing_airtel_float) if report.closing_airtel_float else 0
                     
                     bank_total = BankClosingBalance.objects.filter(daily_report=report).aggregate(
                         total=models.Sum('closing_balance')
                     )['total'] or 0
                     
-                    report.total_closing_balance = mpesa_float + mpesa_cash + float(bank_total)
+                    # Update total to include Airtel
+                    report.total_closing_balance = mpesa_float + mpesa_cash + airtel_float + float(bank_total)
                     report.save()
                     
                     messages.success(request, f'Report for {report.shop.name} updated successfully!')
@@ -471,7 +494,12 @@ def edit_daily_report(request, report_id):
                 import traceback
                 print(traceback.format_exc())
         else:
-            messages.error(request, 'Please correct the errors below.')
+            for field, errors in form.errors.items():
+                for error in errors:
+                    if field == '__all__':
+                        messages.error(request, error)
+                    else:
+                        messages.error(request, f'{field}: {error}')
     else:
         form = DailyShopReportForm(instance=report)
         # For non-superusers, make the shop field readonly and pre-select
@@ -479,7 +507,7 @@ def edit_daily_report(request, report_id):
             form.fields['shop'].initial = assigned_shop.id
             form.fields['shop'].widget.attrs['readonly'] = True
     
-    # Get existing data for the template - IMPORTANT: Pass these to template
+    # Get existing data for the template
     bank_closings = report.bank_closings.filter(is_active=True)
     expenses = report.expenses.all()
     
@@ -491,7 +519,9 @@ def edit_daily_report(request, report_id):
         'title': 'Edit Daily Report',
         'assigned_shop': assigned_shop,
         'user_can_select_shop': user_can_select_shop,
-        'previous_net_balance': float(previous_net_balance), 
+        'previous_net_balance': previous_net_balance,
+        'previous_closing_balance': previous_net_balance,  # For consistency with template
+        'previous_report_date': previous_report.report_date if previous_report else None,
     }
     return render(request, 'shops/report_form.html', context)
 
@@ -526,8 +556,9 @@ def report_detail(request, report_id):
     
     # Get M-PESA closing balances
     mpesa_float = float(report.closing_mpesa_float or 0)
+    airtel_float = float(report.closing_airtel_float or 0) 
     mpesa_cash = float(report.closing_mpesa_cash or 0)
-    total_mpesa = mpesa_float + mpesa_cash
+    total_mpesa = mpesa_float + airtel_float + mpesa_cash
     
     # Get bank closings
     bank_closings = report.bank_closings.filter(is_active=True)

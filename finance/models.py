@@ -363,3 +363,164 @@ class CreditAccount(models.Model):
         self.updated_by = user
         self.save()
         return self.balance
+
+
+
+
+
+
+
+# ============================================
+# M-PESA PAYMENT MODELS
+# ============================================
+
+class MpesaTransaction(models.Model):
+    """Track M-Pesa payment transactions"""
+    
+    TRANSACTION_STATUS = [
+        ('pending', 'Pending'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+        ('cancelled', 'Cancelled'),
+    ]
+    
+    # Transaction identifiers from M-Pesa
+    merchant_request_id = models.CharField(max_length=100, unique=True, db_index=True)
+    checkout_request_id = models.CharField(max_length=100, unique=True, db_index=True)
+    
+    # Transaction results
+    result_code = models.IntegerField(null=True, blank=True)
+    result_desc = models.CharField(max_length=255, null=True, blank=True)
+    
+    # Payment details
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    phone_number = models.CharField(max_length=15, db_index=True)
+    account_reference = models.CharField(max_length=50, db_index=True)  # Will store Sale ID
+    transaction_desc = models.CharField(max_length=100)
+    
+    # M-Pesa response data
+    mpesa_receipt_number = models.CharField(max_length=50, null=True, blank=True, db_index=True)
+    transaction_date = models.DateTimeField(null=True, blank=True)
+    
+    # Status tracking
+    status = models.CharField(max_length=20, choices=TRANSACTION_STATUS, default='pending', db_index=True)
+    
+    # Link to sale
+    sale = models.ForeignKey(
+        'sales.Sale',  # Link to your Sale model
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='mpesa_transactions',
+        to_field='sale_id' 
+    )
+    
+    # Link to financial transaction
+    financial_transaction = models.ForeignKey(
+        'FinancialTransaction',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='mpesa_transactions'
+    )
+    
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='mpesa_transactions'
+    )
+    
+    # Callback data (raw JSON for debugging)
+    callback_raw_data = models.JSONField(null=True, blank=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['merchant_request_id']),
+            models.Index(fields=['checkout_request_id']),
+            models.Index(fields=['mpesa_receipt_number']),
+            models.Index(fields=['status', 'created_at']),
+            models.Index(fields=['phone_number', 'status']),
+        ]
+        verbose_name = 'M-Pesa Transaction'
+        verbose_name_plural = 'M-Pesa Transactions'
+    
+    def __str__(self):
+        return f"M-Pesa {self.amount} - {self.phone_number} - {self.status}"
+    
+    def save(self, *args, **kwargs):
+        # Auto-create FinancialTransaction when payment is completed
+        if self.status == 'completed' and not self.financial_transaction:
+            from decimal import Decimal
+            
+            # Create corresponding financial transaction
+            self.financial_transaction = FinancialTransaction.objects.create(
+                transaction_type='income',
+                category='other',
+                amount=self.amount,
+                description=f"M-Pesa Payment - {self.transaction_desc} - Ref: {self.mpesa_receipt_number}",
+                payment_method='mpesa',
+                payment_reference=self.mpesa_receipt_number,
+                recipient_name=f"Customer {self.phone_number}",
+                transaction_date=self.transaction_date or timezone.now(),
+                created_by=self.created_by,
+                notes=f"M-Pesa Transaction ID: {self.checkout_request_id}\nAccount Ref: {self.account_reference}"
+            )
+        
+        super().save(*args, **kwargs)
+    
+    @property
+    def is_completed(self):
+        return self.status == 'completed'
+    
+    @property
+    def is_pending(self):
+        return self.status == 'pending'
+    
+    @property
+    def is_failed(self):
+        return self.status == 'failed'
+
+
+class MpesaCallbackLog(models.Model):
+    """Log all M-Pesa callbacks for debugging"""
+    
+    transaction = models.ForeignKey(
+        MpesaTransaction,
+        on_delete=models.CASCADE,
+        related_name='callback_logs',
+        null=True,
+        blank=True
+    )
+    
+    # Callback data
+    checkout_request_id = models.CharField(max_length=100, db_index=True)
+    result_code = models.IntegerField()
+    result_desc = models.CharField(max_length=255)
+    
+    # Raw data
+    raw_payload = models.JSONField()
+    
+    # Processing info
+    processed = models.BooleanField(default=False)
+    error_message = models.TextField(blank=True)
+    
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['checkout_request_id']),
+            models.Index(fields=['-created_at']),
+        ]
+        verbose_name = 'M-Pesa Callback Log'
+        verbose_name_plural = 'M-Pesa Callback Logs'
+    
+    def __str__(self):
+        return f"Callback {self.checkout_request_id} - Code: {self.result_code}"

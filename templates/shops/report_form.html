@@ -189,6 +189,13 @@
                         {{ form.closing_mpesa_float }}
                         <small class="text-muted">M-Pesa float balance at closing</small>
                     </div>
+
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Closing Airtel Float (KES)</label>
+                        {{ form.closing_airtel_float }}
+                        <small class="text-muted">Airtel float balance at closing</small>
+                    </div>
+
                     <div class="col-md-6 mb-3">
                         <label class="form-label">Closing M-Pesa Cash (KES)</label>
                         {{ form.closing_mpesa_cash }}
@@ -586,25 +593,31 @@ function removeExpenseRow(button) {
 // Net Position = Today's Total (M-PESA Float + M-PESA Cash + All Banks)
 // Net Deficit = Previous Closing - Today's Net Position
 // ============================================
+
 function calculateTotals() {
     // Get M-PESA values
     let mpesaFloat = parseFloat(document.getElementById('id_closing_mpesa_float')?.value) || 0;
     let mpesaCash = parseFloat(document.getElementById('id_closing_mpesa_cash')?.value) || 0;
-    let mpesaTotal = mpesaFloat + mpesaCash;
+    let airtelFloat = parseFloat(document.getElementById('id_closing_airtel_float')?.value) || 0;  // Make sure this is included
+    
+    // Calculate TOTAL Mobile Money (M-Pesa Float + M-Pesa Cash + Airtel Float)
+    let totalMobileMoney = mpesaFloat + mpesaCash + airtelFloat;
     
     // Get Bank totals
     let bankTotal = 0;
     document.querySelectorAll('.bank-balance').forEach(input => {
-        bankTotal += parseFloat(input.value) || 0;
+        let value = parseFloat(input.value) || 0;
+        bankTotal += value;
     });
     
-    // TODAY'S NET POSITION = M-PESA Total + Bank Total
-    let todayNetPosition = mpesaTotal + bankTotal;
+    // TODAY'S NET POSITION = Mobile Money Total + Bank Total
+    let todayNetPosition = totalMobileMoney + bankTotal;
     
     // Get Expenses
     let totalExpenses = 0;
     document.querySelectorAll('.expense-amount').forEach(input => {
-        totalExpenses += parseFloat(input.value) || 0;
+        let value = parseFloat(input.value) || 0;
+        totalExpenses += value;
     });
     
     // Get Previous Closing from hidden field
@@ -616,48 +629,78 @@ function calculateTotals() {
     
     // UPDATE DISPLAYS
     // Total Expenses Display
-    document.getElementById('totalExpensesDisplay').innerText = 'KES ' + totalExpenses.toLocaleString('en-KE', {minimumFractionDigits: 2});
+    let totalExpensesElement = document.getElementById('totalExpensesDisplay');
+    if (totalExpensesElement) {
+        totalExpensesElement.innerText = 'KES ' + totalExpenses.toLocaleString('en-KE', {minimumFractionDigits: 2});
+    }
     
     // Today's Net Position Display
-    document.getElementById('netPositionDisplay').innerText = 'KES ' + todayNetPosition.toLocaleString('en-KE', {minimumFractionDigits: 2});
+    let netPositionElement = document.getElementById('netPositionDisplay');
+    if (netPositionElement) {
+        netPositionElement.innerText = 'KES ' + todayNetPosition.toLocaleString('en-KE', {minimumFractionDigits: 2});
+    }
     
     // NET DEFICIT / SURPLUS Display
     let deficitDisplay = document.getElementById('netDeficitDisplay');
-    let deficitTitle = document.querySelector('#netDeficitDisplay').closest('.bg-dark').querySelector('p strong');
-    let deficitSmall = document.querySelector('#netDeficitDisplay').closest('.bg-dark').querySelector('small');
-    
-    if (netDeficit > 0) {
-        // Deficit - Lost money compared to yesterday
-        deficitDisplay.innerHTML = 'KES ' + absoluteDeficit.toLocaleString('en-KE', {minimumFractionDigits: 2});
-        deficitDisplay.style.color = '#ef4444';
-        if (deficitTitle) deficitTitle.innerHTML = 'NET DEFICIT';
-        if (deficitSmall) deficitSmall.innerHTML = '= Previous Closing - Today\'s Net Position (Loss of KES ' + absoluteDeficit.toLocaleString() + ')';
-    } else if (netDeficit < 0) {
-        // Surplus - Gained money compared to yesterday
-        deficitDisplay.innerHTML = 'KES ' + absoluteDeficit.toLocaleString('en-KE', {minimumFractionDigits: 2});
-        deficitDisplay.style.color = '#10b981';
-        if (deficitTitle) deficitTitle.innerHTML = 'NET SURPLUS';
-        if (deficitSmall) deficitSmall.innerHTML = '= Today\'s Net Position - Previous Closing (Gain of KES ' + absoluteDeficit.toLocaleString() + ')';
-    } else {
-        // Equal - No change
-        deficitDisplay.innerHTML = 'KES 0.00';
-        deficitDisplay.style.color = '#f59e0b';
-        if (deficitTitle) deficitTitle.innerHTML = 'NET CHANGE';
-        if (deficitSmall) deficitSmall.innerHTML = '= No change from yesterday';
+    if (deficitDisplay) {
+        let deficitTitle = deficitDisplay.closest('.bg-dark')?.querySelector('p strong');
+        let deficitSmall = deficitDisplay.closest('.bg-dark')?.querySelector('small');
+        
+        if (netDeficit > 0) {
+            // Deficit - Lost money compared to yesterday
+            deficitDisplay.innerHTML = 'KES ' + absoluteDeficit.toLocaleString('en-KE', {minimumFractionDigits: 2});
+            deficitDisplay.style.color = '#ef4444';
+            if (deficitTitle) deficitTitle.innerHTML = 'NET DEFICIT';
+            if (deficitSmall) deficitSmall.innerHTML = '= Previous Closing - Today\'s Net Position (Loss of KES ' + absoluteDeficit.toLocaleString() + ')';
+        } else if (netDeficit < 0) {
+            // Surplus - Gained money compared to yesterday
+            deficitDisplay.innerHTML = 'KES ' + absoluteDeficit.toLocaleString('en-KE', {minimumFractionDigits: 2});
+            deficitDisplay.style.color = '#10b981';
+            if (deficitTitle) deficitTitle.innerHTML = 'NET SURPLUS';
+            if (deficitSmall) deficitSmall.innerHTML = '= Today\'s Net Position - Previous Closing (Gain of KES ' + absoluteDeficit.toLocaleString() + ')';
+        } else {
+            // Equal - No change
+            deficitDisplay.innerHTML = 'KES 0.00';
+            deficitDisplay.style.color = '#f59e0b';
+            if (deficitTitle) deficitTitle.innerHTML = 'NET CHANGE';
+            if (deficitSmall) deficitSmall.innerHTML = '= No change from yesterday';
+        }
     }
     
+    // Debug log to verify values
     console.log({
-        previousClosing: previousClosingValue,
-        mpesaFloat: mpesaFloat,
-        mpesaCash: mpesaCash,
-        mpesaTotal: mpesaTotal,
-        bankTotal: bankTotal,
-        todayNetPosition: todayNetPosition,
-        totalExpenses: totalExpenses,
-        netDeficit: netDeficit,
-        absoluteDeficit: absoluteDeficit
+        'M-Pesa Float': mpesaFloat,
+        'M-Pesa Cash': mpesaCash,
+        'Airtel Float': airtelFloat,
+        'Total Mobile Money': totalMobileMoney,
+        'Bank Total': bankTotal,
+        'Today Net Position': todayNetPosition,
+        'Previous Closing': previousClosingValue,
+        'Net Deficit': netDeficit
     });
 }
+
+// Make sure event listeners are set up correctly
+document.addEventListener('DOMContentLoaded', function() {
+    // Add input listeners for all three fields
+    const mpesaFloatInput = document.getElementById('id_closing_mpesa_float');
+    const mpesaCashInput = document.getElementById('id_closing_mpesa_cash');
+    const airtelFloatInput = document.getElementById('id_closing_airtel_float');
+    
+    if (mpesaFloatInput) mpesaFloatInput.addEventListener('input', calculateTotals);
+    if (mpesaCashInput) mpesaCashInput.addEventListener('input', calculateTotals);
+    if (airtelFloatInput) airtelFloatInput.addEventListener('input', calculateTotals);
+    
+    // Also listen for bank balance and expense changes
+    document.addEventListener('input', function(e) {
+        if (e.target.classList && (e.target.classList.contains('bank-balance') || e.target.classList.contains('expense-amount'))) {
+            calculateTotals();
+        }
+    });
+    
+    // Initial calculation
+    calculateTotals();
+});
 
 // Initialize existing banks
 function initializeExistingBanks() {

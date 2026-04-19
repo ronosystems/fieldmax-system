@@ -1,3 +1,5 @@
+# shops/forms.py - Improved version with a few enhancements
+
 from django import forms
 from django.forms import inlineformset_factory
 from .models import (
@@ -86,14 +88,21 @@ class MpesaAccountForm(forms.ModelForm):
 class DailyShopReportForm(forms.ModelForm):
     class Meta:
         model = DailyShopReport
-        fields = ['shop', 'report_date', 'closing_mpesa_float', 'closing_mpesa_cash', 'shop_sales', 'notes']
+        fields = ['shop', 'report_date', 'closing_mpesa_float', 'closing_mpesa_cash', 'closing_airtel_float', 'shop_sales', 'notes']
         widgets = {
             'shop': forms.Select(attrs={'class': 'form-control'}),
             'report_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
-            'closing_mpesa_float': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
-            'closing_mpesa_cash': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'closing_mpesa_float': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '0.00'}),
+            'closing_airtel_float': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '0.00'}), 
+            'closing_mpesa_cash': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '0.00'}),
             'shop_sales': forms.NumberInput(attrs={'class': 'form-control', 'step': '1', 'placeholder': 'Number of transactions (e.g., 50)'}),
-            'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'Any additional notes...'}),
+        }
+        labels = {
+            'closing_mpesa_float': 'Closing M-Pesa Float (KES)',
+            'closing_mpesa_cash': 'Closing M-Pesa Cash (KES)',
+            'closing_airtel_float': 'Closing Airtel Float (KES)',
+            'shop_sales': 'Total M-Pesa Transactions (Count)',
         }
     
     def clean_shop_sales(self):
@@ -106,14 +115,34 @@ class DailyShopReportForm(forms.ModelForm):
                 raise forms.ValidationError("Transaction count seems too high. Please verify.")
         return shop_sales
     
+    def clean(self):
+        cleaned_data = super().clean()
+        # Optional: Add validation to ensure at least one balance is entered
+        mpesa_float = cleaned_data.get('closing_mpesa_float', 0) or 0
+        mpesa_cash = cleaned_data.get('closing_mpesa_cash', 0) or 0
+        airtel_float = cleaned_data.get('closing_airtel_float', 0) or 0
+        
+        # You can add a warning if all balances are zero
+        if mpesa_float == 0 and mpesa_cash == 0 and airtel_float == 0:
+            # This is just a warning, not an error - so don't raise ValidationError
+            # You could add a message to forms using add_error if needed
+            pass
+        
+        return cleaned_data
+    
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['shop'].queryset = ShopBranch.objects.filter(is_active=True)
         self.fields['closing_mpesa_float'].required = False
         self.fields['closing_mpesa_cash'].required = False
+        self.fields['closing_airtel_float'].required = False  # Make sure this is optional too
         self.fields['shop_sales'].required = False
-
-
+        
+        # Add help texts for clarity
+        self.fields['closing_mpesa_float'].help_text = "M-Pesa float balance at closing time"
+        self.fields['closing_mpesa_cash'].help_text = "Physical cash from M-Pesa cash-out"
+        self.fields['closing_airtel_float'].help_text = "Airtel Money float balance at closing time"
+        self.fields['shop_sales'].help_text = "Total number of M-Pesa transactions today"
 
 class ShopExpenseForm(forms.ModelForm):
     class Meta:
@@ -135,7 +164,7 @@ class BankClosingBalanceForm(forms.ModelForm):
         model = BankClosingBalance
         fields = ['bank_account', 'closing_balance']
         widgets = {
-            'bank_account': forms.Select(attrs={'class': 'form-control'}),
+            'bank_account': forms.Select(attrs={'class': 'form-control bank-select'}),
             'closing_balance': forms.NumberInput(attrs={'class': 'form-control bank-balance', 'step': '0.01', 'placeholder': '0.00'}),
         }
     
@@ -144,19 +173,21 @@ class BankClosingBalanceForm(forms.ModelForm):
         # Make bank account fields optional
         self.fields['bank_account'].required = False
         self.fields['closing_balance'].required = False
+        self.fields['bank_account'].empty_label = "-- Select Bank Account --"
 
 class MpesaDailySummaryForm(forms.ModelForm):
     class Meta:
         model = MpesaDailySummary
         fields = ['opening_float', 'opening_cash', 'expected_float', 'expected_cash', 'notes']
         widgets = {
-            'opening_float': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
-            'opening_cash': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
-            'expected_float': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
-            'expected_cash': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
-            'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'opening_float': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '0.00'}),
+            'opening_cash': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '0.00'}),
+            'expected_float': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '0.00'}),
+            'expected_cash': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '0.00'}),
+            'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'Reconciliation notes...'}),
         }
 
+# FormSets remain the same - they look good
 BankClosingFormSet = inlineformset_factory(
     DailyShopReport, 
     BankClosingBalance,

@@ -81,4 +81,10 @@ urlpatterns = [
     # ============================================
     path('credit-company-payments/', views.credit_company_payments_dashboard, name='credit_company_payments'),
     path('credit-company-payment/<int:company_id>/', views.credit_company_payment, name='credit_company_payment'),
+
+    # ============================================
+    # M-PESA PAYMENTS
+    # ============================================
+    path('mpesa-callback/', views.mpesa_callback, name='mpesa_callback'),
+    path('mpesa-status/<str:checkout_request_id>/', views.mpesa_status_check, name='mpesa_status_check'),
 ]

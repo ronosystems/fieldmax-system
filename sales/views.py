@@ -10,6 +10,8 @@ import json
 import logging
 import calendar
 from datetime import timedelta, datetime, date
+from finance.services import stk_push_request, clean_phone_number
+from finance.models import MpesaTransaction
 from sales.models import Sale, SaleItem, generate_custom_sale_id, Customer, LoyaltySettings, LoyaltyTransaction
 from inventory.models import Product, StockEntry
 from django.core.paginator import Paginator
@@ -1257,7 +1259,7 @@ def sale_list(request):
 
 @login_required
 def sale_create(request):
-    """Create a new sale with loyalty points"""
+    """Create a new sale with loyalty points and M-Pesa support"""
     if request.method == 'POST':
         # Check if it's an AJAX request
         is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
@@ -1399,6 +1401,13 @@ def sale_create(request):
                         f"Please register first to use loyalty points."
                     )
                 
+                # ============================================
+                # FOR M-PESA PAYMENTS, AMOUNT_PAID IS 0 INITIALLY
+                # ============================================
+                if payment_method == 'M-Pesa':
+                    # For M-Pesa, customer pays later via STK Push
+                    amount_paid = Decimal('0.00')
+                
                 # Create the sale with final amount
                 sale = Sale.objects.create(
                     seller=request.user,
@@ -1417,7 +1426,7 @@ def sale_create(request):
                     original_subtotal=original_subtotal
                 )
                 
-                # Process each cart item
+                # Process each cart item (same as before)
                 items_processed = []
                 for item in cart:
                     product = Product.objects.select_for_update().get(
@@ -1550,6 +1559,43 @@ def sale_create(request):
                     except Exception as e:
                         logger.error(f"Credit record creation failed: {str(e)}")
                 
+                # ============================================
+                # HANDLE M-PESA PAYMENT
+                # ============================================
+                mpesa_checkout_id = None
+                if payment_method == 'M-Pesa' and normalized_phone:
+                    try:
+                        from finance.services import stk_push_request, clean_phone_number
+                        from finance.models import MpesaTransaction
+                        
+                        # Initiate STK Push
+                        result = stk_push_request(
+                            phone_number=normalized_phone,
+                            amount=float(final_amount),
+                            account_reference=f"SALE{sale.id}",
+                            transaction_desc=f"Payment for Sale #{sale.sale_id}"
+                        )
+                        
+                        if result.get('ResponseCode') == '0':
+                            # Save M-Pesa transaction
+                            mpesa_trans = MpesaTransaction.objects.create(
+                                merchant_request_id=result['MerchantRequestID'],
+                                checkout_request_id=result['CheckoutRequestID'],
+                                amount=final_amount,
+                                phone_number=normalized_phone,
+                                account_reference=f"SALE{sale.id}",
+                                transaction_desc=f"Payment for Sale #{sale.sale_id}",
+                                sale=sale,
+                                created_by=request.user,
+                                status='pending'
+                            )
+                            mpesa_checkout_id = result['CheckoutRequestID']
+                            logger.info(f"✅ M-Pesa STK Push sent for sale {sale.sale_id}")
+                        else:
+                            logger.error(f"M-Pesa STK Push failed: {result.get('ResponseDescription')}")
+                    except Exception as e:
+                        logger.error(f"Error initiating M-Pesa payment: {str(e)}")
+                
                 # Return appropriate response
                 if is_ajax:
                     response_data = {
@@ -1557,6 +1603,14 @@ def sale_create(request):
                         'sale_id': sale.sale_id,
                         'message': 'Sale completed successfully!'
                     }
+                    
+                    # Add M-Pesa info if applicable
+                    if mpesa_checkout_id:
+                        response_data['mpesa'] = {
+                            'checkout_request_id': mpesa_checkout_id,
+                            'message': 'STK Push sent to your phone. Please enter PIN to complete payment.'
+                        }
+                        response_data['message'] = 'Sale created! Check your phone for M-Pesa payment prompt.'
                     
                     # Include points info only for registered customers
                     if is_registered_customer and customer:
@@ -1572,7 +1626,12 @@ def sale_create(request):
                     
                     return JsonResponse(response_data)
                 else:
-                    if is_registered_customer and points_earned > 0:
+                    if mpesa_checkout_id:
+                        messages.success(
+                            request,
+                            f'Sale #{sale.sale_id} created! STK Push sent to {normalized_phone}. Enter PIN to complete payment.'
+                        )
+                    elif is_registered_customer and points_earned > 0:
                         messages.success(
                             request, 
                             f'Sale #{sale.sale_id} completed! You earned {int(points_earned)} loyalty points!'
@@ -2776,3 +2835,85 @@ def customer_delete(request, pk):
             return redirect('sales:customer_detail', pk=pk)
     
     return redirect('sales:customer_detail', pk=pk)
+
+
+
+
+
+
+#====================================
+# M-PESA PAYMENT INTEGRATION
+#====================================
+
+from finance.models import MpesaTransaction
+from finance.services import stk_push_request
+
+@login_required
+def initiate_mpesa_payment(request, sale_id):
+    """Initiate M-Pesa payment for a sale"""
+    from finance.services import stk_push_request, clean_phone_number
+    from finance.models import MpesaTransaction
+    
+    # IMPORTANT: Use sale_id (the primary key) to get the sale
+    sale = get_object_or_404(Sale, sale_id=sale_id)
+    
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            phone_number = data.get('phone_number', '').strip()
+            
+            if not phone_number:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Phone number is required'
+                })
+            
+            # Clean phone number
+            cleaned_phone = clean_phone_number(phone_number)
+            
+            # Use sale.sale_id (NOT sale.id)
+            account_ref = f"SALE{sale.sale_id}"
+            
+            logger.info(f"Initiating M-Pesa payment for sale {sale.sale_id}, amount: {sale.total_amount}")
+            
+            # Initiate STK Push
+            result = stk_push_request(
+                phone_number=cleaned_phone,
+                amount=float(sale.total_amount),
+                account_reference=account_ref,
+                transaction_desc=f"Payment for Sale #{sale.sale_id}"
+            )
+            
+            logger.info(f"STK Push result: {result}")
+            
+            if result.get('ResponseCode') == '0':
+                # Save transaction record - use sale object directly
+                mpesa_trans = MpesaTransaction.objects.create(
+                    merchant_request_id=result['MerchantRequestID'],
+                    checkout_request_id=result['CheckoutRequestID'],
+                    amount=sale.total_amount,
+                    phone_number=cleaned_phone,
+                    account_reference=account_ref,
+                    transaction_desc=f"Payment for Sale #{sale.sale_id}",
+                    sale=sale,  # Pass the entire sale object
+                    created_by=request.user,
+                    status='pending'
+                )
+                
+                return JsonResponse({
+                    'success': True,
+                    'checkout_request_id': result['CheckoutRequestID'],
+                    'sale_id': sale.sale_id,
+                    'message': 'STK Push sent. Please enter PIN to complete payment.'
+                })
+            else:
+                return JsonResponse({
+                    'success': False,
+                    'error': result.get('ResponseDescription', 'Failed to initiate payment')
+                })
+                
+        except Exception as e:
+            logger.error(f"Error initiating M-Pesa payment: {str(e)}")
+            return JsonResponse({'success': False, 'error': str(e)})
+    
+    return JsonResponse({'success': False, 'error': 'Invalid request method'})

@@ -49,4 +49,6 @@ urlpatterns = [
     path('<str:sale_id>/receipt/', views.sale_receipt, name='sale_receipt'),
     path('<str:sale_id>/print/', views.sale_receipt, name='sale_print'),
     path('<str:sale_id>/reverse/', views.sale_reverse, name='sale_reverse'),
+
+    path('sale/<str:sale_id>/mpesa-pay/', views.initiate_mpesa_payment, name='mpesa_pay'),
 ]

@@ -25,6 +25,15 @@ from django.db import transaction
 from django.db import models
 import logging
 import time
+from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse, HttpResponse
+from django.utils import timezone
+import json
+import logging
+from .models import MpesaTransaction, MpesaCallbackLog
+from sales.models import Sale  # Link to your sale model
+
+logger = logging.getLogger(__name__)
 
 logger = logging.getLogger(__name__)
 
@@ -3073,3 +3082,136 @@ def income_detail(request, transaction_id):
     }
     
     return render(request, 'finance/income_detail.html', context)
+
+
+
+
+
+
+
+
+@csrf_exempt
+def mpesa_callback(request):
+    """Handle M-Pesa payment confirmation callback"""
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            logger.info(f"M-Pesa callback received: {data}")
+            
+            # Extract callback data
+            stk_callback = data.get('Body', {}).get('stkCallback', {})
+            result_code = stk_callback.get('ResultCode')
+            result_desc = stk_callback.get('ResultDesc')
+            checkout_request_id = stk_callback.get('CheckoutRequestID')
+            merchant_request_id = stk_callback.get('MerchantRequestID')
+            
+            # Log the callback
+            MpesaCallbackLog.objects.create(
+                checkout_request_id=checkout_request_id,
+                result_code=result_code,
+                result_desc=result_desc,
+                raw_payload=data,
+                processed=False
+            )
+            
+            # Find the transaction
+            try:
+                transaction = MpesaTransaction.objects.get(checkout_request_id=checkout_request_id)
+                transaction.result_code = result_code
+                transaction.result_desc = result_desc
+                transaction.callback_raw_data = data
+            except MpesaTransaction.DoesNotExist:
+                logger.error(f"Transaction not found for CheckoutRequestID: {checkout_request_id}")
+                return JsonResponse({"ResultCode": 1, "ResultDesc": "Transaction not found"})
+            
+            if result_code == 0:  # Success
+                # Extract payment details
+                callback_metadata = stk_callback.get('CallbackMetadata', {}).get('Item', [])
+                
+                for item in callback_metadata:
+                    if item['Name'] == 'Amount':
+                        transaction.amount = item['Value']
+                    elif item['Name'] == 'MpesaReceiptNumber':
+                        transaction.mpesa_receipt_number = item['Value']
+                    elif item['Name'] == 'TransactionDate':
+                        trans_date_str = str(item['Value'])
+                        transaction.transaction_date = timezone.datetime(
+                            int(trans_date_str[0:4]),
+                            int(trans_date_str[4:6]),
+                            int(trans_date_str[6:8]),
+                            int(trans_date_str[8:10]),
+                            int(trans_date_str[10:12]),
+                            int(trans_date_str[12:14])
+                        )
+                
+                transaction.status = 'completed'
+                
+                # Update the linked sale if it exists
+                if transaction.sale:
+                    sale = transaction.sale
+                    sale.payment_method = 'M-Pesa'
+                    sale.amount_paid = transaction.amount
+                    sale.save()
+                    logger.info(f"✅ Sale {sale.sale_id} updated with M-Pesa payment {transaction.amount}")
+                else:
+                    # Try to find sale by account_reference
+                    account_ref = transaction.account_reference
+                    if account_ref and account_ref.startswith('SALE'):
+                        try:
+                            from sales.models import Sale
+                            sale_id_value = account_ref.replace('SALE', '')
+                            sale = Sale.objects.get(sale_id=sale_id_value)
+                            transaction.sale = sale
+                            transaction.save()
+                            
+                            sale.payment_method = 'M-Pesa'
+                            sale.amount_paid = transaction.amount
+                            sale.save()
+                            logger.info(f"✅ Sale {sale.sale_id} linked and updated via account_reference")
+                        except Sale.DoesNotExist:
+                            logger.error(f"Sale not found for reference: {account_ref}")
+                
+                logger.info(f"✅ M-Pesa payment completed: {transaction.mpesa_receipt_number}")
+                
+            else:
+                transaction.status = 'failed'
+                logger.warning(f"❌ M-Pesa payment failed: {result_desc}")
+            
+            transaction.save()
+            
+            # Update callback log
+            callback_log = MpesaCallbackLog.objects.filter(checkout_request_id=checkout_request_id).first()
+            if callback_log:
+                callback_log.processed = True
+                callback_log.transaction = transaction
+                callback_log.save()
+            
+            return JsonResponse({"ResultCode": 0, "ResultDesc": "Success"})
+            
+        except Exception as e:
+            logger.error(f"Error processing M-Pesa callback: {str(e)}")
+            return JsonResponse({"ResultCode": 1, "ResultDesc": str(e)})
+    
+    return HttpResponse("Method not allowed", status=405)
+
+
+
+
+    
+
+
+def mpesa_status_check(request, checkout_request_id):
+    """Check status of M-Pesa transaction"""
+    from .services import check_transaction_status
+    
+    try:
+        transaction = MpesaTransaction.objects.get(checkout_request_id=checkout_request_id)
+        result = check_transaction_status(checkout_request_id)
+        
+        return JsonResponse({
+            'success': True,
+            'status': transaction.status,
+            'result': result
+        })
+    except MpesaTransaction.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Transaction not found'})
