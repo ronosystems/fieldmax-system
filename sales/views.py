@@ -1572,7 +1572,7 @@ def sale_create(request):
                         result = stk_push_request(
                             phone_number=normalized_phone,
                             amount=float(final_amount),
-                            account_reference=f"SALE{sale.id}",
+                            account_reference=f"SALE{sale.sale_id}", 
                             transaction_desc=f"Payment for Sale #{sale.sale_id}"
                         )
                         
