@@ -51,4 +51,5 @@ urlpatterns = [
     path('<str:sale_id>/reverse/', views.sale_reverse, name='sale_reverse'),
 
     path('sale/<str:sale_id>/mpesa-pay/', views.initiate_mpesa_payment, name='mpesa_pay'),
+    path('sale/<str:sale_id>/update-payment/', views.update_sale_payment, name='update_sale_payment'),
 ]

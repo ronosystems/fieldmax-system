@@ -3087,67 +3087,90 @@ def income_detail(request, transaction_id):
 
 
 
-
-
-
 @csrf_exempt
 def mpesa_callback(request):
-    """Handle Kopo Kopo webhook callbacks"""
+    """Handle Kopo Kopo webhook callbacks - ROBUST VERSION"""
     if request.method != 'POST':
         return HttpResponse("Method not allowed", status=405)
     
     try:
         data = json.loads(request.body)
-        logger.info("=== KOPO KOPO CALLBACK RECEIVED ===")
+        logger.info("=" * 50)
+        logger.info("CALLBACK RECEIVED")
+        logger.info("=" * 50)
+        logger.info(f"Callback data: {json.dumps(data, indent=2)}")
         
-        # Extract from the nested structure
-        # The payment ID is at the top level of the data
-        payment_id = data.get('data', {}).get('id')
+        # Extract payment ID safely
+        payment_id = None
+        if 'data' in data and isinstance(data['data'], dict):
+            payment_id = data['data'].get('id')
+        if not payment_id and 'id' in data:
+            payment_id = data.get('id')
         
-        # Extract attributes
-        attributes = data.get('data', {}).get('attributes', {})
-        status = attributes.get('status')
-        metadata = attributes.get('metadata', {})
+        # Extract status safely
+        status = None
+        amount = None
+        receipt = None
+        phone_number = None
         
-        # Extract from the event resource
-        event_resource = attributes.get('event', {}).get('resource', {})
-        amount = event_resource.get('amount')
-        receipt_number = event_resource.get('reference')
-        phone_number = event_resource.get('sender_phone_number')
+        if 'data' in data and isinstance(data['data'], dict):
+            attrs = data['data'].get('attributes', {})
+            status = attrs.get('status')
+            
+            # Safely extract from event.resource
+            event = attrs.get('event')
+            if event and isinstance(event, dict):
+                resource = event.get('resource')
+                if resource and isinstance(resource, dict):
+                    amount = resource.get('amount')
+                    receipt = resource.get('reference')
+                    phone_number = resource.get('sender_phone_number')
+            
+            # If not found in resource, try direct
+            if not amount:
+                amount = attrs.get('amount')
+            if not receipt:
+                receipt = attrs.get('receipt_number')
         
-        logger.info(f"Payment ID: {payment_id}")
-        logger.info(f"Status: {status}")
-        logger.info(f"Amount: {amount}")
-        logger.info(f"Receipt: {receipt_number}")
-        logger.info(f"Metadata: {metadata}")
+        logger.info(f"Extracted - Payment ID: {payment_id}, Status: {status}")
+        logger.info(f"Amount: {amount}, Receipt: {receipt}, Phone: {phone_number}")
         
         if not payment_id:
             logger.error("Could not extract payment_id from callback")
             return JsonResponse({"ResultCode": 0, "ResultDesc": "OK"})
         
-        # Update the callback log with the extracted data
-        callback_log = MpesaCallbackLog.objects.filter(checkout_request_id=payment_id).first()
-        if callback_log:
-            callback_log.processed = True
+        # Update or create callback log
+        callback_log, created = MpesaCallbackLog.objects.get_or_create(
+            checkout_request_id=payment_id,
+            defaults={
+                'result_code': 0 if status == 'Success' else 1,
+                'result_desc': f"Kopo Kopo Status: {status}",
+                'raw_payload': data,
+                'processed': False
+            }
+        )
+        
+        if not created:
+            callback_log.raw_payload = data
             callback_log.result_code = 0 if status == 'Success' else 1
-            callback_log.result_desc = f"Kopo Kopo: {status}"
+            callback_log.result_desc = f"Kopo Kopo Status: {status}"
             callback_log.save()
-            logger.info(f"Updated callback log for {payment_id}")
         
         # Find and update the transaction
         try:
             transaction = MpesaTransaction.objects.get(checkout_request_id=payment_id)
             logger.info(f"Found transaction {transaction.id}, current status: {transaction.status}")
             
-            # Update based on status
             if status == 'Success':
                 transaction.status = 'completed'
                 transaction.result_code = 0
-                transaction.result_desc = f"Payment successful. Receipt: {receipt_number}"
+                transaction.result_desc = f"Payment successful. Receipt: {receipt}"
                 if amount:
                     transaction.amount = amount
-                if receipt_number:
-                    transaction.mpesa_receipt_number = receipt_number
+                if receipt:
+                    transaction.mpesa_receipt_number = receipt
+                if phone_number:
+                    transaction.phone_number = phone_number
                 transaction.transaction_date = timezone.now()
                 logger.info(f"✅ Transaction {payment_id} marked as COMPLETED")
                 
@@ -3157,38 +3180,38 @@ def mpesa_callback(request):
                     sale.payment_method = 'M-Pesa'
                     sale.amount_paid = transaction.amount
                     sale.save()
-                    logger.info(f"✅ Sale {sale.sale_id} updated")
+                    logger.info(f"✅✅✅ SALE {sale.sale_id} UPDATED! Amount: {sale.amount_paid}")
                 else:
                     # Try to find sale by account_reference
                     account_ref = transaction.account_reference
-                    if account_ref and account_ref.startswith('TEST'):
-                        logger.info(f"Test transaction, no sale to update")
-                    elif account_ref and account_ref.startswith('SALE'):
+                    logger.info(f"Looking for sale by account_reference: {account_ref}")
+                    if account_ref:
+                        # Remove 'SALE' prefix if present
+                        sale_id_value = account_ref.replace('SALE', '')
                         try:
                             from sales.models import Sale
-                            sale_id_value = account_ref.replace('SALE', '')
                             sale = Sale.objects.get(sale_id=sale_id_value)
                             transaction.sale = sale
                             transaction.save()
                             sale.payment_method = 'M-Pesa'
                             sale.amount_paid = transaction.amount
                             sale.save()
-                            logger.info(f"✅ Sale {sale.sale_id} linked and updated")
+                            logger.info(f"✅✅✅ SALE {sale.sale_id} LINKED AND UPDATED!")
                         except Sale.DoesNotExist:
-                            logger.error(f"Sale not found: {account_ref}")
+                            logger.error(f"Sale not found: {sale_id_value}")
             else:
                 transaction.status = 'failed'
                 transaction.result_code = 1
-                transaction.result_desc = f"Payment failed. Status: {status}"
+                transaction.result_desc = f"Payment failed: {status}"
                 logger.warning(f"❌ Transaction {payment_id} marked as FAILED")
             
             transaction.callback_raw_data = data
             transaction.save()
             
-            # Update callback log with transaction reference
-            if callback_log:
-                callback_log.transaction = transaction
-                callback_log.save()
+            # Update callback log
+            callback_log.transaction = transaction
+            callback_log.processed = True
+            callback_log.save()
             
         except MpesaTransaction.DoesNotExist:
             logger.warning(f"Transaction not found for ID: {payment_id}")
@@ -3198,43 +3221,58 @@ def mpesa_callback(request):
                 checkout_request_id=payment_id,
                 amount=amount or 0,
                 phone_number=phone_number or '',
-                account_reference=metadata.get('reference', ''),
-                transaction_desc=metadata.get('description', ''),
-                status='completed',
-                mpesa_receipt_number=receipt_number,
-                result_code=0,
-                result_desc=f"Auto-created from callback. Receipt: {receipt_number}",
+                account_reference='',
+                transaction_desc='Callback created',
+                status='completed' if status == 'Success' else 'failed',
+                mpesa_receipt_number=receipt,
+                result_code=0 if status == 'Success' else 1,
+                result_desc=f"Auto-created from callback. Status: {status}",
                 callback_raw_data=data
             )
-            logger.info(f"Created new transaction {transaction.id} from callback")
+            callback_log.transaction = transaction
+            callback_log.save()
+            logger.info(f"Created new transaction from callback: ID={transaction.id}")
+        
+        logger.info("=" * 50)
+        logger.info("CALLBACK PROCESSING COMPLETE")
+        logger.info("=" * 50)
         
         return JsonResponse({"ResultCode": 0, "ResultDesc": "OK"})
         
-    except json.JSONDecodeError as e:
-        logger.error(f"Invalid JSON in callback: {e}")
-        return HttpResponse("Invalid JSON", status=400)
     except Exception as e:
-        logger.error(f"Error processing callback: {str(e)}")
+        logger.error(f"Callback error: {str(e)}")
         import traceback
         traceback.print_exc()
         return JsonResponse({"ResultCode": 0, "ResultDesc": "OK"})
-
-
-
-
     
 
+
+
+
+
 def mpesa_status_check(request, checkout_request_id):
-    """Check status of M-Pesa transaction from Kopo Kopo"""
+    """Check status of M-Pesa transaction"""
     try:
         transaction = MpesaTransaction.objects.get(checkout_request_id=checkout_request_id)
+        
+        # If transaction is completed but sale isn't updated, fix it
+        if transaction.status == 'completed' and transaction.sale:
+            if transaction.sale.amount_paid == 0 or transaction.sale.payment_method != 'M-Pesa':
+                transaction.sale.payment_method = 'M-Pesa'
+                transaction.sale.amount_paid = transaction.amount
+                transaction.sale.save()
+                logger.info(f"Fixed sale {transaction.sale.sale_id} during status check")
         
         return JsonResponse({
             'success': True,
             'status': transaction.status,
             'amount': float(transaction.amount) if transaction.amount else 0,
             'receipt_number': transaction.mpesa_receipt_number,
-            'result_desc': transaction.result_desc
+            'sale_id': transaction.sale.sale_id if transaction.sale else None
         })
     except MpesaTransaction.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'Transaction not found'})
+        return JsonResponse({
+            'success': False, 
+            'status': 'not_found',
+            'error': 'Transaction not found'
+        })

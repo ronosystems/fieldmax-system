@@ -1691,6 +1691,40 @@ def sale_create(request):
 
 
 @login_required
+def update_sale_payment(request, sale_id):
+    """Update sale payment status"""
+    from finance.models import MpesaTransaction
+    
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            sale = get_object_or_404(Sale, sale_id=sale_id)
+            
+            # Find the most recent M-Pesa transaction for this sale
+            mpesa_trans = MpesaTransaction.objects.filter(
+                sale=sale, 
+                status='completed'
+            ).order_by('-created_at').first()
+            
+            if mpesa_trans:
+                sale.amount_paid = mpesa_trans.amount
+                sale.payment_method = 'M-Pesa'
+                sale.save()
+                return JsonResponse({'success': True, 'message': 'Sale updated'})
+            else:
+                return JsonResponse({'success': False, 'error': 'No completed transaction found'})
+                
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+    
+    return JsonResponse({'success': False, 'error': 'Invalid method'})
+
+
+
+
+
+
+@login_required
 def sale_detail(request, sale_id):
     """View sale details"""
     sale = get_object_or_404(Sale.objects.prefetch_related('items__product'), sale_id=sale_id)
