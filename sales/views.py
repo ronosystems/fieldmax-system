@@ -10,7 +10,7 @@ import json
 import logging
 import calendar
 from datetime import timedelta, datetime, date
-from finance.services import stk_push_request, clean_phone_number
+from finance.kopokopo_service import stk_push_request, clean_phone_number
 from finance.models import MpesaTransaction
 from sales.models import Sale, SaleItem, generate_custom_sale_id, Customer, LoyaltySettings, LoyaltyTransaction
 from inventory.models import Product, StockEntry
@@ -1565,7 +1565,7 @@ def sale_create(request):
                 mpesa_checkout_id = None
                 if payment_method == 'M-Pesa' and normalized_phone:
                     try:
-                        from finance.services import stk_push_request, clean_phone_number
+                        from finance.kopokopo_service import stk_push_request, clean_phone_number
                         from finance.models import MpesaTransaction
                         
                         # Initiate STK Push
@@ -1583,7 +1583,7 @@ def sale_create(request):
                                 checkout_request_id=result['CheckoutRequestID'],
                                 amount=final_amount,
                                 phone_number=normalized_phone,
-                                account_reference=f"SALE{sale.id}",
+                                account_reference=f"SALE{sale.sale_id}",
                                 transaction_desc=f"Payment for Sale #{sale.sale_id}",
                                 sale=sale,
                                 created_by=request.user,
@@ -2846,12 +2846,11 @@ def customer_delete(request, pk):
 #====================================
 
 from finance.models import MpesaTransaction
-from finance.services import stk_push_request
+from finance.kopokopo_service import stk_push_request 
 
 @login_required
 def initiate_mpesa_payment(request, sale_id):
-    """Initiate M-Pesa payment for a sale"""
-    from finance.services import stk_push_request, clean_phone_number
+    from finance.kopokopo_service import stk_push_request, clean_phone_number 
     from finance.models import MpesaTransaction
     
     # IMPORTANT: Use sale_id (the primary key) to get the sale
