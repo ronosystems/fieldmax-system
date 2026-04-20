@@ -1,4 +1,5 @@
-# finance/kopokopo_service.py
+# finance/kopokopo_service.py - UPDATED VERSION
+
 import requests
 import base64
 from decouple import config
@@ -16,14 +17,13 @@ def get_kopokopo_token():
     # Check cache
     cached_token = cache.get('kopokopo_token')
     if cached_token:
-        logger.info("Using cached Kopo Kopo token")
         return cached_token
     
     # Encode credentials
     auth = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
     
     try:
-        # Get token
+        # Get token from Kopo Kopo
         response = requests.post(
             "https://api.kopokopo.com/oauth/token",
             headers={"Authorization": f"Basic {auth}"},
@@ -31,15 +31,16 @@ def get_kopokopo_token():
             timeout=30
         )
         
+        logger.info(f"Kopo Kopo token response status: {response.status_code}")
+        
         if response.status_code == 200:
             token = response.json().get('access_token')
-            # Cache for 58 minutes (tokens expire in 1 hour)
             cache.set('kopokopo_token', token, 3480)
             logger.info("✅ Kopo Kopo token obtained successfully")
             return token
         else:
             logger.error(f"❌ Kopo Kopo auth failed: {response.status_code} - {response.text}")
-            raise Exception(f"Kopo Kopo authentication failed: {response.text}")
+            raise Exception(f"Kopo Kopo auth failed: {response.text}")
             
     except Exception as e:
         logger.error(f"Kopo Kopo token error: {str(e)}")
@@ -81,18 +82,22 @@ def stk_push_request(phone_number, amount, account_reference, transaction_desc):
         till_number = config('KOPOKOPO_TILL_NUMBER')
         callback_url = config('MPESA_CALLBACK_URL')
         
-        # Prepare request
+        # Prepare request - FIXED ENDPOINT
         headers = {
             "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "Accept": "application/vnd.kopokopo.v2+json"  # Add this
         }
         
         payload = {
             "payment_channel": "M-PESA",
             "till_number": till_number,
+            "first_name": "Customer",
+            "last_name": "Payment",
             "phone_number": phone_number,
             "amount": str(int(amount)),
             "currency": "KES",
+            "email": f"payment_{account_reference}@fieldmax.shop",
             "callback_url": callback_url,
             "metadata": {
                 "account_reference": account_reference,
@@ -100,17 +105,18 @@ def stk_push_request(phone_number, amount, account_reference, transaction_desc):
             }
         }
         
-        logger.info(f"Sending Kopo Kopo STK Push: Amount={amount}, Phone={phone_number}")
+        logger.info(f"Sending Kopo Kopo STK Push: Amount={amount}, Phone={phone_number}, Till={till_number}")
         
-        # Send request
+        # CORRECT Kopo Kopo API endpoint
         response = requests.post(
-            "https://api.kopokopo.com/api/v1/payment_requests",
+            "https://api.kopokopo.com/api/v1/merchants/tills/payment_requests",
             headers=headers,
             json=payload,
             timeout=60
         )
         
         logger.info(f"Kopo Kopo response status: {response.status_code}")
+        logger.info(f"Kopo Kopo response body: {response.text}")
         
         if response.status_code == 201:
             data = response.json()
@@ -148,7 +154,7 @@ def check_transaction_status(payment_request_id):
         }
         
         response = requests.get(
-            f"https://api.kopokopo.com/api/v1/payment_requests/{payment_request_id}",
+            f"https://api.kopokopo.com/api/v1/merchants/tills/payment_requests/{payment_request_id}",
             headers=headers,
             timeout=30
         )
