@@ -2375,7 +2375,6 @@ def sales_manager_dashboard(request):
 
 
 
-
 # ============================================
 # CASHIER DASHBOARD
 # ============================================
@@ -2385,14 +2384,39 @@ def cashier_dashboard(request):
     """Dashboard for cashier desk"""
     from sales.models import Sale
     from django.db.models import F, Count, Sum, Q
+    from staff.models import Staff
+    from shops.models import ShopBranch
 
     prepare_dashboard_messages(request, 'Cashier')
     
     today = timezone.now().date()
     
-    # Get cart from session - ADD THIS
+    # Get cart from session
     cart = request.session.get('sales_cart', [])
     subtotal = sum(item.get('total', 0) for item in cart)
+    
+    # ============================================
+    # GET USER'S ASSIGNED SHOP FROM STAFF MODEL
+    # ============================================
+    current_shop = None
+    try:
+        staff = Staff.objects.filter(user=request.user).first()
+        if staff and staff.assigned_shop:
+            current_shop = staff.assigned_shop
+            logger.info(f"User {request.user.username} is assigned to shop: {current_shop.name} ({current_shop.code})")
+        else:
+            logger.warning(f"No staff record or assigned shop found for user {request.user.username}")
+    except Exception as e:
+        logger.error(f"Error getting user's shop from Staff model: {str(e)}")
+    
+    # Fallback to first active shop if no shop assigned
+    if not current_shop:
+        try:
+            current_shop = ShopBranch.objects.filter(is_active=True).first()
+            if current_shop:
+                logger.info(f"Using fallback shop: {current_shop.name}")
+        except Exception as e:
+            logger.error(f"Error getting fallback shop: {str(e)}")
     
     # Today's Transactions
     today_transactions = Sale.objects.filter(
@@ -2416,12 +2440,14 @@ def cashier_dashboard(request):
         'subtotal': subtotal,
         'cart_count': len(cart),
         
+        # Add shop to context
+        'current_shop': current_shop,
+        
         # Keep existing context
         'today_transactions': today_transactions,
         'recent_transactions': recent_transactions,
     }
     return render(request, 'staff/dashboards/cashier_dashboard.html', context)
-
 
 
 

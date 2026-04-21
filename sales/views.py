@@ -986,29 +986,18 @@ def sale_details_api(request, sale_id):
 
 
 
-
-
-
-
-
 @login_required
 def search_products(request):
     """AJAX endpoint to search products from inventory"""
+    from django.db.models import Q
+    from inventory.models import Product
+    
     query = request.GET.get('q', '').strip()
     products = []
     
     try:
-        from inventory.models import Product
-        
-        # Base queryset - only show available products
-        # For single items, only show those that are NOT sold
-        # For bulk items, only show those with quantity > 0
-        queryset = Product.objects.filter(
-            is_active=True
-        ).filter(
-            Q(category__is_single_item=False, quantity__gt=0) |  # Bulk items with stock
-            Q(category__is_single_item=True, status='available', quantity__gt=0)  # Single items available
-        )
+        # Base queryset - only show active products with stock
+        queryset = Product.objects.filter(is_active=True, quantity__gt=0)
         
         if query and len(query) >= 2:
             # Search by product_code, name, brand, model, or sku_value
@@ -1020,14 +1009,6 @@ def search_products(request):
                 Q(sku_value__icontains=query) |
                 Q(barcode__icontains=query)
             )
-        
-        # Exclude products already in active sales (for single items)
-        from sales.models import SaleItem
-        sold_single_items = SaleItem.objects.filter(
-            sale__is_reversed=False
-        ).values_list('product_id', flat=True).distinct()
-        
-        queryset = queryset.exclude(id__in=sold_single_items)
         
         # Limit to 30 results for performance
         results = queryset[:30]
@@ -1260,6 +1241,32 @@ def sale_list(request):
 @login_required
 def sale_create(request):
     """Create a new sale with loyalty points and M-Pesa support"""
+
+    # ============================================
+    # GET USER'S ASSIGNED SHOP FROM STAFF MODEL
+    # ============================================
+    current_shop = None
+    try:
+        from staff.models import Staff
+        staff = Staff.objects.filter(user=request.user).first()
+        if staff and staff.assigned_shop:
+            current_shop = staff.assigned_shop
+            logger.info(f"User {request.user.username} is assigned to shop: {current_shop.name} ({current_shop.code})")
+        else:
+            logger.warning(f"No staff record or assigned shop found for user {request.user.username}")
+    except Exception as e:
+        logger.error(f"Error getting user's shop from Staff model: {str(e)}")
+    
+    # Fallback to first active shop if no shop assigned
+    if not current_shop:
+        try:
+            from shops.models import ShopBranch
+            current_shop = ShopBranch.objects.filter(is_active=True).first()
+            if current_shop:
+                logger.info(f"Using fallback shop: {current_shop.name}")
+        except Exception as e:
+            logger.error(f"Error getting fallback shop: {str(e)}")
+
     if request.method == 'POST':
         # Check if it's an AJAX request
         is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
@@ -1274,9 +1281,11 @@ def sale_create(request):
                 is_credit = data.get('is_credit', False)
                 amount_paid = Decimal(str(data.get('amount_paid', '0')))
                 points_redeemed = int(data.get('points_redeemed', '0'))
-                
-                # Get verified customer ID if provided
                 verified_customer_id = data.get('verified_customer_id')
+                cash_amount = Decimal(str(data.get('cash_amount', '0')))
+                mpesa_amount = Decimal(str(data.get('mpesa_amount', '0')))
+                bank_amount = Decimal(str(data.get('bank_amount', '0')))
+                skip_cart_clear = data.get('skip_cart_clear', False)
                 
             except json.JSONDecodeError:
                 return JsonResponse({'success': False, 'error': 'Invalid JSON data'})
@@ -1287,11 +1296,20 @@ def sale_create(request):
             is_credit = request.POST.get('is_credit') == 'on'
             points_redeemed = int(request.POST.get('points_redeemed', '0'))
             verified_customer_id = request.POST.get('verified_customer_id')
+            cash_amount = Decimal(request.POST.get('cash_amount', '0'))
+            mpesa_amount = Decimal(request.POST.get('mpesa_amount', '0'))
+            bank_amount = Decimal(request.POST.get('bank_amount', '0'))
+            skip_cart_clear = request.POST.get('skip_cart_clear') == 'true'
             
             if is_credit:
                 amount_paid = Decimal('0.00')
             else:
                 amount_paid = Decimal(request.POST.get('amount_paid', '0'))
+        
+        # If this is a split payment, use the total from split amounts
+        if payment_method == 'Split':
+            total_paid = cash_amount + mpesa_amount + bank_amount + Decimal(str(points_redeemed))
+            amount_paid = total_paid
         
         # Get cart items from session
         cart = request.session.get('sales_cart', [])
@@ -1311,21 +1329,13 @@ def sale_create(request):
                     """Convert phone numbers to international format (254XXXXXXXXX)"""
                     if not phone:
                         return ''
-                    # Remove all non-digit characters
                     phone = ''.join(filter(str.isdigit, phone))
-                    
-                    # If it starts with 0 (local format like 0722...)
                     if phone.startswith('0') and len(phone) == 10:
-                        return '254' + phone[1:]  # Remove leading 0 and add 254
-                    
-                    # If it starts with 254 and is 12 digits, it's already correct
+                        return '254' + phone[1:]
                     if phone.startswith('254') and len(phone) == 12:
                         return phone
-                    
-                    # If it's 9 digits (like 722...), add 254
                     if len(phone) == 9:
                         return '254' + phone
-                    
                     return phone
                 
                 normalized_phone = normalize_phone(buyer_phone)
@@ -1336,14 +1346,12 @@ def sale_create(request):
                 for item in cart:
                     original_subtotal += Decimal(str(item.get('total', 0)))
                 
-                # ============================================
+                # =========================================================
                 # LOYALTY POINTS REDEMPTION - ONLY FOR REGISTERED CUSTOMERS
-                # ============================================
+                # =========================================================
                 points_discount = Decimal('0.00')
                 final_amount = original_subtotal
                 customer = None
-                
-                # Check if this is a registered customer
                 is_registered_customer = False
                 
                 # First try by verified_customer_id if provided
@@ -1368,95 +1376,56 @@ def sale_create(request):
                 
                 # Only process points for registered customers
                 if is_registered_customer and points_redeemed > 0:
-                    # Check if customer has enough points
                     if customer.points_balance < points_redeemed:
-                        raise ValueError(
-                            f"Insufficient points. Available: {customer.points_balance}, "
-                            f"Requested: {points_redeemed}"
-                        )
+                        raise ValueError(f"Insufficient points. Available: {customer.points_balance}, Requested: {points_redeemed}")
                     
-                    # Points value (1 point = KSH 1)
                     points_discount = Decimal(str(points_redeemed))
-                    
-                    # Ensure discount doesn't exceed subtotal
                     if points_discount > original_subtotal:
                         points_discount = original_subtotal
                         points_redeemed = int(original_subtotal)
                     
-                    # Calculate final amount after points discount
                     final_amount = original_subtotal - points_discount
-                    
-                    # Adjust amount_paid if it was based on original total
                     if amount_paid > final_amount:
                         amount_paid = final_amount
                     
-                    logger.info(
-                        f"💰 Points redemption: {points_redeemed} points = KSH {points_discount} discount "
-                        f"for registered customer {customer.phone_number}"
-                    )
+                    logger.info(f"💰 Points redemption: {points_redeemed} points = KSH {points_discount} discount")
                 elif points_redeemed > 0 and not is_registered_customer:
-                    # Trying to redeem points without registration - block it
-                    raise ValueError(
-                        f"Cannot redeem points. Customer {buyer_phone} is not registered. "
-                        f"Please register first to use loyalty points."
-                    )
+                    raise ValueError(f"Cannot redeem points. Customer {buyer_phone} is not registered.")
                 
-                # ============================================
-                # FOR M-PESA PAYMENTS, AMOUNT_PAID IS 0 INITIALLY
-                # ============================================
-                if payment_method == 'M-Pesa':
-                    # For M-Pesa, customer pays later via STK Push
-                    amount_paid = Decimal('0.00')
-                
-                # Create the sale with final amount
+                # Create the sale
                 sale = Sale.objects.create(
                     seller=request.user,
                     buyer_name=customer.full_name if is_registered_customer and customer else 'Walk-in Customer',
-                    buyer_phone=normalized_phone,  # Store normalized phone
+                    buyer_phone=normalized_phone,
                     buyer_id_number=customer.id_number if is_registered_customer and customer else '',
                     nok_name='',
                     nok_phone='',
                     payment_method=payment_method,
                     amount_paid=amount_paid,
-                    total_amount=final_amount,  # Use amount after points discount
-                    subtotal=original_subtotal,  # Store original subtotal
+                    total_amount=final_amount,
+                    subtotal=original_subtotal,
                     is_credit=is_credit,
                     points_redeemed=points_redeemed if is_registered_customer else 0,
                     points_discount=points_discount if is_registered_customer else Decimal('0.00'),
                     original_subtotal=original_subtotal
                 )
                 
-                # Process each cart item (same as before)
-                items_processed = []
+                # Process each cart item
                 for item in cart:
-                    product = Product.objects.select_for_update().get(
-                        product_code=item['product_code']
-                    )
-                    
-                    # refresh from database
+                    product = Product.objects.select_for_update().get(product_code=item['product_code'])
                     product.refresh_from_db()
-
-                    # Check stock availability
-                    if product.quantity < item['quantity']:
-                        raise ValueError(
-                            f"Insufficient stock for {product.display_name}. "
-                            f"Available: {product.quantity}, Requested: {item['quantity']}"
-                        )
                     
-                    # For single items, validate they haven't been sold in an ACTIVE sale
+                    if product.quantity < item['quantity']:
+                        raise ValueError(f"Insufficient stock for {product.display_name}. Available: {product.quantity}")
+                    
                     if product.category and product.category.is_single_item:
                         active_sale_exists = SaleItem.objects.filter(
-                            sku_value=product.sku_value,
-                            sale__is_reversed=False
+                            sku_value=product.sku_value, sale__is_reversed=False
                         ).exists()
-                        
                         if active_sale_exists:
-                            raise ValueError(
-                                f"This {product.display_name} (SKU: {product.sku_value}) has already been sold in another transaction!"
-                            )
+                            raise ValueError(f"This {product.display_name} (SKU: {product.sku_value}) has already been sold!")
                     
-                    # Create sale item
-                    sale_item = SaleItem.objects.create(
+                    SaleItem.objects.create(
                         sale=sale,
                         product=product,
                         product_code=product.product_code,
@@ -1467,17 +1436,12 @@ def sale_create(request):
                         total_price=Decimal(str(item['total']))
                     )
                     
-                    # Update product quantity
                     product.quantity -= item['quantity']
-                    
-                    # For single items, mark as sold and set status
                     if product.category and product.category.is_single_item:
                         product.status = 'sold'
                         product.quantity = 0
-                    
                     product.save()
                     
-                    # Create stock entry for audit trail
                     StockEntry.objects.create(
                         product=product,
                         quantity=-item['quantity'],
@@ -1488,61 +1452,31 @@ def sale_create(request):
                         notes=f"Sale #{sale.sale_id} - {product.display_name}",
                         created_by=request.user
                     )
-                    
-                    items_processed.append({
-                        'name': product.display_name,
-                        'code': product.product_code,
-                        'quantity': item['quantity'],
-                        'price': Decimal(str(item['price']))
-                    })
                 
-                # ============================================
-                # LOYALTY POINTS EARNING - ONLY FOR REGISTERED CUSTOMERS
-                # ============================================
+                # Loyalty points earning
                 points_earned = 0
-                
                 if is_registered_customer and customer:
-                    # Process points redemption if any
                     if points_redeemed > 0:
-                        customer.redeem_points(
-                            points_redeemed,
-                            sale=sale,
-                            description=f"Redeemed for sale #{sale.sale_id}"
-                        )
+                        customer.redeem_points(points_redeemed, sale=sale, description=f"Redeemed for sale #{sale.sale_id}")
                     
-                    # Update customer stats
                     customer.total_purchases += 1
                     customer.total_spent += original_subtotal
                     customer.last_purchase_date = timezone.now()
                     customer.save()
-                    
-                    # Update customer tier based on spending
                     customer.update_tier()
+                    points_earned = customer.add_points(final_amount, sale=sale, description=f"Purchase #{sale.sale_id}")
                     
-                    # Award loyalty points based on amount spent (after points discount)
-                    points_earned = customer.add_points(
-                        final_amount,
-                        sale=sale,
-                        description=f"Purchase #{sale.sale_id}"
-                    )
-                    
-                    logger.info(
-                        f"💰 Registered customer {customer.phone_number}: "
-                        f"Earned {points_earned} points | "
-                        f"Redeemed {points_redeemed} points | "
-                        f"New balance: {customer.points_balance} points"
-                    )
-                else:
-                    logger.info(f"ℹ️ Unregistered customer {normalized_phone or 'No phone'} - no points awarded")
+                    logger.info(f"💰 Registered customer {customer.phone_number}: Earned {points_earned} points")
                 
-                # Clear the cart
-                request.session['sales_cart'] = []
+                # Clear the cart (unless skip_cart_clear is True for M-Pesa)
+                if not skip_cart_clear:
+                    request.session['sales_cart'] = []
                 
                 # Handle credit sale if needed
                 if is_credit:
                     try:
                         from credit.models import CreditSale
-                        credit_sale = CreditSale.objects.create(
+                        CreditSale.objects.create(
                             sale_id=sale.sale_id,
                             customer_name=customer.full_name if is_registered_customer and customer else "Walk-in Customer",
                             customer_phone=normalized_phone,
@@ -1552,49 +1486,10 @@ def sale_create(request):
                             total_amount=final_amount,
                             created_by=request.user,
                         )
-                        sale.credit_sale_id = credit_sale.id
-                        sale.save(update_fields=['credit_sale_id'])
                     except ImportError:
                         logger.warning(f"Credit app not found for sale #{sale.sale_id}")
                     except Exception as e:
                         logger.error(f"Credit record creation failed: {str(e)}")
-                
-                # ============================================
-                # HANDLE M-PESA PAYMENT
-                # ============================================
-                mpesa_checkout_id = None
-                if payment_method == 'M-Pesa' and normalized_phone:
-                    try:
-                        from finance.kopokopo_service import stk_push_request, clean_phone_number
-                        from finance.models import MpesaTransaction
-                        
-                        # Initiate STK Push
-                        result = stk_push_request(
-                            phone_number=normalized_phone,
-                            amount=float(final_amount),
-                            account_reference=f"SALE{sale.sale_id}", 
-                            transaction_desc=f"Payment for Sale #{sale.sale_id}"
-                        )
-                        
-                        if result.get('ResponseCode') == '0':
-                            # Save M-Pesa transaction
-                            mpesa_trans = MpesaTransaction.objects.create(
-                                merchant_request_id=result['MerchantRequestID'],
-                                checkout_request_id=result['CheckoutRequestID'],
-                                amount=final_amount,
-                                phone_number=normalized_phone,
-                                account_reference=f"SALE{sale.sale_id}",
-                                transaction_desc=f"Payment for Sale #{sale.sale_id}",
-                                sale=sale,
-                                created_by=request.user,
-                                status='pending'
-                            )
-                            mpesa_checkout_id = result['CheckoutRequestID']
-                            logger.info(f"✅ M-Pesa STK Push sent for sale {sale.sale_id}")
-                        else:
-                            logger.error(f"M-Pesa STK Push failed: {result.get('ResponseDescription')}")
-                    except Exception as e:
-                        logger.error(f"Error initiating M-Pesa payment: {str(e)}")
                 
                 # Return appropriate response
                 if is_ajax:
@@ -1604,15 +1499,6 @@ def sale_create(request):
                         'message': 'Sale completed successfully!'
                     }
                     
-                    # Add M-Pesa info if applicable
-                    if mpesa_checkout_id:
-                        response_data['mpesa'] = {
-                            'checkout_request_id': mpesa_checkout_id,
-                            'message': 'STK Push sent to your phone. Please enter PIN to complete payment.'
-                        }
-                        response_data['message'] = 'Sale created! Check your phone for M-Pesa payment prompt.'
-                    
-                    # Include points info only for registered customers
                     if is_registered_customer and customer:
                         response_data['points'] = {
                             'earned': int(points_earned),
@@ -1620,40 +1506,22 @@ def sale_create(request):
                             'balance': customer.points_balance,
                             'discount': float(points_discount) if points_discount > 0 else 0
                         }
-                        response_data['message'] = f'Sale completed! Earned {int(points_earned)} points!'
                     elif normalized_phone and not is_registered_customer:
                         response_data['warning'] = f'Phone {normalized_phone} is not registered. No points awarded.'
                     
                     return JsonResponse(response_data)
                 else:
-                    if mpesa_checkout_id:
-                        messages.success(
-                            request,
-                            f'Sale #{sale.sale_id} created! STK Push sent to {normalized_phone}. Enter PIN to complete payment.'
-                        )
-                    elif is_registered_customer and points_earned > 0:
-                        messages.success(
-                            request, 
-                            f'Sale #{sale.sale_id} completed! You earned {int(points_earned)} loyalty points!'
-                        )
+                    if is_registered_customer and points_earned > 0:
+                        messages.success(request, f'Sale #{sale.sale_id} completed! You earned {int(points_earned)} loyalty points!')
                     elif points_redeemed > 0 and is_registered_customer:
-                        messages.success(
-                            request,
-                            f'Sale #{sale.sale_id} completed! Redeemed {points_redeemed} points for KSH {points_discount} discount!'
-                        )
+                        messages.success(request, f'Sale #{sale.sale_id} completed! Redeemed {points_redeemed} points for KSH {points_discount} discount!')
                     elif normalized_phone and not is_registered_customer:
-                        messages.warning(
-                            request,
-                            f'Sale completed but NO POINTS awarded. Phone {normalized_phone} is not registered.'
-                        )
-                        messages.info(
-                            request,
-                            f'<a href="/sales/customer/register/?phone={normalized_phone}" class="alert-link">Click here to register</a> and start earning points!'
-                        )
+                        messages.warning(request, f'Sale completed but NO POINTS awarded. Phone {normalized_phone} is not registered.')
+                        messages.info(request, f'<a href="/sales/customer/register/?phone={normalized_phone}" class="alert-link">Click here to register</a> and start earning points!')
                     else:
                         messages.success(request, f'Sale #{sale.sale_id} completed successfully!')
                     
-                    return redirect('sales:sale_detail', sale_id=sale.sale_id)
+                    return redirect('staff:cashier_dashboard')
                 
         except Customer.DoesNotExist:
             error_msg = f"Customer with phone {normalized_phone} not found. Please register first."
@@ -1670,20 +1538,28 @@ def sale_create(request):
             messages.error(request, f'Error processing sale: {str(e)}')
             return redirect('sales:sale_create')
     
-    # GET request - show the sale form with cart
+    # GET request - show the sale form with cart (USE THE SAME current_shop from above, DON'T overwrite)
     cart = request.session.get('sales_cart', [])
     subtotal = Decimal('0.00')
     for item in cart:
         subtotal += Decimal(str(item.get('total', 0)))
+    
+    # REMOVE this duplicate block - it's overwriting current_shop!
+    # current_shop = None
+    # try:
+    #     from shops.models import ShopBranch
+    #     current_shop = ShopBranch.objects.filter(is_active=True).first()
+    # except:
+    #     pass
     
     context = {
         'cart': cart,
         'subtotal': subtotal,
         'cart_count': len(cart),
         'now': timezone.now(),
+        'current_shop': current_shop,  # Use the one we already got at the top
     }
     return render(request, 'sales/create.html', context)
-
 
 
 
@@ -2879,15 +2755,11 @@ def customer_delete(request, pk):
 # M-PESA PAYMENT INTEGRATION
 #====================================
 
-from finance.models import MpesaTransaction
-from finance.kopokopo_service import stk_push_request 
-
 @login_required
 def initiate_mpesa_payment(request, sale_id):
-    from finance.kopokopo_service import stk_push_request, clean_phone_number 
+    from finance.kopokopo_service import stk_push_request, clean_phone_number, check_pending_transaction
     from finance.models import MpesaTransaction
     
-    # IMPORTANT: Use sale_id (the primary key) to get the sale
     sale = get_object_or_404(Sale, sale_id=sale_id)
     
     if request.method == 'POST':
@@ -2901,10 +2773,18 @@ def initiate_mpesa_payment(request, sale_id):
                     'error': 'Phone number is required'
                 })
             
-            # Clean phone number
             cleaned_phone = clean_phone_number(phone_number)
             
-            # Use sale.sale_id (NOT sale.id)
+            # ============================================
+            # CHECK FOR PENDING TRANSACTIONS FIRST
+            # ============================================
+            if check_pending_transaction(cleaned_phone):
+                return JsonResponse({
+                    'success': False,
+                    'error': 'There is already a pending M-Pesa request for this phone number. Please wait 2-3 minutes.',
+                    'error_code': '429'
+                })
+            
             account_ref = f"SALE{sale.sale_id}"
             
             logger.info(f"Initiating M-Pesa payment for sale {sale.sale_id}, amount: {sale.total_amount}")
@@ -2919,16 +2799,24 @@ def initiate_mpesa_payment(request, sale_id):
             
             logger.info(f"STK Push result: {result}")
             
+            # Check for 429 error in result
+            if result.get('ResponseCode') == '429' or result.get('error_code') == '429':
+                return JsonResponse({
+                    'success': False,
+                    'error': result.get('ResponseDescription', 'There is a pending request for this phone number'),
+                    'error_code': '429'
+                })
+            
             if result.get('ResponseCode') == '0':
-                # Save transaction record - use sale object directly
+                # Save transaction record
                 mpesa_trans = MpesaTransaction.objects.create(
-                    merchant_request_id=result['MerchantRequestID'],
+                    merchant_request_id=result.get('MerchantRequestID', ''),
                     checkout_request_id=result['CheckoutRequestID'],
                     amount=sale.total_amount,
                     phone_number=cleaned_phone,
                     account_reference=account_ref,
                     transaction_desc=f"Payment for Sale #{sale.sale_id}",
-                    sale=sale,  # Pass the entire sale object
+                    sale=sale,
                     created_by=request.user,
                     status='pending'
                 )
@@ -2940,9 +2828,10 @@ def initiate_mpesa_payment(request, sale_id):
                     'message': 'STK Push sent. Please enter PIN to complete payment.'
                 })
             else:
+                error_msg = result.get('ResponseDescription', 'Failed to initiate payment')
                 return JsonResponse({
                     'success': False,
-                    'error': result.get('ResponseDescription', 'Failed to initiate payment')
+                    'error': error_msg
                 })
                 
         except Exception as e:
