@@ -1824,6 +1824,18 @@ def get_product_details(request, product_code):
 def get_cart(request):
     """AJAX endpoint to get current cart contents"""
     cart = request.session.get('sales_cart', [])
+    
+    # Migrate old cart items to include sku_value
+    for item in cart:
+        if 'sku_value' not in item:
+            # Try to get product from database to fill missing sku_value
+            try:
+                from inventory.models import Product
+                product = Product.objects.get(product_code=item['product_code'])
+                item['sku_value'] = product.sku_value or ''
+            except:
+                item['sku_value'] = ''
+    
     subtotal = sum(item.get('total', 0) for item in cart)
     
     return JsonResponse({
@@ -1832,7 +1844,6 @@ def get_cart(request):
         'subtotal': subtotal,
         'cart_count': len(cart)
     })
-
 
 
 
@@ -1950,6 +1961,7 @@ def add_to_cart(request):
                     'product_id': product.id,
                     'product_code': product.product_code,
                     'name': product.display_name,
+                    'sku_value': product.sku_value or '',
                     'price': price,
                     'original_price': float(product.selling_price),
                     'quantity': quantity,

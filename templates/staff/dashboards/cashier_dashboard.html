@@ -9,9 +9,9 @@
   @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=DM+Sans:wght@400;500;600&display=swap');
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
-    --bg: #0f1117; --surface: #181c25; --surface2: #1e2330; --surface3: #252b3b;
-    --border: rgba(255,255,255,0.08); --border2: rgba(255,255,255,0.14);
-    --text: #e8eaf0; --text2: #8b90a0; --text3: #555b6e;
+    --bg: #0f1117; --surface: #000000; --surface2: #1e2330; --surface3: #252b3b;
+    --border: rgb(255, 255, 255); --border2: rgb(255, 255, 255);
+    --text: #ffffff; --text2: #ffffff; --text3: #ffffff;
     --accent: #3b82f6; --accent2: #60a5fa;
     --green: #22c55e; --green2: #16a34a;
     --amber: #f59e0b; --red: #ef4444; --purple: #a855f7;
@@ -20,9 +20,9 @@
   }
   body { font-family: var(--sans); background: var(--bg); color: var(--text); min-height: 100vh; display: grid; grid-template-columns: 1fr 420px; grid-template-rows: auto 1fr; }
   .topbar { grid-column: 1/-1; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 24px; height: 100px; }
-  .topbar-brand { font-family: var(--mono); font-size: 40px; font-weight: 1000; letter-spacing: 1px; }
+  .topbar-brand { font-family: var(--mono); font-size: 50px; font-weight: 1000; letter-spacing: 1px; background: #ffffff; border-radius: 10px; border-color: rgb(255, 0, 0);}
   .topbar-brand span { color: var(--accent); }
-  .topbar-right { display: flex; align-items: center; gap: 16px; font-size: 13px; color: var(--text2); }
+  .topbar-right { display: flex; align-items: center; gap: 16px; font-size: 40px; color: var(--text2); }
   .topbar-right a { color: var(--text2); text-decoration: none; transition: color 0.15s; }
   .topbar-right a:hover { color: var(--accent2); }
   .left { background: var(--bg); padding: 20px; overflow-y: auto; }
@@ -153,20 +153,41 @@
   .shop-info { text-align: center; background: var(--surface2); padding: 4px 12px; border-radius: 20px; border: 1px solid var(--border); display: flex; align-items: center; gap: 6px; }
   .shop-name { font-weight: 1000;  font-size: 40px; color: var(--accent2); }
   .shop-code { font-size: 10px; font-family: var(--mono); color: var(--text3); margin-left: 8px; }
-
-
+  .logo-wrapper { display: flex; align-items: center; gap: 12px; }
+  .user-dropdown {  position: relative;  display: inline-block; }
+  .user-name {  cursor: pointer;  display: flex;  align-items: center; background: #ffffff; gap: 6px;  padding: 8px 12px;  border-radius: var(--r2);  transition: background 0.15s; font-size: 40px; color: #000000; }
+  .user-name:hover {  background: #ffffff; color: #0400ff; }
+  .dropdown-arrow {  font-size: 20px;  color: #000000;  transition: transform 0.2s; }
+  .user-dropdown.open .dropdown-arrow { transform: rotate(180deg); }
+  .dropdown-menu {  position: absolute;  top: 100%;  right: 0;  margin-top: 8px;  background: var(--surface2);  border: 1px solid var(--border);  border-radius: var(--r);  min-width: 120px;  z-index: 1000;  box-shadow: 0 8px 24px rgba(0,0,0,0.3);  overflow: hidden; }
+  .dropdown-item {display: flex; align-items: center; gap: 10px; padding: 10px_16px; text-decoration: none; color: var(--text); transition: background_0.15s; font-size:_13px; }
+  .dropdown-item:hover { background: var(--surface3); }
+  .dropdown-item.logout { color: var(--red); font-size: 20; background: #ffffff;}    
+  .dropdown-item.logout:hover { background: rgb(255, 255, 255); }
+  .home-icon {  text-decoration: none; font-size: 50px;  color: var(--text2);  transition: color 0.15s;  margin-left: 8px; background-color: #ffffff; }
+  .home-icon:hover { color: var(--accent2); }
+  .grand-total-card {  background: #ffffff;  border-radius: var(--r);  padding: 20px;  margin-bottom: 20px;  text-align: center;  border: 1px solid #0400ff; }
+  .grand-total-card .label {  font-size: 20px;  font-family: var(--mono);  letter-spacing: 0.1em;  text-transform: uppercase;  color: var(--text3);  margin-bottom: 8px; }
+  .grand-total-card .amount {  font-size: 60px;  font-weight: 800;  font-family: var(--mono);  color: var(--green);  line-height: 1.2; }
+  .grand-total-card .amount small {  font-size: 20px;  font-weight: 500;  color: var(--text2);  display: block;  margin-top: 4px; }
 </style>
 </head>
 <body>
 
 <header class="topbar">
-  <div class="topbar-brand">FIELDMAX<span>•</span>POS</div>
+  <div class="logo-wrapper">
+    <img src="{% static 'images/LOGO.jpg' %}" alt="FieldMax Logo" height="60" class="me-2" style="max-height: 60px; width: auto;">
+  </div>
+
+  <div class="topbar-brand">
+    <span id="clock"></span>
+  </div>
 
   <!-- Shop Name in Center -->
   <div class="topbar-center">
     {% if current_shop %}
       <div class="shop-info">
-        <span class="shop-name">{{ current_shop.name }}</span>
+        <span class="shop-name">{{ current_shop.name }} SHOP</span>
       </div>
     {% else %}
       <div class="shop-info">
@@ -176,15 +197,26 @@
   </div>
 
   <div class="topbar-right">
-    <a href="{% url 'website:home' %}">Website</a>
-    <a href="#">Search sales</a>
-    <span>Cashier: <strong>{{ request.user.get_full_name|default:request.user.username }}</strong></span>
-    <span id="clock" class="font-mono text-sm"></span>
+    <div class="user-dropdown">
+      <span class="user-name" onclick="toggleUserDropdown()">
+        <strong>{{ request.user.first_name|default:request.user.username }}</strong>
+        <span class="dropdown-arrow">▼</span>
+      </span>
+      <div class="dropdown-menu" id="userDropdown" style="display: none;">
+        <a href="{% url 'staff:logout' %}" class="dropdown-item logout">
+          <span></span> Logout
+        </a>
+      </div>
+    </div>
+    <a href="{% url 'website:home' %}" class="home-icon">🌐</a>
   </div>
 </header>
 
 <main class="left">
   <div class="sec-hdr">Add Items to Cart</div>
+  <div class="grand-total-card" id="grand-total-card">
+    <div class="amount" id="grand-total-amount">0</div>
+  </div>
   <div class="auto-toggle">
     <label class="toggle-wrap"><input type="checkbox" id="auto-add-toggle" checked><span class="slider-pill"></span></label>
     <span>Auto-add on Enter</span>
@@ -200,7 +232,7 @@
 
   <div class="sec-hdr">Cart</div>
   <table class="cart-table">
-    <thead><tr><th>#</th><th>Product</th><th>Price</th><th>Qty</th><th>Total</th><th></th></tr></thead>
+    <thead><tr><th>#</th><th>Product</th><th>Imei/Serial Number</th><th>Price</th><th>Qty</th><th>Total</th><th>Action</th></tr></thead>
     <tbody id="cart-body"><tr><td colspan="6" class="cart-empty">Cart is empty — add products above</td></tr>
     </tbody>
   </table>
@@ -241,7 +273,7 @@
     <div class="pay-tabs">
       <div class="pay-tab active" data-method="Cash" onclick="selectMethod('Cash')"><span class="pay-icon">💵</span>Cash</div>
       <div class="pay-tab" data-method="M-Pesa" onclick="selectMethod('M-Pesa')"><span class="pay-icon">📱</span>M-Pesa</div>
-      <div class="pay-tab" data-method="Points" onclick="selectMethod('Points')"><span class="pay-icon">⭐</span>Loyalty</div>
+      <div class="pay-tab" data-method="RedeemPoints" onclick="selectMethod('RedeemPoints')"><span class="pay-icon">⭐</span>Redeem Points</div>
       <div class="pay-tab" data-method="Bank" onclick="selectMethod('Bank')"><span class="pay-icon">🏦</span>Bank</div>
     </div>
 
@@ -314,28 +346,43 @@
       </div>
     </div>
 
-    <!-- LOYALTY PANEL -->
+    <!-- LOYALTY PANEL - AWARD POINTS ON CUSTOMER IDENTIFICATION -->
     <div class="pay-panel" id="panel-Points">
-      <div class="step-label">Loyalty Points (Optional)</div>
+      <div class="step-label">⭐ Loyalty Points (Earn on Purchase)</div>
       <div class="input-group">
         <label class="input-label">Customer phone number</label>
         <div class="input-row">
-          <input type="tel" id="points-phone" placeholder="07XX XXX XXX (or Enter to skip)" onkeydown="handlePointsEnter(event)">
-          <button class="btn btn-ghost" onclick="lookupPointsCustomer()">Lookup</button>
+          <input type="tel" id="points-phone" placeholder="07XX XXX XXX" onkeydown="handlePointsEnter(event)">
+          <button class="btn btn-ghost" onclick="lookupAndAwardPoints()">Lookup & Award</button>
         </div>
       </div>
       <div id="points-info" style="display:none;" class="loyalty-card"></div>
-      <div id="points-redeem-section" style="display:none;">
+      <div class="skip-text">💡 Enter phone number → Auto-calculate points → Press Enter again to complete sale</div>
+    </div>
+
+    <!-- POINTS PAYMENT PANEL (REDEEM POINTS) -->
+    <div class="pay-panel" id="panel-RedeemPoints">
+      <div class="step-label">⭐ Redeem Points</div>
+      <div class="input-group">
+        <label class="input-label">Customer phone number</label>
+        <div class="input-row">
+          <input type="tel" id="redeem-phone" placeholder="07XX XXX XXX" onkeydown="handleRedeemEnter(event)">
+          <button class="btn btn-ghost" onclick="lookupRedeemCustomer()">Lookup</button>
+        </div>
+      </div>
+      <div id="redeem-info" style="display:none;" class="loyalty-card"></div>
+      <div id="redeem-section" style="display:none;">
         <div class="input-group">
           <label class="input-label">Points to redeem (1 pt = KSH 1)</label>
           <div class="input-row">
-            <input type="number" id="points-redeem-input" placeholder="0" min="1" step="1" onkeydown="handlePointsRedeemEnter(event)">
-            <button class="btn btn-primary" onclick="redeemPoints()">Redeem Points</button>
+            <input type="number" id="redeem-points-input" placeholder="0" min="1" step="1" onkeydown="handleRedeemPointsEnter(event)">
+            <button class="btn btn-primary" onclick="submitRedeemPoints()">Redeem Points</button>
           </div>
         </div>
       </div>
-      <div class="skip-text">💡 Press Enter on empty field to skip loyalty and complete sale</div>
     </div>
+  
+
 
     <!-- BANK PANEL -->
     <div class="pay-panel" id="panel-Bank">
@@ -377,6 +424,7 @@
 <iframe id="print-frame" class="hidden-iframe"></iframe>
 
 <script>
+// ========== INITIALIZE VARIABLES ==========
 const CSRF = '{{ csrf_token }}';
 let cart = [];
 let currentMethod = 'Cash';
@@ -387,8 +435,6 @@ let mpesaCheckoutId = null;
 let mpesaPollInterval = null;
 let currentSaleId = null;
 let pendingMpesaAmount = 0;
-
-// ========== SPLIT PAYMENT STATE ==========
 let amountPaidCash = 0;
 let amountPaidMpesa = 0;
 let amountPaidPoints = 0;
@@ -396,9 +442,13 @@ let amountPaidBank = 0;
 let paymentCompleted = false;
 let loyaltyCompleted = false;
 
+// ========== GET TOTAL PAID ==========
 function getTotalPaid() { return amountPaidCash + amountPaidMpesa + amountPaidPoints + amountPaidBank; }
+
+// ========== GET REMAINING BALANCE ==========
 function getRemainingBalance() { return Math.max(0, cartTotalAfterDiscount() - getTotalPaid()); }
 
+// ========== UPDATE STAGE INDICATOR ==========
 function updateStageIndicator() {
   const hasItems = cart.length > 0;
   const totalPaid = getTotalPaid();
@@ -417,6 +467,46 @@ function updateStageIndicator() {
   else if (hasItems) { s1.classList.add('active'); s1.classList.remove('completed'); s2.classList.remove('active','completed'); s3.classList.remove('active','completed'); s4.classList.remove('active','completed'); }
 }
 
+// ========== TOGGLE USER DROPDOWN ==========
+function toggleUserDropdown() {
+  const dropdown = document.getElementById('userDropdown');
+  const parent = document.querySelector('.user-dropdown');
+  
+  if (dropdown.style.display === 'none' || dropdown.style.display === '') {
+    dropdown.style.display = 'block';
+    parent.classList.add('open');
+  } else {
+    dropdown.style.display = 'none';
+    parent.classList.remove('open');
+  }
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function(e) {
+  const dropdown = document.getElementById('userDropdown');
+  const userName = document.querySelector('.user-name');
+  
+  if (dropdown && userName && !userName.contains(e.target) && !dropdown.contains(e.target)) {
+    dropdown.style.display = 'none';
+    const parent = document.querySelector('.user-dropdown');
+    if (parent) parent.classList.remove('open');
+  }
+});
+
+// Close dropdown on Escape key
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    const dropdown = document.getElementById('userDropdown');
+    if (dropdown && dropdown.style.display === 'block') {
+      dropdown.style.display = 'none';
+      const parent = document.querySelector('.user-dropdown');
+      if (parent) parent.classList.remove('open');
+    }
+  }
+});
+
+
+// ========== UPDATE PAYMENT SUMMARY ==========
 function updatePaymentSummary() {
   const totalPaid = getTotalPaid();
   const remaining = getRemainingBalance();
@@ -438,6 +528,7 @@ function updatePaymentSummary() {
   checkSubmitReady();
 }
 
+// ========== CHECK SUBMIT READY ==========
 function checkSubmitReady() {
   const btn = document.getElementById('submit-btn');
   const hint = document.getElementById('submit-hint');
@@ -451,6 +542,7 @@ function checkSubmitReady() {
   else { btn.disabled = false; hint.textContent = 'Ready! Press Enter to complete sale and print receipt'; btn.innerHTML = `✓ Complete Sale - Total: ${ksh(totalDue)}`; }
 }
 
+// ========== SHOW TOAST MESSAGE ==========
 function toast(msg, type='info', ms=3500) {
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -459,8 +551,10 @@ function toast(msg, type='info', ms=3500) {
   t._t = setTimeout(() => t.classList.remove('show'), ms);
 }
 
+// ========== KSH FORMAT ==========
 function ksh(n) { return 'KSH ' + Number(n).toLocaleString('en-KE', {minimumFractionDigits:2, maximumFractionDigits:2}); }
 
+// ========== NORMALIZE PHONE NUMBER ==========
 function normalizePhone(p) {
   let cleaned = (p || '').replace(/\D/g, '');
   if (cleaned.startsWith('0') && cleaned.length === 10) return '254' + cleaned.substring(1);
@@ -469,9 +563,13 @@ function normalizePhone(p) {
   return cleaned;
 }
 
+// ========== CALCULATE CART TOTAL ==========
 function cartTotal() { return cart.reduce((s, i) => s + i.total, 0); }
+
+// ========== CALCULATE TOTAL AFTER DISCOUNT ==========
 function cartTotalAfterDiscount() { return Math.max(0, cartTotal() - pointsRedeemed); }
 
+// ========== UPDATE TOTALS ==========
 function updateTotals() {
   document.getElementById('subtotal-disp').textContent = ksh(cartTotal());
   document.getElementById('total-disp').textContent = ksh(cartTotalAfterDiscount());
@@ -481,35 +579,71 @@ function updateTotals() {
   updatePaymentSummary();
 }
 
+
+// ========== UPDATE GRAND TOTAL CARD ==========
+function updateGrandTotalCard() {
+  const total = cartTotalAfterDiscount();
+  const totalElement = document.getElementById('grand-total-amount');
+  if (totalElement) {
+    totalElement.innerHTML = Math.round(total).toLocaleString('en-KE');
+  }
+}
+
+
+// ========== SILENT PRINT ==========
 function silentPrint(saleId) {
   const iframe = document.getElementById('print-frame');
   iframe.src = `/sales/${saleId}/receipt/`;
   iframe.onload = function() { setTimeout(() => { try { iframe.contentWindow.print(); } catch(e) {} }, 500); };
 }
 
-// ========== CART MANAGEMENT ==========
+// ========== RENDER CART ==========
 function renderCart() {
   const tb = document.getElementById('cart-body');
   if (!cart.length) {
-    tb.innerHTML = '<tr><td colspan="6" class="cart-empty">Cart is empty — add products above</td></tr>';
+    tb.innerHTML = '<tr><td colspan="7" class="cart-empty">Cart is empty — add products above</td></tr>';
     document.getElementById('clear-cart-btn').style.display = 'none';
     updateTotals();
+    updateGrandTotalCard();
     return;
   }
   document.getElementById('clear-cart-btn').style.display = 'inline-flex';
-  tb.innerHTML = cart.map((item, i) => `
+  tb.innerHTML = cart.map((item, i) => {
+    const skuValue = item.sku_value || item.sku || '';
+    const displaySku = skuValue ? skuValue : '-';
+    
+    return `
     <tr>
       <td class="font-mono text-xs text-muted">${i+1}</td>
-      <td><div style="font-weight:500;">${item.name}</div><div class="text-xs text-muted font-mono">${item.code}</div></td>
+      <td><div style="font-weight:500;">${item.name || ''}</div><div class="text-xs text-muted font-mono">${item.product_code || item.code || ''}</div></td>
+      <td class="font-mono">${displaySku}</td>
       <td class="font-mono">${ksh(item.price)}</td>
       <td><div class="qty-ctrl"><button class="qty-btn" onclick="changeQty(${i},-1)">−</button><span class="qty-num">${item.quantity}</span><button class="qty-btn" onclick="changeQty(${i},1)">+</button></div></td>
       <td class="font-mono">${ksh(item.total)}</td>
       <td><button class="btn btn-danger btn-sm" onclick="removeItem(${i})">✕</button></td>
     </tr>
-  `).join('');
+    `;
+  }).join('');
   updateTotals();
+  updateGrandTotalCard();
 }
 
+//========= UPDATE TOTALS ==========
+function updateTotals() {
+  document.getElementById('subtotal-disp').textContent = ksh(cartTotal());
+  document.getElementById('total-disp').textContent = ksh(cartTotalAfterDiscount());
+  const dr = document.getElementById('discount-row');
+  if (pointsRedeemed > 0) { 
+    dr.style.display = 'flex'; 
+    document.getElementById('discount-disp').textContent = '— ' + ksh(pointsRedeemed); 
+  } else { 
+    dr.style.display = 'none'; 
+  }
+  updatePaymentSummary();
+  updateGrandTotalCard();
+}
+
+// ========== ADD TO CART ==========
 async function addToCart() {
   const code = document.getElementById('product-input').value.trim();
   const cp = document.getElementById('custom-price-input').value.trim();
@@ -529,11 +663,21 @@ async function addToCart() {
       document.getElementById('product-input').value = '';
       document.getElementById('custom-price-input').value = '';
       toast(data.message, 'success');
+      // Focus back to product input for next item
       document.getElementById('product-input').focus();
-    } else { toast(data.error, 'error'); }
-  } catch (error) { toast('Network error', 'error'); }
+    } else { 
+      toast(data.error, 'error'); 
+      // Focus back to product input on error too
+      document.getElementById('product-input').focus();
+    }
+  } catch (error) { 
+    console.error('Add to cart error:', error);
+    toast('Network error: ' + error.message, 'error'); 
+    document.getElementById('product-input').focus();
+  }
 }
 
+// ========== CHANGE QUANTITY ==========
 async function changeQty(idx, delta) {
   const item = cart[idx];
   const newQty = item.quantity + delta;
@@ -549,6 +693,7 @@ async function changeQty(idx, delta) {
   } catch (error) { toast('Error updating quantity', 'error'); }
 }
 
+// ========== REMOVE ITEM ==========
 async function removeItem(idx) {
   const item = cart[idx];
   try {
@@ -562,6 +707,7 @@ async function removeItem(idx) {
   } catch (error) { toast('Error removing item', 'error'); }
 }
 
+// ========== CLEAR CART ==========
 async function clearCart() {
   if (!confirm('Clear entire cart?')) return;
   try {
@@ -580,7 +726,7 @@ async function clearCart() {
   } catch (error) { toast('Error clearing cart', 'error'); }
 }
 
-// ========== PRODUCT SEARCH ==========
+// ========== PRODUCT INPUT ==========
 let searchTimeout;
 document.getElementById('product-input').addEventListener('input', function() {
   clearTimeout(searchTimeout);
@@ -589,6 +735,15 @@ document.getElementById('product-input').addEventListener('input', function() {
   searchTimeout = setTimeout(() => searchProducts(query), 300);
 });
 
+// ========== CUSTOM PRICE ENTER KEY ==========
+document.getElementById('custom-price-input').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    addToCart();
+  }
+});
+
+// ========== SEARCH PRODUCTS ==========
 async function searchProducts(query) {
   try {
     const response = await fetch(`{% url "sales:search_products" %}?q=${encodeURIComponent(query)}`);
@@ -597,6 +752,8 @@ async function searchProducts(query) {
   } catch (error) { hideSuggestions(); }
 }
 
+
+// ========== SHOW SUGGESTIONS ==========
 function showSuggestions(products) {
   const box = document.getElementById('suggestions');
   if (!products.length) { hideSuggestions(); return; }
@@ -604,10 +761,13 @@ function showSuggestions(products) {
   box.style.display = 'block';
 }
 
+// ========== HIDE SUGGESTIONS ==========
 function hideSuggestions() { document.getElementById('suggestions').style.display = 'none'; }
+
+// ========== SELECT PRODUCT ==========
 function selectProduct(code) { document.getElementById('product-input').value = code; hideSuggestions(); addToCart(); }
 
-// ========== PAYMENT METHODS ==========
+// ========== SELECT PAYMENT METHODS ==========
 function selectMethod(method) {
   currentMethod = method;
   document.querySelectorAll('.pay-tab').forEach(t => t.classList.toggle('active', t.dataset.method === method));
@@ -618,7 +778,7 @@ function selectMethod(method) {
   else if (method === 'Points') document.getElementById('points-phone').focus();
 }
 
-// ========== CASH PAYMENT ==========
+// ========== CALCULATE CHANGE ==========
 function calcChange() {
   const received = parseFloat(document.getElementById('cash-received').value) || 0;
   const remaining = getRemainingBalance();
@@ -628,8 +788,10 @@ function calcChange() {
   else { el.className = 'val'; el.textContent = ksh(0); }
 }
 
+// ========== HANDLE CASH ENTER ==========
 function handleCashEnter(e) { if (e.key === 'Enter') { e.preventDefault(); submitCashPayment(); } }
 
+// ========== SUBMIT CASH PAYMENT ==========
 function submitCashPayment() {
   const received = parseFloat(document.getElementById('cash-received').value) || 0;
   if (!cart.length) { toast('Cart is empty', 'error'); return; }
@@ -665,6 +827,7 @@ function submitCashPayment() {
 // ========== M-PESA (CORRECT FLOW) ==========
 function handleMpesaEnter(e) { if (e.key === 'Enter') { e.preventDefault(); pushSTK(); } }
 
+// ========== PUSH STK ==========
 async function pushSTK() {
   const phone = document.getElementById('mpesa-phone').value.trim();
   let amount = parseFloat(document.getElementById('mpesa-amount').value);
@@ -745,6 +908,7 @@ async function pushSTK() {
   }
 }
 
+// ========== START MPESA POLLING ==========
 function startMpesaPolling() {
   let attempts = 0;
   const maxAttempts = 20;
@@ -789,6 +953,7 @@ function startMpesaPolling() {
   }, 3000);
 }
 
+// ========== CONTINUE TO LOYALTY ==========
 function continueToLoyalty() {
   document.getElementById('mpesa-step-3').style.display = 'none';
   selectMethod('Points');
@@ -796,6 +961,7 @@ function continueToLoyalty() {
   toast('Payment confirmed! Now add customer for loyalty points (optional).', 'info');
 }
 
+// ========== CHECK MPESA STATUS ==========
 async function checkMpesaStatus() {
   if (!mpesaCheckoutId) { toast('No active payment', 'error'); return; }
   const btn = document.getElementById('check-mpesa-btn');
@@ -817,6 +983,7 @@ async function checkMpesaStatus() {
   if (btn) { btn.disabled = false; btn.innerHTML = 'Check Status'; }
 }
 
+// ========== SHOW MPESA FAILED ==========
 function showMpesaFailed(message) {
   clearInterval(mpesaPollInterval);
   document.getElementById('mpesa-step-2').style.display = 'none';
@@ -824,6 +991,8 @@ function showMpesaFailed(message) {
   document.getElementById('mpesa-fail-msg').textContent = message;
 }
 
+
+// ========== RESET MPESA ==========
 function resetMpesa() {
   clearInterval(mpesaPollInterval);
   mpesaCheckoutId = null;
@@ -843,6 +1012,7 @@ function resetMpesa() {
 // ========== BANK PAYMENT ==========
 const BANK_ACCOUNTS = { KCB: '1234567890', Equity: '0987654321', 'Co-op': '1122334455', NCBA: '5544332211' };
 
+// ========== SELECT BANK ==========
 function selectBank(element, bankName) {
   document.querySelectorAll('.bank-card').forEach(c => c.classList.remove('selected'));
   element.classList.add('selected');
@@ -852,6 +1022,7 @@ function selectBank(element, bankName) {
   document.getElementById('bank-pay-btn').focus();
 }
 
+// ========== CONFIRM BANK PAYMENT ==========
 function confirmBankPayment() {
   const remaining = getRemainingBalance();
   if (remaining <= 0) { toast('No remaining balance to pay', 'error'); return; }
@@ -868,6 +1039,7 @@ function confirmBankPayment() {
   checkSubmitReady();
 }
 
+// ========== LOOKUP CUSTOMER ==========
 async function lookupCustomer(panel) {
   const phoneInput = document.getElementById(`${panel}-phone`);
   if (!phoneInput) return;
@@ -887,50 +1059,142 @@ async function lookupCustomer(panel) {
   } catch (error) { toast('Error looking up customer', 'error'); }
 }
 
-// ========== LOYALTY POINTS ==========
+// ========== HANDLE POINTS ENTER ==========
 function handlePointsEnter(e) {
   if (e.key === 'Enter') {
     e.preventDefault();
     const phone = document.getElementById('points-phone').value.trim();
     if (!phone) {
+      // Skip loyalty - just mark as completed
       loyaltyCompleted = true;
       updateStageIndicator();
       updatePaymentSummary();
-      toast('Loyalty skipped. Ready to complete sale.', 'info');
+      toast('Loyalty skipped. Press Enter to complete sale.', 'info');
       document.getElementById('submit-btn').focus();
       checkSubmitReady();
-    } else { lookupPointsCustomer(); }
+    } else {
+      lookupAndAwardPoints();
+    }
   }
 }
 
-function handlePointsRedeemEnter(e) { if (e.key === 'Enter') { e.preventDefault(); redeemPoints(); } }
-
-async function lookupPointsCustomer() {
+//========= LOOKUP AND AWARD POINTS ==========
+async function lookupAndAwardPoints() {
   const phone = document.getElementById('points-phone').value.trim();
-  if (!phone) { toast('Enter phone number or press Enter to skip', 'info'); return; }
+  if (!phone) { 
+    toast('Enter phone number', 'info'); 
+    return; 
+  }
+  
   try {
     const response = await fetch(`{% url "sales:customer_search" %}?phone=${encodeURIComponent(phone)}`);
     const data = await response.json();
+    
     if (data.customers && data.customers.length) {
       const customer = data.customers[0];
       selectedCustomerId = customer.id;
       selectedCustomer = customer;
+      
+      // Calculate points to award (e.g., 1 point per 100 KSH)
+      const totalAmount = cartTotalAfterDiscount();
+      const pointsToAward = Math.floor(totalAmount / 100); // 1 point per 100 KSH
+      
+      // Store points to be awarded when sale is completed
+      window.pointsToAward = pointsToAward;
+      
       const infoDiv = document.getElementById('points-info');
       infoDiv.style.display = 'block';
-      infoDiv.innerHTML = `<div class="loyalty-header"><div><div class="loyalty-name">${customer.name}</div><div class="text-xs text-muted">${customer.phone}</div></div><span class="loyalty-badge badge-${customer.tier_class}">${customer.tier}</span></div><div class="loyalty-pts">${customer.points.toLocaleString()}</div><div class="loyalty-pts-lbl">points available (1 pt = KSH 1)</div>`;
-      document.getElementById('points-redeem-section').style.display = 'block';
-      const maxPoints = Math.min(customer.points, cartTotalAfterDiscount());
-      document.getElementById('points-redeem-input').max = maxPoints;
-      document.getElementById('points-redeem-input').focus();
-      toast(`${customer.name} · ${customer.points} points available`, 'success');
+      infoDiv.innerHTML = `
+        <div class="loyalty-header">
+          <div>
+            <div class="loyalty-name">${customer.name}</div>
+            <div class="text-xs text-muted">${customer.phone}</div>
+          </div>
+          <span class="loyalty-badge badge-${customer.tier_class}">${customer.tier || 'Bronze'}</span>
+        </div>
+        <div class="loyalty-pts">${customer.points.toLocaleString()}</div>
+        <div class="loyalty-pts-lbl">current points</div>
+        <div class="text-green mt-2" style="font-size: 14px; font-weight: bold;">
+          🎉 Will earn ${pointsToAward} points on this purchase!
+        </div>
+        <div class="text-xs text-muted mt-2">Press Enter to complete sale and award points</div>
+      `;
+      
+      // Mark loyalty as completed (customer identified)
+      loyaltyCompleted = true;
+      updateStageIndicator();
+      updatePaymentSummary();
+      
+      toast(`${customer.name} identified! Will earn ${pointsToAward} points on this purchase. Press Enter to complete sale.`, 'success');
+      
+      // Focus on complete sale button
+      document.getElementById('submit-btn').focus();
+      checkSubmitReady();
+      
     } else {
       toast('Customer not registered. Press Enter to skip loyalty.', 'warning');
       document.getElementById('points-phone').value = '';
       document.getElementById('points-phone').focus();
     }
-  } catch (error) { toast('Error looking up customer', 'error'); }
+  } catch (error) { 
+    toast('Error looking up customer', 'error'); 
+  }
 }
 
+// ========== LOOKUP POINTS CUSTOMER ==========
+async function lookupPointsCustomer() {
+  const phone = document.getElementById('points-phone').value.trim();
+  if (!phone) { 
+    toast('Enter phone number or press Enter to skip', 'info'); 
+    return; 
+  }
+  
+  try {
+    const response = await fetch(`{% url "sales:customer_search" %}?phone=${encodeURIComponent(phone)}`);
+    const data = await response.json();
+    
+    if (data.customers && data.customers.length) {
+      const customer = data.customers[0];
+      selectedCustomerId = customer.id;
+      selectedCustomer = customer;
+      
+      const infoDiv = document.getElementById('points-info');
+      infoDiv.style.display = 'block';
+      infoDiv.innerHTML = `
+        <div class="loyalty-header">
+          <div>
+            <div class="loyalty-name">${customer.name}</div>
+            <div class="text-xs text-muted">${customer.phone}</div>
+          </div>
+          <span class="loyalty-badge badge-${customer.tier_class}">${customer.tier || 'Bronze'}</span>
+        </div>
+        <div class="loyalty-pts">${customer.points.toLocaleString()}</div>
+        <div class="loyalty-pts-lbl">points available (1 pt = KSH 1)</div>
+        <div class="text-xs text-muted mt-2">✓ Customer identified. Points will be earned after sale completion.</div>
+      `;
+      
+      // Mark loyalty as completed (customer identified)
+      loyaltyCompleted = true;
+      updateStageIndicator();
+      updatePaymentSummary();
+      
+      toast(`${customer.name} identified! They will earn points on this purchase.`, 'success');
+      
+      // Focus on complete sale button
+      document.getElementById('submit-btn').focus();
+      checkSubmitReady();
+      
+    } else {
+      toast('Customer not registered. Press Enter to skip loyalty.', 'warning');
+      document.getElementById('points-phone').value = '';
+      document.getElementById('points-phone').focus();
+    }
+  } catch (error) { 
+    toast('Error looking up customer', 'error'); 
+  }
+}
+
+// ========== REDEEM POINTS ==========
 function redeemPoints() {
   const pts = parseInt(document.getElementById('points-redeem-input').value) || 0;
   if (!selectedCustomer) { toast('Please lookup customer first', 'error'); document.getElementById('points-phone').focus(); return; }
@@ -949,6 +1213,7 @@ function redeemPoints() {
   document.getElementById('submit-btn').focus();
 }
 
+// ========== RENDER LOYALTY CARD ==========
 function renderLoyaltyCard(customer) {
   const tierClass = { bronze: 'badge-bronze', silver: 'badge-silver', gold: 'badge-gold', platinum: 'badge-platinum' }[customer.tier_class] || 'badge-bronze';
   return `<div class="loyalty-card"><div class="loyalty-header"><div><div class="loyalty-name">${customer.name}</div><div class="text-xs text-muted font-mono">${customer.phone}</div></div><span class="loyalty-badge ${tierClass}">${customer.tier || 'Bronze'}</span></div><div class="divider"></div><div class="flex items-center justify-between"><div><div class="loyalty-pts">${customer.points.toLocaleString()}</div><div class="loyalty-pts-lbl">points = KSH ${customer.points.toLocaleString()}</div></div><div><div class="text-sm font-mono text-muted">${ksh(customer.total_spent || 0)}</div><div class="text-xs text-muted">spent total</div></div></div></div>`;
@@ -956,10 +1221,9 @@ function renderLoyaltyCard(customer) {
 
 
 
-// ========== FINALIZE SALE ==========
+// ========== FINALIZE SALE WITH POINTS AWARD ==========
 async function finalizeSale() {
   if (!cart.length) { 
-    // If cart is empty but we have a sale ID, it means sale was already created
     if (currentSaleId) {
       toast('Sale already processed! Redirecting...', 'info');
       setTimeout(() => { window.location.href = '/staff/cashier-dashboard/'; }, 1500);
@@ -993,6 +1257,9 @@ async function finalizeSale() {
   try {
     let response;
     
+    // Include points to award if customer was identified
+    const pointsToAward = window.pointsToAward || 0;
+    
     // If we have an existing sale ID (from M-Pesa), update it instead of creating new
     if (currentSaleId) {
       response = await fetch(`/sales/sale/${currentSaleId}/update-payment/`, {
@@ -1005,6 +1272,7 @@ async function finalizeSale() {
           mpesa_amount: amountPaidMpesa,
           bank_amount: amountPaidBank,
           points_redeemed: pointsRedeemed,
+          points_to_award: pointsToAward,  // Add points to award
           verified_customer_id: selectedCustomerId || null,
           buyer_phone: selectedCustomer?.phone || ''
         })
@@ -1018,7 +1286,8 @@ async function finalizeSale() {
           payment_method: 'Split', 
           amount_paid: totalPaid, 
           buyer_phone: selectedCustomer?.phone || '', 
-          points_redeemed: pointsRedeemed, 
+          points_redeemed: pointsRedeemed,
+          points_to_award: pointsToAward,  // Add points to award
           verified_customer_id: selectedCustomerId || '', 
           is_credit: false, 
           cash_amount: amountPaidCash, 
@@ -1032,7 +1301,13 @@ async function finalizeSale() {
     
     if (data.success) {
       const saleId = data.sale_id || currentSaleId;
-      toast('Sale completed! Printing receipt...', 'success');
+      const awardedPoints = data.points_awarded || pointsToAward;
+      
+      if (awardedPoints > 0) {
+        toast(`Sale completed! ${awardedPoints} loyalty points awarded!`, 'success');
+      } else {
+        toast('Sale completed! Printing receipt...', 'success');
+      }
       
       // Clear cart from session
       await fetch('{% url "sales:clear_cart" %}', {
@@ -1043,6 +1318,9 @@ async function finalizeSale() {
       // Clear local cart
       cart = [];
       renderCart();
+      
+      // Reset points award
+      window.pointsToAward = 0;
       
       // Silent print
       if (saleId) {
