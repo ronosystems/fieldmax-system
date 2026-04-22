@@ -86,6 +86,7 @@ urlpatterns = [
     # ============================================
     # M-PESA PAYMENTS
     # ============================================
+    path('mpesa/stk-push/', views.stk_push_only, name='stk_push_only'),
     path('mpesa-callback/', views.mpesa_callback, name='mpesa_callback'),
     path('mpesa-status/<str:checkout_request_id>/', views.mpesa_status_check, name='mpesa_status_check'),
     path('webhook/kopokopo/', kopokopo_webhook, name='kopokopo_webhook'),

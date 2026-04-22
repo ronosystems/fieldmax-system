@@ -154,17 +154,7 @@
   .shop-name { font-weight: 1000;  font-size: 40px; color: var(--accent2); }
   .shop-code { font-size: 10px; font-family: var(--mono); color: var(--text3); margin-left: 8px; }
   .logo-wrapper { display: flex; align-items: center; gap: 12px; }
-  .user-dropdown {  position: relative;  display: inline-block; }
-  .user-name {  cursor: pointer;  display: flex;  align-items: center; background: #ffffff; gap: 6px;  padding: 8px 12px;  border-radius: var(--r2);  transition: background 0.15s; font-size: 40px; color: #000000; }
-  .user-name:hover {  background: #ffffff; color: #0400ff; }
-  .dropdown-arrow {  font-size: 20px;  color: #000000;  transition: transform 0.2s; }
-  .user-dropdown.open .dropdown-arrow { transform: rotate(180deg); }
-  .dropdown-menu {  position: absolute;  top: 100%;  right: 0;  margin-top: 8px;  background: var(--surface2);  border: 1px solid var(--border);  border-radius: var(--r);  min-width: 120px;  z-index: 1000;  box-shadow: 0 8px 24px rgba(0,0,0,0.3);  overflow: hidden; }
-  .dropdown-item {display: flex; align-items: center; gap: 10px; padding: 10px_16px; text-decoration: none; color: var(--text); transition: background_0.15s; font-size:_13px; }
-  .dropdown-item:hover { background: var(--surface3); }
-  .dropdown-item.logout { color: var(--red); font-size: 20; background: #ffffff;}    
-  .dropdown-item.logout:hover { background: rgb(255, 255, 255); }
-  .home-icon {  text-decoration: none; font-size: 50px;  color: var(--text2);  transition: color 0.15s;  margin-left: 8px; background-color: #ffffff; }
+  .home-icon {  text-decoration: none; font-size: 45px;  color: var(--text2);  transition: color 0.15s;  margin-left: 8px; background-color: #ffffff; }
   .home-icon:hover { color: var(--accent2); }
   .grand-total-card { background: #ffffff;  border-radius: var(--r);  padding: 16px 20px;  margin-bottom: 20px;  border: 1px solid #0400ff;  display: flex; align-items: center;  justify-content: space-between;  box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
   .grand-total-card .label {  font-size: 24px;  font-family: var(--mono);  font-weight: 700;  letter-spacing: 0.05em;  text-transform: uppercase;  color: #000000; }
@@ -197,17 +187,6 @@
   </div>
 
   <div class="topbar-right">
-    <div class="user-dropdown">
-      <span class="user-name" onclick="toggleUserDropdown()">
-        <strong>{{ request.user.first_name|default:request.user.username }}</strong>
-        <span class="dropdown-arrow">▼</span>
-      </span>
-      <div class="dropdown-menu" id="userDropdown" style="display: none;">
-        <a href="{% url 'staff:logout' %}" class="dropdown-item logout">
-          <span></span> Logout
-        </a>
-      </div>
-    </div>
     <a href="{% url 'website:home' %}" class="home-icon">🌐</a>
   </div>
 </header>
@@ -840,7 +819,7 @@ function submitCashPayment() {
 // ========== M-PESA (CORRECT FLOW) ==========
 function handleMpesaEnter(e) { if (e.key === 'Enter') { e.preventDefault(); pushSTK(); } }
 
-// ========== PUSH STK ==========
+// ========== PUSH STK - DON'T CREATE SALE YET ==========
 async function pushSTK() {
   const phone = document.getElementById('mpesa-phone').value.trim();
   let amount = parseFloat(document.getElementById('mpesa-amount').value);
@@ -868,60 +847,143 @@ async function pushSTK() {
   btn.innerHTML = '<span class="spinner"></span> Sending STK...';
   
   try {
-    // Create sale record WITHOUT clearing cart
-    const saleResponse = await fetch('{% url "sales:sale_create" %}', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF, 'X-Requested-With': 'XMLHttpRequest' },
-      body: JSON.stringify({ 
-        buyer_phone: cleanPhone, 
-        payment_method: 'M-Pesa', 
-        amount_paid: 0, 
-        is_credit: false, 
-        points_redeemed: pointsRedeemed, 
-        verified_customer_id: selectedCustomerId || null,
-        skip_cart_clear: true
-      })
-    });
-    const saleData = await saleResponse.json();
-    
-    if (!saleData.success) {
-      toast(saleData.error || 'Failed to create sale', 'error');
-      btn.disabled = false;
-      btn.innerHTML = '📲 Push STK Prompt';
-      return;
-    }
-    
-    currentSaleId = saleData.sale_id;
-    pendingMpesaAmount = amount;
-    
-    // Start checking for direct payments (customer might pay to till directly)
-    startPaymentCheck(currentSaleId);
-    
-    // Initiate STK push as well (optional)
-    const mpesaResponse = await fetch(`/sales/sale/${currentSaleId}/mpesa-pay/`, {
+    // Step 1: Send STK push WITHOUT creating sale
+    const stkResponse = await fetch('/finance/mpesa/stk-push/', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-      body: JSON.stringify({ phone_number: cleanPhone, amount: amount })
+      body: JSON.stringify({ 
+        phone_number: cleanPhone, 
+        amount: amount,
+        account_reference: `TEMP-${Date.now()}`
+      })
     });
-    const mpesaData = await mpesaResponse.json();
+    const stkData = await stkResponse.json();
     
-    if (mpesaData.success && mpesaData.checkout_request_id) {
-      mpesaCheckoutId = mpesaData.checkout_request_id;
+    if (stkData.success && stkData.checkout_request_id) {
+      mpesaCheckoutId = stkData.checkout_request_id;
+      pendingMpesaAmount = amount;
+      
       document.getElementById('mpesa-phone-disp').textContent = phone;
       document.getElementById('mpesa-step-1').style.display = 'none';
       document.getElementById('mpesa-step-2').style.display = 'block';
-      toast(`STK prompt sent for ${ksh(amount)}. Customer can also pay directly to till.`, 'info');
-      startMpesaPolling();
-    } else { 
-      // If STK fails, still keep checking for direct payment
-      toast(`STK push failed. Customer can still pay directly to till number.`, 'warning');
+      toast(`STK prompt sent for ${ksh(amount)}. Customer must enter PIN.`, 'info');
+      
+      // Start polling for payment confirmation
+      startMpesaPollingForPayment();
+    } else {
+      toast(stkData.error || 'STK push failed', 'error');
       btn.disabled = false;
-      btn.innerHTML = '📲 Retry STK or Wait for Direct Payment';
+      btn.innerHTML = '📲 Push STK Prompt';
     }
   } catch (error) { 
     toast('Network error', 'error'); 
     btn.disabled = false; 
     btn.innerHTML = '📲 Push STK Prompt';
+  }
+}
+
+// ========== POLL FOR PAYMENT CONFIRMATION (NO SALE YET) ==========
+function startMpesaPollingForPayment() {
+  let attempts = 0;
+  const maxAttempts = 20;
+  const bar = document.getElementById('poll-bar-fill');
+  if (mpesaPollInterval) clearInterval(mpesaPollInterval);
+  
+  mpesaPollInterval = setInterval(async () => {
+    attempts++;
+    if (bar) bar.style.width = Math.min((attempts / maxAttempts) * 100, 100) + '%';
+    document.getElementById('mpesa-poll-info').textContent = `Checking payment... attempt ${attempts}/${maxAttempts}`;
+    
+    if (!mpesaCheckoutId) { clearInterval(mpesaPollInterval); return; }
+    
+    try {
+      const response = await fetch(`/finance/mpesa-status/${mpesaCheckoutId}/`);
+      const data = await response.json();
+      
+      if (data.status === 'completed' || data.ResultCode === '0') {
+        clearInterval(mpesaPollInterval);
+        
+        // ✅ PAYMENT CONFIRMED - NOW CREATE SALE
+        toast('✅ Payment confirmed! Creating sale...', 'success');
+        
+        // Create sale with the confirmed payment
+        await createSaleAfterPayment(cleanPhone, pendingMpesaAmount);
+        
+      } else if (data.status === 'failed' || data.ResultCode === '1037') {
+        clearInterval(mpesaPollInterval);
+        // ❌ PAYMENT FAILED - DO NOT CREATE SALE
+        showMpesaFailed(data.ResultDesc || 'Payment cancelled or failed');
+        // Reset the STK button
+        const btn = document.getElementById('stk-btn');
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '📲 Push STK Prompt';
+        }
+      } else if (attempts >= maxAttempts) {
+        clearInterval(mpesaPollInterval);
+        // ⏰ TIMEOUT - DO NOT CREATE SALE
+        showMpesaFailed('Payment timeout — customer did not complete transaction');
+        const btn = document.getElementById('stk-btn');
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '📲 Push STK Prompt';
+        }
+      }
+    } catch (error) {
+      if (attempts >= maxAttempts) {
+        clearInterval(mpesaPollInterval);
+        showMpesaFailed('Could not verify payment status');
+        const btn = document.getElementById('stk-btn');
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '📲 Push STK Prompt';
+        }
+      }
+    }
+  }, 3000);
+}
+
+// ========== CREATE SALE ONLY AFTER PAYMENT CONFIRMED ==========
+async function createSaleAfterPayment(phone, amount) {
+  try {
+    const saleResponse = await fetch('{% url "sales:sale_create" %}', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF, 'X-Requested-With': 'XMLHttpRequest' },
+      body: JSON.stringify({ 
+        buyer_phone: phone,
+        payment_method: 'M-Pesa', 
+        amount_paid: amount,
+        is_credit: false, 
+        points_redeemed: pointsRedeemed, 
+        verified_customer_id: selectedCustomerId || null,
+        cart_total: cartTotalAfterDiscount()
+      })
+    });
+    
+    const saleData = await saleResponse.json();
+    
+    if (saleData.success) {
+      currentSaleId = saleData.sale_id;
+      amountPaidMpesa += amount;
+      updatePaymentSummary();
+      updateTotals();
+      
+      document.getElementById('mpesa-step-2').style.display = 'none';
+      document.getElementById('mpesa-step-3').style.display = 'block';
+      document.getElementById('mpesa-success-msg').innerHTML = `Payment of ${ksh(amount)} received! Sale created.`;
+      
+      if (getRemainingBalance() <= 0) {
+        toast('Full payment received! Add loyalty points (optional).', 'success');
+        selectMethod('Points');
+        document.getElementById('points-phone').focus();
+      }
+      
+      checkSubmitReady();
+    } else {
+      toast(saleData.error || 'Failed to create sale', 'error');
+    }
+  } catch (error) {
+    toast('Error creating sale: ' + error.message, 'error');
   }
 }
 

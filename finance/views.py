@@ -3087,6 +3087,58 @@ def income_detail(request, transaction_id):
 
 
 
+@login_required
+def stk_push_only(request):
+    """Send STK push without creating sale first"""
+    from finance.kopokopo_service import stk_push_request, clean_phone_number, check_pending_transaction
+    
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            phone_number = data.get('phone_number', '').strip()
+            amount = Decimal(str(data.get('amount', 0)))
+            account_reference = data.get('account_reference', f"TEMP-{timezone.now().timestamp()}")
+            
+            if not phone_number:
+                return JsonResponse({'success': False, 'error': 'Phone number required'})
+            
+            cleaned_phone = clean_phone_number(phone_number)
+            
+            if check_pending_transaction(cleaned_phone):
+                return JsonResponse({
+                    'success': False,
+                    'error': 'There is already a pending request for this phone number',
+                    'error_code': '429'
+                })
+            
+            result = stk_push_request(
+                phone_number=cleaned_phone,
+                amount=float(amount),
+                account_reference=account_reference,
+                transaction_desc=f"Payment of {amount} KES"
+            )
+            
+            if result.get('ResponseCode') == '0':
+                return JsonResponse({
+                    'success': True,
+                    'checkout_request_id': result['CheckoutRequestID'],
+                    'message': 'STK Push sent'
+                })
+            else:
+                return JsonResponse({'success': False, 'error': result.get('ResponseDescription')})
+                
+        except Exception as e:
+            logger.error(f"STK push error: {str(e)}")
+            return JsonResponse({'success': False, 'error': str(e)})
+    
+    return JsonResponse({'success': False, 'error': 'Invalid method'})
+
+
+
+
+
+
+
 @csrf_exempt
 def mpesa_callback(request):
     """Handle Kopo Kopo webhook callbacks - ROBUST VERSION"""
