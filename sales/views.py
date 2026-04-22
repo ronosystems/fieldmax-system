@@ -23,6 +23,28 @@ logger = logging.getLogger(__name__)
 # HELPER FUNCTIONS
 # ============================================
 
+def normalize_phone(phone):
+    """Convert phone numbers to international format (254XXXXXXXXX)"""
+    if not phone:
+        return ''
+    # Remove all non-digit characters
+    phone = ''.join(filter(str.isdigit, phone))
+    
+    # If it starts with 0 (local format like 0722...)
+    if phone.startswith('0') and len(phone) == 10:
+        return '254' + phone[1:]  # Remove leading 0 and add 254
+    
+    # If it starts with 254 and is 12 digits, it's already correct
+    if phone.startswith('254') and len(phone) == 12:
+        return phone
+    
+    # If it's 9 digits (like 722...), add 254
+    if len(phone) == 9:
+        return '254' + phone
+    
+    return phone
+
+
 def calculate_profit(sale):
     """Calculate profit for a single sale"""
     total_profit = Decimal('0.00')
@@ -2893,11 +2915,71 @@ def check_payment_status(request, sale_id):
 
 
 
+from datetime import timedelta
+
+@login_required
+def check_payment_by_phone(request):
+    """Check if customer has made a direct payment to till number by phone and amount"""
+    from finance.models import MpesaTransaction
+    from decimal import Decimal
+    
+    try:
+        phone_number = request.GET.get('phone', '').strip()
+        expected_amount = request.GET.get('amount', '').strip()
+        
+        if not phone_number:
+            return JsonResponse({'success': False, 'error': 'Phone number required'})
+        
+        # Clean phone number
+        cleaned_phone = normalize_phone(phone_number)
+        
+        # Parse expected amount
+        expected = Decimal(expected_amount) if expected_amount else None
+        
+        # Check for completed transactions in the last 10 minutes
+        time_threshold = timezone.now() - timedelta(minutes=10)
+        
+        # Look for payment by phone number
+        query = MpesaTransaction.objects.filter(
+            phone_number__icontains=cleaned_phone,
+            status='completed',
+            created_at__gte=time_threshold
+        ).order_by('-created_at')
+        
+        # If amount specified, filter by amount
+        if expected:
+            # Allow small tolerance (within 1 KSH)
+            amount_min = expected - Decimal('1.00')
+            amount_max = expected + Decimal('1.00')
+            query = query.filter(amount__gte=amount_min, amount__lte=amount_max)
+        
+        recent_payment = query.first()
+        
+        if recent_payment:
+            return JsonResponse({
+                'success': True,
+                'paid': True,
+                'amount': float(recent_payment.amount),
+                'transaction_id': recent_payment.checkout_request_id,
+                'phone': recent_payment.phone_number,
+                'matches': float(recent_payment.amount) == float(expected) if expected else False
+            })
+        
+        return JsonResponse({'success': True, 'paid': False})
+        
+    except Exception as e:
+        logger.error(f"Error checking payment by phone: {str(e)}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+
+
 
 @login_required
 def record_direct_payment(request, sale_id):
     """Manually record a direct till payment"""
     from finance.models import MpesaTransaction
+    import uuid
     
     if request.method == 'POST':
         try:
@@ -2915,23 +2997,35 @@ def record_direct_payment(request, sale_id):
             
             # Update sale
             sale.amount_paid += amount
+            if sale.amount_paid >= sale.total_amount:
+                sale.payment_method = 'M-Pesa'
             sale.save()
             
-            # Create transaction record
-            MpesaTransaction.objects.create(
-                checkout_request_id=f"MANUAL-{sale.sale_id}-{timezone.now().timestamp()}",
+            # Generate a unique checkout ID with DIRECT prefix
+            checkout_id = f"DIRECT-{sale.sale_id}-{uuid.uuid4().hex[:8].upper()}"
+            
+            # Create M-Pesa transaction record
+            mpesa_trans = MpesaTransaction.objects.create(
+                merchant_request_id=checkout_id,
+                checkout_request_id=checkout_id,
                 amount=amount,
                 phone_number=phone_number,
                 account_reference=f"SALE{sale.sale_id}",
                 transaction_desc=f"Manual direct payment for Sale #{sale.sale_id}",
                 sale=sale,
                 created_by=request.user,
-                status='completed'
+                status='completed',
+                result_code=0,
+                result_desc="Manual payment recorded by cashier"
             )
             
             logger.info(f"Manual direct payment recorded: {amount} for sale {sale.sale_id}")
             
-            return JsonResponse({'success': True, 'message': 'Payment recorded'})
+            return JsonResponse({
+                'success': True, 
+                'message': 'Payment recorded',
+                'amount_paid': float(sale.amount_paid)
+            })
             
         except Exception as e:
             logger.error(f"Error recording direct payment: {str(e)}")

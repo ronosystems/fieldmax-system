@@ -457,6 +457,9 @@ class MpesaTransaction(models.Model):
         # Auto-create FinancialTransaction when payment is completed
         if self.status == 'completed' and not self.financial_transaction:
             from decimal import Decimal
+
+            import uuid
+            payment_ref = f"MPESA-{self.checkout_request_id[-8:]}-{uuid.uuid4().hex[:4]}"
             
             # Create corresponding financial transaction
             self.financial_transaction = FinancialTransaction.objects.create(
@@ -465,7 +468,7 @@ class MpesaTransaction(models.Model):
                 amount=self.amount,
                 description=f"M-Pesa Payment - {self.transaction_desc} - Ref: {self.mpesa_receipt_number}",
                 payment_method='mpesa',
-                payment_reference=self.mpesa_receipt_number,
+                payment_reference=self.mpesa_receipt_number or payment_ref, 
                 recipient_name=f"Customer {self.phone_number}",
                 transaction_date=self.transaction_date or timezone.now(),
                 created_by=self.created_by,

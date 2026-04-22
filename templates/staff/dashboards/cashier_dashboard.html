@@ -358,6 +358,14 @@
           <button class="btn btn-primary" onclick="recordDirectPayment()">Record Payment</button>
         </div>
       </div>
+      <div class="input-group mt-2">
+        <button class="btn btn-amber w-full" onclick="completePartialPayment()">
+          ✅ Complete Sale with Partial Payment
+        </button>
+        <div class="text-xs text-muted text-center mt-1">
+          Use when customer has paid remaining balance via cash/other method
+        </div>
+      </div>
     </div>
 
     <!-- LOYALTY PANEL - AWARD POINTS ON CUSTOMER IDENTIFICATION -->
@@ -996,87 +1004,138 @@ function startPaymentCheck(saleId) {
 }
 
 
-// ========== MANUAL CHECK FOR DIRECT PAYMENT ==========
+// ========== CHECK DIRECT PAYMENT BY PHONE AND AMOUNT ==========
 async function checkDirectPayment() {
-  // If no sale exists, create one first
-  if (!currentSaleId) {
-    toast('Creating sale record first...', 'info');
-    
-    // Check if cart has items
-    if (!cart.length) {
-      toast('Cart is empty. Add items first.', 'error');
-      return;
-    }
-    
-    const remaining = getRemainingBalance();
-    if (remaining <= 0) {
-      toast('Cart is empty or payment already completed', 'error');
-      return;
-    }
-    
-    try {
-      // Create sale without STK
-      const saleResponse = await fetch('{% url "sales:sale_create" %}', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF, 'X-Requested-With': 'XMLHttpRequest' },
-        body: JSON.stringify({ 
-          buyer_phone: document.getElementById('mpesa-phone').value || '',
-          payment_method: 'M-Pesa', 
-          amount_paid: 0, 
-          is_credit: false, 
-          points_redeemed: pointsRedeemed, 
-          verified_customer_id: selectedCustomerId || null,
-          skip_cart_clear: true
-        })
-      });
-      const saleData = await saleResponse.json();
-      if (!saleData.success) {
-        toast(saleData.error || 'Failed to create sale', 'error');
-        return;
-      }
-      currentSaleId = saleData.sale_id;
-      toast(`Sale created: ${currentSaleId}. Checking for payments...`, 'success');
-    } catch (error) {
-      toast('Error creating sale: ' + error.message, 'error');
-      return;
-    }
+  const phone = document.getElementById('mpesa-phone').value.trim();
+  
+  if (!phone) {
+    toast('Enter customer phone number first', 'error');
+    document.getElementById('mpesa-phone').focus();
+    return;
   }
   
-  toast('Checking for direct payments...', 'info');
+  if (!cart.length) {
+    toast('Cart is empty. Add items first.', 'error');
+    return;
+  }
+  
+  const totalDue = cartTotalAfterDiscount();
+  
+  toast(`Checking for payment of ${ksh(totalDue)} from ${phone}...`, 'info');
   
   try {
-    const response = await fetch(`/sales/api/check-payment/${currentSaleId}/`);
+    // Check payment by both phone AND amount
+    const response = await fetch(`/sales/api/check-payment-by-phone/?phone=${encodeURIComponent(phone)}&amount=${totalDue}`);
     const data = await response.json();
     
-    if (data.paid) {
-      // Check if this payment is already recorded
-      const existingMpesaPaid = amountPaidMpesa;
+    if (data.success && data.paid) {
+      const receivedAmount = data.amount;
+      const expectedAmount = totalDue;
       
-      if (data.amount > existingMpesaPaid) {
-        const newAmount = data.amount - existingMpesaPaid;
-        amountPaidMpesa = data.amount;
+      // Check if amounts match exactly
+      if (Math.abs(receivedAmount - expectedAmount) < 1) {
+        toast(`✅ Exact payment of ${ksh(receivedAmount)} detected! Creating sale...`, 'success');
+        
+        // Create sale with the payment
+        await createSaleWithPayment(phone, receivedAmount);
+        
+      } else if (receivedAmount > expectedAmount) {
+        toast(`⚠️ Overpayment: ${ksh(receivedAmount)} paid, total is ${ksh(expectedAmount)}. Change: ${ksh(receivedAmount - expectedAmount)}`, 'warning');
+        
+        // Create sale with correct amount
+        await createSaleWithPayment(phone, expectedAmount);
+        
+      } else {
+        const remaining = expectedAmount - receivedAmount;
+        toast(`⚠️ Partial payment: ${ksh(receivedAmount)} of ${ksh(expectedAmount)}. Need ${ksh(remaining)} more.`, 'warning');
+        
+        // Record partial payment without creating sale yet
+        amountPaidMpesa += receivedAmount;
         updatePaymentSummary();
         updateTotals();
-        toast(`✅ Direct payment of ${ksh(newAmount)} detected! Total paid: ${ksh(data.amount)}`, 'success');
         
-        if (getRemainingBalance() <= 0) {
-          toast('Full payment received! Add loyalty points (optional).', 'success');
-          selectMethod('Points');
-          document.getElementById('points-phone').focus();
+        // Mark that we've recorded this payment so we don't double count
+        localStorage.setItem(`payment_${phone}`, receivedAmount);
+        
+        toast(`Partial payment recorded. Balance: ${ksh(getRemainingBalance())}`, 'info');
+        
+        // Suggest next steps
+        if (getRemainingBalance() > 0) {
+          toast(`Customer needs to pay ${ksh(getRemainingBalance())} more via cash or other method`, 'info');
         }
-        
-        checkSubmitReady();
-      } else {
-        toast(`Payment already recorded. Total paid: ${ksh(data.amount)}`, 'info');
       }
     } else {
-      toast('No payment detected yet. Customer can pay to till number: 5627132', 'info');
+      toast('No payment detected. Customer should pay to till number: 5627132', 'info');
     }
   } catch (error) {
     toast('Error checking payment: ' + error.message, 'error');
   }
 }
 
+// ========== CREATE SALE AFTER PAYMENT CONFIRMED ==========
+async function createSaleWithPayment(phone, amount) {
+  try {
+    const response = await fetch('{% url "sales:sale_create" %}', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF, 'X-Requested-With': 'XMLHttpRequest' },
+      body: JSON.stringify({ 
+        buyer_phone: phone,
+        payment_method: 'M-Pesa', 
+        amount_paid: amount,
+        is_credit: false, 
+        points_redeemed: pointsRedeemed, 
+        verified_customer_id: selectedCustomerId || null,
+        cart_total: cartTotalAfterDiscount()
+      })
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      currentSaleId = data.sale_id;
+      toast(`✅ Sale created! Payment of ${ksh(amount)} confirmed.`, 'success');
+      
+      // Clear cart
+      cart = [];
+      renderCart();
+      updatePaymentSummary();
+      
+      // Clear stored payment flag
+      localStorage.removeItem(`payment_${phone}`);
+      
+      // Move to loyalty stage
+      toast('Proceed to add loyalty points (optional)', 'info');
+      selectMethod('Points');
+      document.getElementById('points-phone').focus();
+      
+      checkSubmitReady();
+    } else {
+      toast(data.error || 'Failed to create sale', 'error');
+    }
+  } catch (error) {
+    toast('Error creating sale: ' + error.message, 'error');
+  }
+}
+
+
+// ========== COMPLETE SALE WITH PARTIAL PAYMENT ==========
+async function completePartialPayment() {
+  if (!cart.length) {
+    toast('Cart is empty', 'error');
+    return;
+  }
+  
+  const totalDue = cartTotalAfterDiscount();
+  const totalPaid = getTotalPaid();
+  
+  if (totalPaid < totalDue) {
+    toast(`Cannot complete. Still need ${ksh(totalDue - totalPaid)}`, 'error');
+    return;
+  }
+  
+  // Proceed to finalize sale
+  await finalizeSale();
+}
 
 
 // ========== MANUAL DIRECT PAYMENT RECORDING ==========

@@ -54,5 +54,6 @@ urlpatterns = [
     path('sale/<str:sale_id>/mpesa-pay/', views.initiate_mpesa_payment, name='mpesa_pay'),
     path('sale/<str:sale_id>/update-payment/', views.update_sale_payment, name='update_sale_payment'),
     path('api/check-payment/<str:sale_id>/', views.check_payment_status, name='check_payment_status'),
+    path('api/check-payment-by-phone/', views.check_payment_by_phone, name='check_payment_by_phone'),
     path('sale/<str:sale_id>/record-direct-payment/', views.record_direct_payment, name='record_direct_payment'),
 ]
