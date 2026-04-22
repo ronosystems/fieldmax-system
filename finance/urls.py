@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from finance.kopokopo_service import kopokopo_webhook
 
 app_name = 'finance'
 
@@ -87,4 +88,5 @@ urlpatterns = [
     # ============================================
     path('mpesa-callback/', views.mpesa_callback, name='mpesa_callback'),
     path('mpesa-status/<str:checkout_request_id>/', views.mpesa_status_check, name='mpesa_status_check'),
+    path('webhook/kopokopo/', kopokopo_webhook, name='kopokopo_webhook'),
 ]

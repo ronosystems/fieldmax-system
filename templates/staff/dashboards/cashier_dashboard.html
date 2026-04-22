@@ -35,8 +35,8 @@
   .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 16px; border-radius: var(--r2); font-family: var(--sans); font-size: 13px; font-weight: 500; cursor: pointer; border: none; transition: all 0.15s; white-space: nowrap; }
   .btn-primary { background: var(--accent); color: #fff; }
   .btn-primary:hover { background: var(--accent2); }
-  .btn-green { background: var(--green2); color: #fff; }
-  .btn-green:hover { background: var(--green); }
+  .btn-green { background: var(--green2); color: #ffffff; border: 1px solid #ffffff; }
+  .btn-green:hover { background: var(--green); border: 1px solid #ffffff;}
   .btn-ghost { background: var(--surface3); color: var(--text2); border: 1px solid var(--border); }
   .btn-ghost:hover { border-color: var(--border2); color: var(--text); }
   .btn-danger { background: transparent; color: var(--red); border: 1px solid rgba(239,68,68,0.3); }
@@ -166,10 +166,10 @@
   .dropdown-item.logout:hover { background: rgb(255, 255, 255); }
   .home-icon {  text-decoration: none; font-size: 50px;  color: var(--text2);  transition: color 0.15s;  margin-left: 8px; background-color: #ffffff; }
   .home-icon:hover { color: var(--accent2); }
-  .grand-total-card {  background: #ffffff;  border-radius: var(--r);  padding: 20px;  margin-bottom: 20px;  text-align: center;  border: 1px solid #0400ff; }
-  .grand-total-card .label {  font-size: 20px;  font-family: var(--mono);  letter-spacing: 0.1em;  text-transform: uppercase;  color: var(--text3);  margin-bottom: 8px; }
-  .grand-total-card .amount {  font-size: 60px;  font-weight: 800;  font-family: var(--mono);  color: var(--green);  line-height: 1.2; }
-  .grand-total-card .amount small {  font-size: 20px;  font-weight: 500;  color: var(--text2);  display: block;  margin-top: 4px; }
+  .grand-total-card { background: #ffffff;  border-radius: var(--r);  padding: 16px 20px;  margin-bottom: 20px;  border: 1px solid #0400ff;  display: flex; align-items: center;  justify-content: space-between;  box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+  .grand-total-card .label {  font-size: 24px;  font-family: var(--mono);  font-weight: 700;  letter-spacing: 0.05em;  text-transform: uppercase;  color: #000000; }
+  .grand-total-card .amount { font-size: 32px;  font-weight: 800;  font-family: var(--mono);  color: #22c55e;  line-height: 1.2; }
+  .grand-total-card .amount small {  font-size: 16px;  font-weight: 500;  color: #666;  margin-left: 4px; }
 </style>
 </head>
 <body>
@@ -213,8 +213,8 @@
 </header>
 
 <main class="left">
-  <div class="sec-hdr">Add Items to Cart</div>
   <div class="grand-total-card" id="grand-total-card">
+    <div class="label">Grand Totals</div>
     <div class="amount" id="grand-total-amount">0</div>
   </div>
   <div class="auto-toggle">
@@ -344,6 +344,20 @@
         </div>
         <button class="btn btn-amber w-full mt-2" onclick="resetMpesa()">← Try Again</button>
       </div>
+      <div class="input-group mt-2">
+        <button class="btn btn-ghost w-full" onclick="checkDirectPayment()">
+          🔄 Check for Direct Payment
+        </button>
+      </div>
+      <div class="divider"></div>
+      <div class="step-label">Manual Payment Recording</div>
+      <div class="input-group">
+        <label class="input-label">If customer paid directly, enter amount</label>
+        <div class="input-row">
+          <input type="number" id="manual-mpesa-amount" placeholder="Amount" min="0" step="0.01">
+          <button class="btn btn-primary" onclick="recordDirectPayment()">Record Payment</button>
+        </div>
+      </div>
     </div>
 
     <!-- LOYALTY PANEL - AWARD POINTS ON CUSTOMER IDENTIFICATION -->
@@ -441,6 +455,8 @@ let amountPaidPoints = 0;
 let amountPaidBank = 0;
 let paymentCompleted = false;
 let loyaltyCompleted = false;
+let paymentCheckInterval = null;
+
 
 // ========== GET TOTAL PAID ==========
 function getTotalPaid() { return amountPaidCash + amountPaidMpesa + amountPaidPoints + amountPaidBank; }
@@ -569,23 +585,27 @@ function cartTotal() { return cart.reduce((s, i) => s + i.total, 0); }
 // ========== CALCULATE TOTAL AFTER DISCOUNT ==========
 function cartTotalAfterDiscount() { return Math.max(0, cartTotal() - pointsRedeemed); }
 
-// ========== UPDATE TOTALS ==========
+//========= UPDATE TOTALS ==========
 function updateTotals() {
   document.getElementById('subtotal-disp').textContent = ksh(cartTotal());
   document.getElementById('total-disp').textContent = ksh(cartTotalAfterDiscount());
   const dr = document.getElementById('discount-row');
-  if (pointsRedeemed > 0) { dr.style.display = 'flex'; document.getElementById('discount-disp').textContent = '— ' + ksh(pointsRedeemed); }
-  else { dr.style.display = 'none'; }
+  if (pointsRedeemed > 0) { 
+    dr.style.display = 'flex'; 
+    document.getElementById('discount-disp').textContent = '— ' + ksh(pointsRedeemed); 
+  } else { 
+    dr.style.display = 'none'; 
+  }
   updatePaymentSummary();
+  updateGrandTotalCard();
 }
-
 
 // ========== UPDATE GRAND TOTAL CARD ==========
 function updateGrandTotalCard() {
   const total = cartTotalAfterDiscount();
   const totalElement = document.getElementById('grand-total-amount');
   if (totalElement) {
-    totalElement.innerHTML = Math.round(total).toLocaleString('en-KE');
+    totalElement.innerHTML = 'KSH ' + Math.round(total).toLocaleString('en-KE');
   }
 }
 
@@ -625,21 +645,6 @@ function renderCart() {
     `;
   }).join('');
   updateTotals();
-  updateGrandTotalCard();
-}
-
-//========= UPDATE TOTALS ==========
-function updateTotals() {
-  document.getElementById('subtotal-disp').textContent = ksh(cartTotal());
-  document.getElementById('total-disp').textContent = ksh(cartTotalAfterDiscount());
-  const dr = document.getElementById('discount-row');
-  if (pointsRedeemed > 0) { 
-    dr.style.display = 'flex'; 
-    document.getElementById('discount-disp').textContent = '— ' + ksh(pointsRedeemed); 
-  } else { 
-    dr.style.display = 'none'; 
-  }
-  updatePaymentSummary();
   updateGrandTotalCard();
 }
 
@@ -866,7 +871,7 @@ async function pushSTK() {
         is_credit: false, 
         points_redeemed: pointsRedeemed, 
         verified_customer_id: selectedCustomerId || null,
-        skip_cart_clear: true  // Add this flag to prevent cart clearing
+        skip_cart_clear: true
       })
     });
     const saleData = await saleResponse.json();
@@ -881,7 +886,10 @@ async function pushSTK() {
     currentSaleId = saleData.sale_id;
     pendingMpesaAmount = amount;
     
-    // Initiate M-Pesa payment
+    // Start checking for direct payments (customer might pay to till directly)
+    startPaymentCheck(currentSaleId);
+    
+    // Initiate STK push as well (optional)
     const mpesaResponse = await fetch(`/sales/sale/${currentSaleId}/mpesa-pay/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
@@ -894,12 +902,13 @@ async function pushSTK() {
       document.getElementById('mpesa-phone-disp').textContent = phone;
       document.getElementById('mpesa-step-1').style.display = 'none';
       document.getElementById('mpesa-step-2').style.display = 'block';
-      toast(`STK prompt sent for ${ksh(amount)}. Customer should enter PIN.`, 'info');
+      toast(`STK prompt sent for ${ksh(amount)}. Customer can also pay directly to till.`, 'info');
       startMpesaPolling();
     } else { 
-      toast(mpesaData.error || 'STK push failed', 'error'); 
-      btn.disabled = false; 
-      btn.innerHTML = '📲 Push STK Prompt';
+      // If STK fails, still keep checking for direct payment
+      toast(`STK push failed. Customer can still pay directly to till number.`, 'warning');
+      btn.disabled = false;
+      btn.innerHTML = '📲 Retry STK or Wait for Direct Payment';
     }
   } catch (error) { 
     toast('Network error', 'error'); 
@@ -952,6 +961,216 @@ function startMpesaPolling() {
     }
   }, 3000);
 }
+
+// ========== CHECK FOR DIRECT PAYMENTS ==========
+function startPaymentCheck(saleId) {
+  if (paymentCheckInterval) clearInterval(paymentCheckInterval);
+  
+  paymentCheckInterval = setInterval(async () => {
+    try {
+      const response = await fetch(`/sales/api/check-payment/${saleId}/`);
+      const data = await response.json();
+      
+      if (data.paid) {
+        clearInterval(paymentCheckInterval);
+        paymentCheckInterval = null;
+        
+        // Payment detected!
+        amountPaidMpesa += data.amount;
+        updatePaymentSummary();
+        
+        toast(`✅ Payment of ${ksh(data.amount)} detected!`, 'success');
+        
+        if (getRemainingBalance() <= 0) {
+          toast('Full payment received! Add loyalty points (optional).', 'success');
+          selectMethod('Points');
+          document.getElementById('points-phone').focus();
+        }
+        
+        checkSubmitReady();
+      }
+    } catch (error) {
+      console.error('Payment check error:', error);
+    }
+  }, 3000); // Check every 3 seconds
+}
+
+
+// ========== MANUAL CHECK FOR DIRECT PAYMENT ==========
+async function checkDirectPayment() {
+  // If no sale exists, create one first
+  if (!currentSaleId) {
+    toast('Creating sale record first...', 'info');
+    
+    // Check if cart has items
+    if (!cart.length) {
+      toast('Cart is empty. Add items first.', 'error');
+      return;
+    }
+    
+    const remaining = getRemainingBalance();
+    if (remaining <= 0) {
+      toast('Cart is empty or payment already completed', 'error');
+      return;
+    }
+    
+    try {
+      // Create sale without STK
+      const saleResponse = await fetch('{% url "sales:sale_create" %}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF, 'X-Requested-With': 'XMLHttpRequest' },
+        body: JSON.stringify({ 
+          buyer_phone: document.getElementById('mpesa-phone').value || '',
+          payment_method: 'M-Pesa', 
+          amount_paid: 0, 
+          is_credit: false, 
+          points_redeemed: pointsRedeemed, 
+          verified_customer_id: selectedCustomerId || null,
+          skip_cart_clear: true
+        })
+      });
+      const saleData = await saleResponse.json();
+      if (!saleData.success) {
+        toast(saleData.error || 'Failed to create sale', 'error');
+        return;
+      }
+      currentSaleId = saleData.sale_id;
+      toast(`Sale created: ${currentSaleId}. Checking for payments...`, 'success');
+    } catch (error) {
+      toast('Error creating sale: ' + error.message, 'error');
+      return;
+    }
+  }
+  
+  toast('Checking for direct payments...', 'info');
+  
+  try {
+    const response = await fetch(`/sales/api/check-payment/${currentSaleId}/`);
+    const data = await response.json();
+    
+    if (data.paid) {
+      // Check if this payment is already recorded
+      const existingMpesaPaid = amountPaidMpesa;
+      
+      if (data.amount > existingMpesaPaid) {
+        const newAmount = data.amount - existingMpesaPaid;
+        amountPaidMpesa = data.amount;
+        updatePaymentSummary();
+        updateTotals();
+        toast(`✅ Direct payment of ${ksh(newAmount)} detected! Total paid: ${ksh(data.amount)}`, 'success');
+        
+        if (getRemainingBalance() <= 0) {
+          toast('Full payment received! Add loyalty points (optional).', 'success');
+          selectMethod('Points');
+          document.getElementById('points-phone').focus();
+        }
+        
+        checkSubmitReady();
+      } else {
+        toast(`Payment already recorded. Total paid: ${ksh(data.amount)}`, 'info');
+      }
+    } else {
+      toast('No payment detected yet. Customer can pay to till number: 5627132', 'info');
+    }
+  } catch (error) {
+    toast('Error checking payment: ' + error.message, 'error');
+  }
+}
+
+
+
+// ========== MANUAL DIRECT PAYMENT RECORDING ==========
+async function recordDirectPayment() {
+  const amount = parseFloat(document.getElementById('manual-mpesa-amount').value);
+  if (!amount || amount <= 0) {
+    toast('Enter valid amount', 'error');
+    return;
+  }
+  
+  const remaining = getRemainingBalance();
+  if (remaining <= 0) {
+    toast('Cart is empty or payment already completed', 'error');
+    return;
+  }
+  
+  if (amount > remaining) {
+    toast(`Amount cannot exceed remaining balance of ${ksh(remaining)}`, 'error');
+    return;
+  }
+  
+  // If no sale exists, create one first
+  if (!currentSaleId) {
+    toast('Creating sale record first...', 'info');
+    
+    if (!cart.length) {
+      toast('Cart is empty. Add items first.', 'error');
+      return;
+    }
+    
+    try {
+      const saleResponse = await fetch('{% url "sales:sale_create" %}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF, 'X-Requested-With': 'XMLHttpRequest' },
+        body: JSON.stringify({ 
+          buyer_phone: document.getElementById('mpesa-phone').value || '',
+          payment_method: 'M-Pesa', 
+          amount_paid: 0, 
+          is_credit: false, 
+          points_redeemed: pointsRedeemed, 
+          verified_customer_id: selectedCustomerId || null,
+          skip_cart_clear: true
+        })
+      });
+      const saleData = await saleResponse.json();
+      if (!saleData.success) {
+        toast(saleData.error || 'Failed to create sale', 'error');
+        return;
+      }
+      currentSaleId = saleData.sale_id;
+      toast(`Sale created: ${currentSaleId}`, 'success');
+    } catch (error) {
+      toast('Error creating sale: ' + error.message, 'error');
+      return;
+    }
+  }
+  
+  try {
+    const response = await fetch(`/sales/sale/${currentSaleId}/record-direct-payment/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': CSRF
+      },
+      body: JSON.stringify({
+        amount: amount,
+        phone_number: document.getElementById('mpesa-phone').value || 'Direct Payment'
+      })
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      amountPaidMpesa += amount;
+      updatePaymentSummary();
+      updateTotals();
+      toast(`✅ Recorded direct payment of ${ksh(amount)}`, 'success');
+      document.getElementById('manual-mpesa-amount').value = '';
+      
+      if (getRemainingBalance() <= 0) {
+        toast('Full payment received! Add loyalty points (optional).', 'success');
+        selectMethod('Points');
+        document.getElementById('points-phone').focus();
+      }
+      
+      checkSubmitReady();
+    } else {
+      toast(data.error || 'Failed to record payment', 'error');
+    }
+  } catch (error) {
+    toast('Error recording payment: ' + error.message, 'error');
+  }
+}
+
 
 // ========== CONTINUE TO LOYALTY ==========
 function continueToLoyalty() {

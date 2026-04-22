@@ -2851,3 +2851,90 @@ def initiate_mpesa_payment(request, sale_id):
             return JsonResponse({'success': False, 'error': str(e)})
     
     return JsonResponse({'success': False, 'error': 'Invalid request method'})
+
+
+
+@login_required
+def check_payment_status(request, sale_id):
+    """Check if M-Pesa payment has been received for a sale (for direct till payments)"""
+    from finance.models import MpesaTransaction
+    
+    try:
+        sale = Sale.objects.get(sale_id=sale_id)
+        
+        # Check for completed M-Pesa transaction
+        mpesa_trans = MpesaTransaction.objects.filter(
+            sale=sale,
+            status='completed'
+        ).order_by('-created_at').first()
+        
+        if mpesa_trans:
+            return JsonResponse({
+                'paid': True,
+                'amount': float(mpesa_trans.amount),
+                'transaction_id': mpesa_trans.checkout_request_id
+            })
+        
+        # Also check if sale already has amount_paid
+        if sale.amount_paid >= sale.total_amount:
+            return JsonResponse({
+                'paid': True,
+                'amount': float(sale.amount_paid),
+                'transaction_id': None
+            })
+        
+        return JsonResponse({'paid': False})
+        
+    except Sale.DoesNotExist:
+        return JsonResponse({'paid': False, 'error': 'Sale not found'})
+    except Exception as e:
+        logger.error(f"Error checking payment status: {str(e)}")
+        return JsonResponse({'paid': False, 'error': str(e)})
+
+
+
+
+@login_required
+def record_direct_payment(request, sale_id):
+    """Manually record a direct till payment"""
+    from finance.models import MpesaTransaction
+    
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            amount = Decimal(str(data.get('amount', 0)))
+            phone_number = data.get('phone_number', '')
+            
+            sale = get_object_or_404(Sale, sale_id=sale_id)
+            
+            if amount <= 0:
+                return JsonResponse({'success': False, 'error': 'Invalid amount'})
+            
+            if sale.amount_paid + amount > sale.total_amount:
+                return JsonResponse({'success': False, 'error': 'Amount exceeds total due'})
+            
+            # Update sale
+            sale.amount_paid += amount
+            sale.save()
+            
+            # Create transaction record
+            MpesaTransaction.objects.create(
+                checkout_request_id=f"MANUAL-{sale.sale_id}-{timezone.now().timestamp()}",
+                amount=amount,
+                phone_number=phone_number,
+                account_reference=f"SALE{sale.sale_id}",
+                transaction_desc=f"Manual direct payment for Sale #{sale.sale_id}",
+                sale=sale,
+                created_by=request.user,
+                status='completed'
+            )
+            
+            logger.info(f"Manual direct payment recorded: {amount} for sale {sale.sale_id}")
+            
+            return JsonResponse({'success': True, 'message': 'Payment recorded'})
+            
+        except Exception as e:
+            logger.error(f"Error recording direct payment: {str(e)}")
+            return JsonResponse({'success': False, 'error': str(e)})
+    
+    return JsonResponse({'success': False, 'error': 'Invalid method'})

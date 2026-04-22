@@ -50,6 +50,9 @@ urlpatterns = [
     path('<str:sale_id>/print/', views.sale_receipt, name='sale_print'),
     path('<str:sale_id>/reverse/', views.sale_reverse, name='sale_reverse'),
 
+    # ===== M-PESA PAYMENT STATUS =====
     path('sale/<str:sale_id>/mpesa-pay/', views.initiate_mpesa_payment, name='mpesa_pay'),
     path('sale/<str:sale_id>/update-payment/', views.update_sale_payment, name='update_sale_payment'),
+    path('api/check-payment/<str:sale_id>/', views.check_payment_status, name='check_payment_status'),
+    path('sale/<str:sale_id>/record-direct-payment/', views.record_direct_payment, name='record_direct_payment'),
 ]
