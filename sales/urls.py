@@ -16,7 +16,7 @@ urlpatterns = [
     path('sold-items/', views.sold_items_list, name='sold_items_list'),
     path('sold-items/export/', views.export_sold_items, name='export_sold_items'),
     
-    # ===== CUSTOMER LOYALTY URLS - MUST COME BEFORE CATCH-ALL =====
+    # ===== CUSTOMER LOYALTY URLS =====
     path('customer/register/', views.customer_register, name='customer_register'),
     path('customers/', views.customer_list, name='customer_list'),
     path('customer/search/', views.customer_search, name='customer_search'),
@@ -25,7 +25,7 @@ urlpatterns = [
     path('customer/<int:pk>/delete/', views.customer_delete, name='customer_delete'),
     path('customer/<int:pk>/transactions/', views.customer_transactions, name='customer_transactions'),
     
-    # ===== PERIOD DETAILS - MUST COME BEFORE CATCH-ALL PATTERNS =====
+    # ===== PERIOD DETAILS =====
     path('period-details/', views.period_details, name='period_details'),
     
     # ===== API endpoints for cart management (AJAX) =====
@@ -44,16 +44,23 @@ urlpatterns = [
     path('api/items-by-month/', views.items_by_month_api, name='items_by_month_api'),
     path('api/sale-details/<int:sale_id>/', views.sale_details_api, name='sale_details_api'),
     
-    # ===== CATCH-ALL PATTERNS - MUST BE LAST =====
+    # ===== M-PESA PAYMENT API =====
+    path('api/check-payment/<str:sale_id>/', views.check_payment_status, name='check_payment_status'),
+    path('api/check-payment-by-phone/', views.check_payment_by_phone, name='check_payment_by_phone'),
+    path('api/send-otp/', views.send_otp, name='send_otp'),
+    path('api/verify-otp/', views.verify_otp, name='verify_otp'),
+    
+    # ===== SALE MANAGEMENT (with payment endpoints) =====
+    path('sale/<str:sale_id>/mpesa-pay/', views.initiate_mpesa_payment, name='mpesa_pay'),
+    path('sale/<str:sale_id>/update-payment/', views.update_sale_payment, name='update_sale_payment'),
+    path('sale/<str:sale_id>/record-direct-payment/', views.record_direct_payment, name='record_direct_payment'),
+    path('sale/<str:sale_id>/complete-payment/', views.complete_sale_payment, name='complete_sale_payment'),
+    path('sale/<str:sale_id>/delete-pending/', views.delete_pending_sale, name='delete_pending_sale'),
+    
+    # ===== CATCH-ALL PATTERNS - MUST BE ABSOLUTELY LAST! =====
+    # These will match ANY string that didn't match above
     path('<str:sale_id>/', views.sale_detail, name='sale_detail'),
     path('<str:sale_id>/receipt/', views.sale_receipt, name='sale_receipt'),
     path('<str:sale_id>/print/', views.sale_receipt, name='sale_print'),
     path('<str:sale_id>/reverse/', views.sale_reverse, name='sale_reverse'),
-
-    # ===== M-PESA PAYMENT STATUS =====
-    path('sale/<str:sale_id>/mpesa-pay/', views.initiate_mpesa_payment, name='mpesa_pay'),
-    path('sale/<str:sale_id>/update-payment/', views.update_sale_payment, name='update_sale_payment'),
-    path('api/check-payment/<str:sale_id>/', views.check_payment_status, name='check_payment_status'),
-    path('api/check-payment-by-phone/', views.check_payment_by_phone, name='check_payment_by_phone'),
-    path('sale/<str:sale_id>/record-direct-payment/', views.record_direct_payment, name='record_direct_payment'),
 ]

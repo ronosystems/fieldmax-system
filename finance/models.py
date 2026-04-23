@@ -457,9 +457,11 @@ class MpesaTransaction(models.Model):
         # Auto-create FinancialTransaction when payment is completed
         if self.status == 'completed' and not self.financial_transaction:
             from decimal import Decimal
-
             import uuid
-            payment_ref = f"MPESA-{self.checkout_request_id[-8:]}-{uuid.uuid4().hex[:4]}"
+
+            # Safe slicing with fallback
+            short_id = self.checkout_request_id[-8:] if len(self.checkout_request_id) >= 8 else self.checkout_request_id
+            payment_ref = f"MPESA-{short_id}-{uuid.uuid4().hex[:4]}"
             
             # Create corresponding financial transaction
             self.financial_transaction = FinancialTransaction.objects.create(

@@ -4,6 +4,8 @@ import requests
 import base64
 from decouple import config
 from django.core.cache import cache
+from django.utils import timezone 
+from datetime import timedelta   
 import logging
 import json
 import hmac
@@ -310,6 +312,7 @@ def kopokopo_webhook(request):
 
         # Create an audit record for this transaction
         MpesaTransaction.objects.create(
+            merchant_request_id=payload.get('id', ''), 
             checkout_request_id=payload.get('id', ''),
             amount=amount,
             phone_number=sender_phone,

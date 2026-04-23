@@ -1590,29 +1590,59 @@ def sale_create(request):
 
 @login_required
 def update_sale_payment(request, sale_id):
-    """Update sale payment status"""
-    from finance.models import MpesaTransaction
+    """Update sale payment status without finalizing (for M-Pesa)"""
+    from decimal import Decimal
     
     if request.method == 'POST':
         try:
             data = json.loads(request.body)
             sale = get_object_or_404(Sale, sale_id=sale_id)
             
-            # Find the most recent M-Pesa transaction for this sale
-            mpesa_trans = MpesaTransaction.objects.filter(
-                sale=sale, 
-                status='completed'
-            ).order_by('-created_at').first()
+            # ✅ Get data from frontend
+            amount = Decimal(str(data.get('amount_paid', 0)))
+            payment_method = data.get('payment_method', 'M-Pesa')
+            points_to_award = data.get('points_to_award', 0)
+            verified_customer_id = data.get('verified_customer_id')
+            buyer_phone = data.get('buyer_phone', '')
+            points_redeemed = data.get('points_redeemed', 0)
             
-            if mpesa_trans:
-                sale.amount_paid = mpesa_trans.amount
-                sale.payment_method = 'M-Pesa'
-                sale.save()
-                return JsonResponse({'success': True, 'message': 'Sale updated'})
-            else:
-                return JsonResponse({'success': False, 'error': 'No completed transaction found'})
+            logger.info(f"📦 UPDATING SALE {sale_id} (NOT finalizing)")
+            logger.info(f"   Amount: {amount}, Payment: {payment_method}")
+            logger.info(f"   Customer ID: {verified_customer_id}")
+            logger.info(f"   Points to award: {points_to_award}")
+            
+            # ✅ Update sale with payment info
+            sale.amount_paid = amount
+            sale.payment_method = payment_method
+            
+            # ✅ Update customer info if provided
+            if verified_customer_id:
+                try:
+                    from sales.models import Customer
+                    customer = Customer.objects.get(id=verified_customer_id)
+                    sale.buyer_name = customer.full_name
+                    sale.buyer_phone = buyer_phone or customer.phone_number
+                    logger.info(f"✅ Linked customer {customer.full_name} to sale {sale_id}")
+                except Customer.DoesNotExist:
+                    logger.warning(f"Customer {verified_customer_id} not found")
+            
+            # ✅ Save the sale (DON'T deduct stock yet - that happens when finalized)
+            sale.save()
+            
+            # ✅ Store points to award for later when sale is finalized
+            # We'll store this in the session or a temporary model
+            request.session[f'pending_points_{sale_id}'] = points_to_award
+            request.session[f'pending_customer_{sale_id}'] = verified_customer_id
+            
+            return JsonResponse({
+                'success': True,
+                'message': 'Payment recorded. Complete sale to award points.',
+                'points_to_award': points_to_award,
+                'customer_name': sale.buyer_name
+            })
                 
         except Exception as e:
+            logger.error(f"Error updating sale payment: {str(e)}")
             return JsonResponse({'success': False, 'error': str(e)})
     
     return JsonResponse({'success': False, 'error': 'Invalid method'})
@@ -2784,6 +2814,114 @@ def customer_delete(request, pk):
 
 
 
+# ============================================
+# OTP FOR POINTS REDEMPTION
+# ============================================
+
+import random
+from datetime import datetime, timedelta
+
+@login_required
+def send_otp(request):
+    """Send OTP to customer phone for points redemption"""
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            phone = data.get('phone')
+            purpose = data.get('purpose', 'redeem_points')
+            points = data.get('points', 0)
+            
+            if not phone:
+                return JsonResponse({'success': False, 'error': 'Phone number required'})
+            
+            # Clean phone number
+            cleaned_phone = normalize_phone(phone)
+            
+            # Generate 4-digit OTP
+            otp = f"{random.randint(1000, 9999)}"
+            
+            # Store OTP in session with expiry (5 minutes)
+            request.session[f'otp_{cleaned_phone}'] = {
+                'code': otp,
+                'expires': (timezone.now() + timedelta(minutes=5)).isoformat(),
+                'purpose': purpose,
+                'points': points
+            }
+            
+            # Log OTP to console for testing
+            logger.info("=" * 50)
+            logger.info(f"🔐 OTP GENERATED FOR {cleaned_phone}")
+            logger.info(f"📱 OTP CODE: {otp}")
+            logger.info(f"⭐ Points to redeem: {points}")
+            logger.info(f"⏰ Expires in 5 minutes")
+            logger.info("=" * 50)
+            
+            # Also print to console for immediate visibility
+            print("\n" + "=" * 60)
+            print(f"🔐 OTP VERIFICATION CODE")
+            print(f"📞 Phone: {cleaned_phone}")
+            print(f"🔢 OTP: {otp}")
+            print(f"⭐ Points: {points}")
+            print("=" * 60 + "\n")
+            
+            return JsonResponse({
+                'success': True,
+                'message': 'OTP sent successfully',
+                'otp': otp  # Remove this line in production
+            })
+            
+        except Exception as e:
+            logger.error(f"Error sending OTP: {str(e)}")
+            return JsonResponse({'success': False, 'error': str(e)})
+    
+    return JsonResponse({'success': False, 'error': 'Invalid method'})
+
+
+@login_required
+def verify_otp(request):
+    """Verify OTP for points redemption"""
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            phone = data.get('phone')
+            entered_otp = data.get('otp')
+            purpose = data.get('purpose', 'redeem_points')
+            
+            if not phone or not entered_otp:
+                return JsonResponse({'success': False, 'error': 'Phone and OTP required'})
+            
+            cleaned_phone = normalize_phone(phone)
+            
+            # Get stored OTP data
+            stored_data = request.session.get(f'otp_{cleaned_phone}')
+            
+            if not stored_data:
+                return JsonResponse({'success': False, 'error': 'No OTP request found. Please request again.'})
+            
+            # Check expiry
+            expires = datetime.fromisoformat(stored_data['expires'])
+            if timezone.now() > expires:
+                del request.session[f'otp_{cleaned_phone}']
+                return JsonResponse({'success': False, 'error': 'OTP has expired. Please request again.'})
+            
+            # Verify OTP
+            if stored_data['code'] == entered_otp and stored_data['purpose'] == purpose:
+                # Clear OTP from session
+                del request.session[f'otp_{cleaned_phone}']
+                logger.info(f"✅ OTP verified successfully for {cleaned_phone}")
+                return JsonResponse({'success': True, 'message': 'OTP verified successfully'})
+            else:
+                return JsonResponse({'success': False, 'error': 'Invalid OTP. Please try again.'})
+                
+        except Exception as e:
+            logger.error(f"Error verifying OTP: {str(e)}")
+            return JsonResponse({'success': False, 'error': str(e)})
+    
+    return JsonResponse({'success': False, 'error': 'Invalid method'})
+
+
+
+
 
 #====================================
 # M-PESA PAYMENT INTEGRATION
@@ -3032,3 +3170,137 @@ def record_direct_payment(request, sale_id):
             return JsonResponse({'success': False, 'error': str(e)})
     
     return JsonResponse({'success': False, 'error': 'Invalid method'})
+
+
+
+
+@login_required
+def complete_sale_payment(request, sale_id):
+    """Complete a pending sale after M-Pesa payment confirmation - PRESERVE LOYALTY DATA"""
+    from django.db import transaction
+    from decimal import Decimal
+    import json
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
+    try:
+        sale = get_object_or_404(Sale, sale_id=sale_id)
+        
+        data = json.loads(request.body)
+        amount = Decimal(str(data.get('amount_paid', 0)))
+        payment_method = data.get('payment_method', 'M-Pesa')
+        points_to_award = data.get('points_to_award', 0)
+        verified_customer_id = data.get('verified_customer_id')
+        buyer_phone = data.get('buyer_phone', '')
+        points_redeemed = data.get('points_redeemed', 0)
+        
+        logger.info(f"📦 COMPLETING SALE {sale_id}")
+        logger.info(f"   Amount: {amount}, Points to award: {points_to_award}")
+        logger.info(f"   Customer ID: {verified_customer_id}, Phone: {buyer_phone}")
+        logger.info(f"   Points redeemed: {points_redeemed}")
+        
+        with transaction.atomic():
+            # Update sale with payment info
+            sale.amount_paid = amount
+            sale.payment_method = payment_method
+            
+            # IMPORTANT: Preserve customer/loyalty data
+            customer = None
+            if verified_customer_id:
+                try:
+                    from sales.models import Customer
+                    customer = Customer.objects.get(id=verified_customer_id)
+                    sale.buyer_name = customer.full_name
+                    sale.buyer_phone = buyer_phone or customer.phone_number
+                    logger.info(f"✅ Linked sale to customer: {customer.full_name} (ID: {customer.id})")
+                except Customer.DoesNotExist:
+                    logger.warning(f"⚠️ Customer {verified_customer_id} not found")
+            
+            # Handle points redeemed (if customer used points to pay)
+            if points_redeemed > 0 and customer:
+                # Points were already redeemed when sale was created
+                # Just log it
+                logger.info(f"💰 Customer redeemed {points_redeemed} points for this sale")
+            
+            sale.save()
+            
+            # Award loyalty points if any (for earning points, not redeeming)
+            points_earned = 0
+            if points_to_award > 0 and customer:
+                try:
+                    points_earned = customer.add_points(
+                        points_to_award,
+                        sale=sale,
+                        description=f"Points earned for sale #{sale.sale_id}"
+                    )
+                    logger.info(f"✅ Awarded {points_earned} points to customer {customer.phone_number}")
+                except Exception as e:
+                    logger.error(f"Failed to award points: {str(e)}")
+            
+            # Now deduct stock (since payment is confirmed)
+            from inventory.models import StockEntry
+            
+            for item in sale.items.all():
+                if item.product:
+                    # Skip if stock already deducted (check if already processed)
+                    stock_entry_exists = StockEntry.objects.filter(
+                        reference_id=sale.sale_id,
+                        entry_type='sale'
+                    ).exists()
+                    
+                    if not stock_entry_exists:
+                        item.product.quantity -= item.quantity
+                        if item.product.category and item.product.category.is_single_item:
+                            item.product.status = 'sold'
+                            item.product.quantity = 0
+                        item.product.save()
+                        
+                        StockEntry.objects.create(
+                            product=item.product,
+                            quantity=-item.quantity,
+                            entry_type='sale',
+                            unit_price=item.unit_price,
+                            total_amount=item.total_price,
+                            reference_id=sale.sale_id,
+                            notes=f"Sale #{sale.sale_id} - Payment confirmed",
+                            created_by=request.user
+                        )
+            
+            # Clear cart from session
+            request.session['sales_cart'] = []
+            
+            return JsonResponse({
+                'success': True, 
+                'message': 'Sale completed',
+                'points_awarded': points_earned,
+                'points_redeemed': points_redeemed,
+                'customer_id': customer.id if customer else None
+            })
+            
+    except Exception as e:
+        logger.error(f"Error completing sale: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'success': False, 'error': str(e)})
+    
+
+    
+
+
+@login_required
+def delete_pending_sale(request, sale_id):
+    """Delete a pending sale if payment failed"""
+    try:
+        sale = get_object_or_404(Sale, sale_id=sale_id)
+        
+        # Only allow deletion if no payment was made
+        if sale.amount_paid == 0:
+            sale.delete()
+            return JsonResponse({'success': True, 'message': 'Pending sale deleted'})
+        else:
+            return JsonResponse({'success': False, 'error': 'Cannot delete completed sale'})
+            
+    except Exception as e:
+        logger.error(f"Error deleting pending sale: {str(e)}")
+        return JsonResponse({'success': False, 'error': str(e)})
