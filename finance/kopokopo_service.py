@@ -58,20 +58,30 @@ def get_kopokopo_token():
 
 
 def clean_phone_number(phone):
-    """Clean phone number to format +254XXXXXXXXX"""
+    """Clean phone number to format 254XXXXXXXXX (NO + sign for Kopo Kopo)"""
     if not phone:
         return ''
     
+    # Remove all non-digit characters
     phone = ''.join(filter(str.isdigit, str(phone)))
     
+    # If it starts with 0 and is 10 digits (e.g., 0722527955)
     if phone.startswith('0') and len(phone) == 10:
-        return '+254' + phone[1:]
-    if phone.startswith('254') and len(phone) == 12:
-        return '+' + phone
-    if len(phone) == 9:
-        return '+254' + phone
+        return '254' + phone[1:]  # Returns 254722527955 (NO + sign)
     
-    return f'+{phone}' if not phone.startswith('+') else phone
+    # If it starts with 254 and is 12 digits (already correct format)
+    if phone.startswith('254') and len(phone) == 12:
+        return phone  # Returns 254722527955 (NO + sign)
+    
+    # If it's 9 digits (e.g., 722527955)
+    if len(phone) == 9:
+        return '254' + phone  # Returns 254722527955
+    
+    # Remove any + sign if present
+    if phone.startswith('+'):
+        phone = phone[1:]
+    
+    return phone
 
 
 def stk_push_request(phone_number, amount, account_reference, transaction_desc):

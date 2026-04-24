@@ -1269,7 +1269,7 @@ def sale_create(request):
     # ============================================
     current_shop = None
     try:
-        from staff.models import Staff
+        from staff.models import Staff  # This should work if app is named 'staff'
         staff = Staff.objects.filter(user=request.user).first()
         if staff and staff.assigned_shop:
             current_shop = staff.assigned_shop
@@ -1485,8 +1485,9 @@ def sale_create(request):
                     customer.total_spent += original_subtotal
                     customer.last_purchase_date = timezone.now()
                     customer.save()
-                    customer.update_tier()
-                    points_earned = customer.add_points(final_amount, sale=sale, description=f"Purchase #{sale.sale_id}")
+                    # Calculate points as 1% of sale value
+                    points_to_add = customer.calculate_points_to_earn(float(final_amount))
+                    points_earned = customer.add_points(points_to_add, sale=sale, description=f"Purchase #{sale.sale_id}")
                     
                     logger.info(f"💰 Registered customer {customer.phone_number}: Earned {points_earned} points")
                 
@@ -1560,29 +1561,70 @@ def sale_create(request):
             messages.error(request, f'Error processing sale: {str(e)}')
             return redirect('sales:sale_create')
     
-    # GET request - show the sale form with cart (USE THE SAME current_shop from above, DON'T overwrite)
+    # ============================================
+    # GET request - show the sale form with cart
+    # ============================================
+    
     cart = request.session.get('sales_cart', [])
     subtotal = Decimal('0.00')
     for item in cart:
         subtotal += Decimal(str(item.get('total', 0)))
-    
-    # REMOVE this duplicate block - it's overwriting current_shop!
-    # current_shop = None
-    # try:
-    #     from shops.models import ShopBranch
-    #     current_shop = ShopBranch.objects.filter(is_active=True).first()
-    # except:
-    #     pass
     
     context = {
         'cart': cart,
         'subtotal': subtotal,
         'cart_count': len(cart),
         'now': timezone.now(),
-        'current_shop': current_shop,  # Use the one we already got at the top
+        'current_shop': current_shop, 
     }
     return render(request, 'sales/create.html', context)
 
+
+
+
+
+from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse
+
+@login_required
+@csrf_exempt
+def award_points_to_sale(request, sale_id):
+    """Award points to a customer for a completed sale"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Invalid method'})
+    
+    try:
+        data = json.loads(request.body)
+        customer_id = data.get('customer_id')
+        points = data.get('points', 0)
+        
+        sale = get_object_or_404(Sale, sale_id=sale_id)
+        customer = get_object_or_404(Customer, id=customer_id, is_active=True)
+        
+        if points <= 0:
+            return JsonResponse({'success': False, 'error': 'Invalid points amount'})
+        
+        # Award points to customer
+        points_earned = customer.add_points(
+            points,
+            sale=sale,
+            description=f"Points earned for M-Pesa sale #{sale.sale_id}"
+        )
+        
+        # Update sale with customer info
+        sale.buyer_name = customer.full_name
+        sale.buyer_phone = customer.phone_number
+        sale.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'{points} points awarded to {customer.full_name}',
+            'points': points_earned
+        })
+        
+    except Exception as e:
+        logger.error(f"Error awarding points: {str(e)}")
+        return JsonResponse({'success': False, 'error': str(e)})
 
 
 
@@ -1598,24 +1640,23 @@ def update_sale_payment(request, sale_id):
             data = json.loads(request.body)
             sale = get_object_or_404(Sale, sale_id=sale_id)
             
-            # ✅ Get data from frontend
             amount = Decimal(str(data.get('amount_paid', 0)))
             payment_method = data.get('payment_method', 'M-Pesa')
             points_to_award = data.get('points_to_award', 0)
             verified_customer_id = data.get('verified_customer_id')
             buyer_phone = data.get('buyer_phone', '')
             points_redeemed = data.get('points_redeemed', 0)
+            finalize = data.get('finalize', False)  # NEW: Check if we should finalize
             
-            logger.info(f"📦 UPDATING SALE {sale_id} (NOT finalizing)")
+            logger.info(f"📦 UPDATING SALE {sale_id}")
             logger.info(f"   Amount: {amount}, Payment: {payment_method}")
-            logger.info(f"   Customer ID: {verified_customer_id}")
-            logger.info(f"   Points to award: {points_to_award}")
+            logger.info(f"   Finalize: {finalize}")
             
-            # ✅ Update sale with payment info
+            # Update sale with payment info
             sale.amount_paid = amount
             sale.payment_method = payment_method
             
-            # ✅ Update customer info if provided
+            # Update customer info if provided
             if verified_customer_id:
                 try:
                     from sales.models import Customer
@@ -1626,13 +1667,59 @@ def update_sale_payment(request, sale_id):
                 except Customer.DoesNotExist:
                     logger.warning(f"Customer {verified_customer_id} not found")
             
-            # ✅ Save the sale (DON'T deduct stock yet - that happens when finalized)
             sale.save()
             
-            # ✅ Store points to award for later when sale is finalized
-            # We'll store this in the session or a temporary model
-            request.session[f'pending_points_{sale_id}'] = points_to_award
-            request.session[f'pending_customer_{sale_id}'] = verified_customer_id
+            # If finalize is True, complete the sale
+            if finalize:
+                # Award points if any
+                if points_to_award > 0 and verified_customer_id:
+                    try:
+                        customer = Customer.objects.get(id=verified_customer_id)
+                        customer.add_points(
+                            points_to_award,
+                            sale=sale,
+                            description=f"Points earned for sale #{sale.sale_id}"
+                        )
+                        logger.info(f"✅ Awarded {points_to_award} points to customer")
+                    except Exception as e:
+                        logger.error(f"Failed to award points: {str(e)}")
+                
+                # Deduct stock if not already deducted
+                from inventory.models import StockEntry
+                for item in sale.items.all():
+                    if item.product:
+                        stock_entry_exists = StockEntry.objects.filter(
+                            reference_id=sale.sale_id,
+                            entry_type='sale'
+                        ).exists()
+                        
+                        if not stock_entry_exists:
+                            item.product.quantity -= item.quantity
+                            if item.product.category and item.product.category.is_single_item:
+                                item.product.status = 'sold'
+                                item.product.quantity = 0
+                            item.product.save()
+                            
+                            StockEntry.objects.create(
+                                product=item.product,
+                                quantity=-item.quantity,
+                                entry_type='sale',
+                                unit_price=item.unit_price,
+                                total_amount=item.total_price,
+                                reference_id=sale.sale_id,
+                                notes=f"Sale #{sale.sale_id} - Finalized",
+                                created_by=request.user
+                            )
+                
+                # Clear cart from session
+                request.session['sales_cart'] = []
+                
+                return JsonResponse({
+                    'success': True,
+                    'sale_id': sale.sale_id,
+                    'message': 'Sale completed successfully!',
+                    'points_awarded': points_to_award
+                })
             
             return JsonResponse({
                 'success': True,
@@ -2467,7 +2554,6 @@ def customer_register(request):
                 email=email,
                 id_number=id_number,
                 points_balance=0,
-                tier='bronze'
             )
             
             # Award welcome points
@@ -2497,7 +2583,6 @@ def customer_register(request):
                         'phone': customer.phone_number,
                         'name': customer.full_name,
                         'points': customer.points_balance,
-                        'tier': customer.get_tier_display(),
                     }
                 })
             
@@ -2562,8 +2647,6 @@ def customer_search(request):
         'phone': c.phone_number,
         'name': c.full_name or 'Unknown',
         'points': c.points_balance,
-        'tier': c.get_tier_display(),
-        'tier_class': c.tier,
         'points_value': float(c.points_balance),
         'total_spent': float(c.total_spent),
         'purchases': c.total_purchases,
@@ -2601,8 +2684,6 @@ def customer_detail(request, pk):
         'id_number': customer.id_number,
         'points': customer.points_balance,
         'points_value': float(customer.points_balance),  # 1 point = KSH 1
-        'tier': customer.get_tier_display(),
-        'tier_class': customer.tier,
         'total_spent': float(customer.total_spent),
         'total_purchases': customer.total_purchases,
         'last_purchase': customer.last_purchase_date.isoformat() if customer.last_purchase_date else None,
@@ -2707,13 +2788,9 @@ def customer_list(request):
         'total_points_value': total_points,  # 1 point = KSH 1
         'total_spent': total_spent,
         'avg_spent': total_spent / total_customers if total_customers > 0 else 0,
-        'platinum_customers': platinum_customers,
-        'gold_customers': gold_customers,
         'new_customers': new_customers,
         'search': search,
-        'tier': tier,
         'sort': sort,
-        'tier_choices': Customer.TIER_CHOICES,
     }
     return render(request, 'sales/customer_list.html', context)
 

@@ -189,14 +189,14 @@ class FiscalReceiptAdmin(admin.ModelAdmin):
 
 
 # ============================================
-# CUSTOMER MANAGEMENT ADMIN
+# CUSTOMER MANAGEMENT ADMIN (UPDATED - NO TIERS)
 # ============================================
 @admin.register(Customer)
 class CustomerAdmin(admin.ModelAdmin):
-    list_display = ['full_name', 'phone_number', 'email', 'tier_badge', 
+    list_display = ['full_name', 'phone_number', 'email', 
                     'points_display', 'total_spent_display', 'total_purchases', 
                     'last_purchase', 'is_active', 'registered_by']
-    list_filter = ['tier', 'is_active', 'created_at', 'registered_by']
+    list_filter = ['is_active', 'created_at', 'registered_by']
     search_fields = ['phone_number', 'full_name', 'email', 'id_number']
     readonly_fields = ['created_at', 'updated_at', 'points_summary', 
                        'transaction_history_link', 'purchase_stats', 'registered_by']
@@ -212,12 +212,12 @@ class CustomerAdmin(admin.ModelAdmin):
             'fields': ('points_balance', 'total_points_earned', 'total_points_redeemed', 
                       'points_summary'),
         }),
-        ('Tier & Statistics', {
-            'fields': ('tier', 'total_purchases', 'total_spent', 'last_purchase_date',
+        ('Statistics', {
+            'fields': ('total_purchases', 'total_spent', 'last_purchase_date',
                       'purchase_stats'),
         }),
         ('Registration', {
-            'fields': ('registered_by', 'registration_note', 'is_active'),
+            'fields': ('registered_by', 'is_active'),
         }),
         ('Metadata', {
             'fields': ('created_at', 'updated_at'),
@@ -228,28 +228,6 @@ class CustomerAdmin(admin.ModelAdmin):
             'classes': ('collapse',),
         }),
     )
-    
-    def tier_badge(self, obj):
-        colors = {
-            'bronze': '#cd7f32',
-            'silver': '#c0c0c0',
-            'gold': '#ffd700',
-            'platinum': '#e5e4e2'
-        }
-        text_colors = {
-            'bronze': 'white',
-            'silver': 'black',
-            'gold': 'black',
-            'platinum': 'black'
-        }
-        return format_html(
-            '<span style="background-color: {}; color: {}; padding: 3px 10px; '
-            'border-radius: 20px; font-weight: bold;">{}</span>',
-            colors.get(obj.tier, '#6c757d'),
-            text_colors.get(obj.tier, 'white'),
-            obj.get_tier_display().upper()
-        )
-    tier_badge.short_description = "Tier"
     
     def points_display(self, obj):
         return format_html(
@@ -340,7 +318,7 @@ class CustomerAdmin(admin.ModelAdmin):
         response['Content-Disposition'] = 'attachment; filename="customers_export.csv"'
         
         writer = csv.writer(response)
-        writer.writerow(['Phone', 'Name', 'Email', 'Tier', 'Points Balance', 
+        writer.writerow(['Phone', 'Name', 'Email', 'Points Balance', 
                         'Total Spent', 'Total Purchases', 'Status', 'Registered Date'])
         
         for customer in queryset:
@@ -348,7 +326,6 @@ class CustomerAdmin(admin.ModelAdmin):
                 customer.phone_number,
                 customer.full_name,
                 customer.email or '',
-                customer.get_tier_display(),
                 customer.points_balance,
                 f"{customer.total_spent:.2f}",
                 customer.total_purchases,
@@ -442,17 +419,17 @@ class LoyaltyTransactionAdmin(admin.ModelAdmin):
 
 
 # ============================================
-# LOYALTY SETTINGS ADMIN
+# LOYALTY SETTINGS ADMIN (UPDATED)
 # ============================================
 @admin.register(LoyaltySettings)
 class LoyaltySettingsAdmin(admin.ModelAdmin):
-    list_display = ['id', 'points_per_unit', 'min_purchase_for_points', 
+    list_display = ['id', 'points_percentage', 'min_purchase_for_points', 
                    'max_points_per_transaction', 'min_redeem_points', 
                    'max_redeem_percentage', 'welcome_points']
     
     fieldsets = (
         ('Points Earning', {
-            'fields': ('min_purchase_for_points', 'points_per_unit', 'max_points_per_transaction')
+            'fields': ('min_purchase_for_points', 'points_percentage', 'max_points_per_transaction')
         }),
         ('Points Redemption', {
             'fields': ('min_redeem_points', 'max_redeem_percentage')

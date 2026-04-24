@@ -838,21 +838,32 @@ class FiscalReceipt(models.Model):
         return f"Receipt {self.receipt_number} for Sale #{self.sale.sale_id}"
 
 
+
+
+
+
 # ====================================
-# CUSTOMER MODEL - LOYALTY PROGRAM
+# CUSTOMER MODEL - SIMPLE LOYALTY PROGRAM
+# ====================================
+# ====================================
+# CUSTOMER MODEL - SIMPLE LOYALTY PROGRAM
+# 1% of sale value = points earned
 # ====================================
 
+from decimal import Decimal
+from django.db import models
+from django.contrib.auth.models import User
+from django.utils import timezone
+from django.core.validators import MinValueValidator, MaxValueValidator
+import logging
+
+logger = logging.getLogger(__name__)
+
+
 class Customer(models.Model):
-    """Customer model for loyalty program - ONLY registered customers can earn/redeem points"""
+    """Customer model for simple loyalty program - 1% of sale value = points earned"""
     
-    TIER_CHOICES = [
-        ('bronze', 'Bronze'),
-        ('silver', 'Silver'),
-        ('gold', 'Gold'),
-        ('platinum', 'Platinum'),
-    ]
-    
-    # Basic Info - All required for registration
+    # Basic Info
     phone_number = models.CharField(
         max_length=20, 
         unique=True, 
@@ -863,72 +874,40 @@ class Customer(models.Model):
         max_length=200, 
         blank=False, 
         null=False,
-        default="Unknown Customer",
-        help_text="Customer's full name"
+        default="Unknown Customer"
     )
-    email = models.EmailField(
-        blank=True, 
-        null=True,
-        help_text="Optional email address"
-    )
-    id_number = models.CharField(
-        max_length=50, 
-        blank=True, 
-        null=True,
-        help_text="National ID or passport number"
-    )
+    email = models.EmailField(blank=True, null=True)
+    id_number = models.CharField(max_length=50, blank=True, null=True)
     
-    # Loyalty Points - Only relevant for registered customers
-    points_balance = models.IntegerField(
-        default=0,
-        help_text="Current loyalty points balance (1 point = KSH 1)"
+    # Loyalty Points - Decimal to support fractional points (e.g., 1.5 points)
+    points_balance = models.DecimalField(
+        max_digits=10, 
+        decimal_places=1, 
+        default=Decimal('0.0'),
+        help_text="Current loyalty points balance (1 point = KSH 1 value)"
     )
-    total_points_earned = models.IntegerField(
-        default=0,
+    total_points_earned = models.DecimalField(
+        max_digits=10, 
+        decimal_places=1, 
+        default=Decimal('0.0'),
         help_text="Total points earned all time"
     )
-    total_points_redeemed = models.IntegerField(
-        default=0,
+    total_points_redeemed = models.DecimalField(
+        max_digits=10, 
+        decimal_places=1, 
+        default=Decimal('0.0'),
         help_text="Total points redeemed"
     )
     
-    # Customer tier - Automatically updated based on spending
-    tier = models.CharField(
-        max_length=20, 
-        choices=TIER_CHOICES, 
-        default='bronze'
-    )
-    
-    # Statistics - Track customer value
-    total_purchases = models.PositiveIntegerField(
-        default=0,
-        help_text="Number of purchases made"
-    )
-    total_spent = models.DecimalField(
-        max_digits=12, 
-        decimal_places=2, 
-        default=0,
-        help_text="Total amount spent in KSH"
-    )
-    last_purchase_date = models.DateTimeField(
-        null=True, 
-        blank=True,
-        help_text="Date of most recent purchase"
-    )
+    # Statistics
+    total_purchases = models.PositiveIntegerField(default=0)
+    total_spent = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    last_purchase_date = models.DateTimeField(null=True, blank=True)
     
     # Metadata
-    created_at = models.DateTimeField(
-        auto_now_add=True,
-        help_text="Registration date"
-    )
-    updated_at = models.DateTimeField(
-        auto_now=True,
-        help_text="Last updated"
-    )
-    is_active = models.BooleanField(
-        default=True,
-        help_text="Whether customer is active"
-    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    is_active = models.BooleanField(default=True)
     
     # Registration source
     registered_by = models.ForeignKey(
@@ -936,137 +915,220 @@ class Customer(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='registered_customers',
-        help_text="Staff member who registered this customer"
-    )
-    registration_note = models.TextField(
-        blank=True,
-        null=True,
-        help_text="Additional notes about registration"
+        related_name='registered_customers'
     )
     
     class Meta:
         ordering = ['-created_at']
         indexes = [
             models.Index(fields=['phone_number']),
-            models.Index(fields=['tier']),
-            models.Index(fields=['-total_spent']),
             models.Index(fields=['-created_at']),
         ]
         verbose_name = "Customer"
         verbose_name_plural = "Customers"
     
     def __str__(self):
-        return f"{self.full_name or 'Unknown'} ({self.phone_number}) - {self.points_balance} pts"
+        return f"{self.full_name} ({self.phone_number}) - {self.points_balance} pts"
     
     def save(self, *args, **kwargs):
-        """Ensure customer has required fields"""
         if not self.full_name:
             self.full_name = f"Customer {self.phone_number}"
         super().save(*args, **kwargs)
     
-    def update_tier(self):
-        """Auto-update customer tier based on total spent"""
-        old_tier = self.tier
-        
-        if self.total_spent >= 10000000:
-            self.tier = 'platinum'
-        elif self.total_spent >= 1000000:
-            self.tier = 'gold'
-        elif self.total_spent >= 100000:
-            self.tier = 'silver'
-        else:
-            self.tier = 'bronze'
-        
-        if old_tier != self.tier:
-            logger.info(f"Customer {self.phone_number} upgraded from {old_tier} to {self.tier}")
-            self.save(update_fields=['tier'])
-    
     def calculate_points_to_earn(self, amount):
-        """Calculate points to earn based on amount spent"""
-        if amount < 100:
-            return 0
+        """
+        Calculate points based on amount spent.
+        1% of total sale value = points earned
         
-        points = math.floor(amount / 100)
-        points = min(points, 100)
+        Examples:
+        - KSH 100 = 1.0 point (1% of 100)
+        - KSH 150 = 1.5 points (1% of 150)
+        - KSH 200 = 2.0 points (1% of 200)
+        - KSH 1,000 = 10.0 points (1% of 1,000)
+        - KSH 10,000 = 100.0 points (1% of 10,000)
+        - KSH 90,000 = 900.0 points (1% of 90,000)
+        - KSH 100,000 = 1,000.0 points (1% of 100,000)
+        """
+        if amount < 100:
+            return Decimal('0.0')
+        
+        # Calculate 1% of amount
+        points = Decimal(str(amount)) * Decimal('0.01')
+        
+        # Round to 1 decimal place
+        points = points.quantize(Decimal('0.1'))
+        
         return points
     
-    def add_points(self, amount_spent, sale=None, description=""):
-        """Add points to customer balance based on amount spent"""
+    def add_points(self, points, sale=None, description=""):
+        """
+        Add points directly to customer balance
+        Accepts Decimal points (e.g., 1.5 points)
+        
+        Args:
+            points: Number of points to add (supports decimals like 1.5)
+            sale: Optional Sale object to link transaction
+            description: Optional description string
+        
+        Returns:
+            Decimal: Number of points actually added
+        """
         if not self.pk or not self.phone_number:
             logger.warning("Attempted to add points to unregistered customer - BLOCKED")
-            return 0
+            return Decimal('0.0')
         
-        points_to_add = self.calculate_points_to_earn(amount_spent)
+        # Convert to Decimal with 1 decimal place
+        points_to_add = Decimal(str(points)).quantize(Decimal('0.1'))
         
-        if points_to_add > 0:
-            self.points_balance += points_to_add
-            self.total_points_earned += points_to_add
-            self.save(update_fields=['points_balance', 'total_points_earned'])
-            
-            LoyaltyTransaction.objects.create(
-                customer=self,
-                sale=sale,
-                points=points_to_add,
-                transaction_type='earned',
-                description=description or f"Earned from KSH {amount_spent:,.0f} purchase"
-            )
-            
-            logger.info(f"Customer {self.phone_number} earned {points_to_add} points")
-            return points_to_add
+        if points_to_add <= 0:
+            return Decimal('0.0')
         
-        return 0
+        # Convert existing balances to Decimal
+        current_balance = Decimal(str(self.points_balance))
+        current_total_earned = Decimal(str(self.total_points_earned))
+        
+        # Update customer balance
+        self.points_balance = current_balance + points_to_add
+        self.total_points_earned = current_total_earned + points_to_add
+        
+        self.save(update_fields=['points_balance', 'total_points_earned'])
+        
+        # Update customer statistics if sale is provided
+        if sale:
+            self.total_purchases += 1
+            self.total_spent += sale.total_amount
+            self.last_purchase_date = timezone.now()
+            self.save(update_fields=['total_purchases', 'total_spent', 'last_purchase_date'])
+        
+        # Create loyalty transaction record
+        LoyaltyTransaction.objects.create(
+            customer=self,
+            sale=sale,
+            points=points_to_add,
+            transaction_type='earned',
+            description=description or f"Earned {points_to_add} points"
+        )
+        
+        logger.info(f"✅ Customer {self.phone_number} earned {points_to_add} points")
+        return points_to_add
+    
+    def add_points_from_sale(self, sale, description=""):
+        """
+        Add points to customer balance based on sale amount.
+        1% of sale total = points earned
+        
+        Args:
+            sale: Sale object to calculate points from
+            description: Optional description string
+        
+        Returns:
+            Decimal: Number of points actually added
+        """
+        if not self.pk or not self.phone_number:
+            logger.warning("Attempted to add points to unregistered customer - BLOCKED")
+            return Decimal('0.0')
+        
+        if not sale:
+            return Decimal('0.0')
+        
+        # Calculate points as 1% of sale total
+        points_to_add = self.calculate_points_to_earn(float(sale.total_amount))
+        
+        if points_to_add <= 0:
+            return Decimal('0.0')
+        
+        # Update customer balance
+        self.points_balance = Decimal(str(self.points_balance)) + points_to_add
+        self.total_points_earned = Decimal(str(self.total_points_earned)) + points_to_add
+        
+        self.save(update_fields=['points_balance', 'total_points_earned'])
+        
+        # Update customer statistics
+        self.total_purchases += 1
+        self.total_spent += sale.total_amount
+        self.last_purchase_date = timezone.now()
+        self.save(update_fields=['total_purchases', 'total_spent', 'last_purchase_date'])
+        
+        # Create loyalty transaction record
+        LoyaltyTransaction.objects.create(
+            customer=self,
+            sale=sale,
+            points=points_to_add,
+            transaction_type='earned',
+            description=description or f"Earned {points_to_add} points (1% of KSH {sale.total_amount:,.0f})"
+        )
+        
+        logger.info(f"✅ Customer {self.phone_number} earned {points_to_add} points (1% of {sale.total_amount})")
+        return points_to_add
     
     def redeem_points(self, points_to_redeem, sale=None, description=""):
-        """Redeem points from customer balance (1 point = KSH 1)"""
+        """
+        Redeem points from customer balance (1 point = KSH 1 discount)
+        
+        Args:
+            points_to_redeem: Number of points to redeem (supports decimals)
+            sale: Optional Sale object to link transaction
+            description: Optional description string
+        
+        Returns:
+            Decimal: Cash value of redeemed points (1 point = KSH 1)
+        """
         if not self.pk or not self.phone_number:
             logger.warning("Attempted to redeem points for unregistered customer - BLOCKED")
             raise ValueError("Cannot redeem points: Customer is not registered")
         
+        points_to_redeem = Decimal(str(points_to_redeem)).quantize(Decimal('0.1'))
+        
         if points_to_redeem <= 0:
             raise ValueError("Points to redeem must be greater than 0")
         
-        if self.points_balance < points_to_redeem:
-            raise ValueError(
-                f"Insufficient points. Available: {self.points_balance}, "
-                f"Requested: {points_to_redeem}"
-            )
+        current_balance = Decimal(str(self.points_balance))
         
-        cash_value = points_to_redeem
+        if current_balance < points_to_redeem:
+            raise ValueError(f"Insufficient points. Available: {current_balance}, Requested: {points_to_redeem}")
         
-        self.points_balance -= points_to_redeem
-        self.total_points_redeemed += points_to_redeem
+        # Deduct points
+        self.points_balance = current_balance - points_to_redeem
+        self.total_points_redeemed = Decimal(str(self.total_points_redeemed)) + points_to_redeem
         self.save(update_fields=['points_balance', 'total_points_redeemed'])
         
+        # Create loyalty transaction record (negative points for redemption)
         LoyaltyTransaction.objects.create(
             customer=self,
             sale=sale,
             points=-points_to_redeem,
             transaction_type='redeemed',
-            description=description or f"Redeemed {points_to_redeem} points (KSH {cash_value})"
+            description=description or f"Redeemed {points_to_redeem} points"
         )
         
-        logger.info(
-            f"Customer {self.phone_number} redeemed {points_to_redeem} points "
-            f"(KSH {cash_value}). Remaining: {self.points_balance} points"
-        )
+        cash_value = points_to_redeem  # 1 point = KSH 1
+        logger.info(f"💰 Customer {self.phone_number} redeemed {points_to_redeem} points (KSH {cash_value})")
         
         return cash_value
     
     def can_redeem(self, points_to_redeem, sale_total):
-        """Check if customer can redeem specified points"""
+        """
+        Check if customer can redeem specified points.
+        
+        Returns:
+            tuple: (can_redeem: bool, message: str, max_points: Decimal)
+        """
         if not self.pk or not self.phone_number:
-            return False, "Customer is not registered", 0
+            return False, "Customer is not registered", Decimal('0.0')
+        
+        points_to_redeem = Decimal(str(points_to_redeem)).quantize(Decimal('0.1'))
         
         if points_to_redeem <= 0:
-            return False, "Points to redeem must be greater than 0", 0
+            return False, "Points to redeem must be greater than 0", Decimal('0.0')
         
-        if self.points_balance < points_to_redeem:
-            return False, f"Insufficient points. Available: {self.points_balance}", self.points_balance
+        current_balance = Decimal(str(self.points_balance))
+        
+        if current_balance < points_to_redeem:
+            return False, f"Insufficient points. Available: {current_balance}", current_balance
         
         if points_to_redeem > sale_total:
-            max_points = int(sale_total)
-            return False, f"Points cannot exceed sale amount. Max: {max_points}", max_points
+            max_points = Decimal(str(sale_total)).quantize(Decimal('0.1'))
+            return False, f"Points cannot exceed sale amount. Max: {max_points} points", max_points
         
         return True, "Can redeem", points_to_redeem
     
@@ -1077,19 +1139,16 @@ class Customer(models.Model):
     
     @property
     def points_value_ksh(self):
-        """Get cash value of points"""
-        return self.points_balance
+        """Cash value of points (1 point = KSH 1)"""
+        return Decimal(str(self.points_balance))
     
     @property
-    def tier_display(self):
-        """Get tier with emoji"""
-        emojis = {
-            'bronze': '🥉 Bronze',
-            'silver': '🥈 Silver',
-            'gold': '🥇 Gold',
-            'platinum': '💎 Platinum'
-        }
-        return emojis.get(self.tier, self.tier)
+    def display_points(self):
+        """Format points for display (e.g., '1.5')"""
+        points = Decimal(str(self.points_balance))
+        if points == int(points):
+            return str(int(points))
+        return str(points)
 
 
 class LoyaltyTransaction(models.Model):
@@ -1114,22 +1173,17 @@ class LoyaltyTransaction(models.Model):
         blank=True,
         related_name='loyalty_transactions'
     )
-    points = models.IntegerField(
+    points = models.DecimalField(
+        max_digits=10, 
+        decimal_places=1,
+        default=Decimal('0.0'),
         help_text="Positive for earned, negative for redeemed"
     )
-    transaction_type = models.CharField(
-        max_length=20, 
-        choices=TRANSACTION_TYPES
-    )
-    description = models.CharField(
-        max_length=255, 
-        blank=True
-    )
+    transaction_type = models.CharField(max_length=20, choices=TRANSACTION_TYPES)
+    description = models.CharField(max_length=255, blank=True)
     
     # Metadata
-    created_at = models.DateTimeField(
-        auto_now_add=True
-    )
+    created_at = models.DateTimeField(auto_now_add=True)
     created_by = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
@@ -1142,7 +1196,6 @@ class LoyaltyTransaction(models.Model):
         indexes = [
             models.Index(fields=['customer', '-created_at']),
             models.Index(fields=['sale']),
-            models.Index(fields=['transaction_type']),
         ]
         verbose_name = "Loyalty Transaction"
         verbose_name_plural = "Loyalty Transactions"
@@ -1153,7 +1206,8 @@ class LoyaltyTransaction(models.Model):
     
     @property
     def points_abs(self):
-        return abs(self.points)
+        """Absolute value of points (for display)"""
+        return abs(float(self.points))
     
     @property
     def is_earned(self):
@@ -1162,6 +1216,14 @@ class LoyaltyTransaction(models.Model):
     @property
     def is_redeemed(self):
         return self.transaction_type == 'redeemed'
+    
+    @property
+    def display_points(self):
+        """Format points for display"""
+        points = abs(self.points)
+        if points == int(points):
+            return str(int(points))
+        return str(points)
 
 
 class LoyaltySettings(models.Model):
@@ -1169,14 +1231,16 @@ class LoyaltySettings(models.Model):
     
     min_purchase_for_points = models.PositiveIntegerField(
         default=100,
-        help_text="Minimum purchase amount to earn points"
+        help_text="Minimum purchase amount to earn points (KSH)"
     )
-    points_per_unit = models.PositiveIntegerField(
-        default=100,
-        help_text="KSH spent per point (e.g., 100 = 1 point per 100 KSH)"
+    points_percentage = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal('1.00'),
+        help_text="Percentage of sale to award as points (e.g., 1.00 = 1%)"
     )
     max_points_per_transaction = models.PositiveIntegerField(
-        default=100,
+        default=100000,
         help_text="Maximum points that can be earned in a single transaction"
     )
     min_redeem_points = models.PositiveIntegerField(
@@ -1186,7 +1250,7 @@ class LoyaltySettings(models.Model):
     max_redeem_percentage = models.PositiveIntegerField(
         default=100,
         validators=[MinValueValidator(0), MaxValueValidator(100)],
-        help_text="Maximum percentage of sale that can be paid with points (100% = full payment)"
+        help_text="Maximum percentage of sale that can be paid with points"
     )
     points_expiry_days = models.PositiveIntegerField(
         default=365,
@@ -1210,7 +1274,7 @@ class LoyaltySettings(models.Model):
         verbose_name_plural = "Loyalty Settings"
     
     def __str__(self):
-        return f"Loyalty Program Settings (1 point per {self.points_per_unit} KSH)"
+        return f"Loyalty Program Settings ({self.points_percentage}% of sale = points)"
     
     @classmethod
     def get_settings(cls):
