@@ -373,6 +373,50 @@ LOGGING = {
     },
 }
 
+
+
+# ============================================
+# CACHE CONFIGURATION (for M-Pesa cart storage)
+# ============================================
+
+# Use local memory cache for development
+# For production, use Redis or Memcached
+if DEBUG:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'mpesa-cart-cache',
+            'TIMEOUT': 1800,  # 30 minutes
+            'OPTIONS': {
+                'MAX_ENTRIES': 1000,
+            }
+        }
+    }
+else:
+    # Production - Use Redis (recommended) or database cache
+    # Option 1: Redis (best for production)
+    # Uncomment if you have Redis installed
+    # CACHES = {
+    #     'default': {
+    #         'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+    #         'LOCATION': config('REDIS_URL', default='redis://127.0.0.1:6379/1'),
+    #         'TIMEOUT': 1800,
+    #         'OPTIONS': {
+    #             'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+    #         }
+    #     }
+    # }
+    
+    # Option 2: Database cache (fallback)
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
+            'LOCATION': 'django_cache_table',
+            'TIMEOUT': 1800,
+        }
+    }
+
+
 # Suppress specific warnings
 import warnings
 warnings.filterwarnings("ignore", message=".*Model 'staff.userstatus' was already registered.*")

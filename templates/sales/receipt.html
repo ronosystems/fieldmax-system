@@ -526,6 +526,24 @@
                 width: 100%;
             }
         }
+
+        /* Focus style for keyboard navigation */
+        .print-button:focus {
+            outline: 3px solid #ff9800;
+            outline-offset: 2px;
+        }
+
+        /* Hint text for Enter key */
+        .keyboard-hint {
+            text-align: center;
+            font-size: 11px;
+            color: #888;
+            margin-top: 10px;
+            padding: 5px;
+            background: #f5f5f5;
+            border-radius: 6px;
+            display: inline-block;
+        }
     </style>
 </head>
 <body>
@@ -706,16 +724,22 @@
                 </div>
             </div>
 
+            <!-- Keyboard Hint -->
+            <div class="receipt-footer" style="margin-top: 15px;">
+                <div class="keyboard-hint">
+                    <i class="fas fa-keyboard"></i> Press <kbd>Enter</kbd> to close | <kbd>Ctrl+P</kbd> to print
+                </div>
+            </div>
         </div>
     </div>
 
     <!-- PRINT BUTTONS -->
     <div class="print-actions no-print">
-        <button class="print-button" onclick="window.print()">
+        <button class="print-button" onclick="window.print()" id="printBtn">
             <i class="fas fa-print"></i> Print Receipt
         </button>
-        <button class="print-button secondary" onclick="window.close()">
-            <i class="fas fa-times"></i> Close
+        <button class="print-button secondary" onclick="closeWindow()" id="closeBtn">
+            <i class="fas fa-times"></i> Close (Enter)
         </button>
     </div>
 
@@ -749,11 +773,56 @@
             }
         }
         
-        // Wait for DOM to load then generate barcode
+        // Function to close window safely
+        function closeWindow() {
+            // Try to close the window
+            if (window.opener) {
+                // If opened from another window, just close
+                window.close();
+            } else {
+                // If not, try to close anyway
+                window.close();
+            }
+        }
+        
+        // Handle Enter key to close window
+        function handleKeyPress(event) {
+            // Check if Enter key is pressed (key code 13)
+            if (event.key === 'Enter' || event.keyCode === 13) {
+                event.preventDefault();
+                console.log('Enter key pressed - closing window');
+                closeWindow();
+            }
+            
+            // Optional: Escape key also closes (Ctrl+Shift+E for safety)
+            if (event.key === 'Escape' || event.keyCode === 27) {
+                event.preventDefault();
+                console.log('Escape key pressed - closing window');
+                closeWindow();
+            }
+        }
+        
+        // Wait for DOM to load then generate barcode and setup keyboard listener
         if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', generateBarcode);
+            document.addEventListener('DOMContentLoaded', function() {
+                generateBarcode();
+                setupKeyboardListener();
+            });
         } else {
             generateBarcode();
+            setupKeyboardListener();
+        }
+        
+        function setupKeyboardListener() {
+            // Add keyboard event listener for Enter key
+            document.addEventListener('keydown', handleKeyPress);
+            
+            // Also focus on the close button for visual feedback
+            const closeBtn = document.getElementById('closeBtn');
+            if (closeBtn) {
+                // Don't auto-focus, but add a visual indicator
+                closeBtn.setAttribute('title', 'Press Enter to close');
+            }
         }
         
         // Print function
@@ -761,7 +830,7 @@
             window.print();
         };
 
-        // Keyboard shortcut: Ctrl+P
+        // Keyboard shortcut: Ctrl+P for print
         document.addEventListener('keydown', function(e) {
             if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
                 e.preventDefault();
@@ -771,7 +840,7 @@
 
         // Auto-focus print button for keyboard users
         document.addEventListener('DOMContentLoaded', function() {
-            const printBtn = document.querySelector('.print-button');
+            const printBtn = document.getElementById('printBtn');
             if (printBtn) {
                 printBtn.addEventListener('keydown', function(e) {
                     if (e.key === 'Enter' || e.key === ' ') {
@@ -787,13 +856,21 @@
                     window.print();
                 }, 500);
             }
+            
+            // Show a small notification about Enter key
+            console.log('💡 Tip: Press Enter key to close this window');
         });
         
         // Handle print completion
         window.onafterprint = function() {
-            // Optional: Close window after print (uncomment if desired)
-            // setTimeout(function() { window.close(); }, 1000);
+            // Optional: Close after print (uncomment if desired)
+            // setTimeout(function() { closeWindow(); }, 1000);
         };
+        
+        // Clean up event listener when page unloads
+        window.addEventListener('beforeunload', function() {
+            document.removeEventListener('keydown', handleKeyPress);
+        });
     })();
     </script>
 </body>

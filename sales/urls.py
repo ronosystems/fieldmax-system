@@ -11,6 +11,7 @@ urlpatterns = [
     # Sales list and create
     path('sales/', views.sale_list, name='sale_list'),
     path('create/', views.sale_create, name='sale_create'),
+    path('api/sale/create/', views.sale_create_api, name='sale_create_api'),
     
     # ===== SOLD ITEMS =====
     path('sold-items/', views.sold_items_list, name='sold_items_list'),

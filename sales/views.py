@@ -1582,6 +1582,183 @@ def sale_create(request):
 
 
 
+@login_required
+def sale_create_api(request):
+    """API endpoint for POS sale creation - ALWAYS returns JSON"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Invalid method'})
+    
+    try:
+        data = json.loads(request.body)
+        
+        # Get cart from session
+        cart = request.session.get('sales_cart', [])
+        
+        if not cart:
+            return JsonResponse({'success': False, 'error': 'No items in cart'})
+        
+        with transaction.atomic():
+            # Normalize phone
+            def normalize_phone(phone):
+                if not phone:
+                    return ''
+                phone = ''.join(filter(str.isdigit, phone))
+                if phone.startswith('0') and len(phone) == 10:
+                    return '254' + phone[1:]
+                if phone.startswith('254') and len(phone) == 12:
+                    return phone
+                if len(phone) == 9:
+                    return '254' + phone
+                return phone
+            
+            buyer_phone = data.get('buyer_phone', '').strip()
+            normalized_phone = normalize_phone(buyer_phone)
+            
+            payment_method = data.get('payment_method', 'Cash')
+            amount_paid = Decimal(str(data.get('amount_paid', '0')))
+            points_redeemed = int(data.get('points_redeemed', '0'))
+            points_to_award = int(data.get('points_to_award', '0'))
+            verified_customer_id = data.get('verified_customer_id')
+            cash_amount = Decimal(str(data.get('cash_amount', '0')))
+            mpesa_amount = Decimal(str(data.get('mpesa_amount', '0')))
+            bank_amount = Decimal(str(data.get('bank_amount', '0')))
+            
+            # Calculate original subtotal
+            original_subtotal = Decimal('0.00')
+            for item in cart:
+                original_subtotal += Decimal(str(item.get('total', 0)))
+            
+            # Customer lookup
+            customer = None
+            is_registered_customer = False
+            
+            if verified_customer_id:
+                try:
+                    customer = Customer.objects.get(id=verified_customer_id, is_active=True)
+                    is_registered_customer = True
+                except Customer.DoesNotExist:
+                    pass
+            
+            if not is_registered_customer and normalized_phone:
+                try:
+                    customer = Customer.objects.get(phone_number=normalized_phone, is_active=True)
+                    is_registered_customer = True
+                except Customer.DoesNotExist:
+                    pass
+            
+            # Points discount
+            points_discount = Decimal('0.00')
+            final_amount = original_subtotal
+            
+            if is_registered_customer and points_redeemed > 0:
+                if customer.points_balance >= points_redeemed:
+                    points_discount = Decimal(str(points_redeemed))
+                    if points_discount > original_subtotal:
+                        points_discount = original_subtotal
+                        points_redeemed = int(original_subtotal)
+                    final_amount = original_subtotal - points_discount
+                    # ✅ NO NEED TO DEDUCT HERE - will deduct after sale creation
+                else:
+                    raise ValueError(f"Insufficient points. Available: {customer.points_balance}, Requested: {points_redeemed}")
+            
+            # Create sale
+            sale = Sale.objects.create(
+                seller=request.user,
+                buyer_name=customer.full_name if is_registered_customer and customer else data.get('buyer_name', 'Walk-in Customer'),
+                buyer_phone=normalized_phone,
+                payment_method=payment_method,
+                amount_paid=amount_paid,
+                total_amount=final_amount,
+                subtotal=original_subtotal,
+                is_credit=False,
+                points_redeemed=points_redeemed if is_registered_customer else 0,
+                points_discount=points_discount if is_registered_customer else Decimal('0.00'),
+                original_subtotal=original_subtotal
+            )
+            
+            # ✅ ADD THIS: Deduct points AFTER sale is created (needs sale ID)
+            if is_registered_customer and points_redeemed > 0:
+                customer.redeem_points(points_redeemed, sale=sale, description=f"Redeemed {points_redeemed} points for sale #{sale.sale_id}")
+                logger.info(f"💰 Points redeemed: {points_redeemed} points deducted from customer {customer.phone_number}")
+            
+            # Process items
+            for item in cart:
+                product = Product.objects.select_for_update().get(product_code=item['product_code'])
+                if product.quantity < item['quantity']:
+                    raise ValueError(f"Insufficient stock for {product.display_name}")
+                
+                SaleItem.objects.create(
+                    sale=sale,
+                    product=product,
+                    product_code=product.product_code,
+                    product_name=product.display_name,
+                    sku_value=product.sku_value,
+                    quantity=item['quantity'],
+                    unit_price=Decimal(str(item['price'])),
+                    total_price=Decimal(str(item['total']))
+                )
+                
+                product.quantity -= item['quantity']
+                if product.category and product.category.is_single_item:
+                    product.status = 'sold'
+                    product.quantity = 0
+                product.save()
+                
+                StockEntry.objects.create(
+                    product=product,
+                    quantity=-item['quantity'],
+                    entry_type='sale',
+                    unit_price=Decimal(str(item['price'])),
+                    total_amount=Decimal(str(item['total'])),
+                    reference_id=sale.sale_id,
+                    notes=f"Sale #{sale.sale_id}",
+                    created_by=request.user
+                )
+            
+            # Award points (only if no points were redeemed)
+            points_earned = 0
+            if is_registered_customer and customer and points_redeemed == 0 and points_to_award > 0:
+                points_earned = customer.add_points(points_to_award, sale=sale, description=f"Points earned for sale #{sale.sale_id}")
+                customer.total_purchases += 1
+                customer.total_spent += original_subtotal
+                customer.last_purchase_date = timezone.now()
+                customer.save()
+            elif is_registered_customer and customer and points_redeemed > 0:
+                # Still update purchase stats even when redeeming points
+                customer.total_purchases += 1
+                customer.total_spent += original_subtotal
+                customer.last_purchase_date = timezone.now()
+                customer.save()
+            
+            # Clear cart
+            request.session['sales_cart'] = []
+            
+            # Return JSON response
+            response_data = {
+                'success': True,
+                'sale_id': sale.sale_id,
+                'message': 'Sale completed successfully!'
+            }
+            
+            if is_registered_customer and customer:
+                response_data['points'] = {
+                    'earned': int(points_earned),
+                    'redeemed': points_redeemed,
+                    'balance': customer.points_balance,
+                    'discount': float(points_discount) if points_discount > 0 else 0
+                }
+            
+            return JsonResponse(response_data)
+            
+    except Exception as e:
+        logger.error(f"Sale API error: {str(e)}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+
+
+
+
 
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
@@ -2683,7 +2860,7 @@ def customer_detail(request, pk):
         'email': customer.email,
         'id_number': customer.id_number,
         'points': customer.points_balance,
-        'points_value': float(customer.points_balance),  # 1 point = KSH 1
+        'points_value': float(customer.points_balance), 
         'total_spent': float(customer.total_spent),
         'total_purchases': customer.total_purchases,
         'last_purchase': customer.last_purchase_date.isoformat() if customer.last_purchase_date else None,
@@ -2715,6 +2892,11 @@ def customer_detail(request, pk):
         'recent_sales': recent_sales,
     }
     return render(request, 'sales/customer_detail.html', context)
+
+
+
+
+
 
 @login_required
 def customer_transactions(request, pk):
@@ -2754,11 +2936,6 @@ def customer_list(request):
             Q(email__icontains=search)
         )
     
-    # Filter by tier
-    tier = request.GET.get('tier', '')
-    if tier:
-        customers = customers.filter(tier=tier)
-    
     # Sorting
     sort = request.GET.get('sort', '-points_balance')
     customers = customers.order_by(sort)
@@ -2773,9 +2950,6 @@ def customer_list(request):
     total_points = Customer.objects.aggregate(total=Sum('points_balance'))['total'] or 0
     total_spent = Customer.objects.aggregate(total=Sum('total_spent'))['total'] or 0
     
-    # Tier counts
-    platinum_customers = Customer.objects.filter(tier='platinum').count()
-    gold_customers = Customer.objects.filter(tier='gold').count()
     
     # New customers this month
     month_start = timezone.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
@@ -2785,7 +2959,7 @@ def customer_list(request):
         'customers': page_obj,
         'total_customers': total_customers,
         'total_points': total_points,
-        'total_points_value': total_points,  # 1 point = KSH 1
+        'total_points_value': total_points,  
         'total_spent': total_spent,
         'avg_spent': total_spent / total_customers if total_customers > 0 else 0,
         'new_customers': new_customers,

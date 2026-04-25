@@ -1,4 +1,5 @@
-
+# finance/views.py
+from django.core.cache import cache
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -3094,6 +3095,73 @@ def income_detail(request, transaction_id):
 # ============================================
 # M-PESA PAYMENT INTEGRATION - COMPLETE
 # ============================================
+
+# TEMPORARY CART STORAGE FOR M-PESA PAYMENTS
+@login_required
+def store_mpesa_cart(request):
+    """Store cart data temporarily while waiting for M-Pesa payment"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Invalid method'})
+    
+    try:
+        data = json.loads(request.body)
+        checkout_id = data.get('checkout_id')
+        cart_data = data.get('cart_data')
+        
+        if not checkout_id or not cart_data:
+            return JsonResponse({'success': False, 'error': 'Missing checkout_id or cart_data'})
+        
+        # Store in cache for 30 minutes
+        cache_key = f'mpesa_cart_{checkout_id}'
+        cache.set(cache_key, cart_data, timeout=1800)
+        
+        logger.info(f"Stored cart data for checkout: {checkout_id}")
+        return JsonResponse({'success': True})
+        
+    except Exception as e:
+        logger.error(f"Error storing cart: {str(e)}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+
+
+
+@login_required
+def get_mpesa_cart(request, checkout_id):
+    """Retrieve stored cart data after payment confirmation"""
+    try:
+        cache_key = f'mpesa_cart_{checkout_id}'
+        cart_data = cache.get(cache_key)
+        
+        if not cart_data:
+            return JsonResponse({'success': False, 'error': 'Cart data expired or not found'})
+        
+        # Delete after retrieval (one-time use)
+        cache.delete(cache_key)
+        
+        return JsonResponse({
+            'success': True,
+            'cart_data': cart_data
+        })
+        
+    except Exception as e:
+        logger.error(f"Error retrieving cart: {str(e)}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+
+
+async def clear_mpesa_cart_data(checkout_id):
+    """Clear cart data after timeout or failure"""
+    try:
+        cache_key = f'mpesa_cart_{checkout_id}'
+        cache.delete(cache_key)
+    except Exception as e:
+        logger.error(f"Error clearing cart: {str(e)}")
+
+
+
+
 
 @csrf_exempt
 @require_http_methods(["POST"])
