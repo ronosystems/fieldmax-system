@@ -54,7 +54,7 @@
         .nav-item:hover { background: #2a2a4a; color: white; }
         .nav-item.active { background: #0f3460; color: white; border-left: 3px solid #00d4aa; }
 
-        .main-content { flex: 1; background: #6e6e6e; overflow-y: auto; padding: 50px; height: 100%;  position: relative;  }
+        .main-content { flex: 1; background: #6e6e6e; overflow-y: auto; padding: 50px; height: 100%; }
         .product-search-area { background: white; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
         .search-input-group { display: flex; gap: 10px; flex-wrap: wrap; }
         .search-input { flex: 1; min-width: 200px; padding: 12px 15px; border: 2px solid #000000; border-radius: 10px; font-size: 1rem; outline: none; }
@@ -142,20 +142,6 @@
         .page {    display: none; }
         .page.active {    display: block;}
 
-        .cart-lock-overlay {    position: absolute;    top: 0;    left: 0;    right: 0;    bottom: 0;    background: rgba(0, 0, 0, 0.85);    backdrop-filter: blur(5px);    z-index: 9999;    display: none;    justify-content: center;    align-items: center;    border-radius: 12px;}
-        .cart-lock-overlay.active {   display: flex; }
-        .lock-card {    background: white;    border-radius: 20px;    padding: 40px;    width: 400px;    max-width: 90%;    text-align: center;    box-shadow: 0 20px 40px rgba(0,0,0,0.3);    animation: slideUp 0.3s ease; }
-        @keyframes slideUp {    from { transform: translateY(50px); opacity: 0; }    to { transform: translateY(0); opacity: 1; } }
-        .lock-card i {    font-size: 60px;    color: #28a745;    margin-bottom: 20px;}
-        .lock-card h3 {    margin-bottom: 10px;    color: #333;}
-        .lock-card p {    color: #666;    margin-bottom: 20px;}
-        .lock-pin-input {    width: 100%;    padding: 12px;    font-size: 20px;    text-align: center;    letter-spacing: 5px;    border: 2px solid #ddd;    border-radius: 10px;    margin-bottom: 15px;}
-        .lock-pin-input:focus {   border-color: #28a745;   outline: none;}
-        .lock-error {    color: #dc3545;    font-size: 12px;    margin-bottom: 15px;    display: none;}
-        .lock-error.show {    display: block;}
-        .lock-timer {    color: #ff9800;    font-weight: bold;    margin-top: 10px;}
-
-
     </style>
 </head>
 <body>
@@ -234,27 +220,7 @@
         </div>
     </div>
 
-
-
-
-
-
 <div class="main-content">
-    <!-- Cart Lock Overlay - Only covers main content -->
-    <div id="cartLockOverlay" class="cart-lock-overlay">
-        <div class="lock-card">
-            <i class="fas fa-lock"></i>
-            <h3>Cart Locked</h3>
-            <p>Your cart has been locked due to inactivity.<br>Enter PIN to continue.</p>
-            <input type="password" id="lockPinInput" class="lock-pin-input" placeholder="••••" maxlength="4" pattern="[0-9]{4}" inputmode="numeric">
-            <div id="lockError" class="lock-error">Invalid PIN. Please try again.</div>
-            <button class="action-btn" onclick="unlockCart()" style="width: 100%;">
-                <i class="fas fa-key"></i> Unlock Cart
-            </button>
-            <div id="lockTimer" class="lock-timer"></div>
-        </div>
-    </div>
-    
     <!-- POS Page (Default) -->
     <div id="pos-page" class="page active">
         <div class="product-search-area">
@@ -350,6 +316,7 @@
                                                 <li>Earn 1 point for every KSH 100 spent</li>
                                                 <li>1 point = KSH 1 discount on future purchases</li>
                                                 <li>Redeem points anytime - use any amount</li>
+                                                <li>Progress through tiers based on points</li>
                                             </ul>
                                         </div>
                                     </div>
@@ -614,9 +581,6 @@ let subtotal = 0;
 let total    = 0;
 let selectedPayment  = 'Cash';
 let selectedBankName = null;
-let inactivityTimer = null;
-let cartLocked = false;
-let lockExpiryTime = null;
 
 // Customer
 let customerId            = null;
@@ -954,292 +918,6 @@ function checkCanFinalize() {
     }
     btn.disabled = !ready;
 }
-
-
-
-
-// ============================================
-// CART LOCK/UNLOCK FUNCTIONALITY
-// ============================================
-
-const LOCK_PIN = "2026"; // Default PIN - Change this to your desired PIN
-const INACTIVITY_TIMEOUT = 2 * 60 * 1000; // 2 minutes in milliseconds
-
-// Set custom PIN (run once to change)
-function setLockPin(newPin) {
-    localStorage.setItem('cart_lock_pin', newPin);
-    showToast('PIN updated successfully!', 'success');
-}
-
-// Get current PIN
-function getLockPin() {
-    return localStorage.getItem('cart_lock_pin') || LOCK_PIN;
-}
-
-// Reset inactivity timer
-function resetInactivityTimer() {
-    if (cartLocked) return;
-    
-    if (inactivityTimer) {
-        clearTimeout(inactivityTimer);
-    }
-    
-    inactivityTimer = setTimeout(() => {
-        lockCart();
-    }, INACTIVITY_TIMEOUT);
-}
-
-// Lock the cart
-function lockCart() {
-    if (cartLocked) return;
-    
-    cartLocked = true;
-    lockExpiryTime = Date.now() + INACTIVITY_TIMEOUT;
-    
-    // Store lock state in session
-    sessionStorage.setItem('cart_locked', 'true');
-    sessionStorage.setItem('cart_lock_time', Date.now());
-    
-    // Show overlay
-    const overlay = document.getElementById('cartLockOverlay');
-    if (overlay) {
-        overlay.classList.add('active');
-        document.getElementById('lockPinInput').value = '';
-        document.getElementById('lockError').classList.remove('show');
-        
-        // Disable cart interactions
-        disableCartInteractions(true);
-        
-        showToast('Cart locked due to inactivity. Enter PIN to unlock.', 'warning');
-        startLockCountdown();
-    }
-}
-
-// Start countdown timer for lock screen
-function startLockCountdown() {
-    const timerEl = document.getElementById('lockTimer');
-    if (!timerEl) return;
-    
-    const updateTimer = setInterval(() => {
-        if (!cartLocked) {
-            clearInterval(updateTimer);
-            timerEl.textContent = '';
-            return;
-        }
-        
-        const remaining = lockExpiryTime - Date.now();
-        if (remaining <= 0) {
-            clearInterval(updateTimer);
-            // Cart would be cleared after timeout (optional)
-            // clearCartAndLock();
-        } else {
-            const minutes = Math.floor(remaining / 60000);
-            const seconds = Math.floor((remaining % 60000) / 1000);
-            timerEl.textContent = `Auto-clear in ${minutes}:${seconds.toString().padStart(2, '0')}`;
-        }
-    }, 1000);
-}
-
-// Optional: Clear cart if locked too long
-function clearCartAndLock() {
-    if (cartLocked) {
-        clearCart();
-        showToast('Cart has been cleared due to prolonged inactivity', 'warning');
-        unlockCart();
-    }
-}
-
-// Unlock the cart
-function unlockCart() {
-    const enteredPin = document.getElementById('lockPinInput').value;
-    const correctPin = getLockPin();
-    
-    if (enteredPin === correctPin) {
-        cartLocked = false;
-        lockExpiryTime = null;
-        
-        // Clear session storage
-        sessionStorage.removeItem('cart_locked');
-        sessionStorage.removeItem('cart_lock_time');
-        
-        // Hide overlay
-        const overlay = document.getElementById('cartLockOverlay');
-        if (overlay) {
-            overlay.classList.remove('active');
-        }
-        
-        // Re-enable cart interactions
-        disableCartInteractions(false);
-        
-        // Reset timer
-        resetInactivityTimer();
-        
-        showToast('Cart unlocked!', 'success');
-        
-        // Reload cart to ensure latest data
-        loadCart();
-    } else {
-        const errorEl = document.getElementById('lockError');
-        if (errorEl) {
-            errorEl.classList.add('show');
-            setTimeout(() => {
-                errorEl.classList.remove('show');
-            }, 2000);
-        }
-        document.getElementById('lockPinInput').value = '';
-        showToast('Invalid PIN', 'error');
-    }
-}
-
-// Enable/disable cart interactions
-function disableCartInteractions(disabled) {
-    const elements = [
-        'productSearchInput',
-        'customPrice',
-        'addToCart',
-        'cartTableBody',
-        'clearCartBtn'
-    ];
-    
-    // Disable product search and add buttons
-    const searchInput = document.getElementById('productSearchInput');
-    if (searchInput) searchInput.disabled = disabled;
-    
-    const customPrice = document.getElementById('customPrice');
-    if (customPrice) customPrice.disabled = disabled;
-    
-    const addBtn = document.querySelector('.add-btn');
-    if (addBtn) addBtn.disabled = disabled;
-    
-    const clearBtn = document.querySelector('.clear-cart-btn');
-    if (clearBtn) clearBtn.disabled = disabled;
-    
-    // Add visual indicator
-    const cartContainer = document.querySelector('.cart-table-container');
-    if (cartContainer) {
-        if (disabled) {
-            cartContainer.style.opacity = '0.5';
-            cartContainer.style.pointerEvents = 'none';
-        } else {
-            cartContainer.style.opacity = '1';
-            cartContainer.style.pointerEvents = 'auto';
-        }
-    }
-}
-
-// Track user activity
-function trackActivity() {
-    if (!cartLocked) {
-        resetInactivityTimer();
-    }
-}
-
-// Setup activity listeners
-function setupActivityTracking() {
-    const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
-    events.forEach(event => {
-        document.addEventListener(event, trackActivity);
-    });
-}
-
-// Check lock state on page load
-function checkLockState() {
-    const wasLocked = sessionStorage.getItem('cart_locked');
-    const lockTime = sessionStorage.getItem('cart_lock_time');
-    
-    if (wasLocked === 'true' && lockTime) {
-        const timeLocked = Date.now() - parseInt(lockTime);
-        if (timeLocked < INACTIVITY_TIMEOUT) {
-            // Still within lock period
-            lockCart();
-        } else {
-            // Lock period expired, clear session
-            sessionStorage.removeItem('cart_locked');
-            sessionStorage.removeItem('cart_lock_time');
-        }
-    }
-}
-
-// Override existing cart functions to check lock state
-const originalAddToCart = addToCart;
-const originalUpdateQty = updateQty;
-const originalRemoveItem = removeItem;
-const originalClearCart = clearCart;
-
-// Wrap cart functions with lock check
-window.addToCart = async function() {
-    if (cartLocked) {
-        showToast('Cart is locked. Please unlock first.', 'error');
-        return;
-    }
-    return originalAddToCart();
-};
-
-window.updateQty = async function(productCode, price, qty) {
-    if (cartLocked) {
-        showToast('Cart is locked. Please unlock first.', 'error');
-        return;
-    }
-    return originalUpdateQty(productCode, price, qty);
-};
-
-window.removeItem = async function(productCode, price) {
-    if (cartLocked) {
-        showToast('Cart is locked. Please unlock first.', 'error');
-        return;
-    }
-    return originalRemoveItem(productCode, price);
-};
-
-window.clearCart = async function() {
-    if (cartLocked) {
-        showToast('Cart is locked. Please unlock first.', 'error');
-        return;
-    }
-    return originalClearCart();
-};
-
-// Also lock finalize sale
-const originalFinalizeSale = finalizeSale;
-window.finalizeSale = async function() {
-    if (cartLocked) {
-        showToast('Cart is locked. Please unlock first.', 'error');
-        return;
-    }
-    return originalFinalizeSale();
-};
-
-// Initialize lock system
-function initLockSystem() {
-    setupActivityTracking();
-    checkLockState();
-    resetInactivityTimer();
-}
-
-// Change PIN (Admin function - can be called from console or settings)
-window.changeLockPin = function(newPin) {
-    if (newPin && newPin.length === 4 && /^\d+$/.test(newPin)) {
-        setLockPin(newPin);
-    } else {
-        showToast('PIN must be 4 digits', 'error');
-    }
-};
-
-// Quick unlock with Enter key
-document.addEventListener('DOMContentLoaded', function() {
-    const pinInput = document.getElementById('lockPinInput');
-    if (pinInput) {
-        pinInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                unlockCart();
-            }
-        });
-    }
-    
-    // Initialize lock system
-    initLockSystem();
-});
-
 
 
 
