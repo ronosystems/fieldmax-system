@@ -266,6 +266,13 @@ SENDGRID_API_KEY = config('SENDGRID_API_KEY', default='')
 
 
 
+# Africa's Talking Configuration
+AFRICASTALKING_USERNAME = config('AFRICASTALKING_USERNAME', default='sandbox')
+AFRICASTALKING_API_KEY = config('AFRICASTALKING_API_KEY', default='')
+SMS_ENABLED = config('SMS_ENABLED', default=True, cast=bool)
+SMS_PROVIDER = config('SMS_PROVIDER', default='africastalking')
+
+
 
 # For development, you can also use console backend
 if DEBUG:

@@ -6,9 +6,12 @@ from django.db.models import Q, Sum, Count, Avg, F
 from django.http import JsonResponse
 from django.utils import timezone
 from decimal import Decimal
+from django.conf import settings
 import json
 import logging
 import calendar
+import random  
+import africastalking 
 from datetime import timedelta, datetime, date
 from finance.kopokopo_service import stk_push_request, clean_phone_number
 from finance.models import MpesaTransaction
@@ -3067,10 +3070,17 @@ def customer_delete(request, pk):
 
 # ============================================
 # OTP FOR POINTS REDEMPTION
-# ============================================
+# ===========================================
 
-import random
-from datetime import datetime, timedelta
+try:
+    africastalking.initialize(
+        username=settings.AFRICASTALKING_USERNAME,
+        api_key=settings.AFRICASTALKING_API_KEY
+    )
+    sms = africastalking.SMS
+except Exception as e:
+    sms = None
+    print(f"Warning: Failed to initialize Africa's Talking: {e}")
 
 @login_required
 def send_otp(request):
@@ -3085,13 +3095,39 @@ def send_otp(request):
             if not phone:
                 return JsonResponse({'success': False, 'error': 'Phone number required'})
             
-            # Clean phone number
             cleaned_phone = normalize_phone(phone)
             
-            # Generate 4-digit OTP
+            # ============================================
+            # FIX: Format phone number for Africa's Talking
+            # ============================================
+            def format_for_africastalking(phone):
+                """Convert to format expected by Africa's Talking Sandbox"""
+                # Remove any non-digit characters
+                digits = ''.join(filter(str.isdigit, phone))
+                
+                # For Sandbox mode, Africa's Talking expects local format (0722xxxxxx)
+                # Remove the 254 prefix if present
+                if digits.startswith('254') and len(digits) == 12:
+                    # Convert 254722527955 -> 0722527955
+                    return '0' + digits[3:]  # Remove 254 and add leading 0
+                
+                # If it starts with 0 and is 10 digits, keep as is
+                if digits.startswith('0') and len(digits) == 10:
+                    return digits
+                
+                # If it's 9 digits (missing leading 0), add it
+                if len(digits) == 9:
+                    return '0' + digits
+                
+                return digits
+            
+            # For SMS sending, use local format
+            sms_phone = format_for_africastalking(cleaned_phone)
+            
+            # Generate OTP
             otp = f"{random.randint(1000, 9999)}"
             
-            # Store OTP in session with expiry (5 minutes)
+            # Store OTP in session (using normalized phone as key)
             request.session[f'otp_{cleaned_phone}'] = {
                 'code': otp,
                 'expires': (timezone.now() + timedelta(minutes=5)).isoformat(),
@@ -3099,33 +3135,48 @@ def send_otp(request):
                 'points': points
             }
             
-            # Log OTP to console for testing
-            logger.info("=" * 50)
-            logger.info(f"🔐 OTP GENERATED FOR {cleaned_phone}")
-            logger.info(f"📱 OTP CODE: {otp}")
-            logger.info(f"⭐ Points to redeem: {points}")
-            logger.info(f"⏰ Expires in 5 minutes")
-            logger.info("=" * 50)
+            # Send SMS using settings
+            message = f"FIELDMAX: Use OTP {otp} to redeem {points} loyalty points. Valid for 5 minutes."
             
-            # Also print to console for immediate visibility
-            print("\n" + "=" * 60)
-            print(f"🔐 OTP VERIFICATION CODE")
-            print(f"📞 Phone: {cleaned_phone}")
-            print(f"🔢 OTP: {otp}")
-            print(f"⭐ Points: {points}")
-            print("=" * 60 + "\n")
+            sms_sent = False
+            if settings.SMS_ENABLED and sms:
+                try:
+                    # Use the formatted phone number for SMS
+                    response = sms.send(message, [sms_phone])
+                    sms_sent = True
+                    logger.info(f"OTP sent to {sms_phone}: {response}")
+                    print(f"✅ SMS sent to {sms_phone}")
+                except Exception as e:
+                    logger.error(f"SMS failed: {str(e)}")
+                    print(f"SMS Error: {e}")
             
-            return JsonResponse({
-                'success': True,
-                'message': 'OTP sent successfully',
-                'otp': otp  # Remove this line in production
-            })
-            
+            if sms_sent:
+                return JsonResponse({
+                    'success': True,
+                    'message': 'OTP sent to customer\'s phone'
+                })
+            else:
+                # Fallback for testing
+                print("\n" + "=" * 60)
+                print(f"⚠️ SMS FAILED - OTP FOR TESTING ONLY")
+                print(f"📞 Customer Phone: {cleaned_phone}")
+                print(f"📱 SMS Format: {sms_phone}")
+                print(f"🔢 OTP: {otp}")
+                print(f"⭐ Points: {points}")
+                print("=" * 60 + "\n")
+                return JsonResponse({
+                    'success': True,
+                    'message': 'OTP generated (SMS failed - check console)',
+                    'otp': otp if settings.DEBUG else None
+                })
+                
         except Exception as e:
             logger.error(f"Error sending OTP: {str(e)}")
             return JsonResponse({'success': False, 'error': str(e)})
     
     return JsonResponse({'success': False, 'error': 'Invalid method'})
+
+
 
 
 @login_required

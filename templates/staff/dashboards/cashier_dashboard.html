@@ -116,7 +116,9 @@
 
         .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.2); border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
-        .toast-message { position: fixed; bottom: 70px; left: 50%; transform: translateX(-50%); background: #333; color: white; padding: 10px 20px; border-radius: 8px; z-index: 2000; opacity: 0; transition: opacity 0.3s; }
+
+
+        .toast-message { position: fixed; bottom: 300px; left: 50%; transform: translateX(-50%); background: #333; color: rgb(0, 0, 0); padding: 75px 150px; border-radius: 8px; z-index: 2000; opacity: 0; transition: opacity 0.3s;   font-size: 30px; box-shadow: #000000; }
         .toast-message.show { opacity: 1; }
 
         @media (max-width: 1024px) { .left-sidebar { width: 5%; min-width: 65px; } .left-sidebar .nav-label, .left-sidebar .sidebar-section-title, .left-sidebar .user-name { display: none; } .right-sidebar { width: 30%; min-width: 260px; } }
@@ -168,6 +170,7 @@
         <div class="card-slideshow" style="position: relative; height: 150px; overflow: hidden; border-radius: 8px;">
             <img class="card-slide active" src="{% static 'images/WALLPAPER.jpg' %}" alt="SHOP VIEW 1">
             <img class="card-slide" src="{% static 'images/TILL1.jpeg' %}" alt="BUY GOODS TILL 1">
+            <img class="card-slide" src="{% static 'images/TILL1.jpeg' %}" alt="BUY GOODS TILL 1">
         </div>
     </div>
 
@@ -175,6 +178,7 @@
     <div class="card">
         <div class="card-slideshow" style="position: relative; height: 150px; overflow: hidden; border-radius: 8px;">
             <img class="card-slide active" src="{% static 'images/FIELDMAXSHOP.jpg' %}" alt="SHOP VIEW 2">
+            <img class="card-slide" src="{% static 'images/TILL2.jpeg' %}" alt="BUY GOODS TILL 2">
             <img class="card-slide" src="{% static 'images/TILL2.jpeg' %}" alt="BUY GOODS TILL 2">
         </div>
     </div>
@@ -244,101 +248,83 @@
         </div>
     </div>
 
-    <!-- Registration Page -->
-    <div id="register-page" class="page">
-        <div class="row justify-content-center">
-            <div class="col-md-12">
-                <div class="card">
-                    <div class="card-header bg-primary text-white">
-                        <button class="btn btn-light btn-sm float-end" onclick="showPage('pos')">
-                            <i class="fas fa-arrow-left"></i> Back to POS
-                        </button>
-                        <h5 class="mb-0">
-                            <i class="fas fa-id-card me-2"></i>
-                            Register New Customer
-                        </h5>
+<!-- Registration Page -->
+<div id="register-page" class="page">
+    <div class="row justify-content-center">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <button class="btn btn-light btn-sm float-end" onclick="showPage('pos')">
+                        <i class="fas fa-arrow-left"></i> Back to POS
+                    </button>
+                    <h5 class="mb-0">
+                        <i class="fas fa-id-card me-2"></i>
+                        Register New Customer
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <!-- Welcome Points Info -->
+                    <div class="alert alert-info">
+                        <i class="fas fa-gift me-2"></i>
+                        <strong>Welcome Bonus:</strong> New customers receive 
+                        <strong>{{ settings.welcome_points|default:"100" }} points</strong> worth 
+                        <strong>KSH {{ settings.welcome_points|default:"100" }}</strong> on registration!
                     </div>
-                    <div class="card-body">
-                        <!-- Welcome Points Info -->
-                        <div class="alert alert-info">
-                            <i class="fas fa-gift me-2"></i>
-                            <strong>Welcome Bonus:</strong> New customers receive 
-                            <strong>{{ settings.welcome_points }} points</strong> worth 
-                            <strong>KSH {{ settings.welcome_points }}</strong> on registration!
+                    
+                    <form method="post" id="registerForm" action="{% url 'sales:customer_register' %}" onsubmit="return submitCustomerRegistration(event)">
+                        {% csrf_token %}
+                        
+                        <div class="row mb-3">
+                            <label class="col-md-3 col-form-label">Phone Number *</label>
+                            <div class="col-md-9">
+                                <input type="text" name="phone_number" id="reg_phone" class="form-control" 
+                                       placeholder="07XX XXX XXX" required>
+                                <small class="text-muted">Will be automatically formatted to international format (254XXXXXXXXX)</small>
+                                <div id="reg_phone_error" class="text-danger" style="font-size:12px; display:none;"></div>
+                            </div>
                         </div>
                         
-                        <form method="post" id="registerForm" action="{% url 'sales:customer_register' %}">
-                            {% csrf_token %}
-                            
-                            <div class="row mb-3">
-                                <label class="col-md-3 col-form-label">Phone Number *</label>
-                                <div class="col-md-9">
-                                    <input type="text" name="phone_number" id="phone_number" class="form-control" 
-                                           placeholder="07XX XXX XXX" required 
-                                           pattern="[0-9]{10,}" title="Please enter a valid phone number">
-                                    <small class="text-muted">Will be automatically formatted to international format (254XXXXXXXXX)</small>
-                                </div>
+                        <div class="row mb-3">
+                            <label class="col-md-3 col-form-label">Full Name *</label>
+                            <div class="col-md-9">
+                                <input type="text" name="full_name" id="reg_name" class="form-control" 
+                                       placeholder="John Doe" required>
+                                <div id="reg_name_error" class="text-danger" style="font-size:12px; display:none;"></div>
                             </div>
-                            
-                            <div class="row mb-3">
-                                <label class="col-md-3 col-form-label">Full Name *</label>
-                                <div class="col-md-9">
-                                    <input type="text" name="full_name" class="form-control" 
-                                           placeholder="John Doe" required>
-                                </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <label class="col-md-3 col-form-label">Email</label>
+                            <div class="col-md-9">
+                                <input type="email" name="email" id="reg_email" class="form-control" 
+                                       placeholder="customer@example.com">
                             </div>
-                            
-                            <div class="row mb-3">
-                                <label class="col-md-3 col-form-label">Email</label>
-                                <div class="col-md-9">
-                                    <input type="email" name="email" class="form-control" 
-                                           placeholder="customer@example.com">
-                                </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <label class="col-md-3 col-form-label">ID Number</label>
+                            <div class="col-md-9">
+                                <input type="text" name="id_number" id="reg_id" class="form-control" 
+                                       placeholder="12345678">
                             </div>
-                            
-                            <div class="row mb-3">
-                                <label class="col-md-3 col-form-label">ID Number</label>
-                                <div class="col-md-9">
-                                    <input type="text" name="id_number" class="form-control" 
-                                           placeholder="12345678">
-                                </div>
+                        </div>
+                      
+                        <div class="row">
+                            <div class="col-md-9 offset-md-3">
+                                <button type="submit" class="btn btn-primary btn-lg" id="registerCustomerBtn">
+                                    <i class="fas fa-save me-2"></i>Register Customer
+                                </button>
+                                <button type="button" class="btn btn-secondary btn-lg ms-2" onclick="showPage('pos')">
+                                    <i class="fas fa-times me-2"></i>Cancel
+                                </button>
                             </div>
-                            
-                            <hr>
-                            
-                            <!-- Points Info -->
-                            <div class="row mb-3">
-                                <div class="col-md-9 offset-md-3">
-                                    <div class="card bg-light">
-                                        <div class="card-body">
-                                            <h6>Loyalty Program Benefits:</h6>
-                                            <ul class="mb-0">
-                                                <li>Earn 1 point for every KSH 100 spent</li>
-                                                <li>1 point = KSH 1 discount on future purchases</li>
-                                                <li>Redeem points anytime - use any amount</li>
-                                                <li>Progress through tiers based on points</li>
-                                            </ul>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div class="row">
-                                <div class="col-md-9 offset-md-3">
-                                    <button type="submit" class="btn btn-primary btn-lg">
-                                        <i class="fas fa-save me-2"></i>Register Customer
-                                    </button>
-                                    <button type="button" class="btn btn-secondary btn-lg ms-2" onclick="showPage('pos')">
-                                        <i class="fas fa-times me-2"></i>Cancel
-                                    </button>
-                                </div>
-                            </div>
-                        </form>
-                    </div>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>
     </div>
+</div>
 </div>
 
     <div class="right-sidebar">
@@ -689,6 +675,17 @@ function showPage(page) {
     } else if (page === 'register') {
         posPage.classList.remove('active');
         registerPage.classList.add('active');
+        
+        // Clear registration form when showing
+        document.getElementById('reg_phone').value = '';
+        document.getElementById('reg_name').value = '';
+        document.getElementById('reg_email').value = '';
+        document.getElementById('reg_id').value = '';
+        
+        // Focus on phone field
+        setTimeout(() => {
+            document.getElementById('reg_phone').focus();
+        }, 100);
     }
 }
 
@@ -722,7 +719,7 @@ function normalizePhoneNumber(phone) {
 
 // Auto-normalize phone number on blur
 document.addEventListener('DOMContentLoaded', function() {
-    const phoneInput = document.getElementById('phone_number');
+    const phoneInput = document.getElementById('reg_phone'); // ✅ Correct
     
     if (phoneInput) {
         phoneInput.addEventListener('blur', function() {
@@ -742,7 +739,7 @@ document.addEventListener('DOMContentLoaded', function() {
 const registerForm = document.getElementById('registerForm');
 if (registerForm) {
     registerForm.addEventListener('submit', function(e) {
-        const phoneInput = document.getElementById('phone_number');
+        const phoneInput = document.getElementById('reg_phone'); // ✅ Correct
         let phone = phoneInput.value.trim();
         
         if (phone) {
@@ -918,6 +915,148 @@ function checkCanFinalize() {
     }
     btn.disabled = !ready;
 }
+
+
+
+//============================================
+// Customer Registration via AJAX
+//=============================================
+async function submitCustomerRegistration(event) {
+    event.preventDefault(); // Prevent normal form submission
+    
+    // Get form values
+    const phone = document.getElementById('reg_phone').value.trim();
+    const name = document.getElementById('reg_name').value.trim();
+    const email = document.getElementById('reg_email').value.trim();
+    const idNumber = document.getElementById('reg_id').value.trim();
+    
+    // Clear previous errors
+    document.getElementById('reg_phone_error').style.display = 'none';
+    document.getElementById('reg_name_error').style.display = 'none';
+    
+    // Validate
+    let hasError = false;
+    
+    if (!phone) {
+        document.getElementById('reg_phone_error').textContent = 'Phone number is required';
+        document.getElementById('reg_phone_error').style.display = 'block';
+        hasError = true;
+    } else {
+        // Validate phone format
+        const cleanPhone = phone.replace(/\D/g, '');
+        if (cleanPhone.length < 9 || cleanPhone.length > 12) {
+            document.getElementById('reg_phone_error').textContent = 'Please enter a valid phone number (10-12 digits)';
+            document.getElementById('reg_phone_error').style.display = 'block';
+            hasError = true;
+        }
+    }
+    
+    if (!name) {
+        document.getElementById('reg_name_error').textContent = 'Full name is required';
+        document.getElementById('reg_name_error').style.display = 'block';
+        hasError = true;
+    }
+    
+    if (hasError) return;
+    
+    // Disable button and show loading
+    const btn = document.getElementById('registerCustomerBtn');
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Registering...';
+    
+    try {
+        // Create FormData object for traditional form submission
+        const formData = new FormData();
+        formData.append('phone_number', phone);
+        formData.append('full_name', name);
+        formData.append('email', email);
+        formData.append('id_number', idNumber);
+        formData.append('csrfmiddlewaretoken', CSRF);
+        
+        const response = await fetch('/sales/customer/register/', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        });
+        
+        // Check if response is JSON or redirect
+        const contentType = response.headers.get('content-type');
+        
+        if (contentType && contentType.includes('application/json')) {
+            const data = await response.json();
+            if (data.success) {
+                showToast(`✅ Customer ${name} registered successfully! Welcome bonus: ${data.welcome_points || 100} points`, 'success');
+                
+                // Clear form
+                document.getElementById('reg_phone').value = '';
+                document.getElementById('reg_name').value = '';
+                document.getElementById('reg_email').value = '';
+                document.getElementById('reg_id').value = '';
+                
+                // Auto-fill in customer lookup fields
+                const customerPhoneInput = document.getElementById('customer-phone-input');
+                if (customerPhoneInput) {
+                    customerPhoneInput.value = phone;
+                    // Trigger lookup
+                    setTimeout(() => {
+                        lookupCustomer();
+                    }, 500);
+                }
+                
+                // Also update main customer fields
+                const mainCustomerPhone = document.getElementById('customerPhone');
+                if (mainCustomerPhone) {
+                    mainCustomerPhone.value = phone;
+                    onCustomerPhoneInput(phone);
+                }
+                
+                // Switch back to POS page after 1.5 seconds
+                setTimeout(() => {
+                    showPage('pos');
+                    showToast('Customer ready for checkout!', 'success');
+                }, 1500);
+            } else {
+                showToast(data.error || 'Registration failed', 'error');
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        } else {
+            // If redirect happened, registration was successful
+            showToast(`✅ Customer ${name} registered successfully!`, 'success');
+            
+            // Clear form
+            document.getElementById('reg_phone').value = '';
+            document.getElementById('reg_name').value = '';
+            document.getElementById('reg_email').value = '';
+            document.getElementById('reg_id').value = '';
+            
+            // Auto-fill customer phone
+            const customerPhoneInput = document.getElementById('customer-phone-input');
+            if (customerPhoneInput) {
+                customerPhoneInput.value = phone;
+                setTimeout(() => {
+                    lookupCustomer();
+                }, 500);
+            }
+            
+            // Switch back to POS
+            setTimeout(() => {
+                showPage('pos');
+            }, 1500);
+        }
+        
+    } catch (error) {
+        console.error('Registration error:', error);
+        showToast('Registration failed: ' + error.message, 'error');
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    }
+}
+
+
 
 
 
@@ -1466,7 +1605,18 @@ function resetMpesaUI() {
 }
 
 
-
+async function clearMpesaCartData() {
+    if (currentCheckoutId) {
+        try {
+            await safeFetch(`/finance/mpesa/clear-cart/${currentCheckoutId}/`, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': CSRF }
+            });
+        } catch(e) {
+            console.warn('Failed to clear cart data:', e);
+        }
+    }
+}
 
 
 
@@ -1475,9 +1625,9 @@ function resetMpesaUI() {
 // ============================================
 // ============================================
 // POINTS REDEMPTION - NEW FLOW
+// CUSTOMER SHOULD RECIEVE OTP
+// OTP MIST BE VERIFIED BEFORE REDEMTION
 // ============================================
-
-
 
 //MOVE FOCUS TO NEXT OTP INPUT
 function moveToNextPoints(input, idx) {
@@ -1572,6 +1722,225 @@ function updatePointsCartTotal() {
 }
 
 
+// SEND OTP FOR POINTS REDEMPTION - ONLY CALLED WHEN REDEEMING POINTS
+async function sendPointsOtp() {
+    // Validate customer exists
+    if (!pointsCustomerId) {
+        showToast('Please look up a registered customer first', 'error');
+        return;
+    }
+
+    // Validate points to redeem
+    const points = parseInt(document.getElementById('pointsToRedeem').value) || 0;
+    if (points <= 0) {
+        showToast('Enter how many points to redeem', 'error');
+        return;
+    }
+    
+    // Validate customer has enough points
+    if (points > pointsCustomerBalance) {
+        showToast(`Customer only has ${Math.floor(pointsCustomerBalance)} points available`, 'error');
+        return;
+    }
+    
+    // Validate points don't exceed cart total
+    if (points > total) {
+        showToast(`Cannot redeem more than KSH ${total.toLocaleString()} (the sale total)`, 'error');
+        return;
+    }
+
+    // Store pending redemption amount
+    pointsPendingRedeem = points;
+    pendingRedeemPoints = points;
+
+    const btn = document.getElementById('sendPointsOtpBtn');
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Sending OTP...';
+
+    try {
+        const customerPhone = document.getElementById('pointsCustomerPhone').value.trim();
+        
+        const data = await safeFetch(URLS.send_otp, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+            body: JSON.stringify({
+                phone: customerPhone,
+                purpose: 'redeem_points',
+                points: points,
+                amount: total,
+                discounted_amount: Math.max(0, total - points)
+            })
+        });
+
+        if (data.success) {
+            serverOtp = data.otp;
+            // Show OTP section
+            document.getElementById('pointsOtpSection').style.display = 'block';
+            
+            // Clear and focus OTP inputs
+            for (let i = 0; i < 4; i++) {
+                document.getElementById(`pointsOtp${i}`).value = '';
+            }
+            document.getElementById('pointsOtp0').focus();
+            
+            // Show success message with details
+            showToast(`✅ OTP sent to ${customerPhone}! Customer will save KSH ${points.toLocaleString()}`, 'success');
+            showStatus(`📱 OTP sent to customer's phone. They will save KSH ${points.toLocaleString()} off their purchase!`, 'info');
+            
+            // Auto-hide status after 5 seconds
+            setTimeout(() => {
+                hideStatus();
+            }, 5000);
+            
+        } else {
+            showToast(data.error || 'Could not send OTP', 'error');
+            // Reset OTP section
+            document.getElementById('pointsOtpSection').style.display = 'none';
+        }
+    } catch(e) {
+        console.error('Send OTP error:', e);
+        showToast('Send OTP failed: ' + e.message, 'error');
+        document.getElementById('pointsOtpSection').style.display = 'none';
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    }
+}
+
+// VERIFY OTP AND COMPLETE POINTS REDEMPTION
+async function verifyPointsOtp() {
+    const enteredOtp = ['pointsOtp0', 'pointsOtp1', 'pointsOtp2', 'pointsOtp3']
+        .map(id => document.getElementById(id).value).join('');
+
+    if (enteredOtp.length < 4) {
+        showToast('Enter the 4-digit OTP sent to customer', 'error');
+        return;
+    }
+
+    const btn = document.getElementById('verifyOtpBtn');
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Verifying OTP...';
+    showStatus('🔐 Verifying OTP and processing redemption...', 'info');
+
+    try {
+        const customerPhone = document.getElementById('pointsCustomerPhone').value.trim();
+        
+        const data = await safeFetch(URLS.verify_otp, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+            body: JSON.stringify({
+                phone: customerPhone,
+                otp: enteredOtp,
+                purpose: 'redeem_points',
+                points: pointsPendingRedeem
+            })
+        });
+
+        if (data.success) {
+            showToast('✅ OTP verified! Processing points redemption...', 'success');
+            showStatus('💰 Processing points redemption...', 'info');
+            
+            // Proceed with the points redemption sale
+            await processPointsSale();
+        } else {
+            showToast(data.error || 'Invalid OTP. Please try again.', 'error');
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+            
+            // Clear OTP inputs for retry
+            for (let i = 0; i < 4; i++) {
+                document.getElementById(`pointsOtp${i}`).value = '';
+            }
+            document.getElementById('pointsOtp0').focus();
+        }
+    } catch(e) {
+        console.error('OTP verify error:', e);
+        showToast('OTP verification failed: ' + e.message, 'error');
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    }
+}
+
+// PROCESS POINTS REDEMPTION SALE - called only after OTP verified
+async function processPointsSale() {
+    showStatus('<i class="fas fa-spinner fa-pulse"></i> Processing points redemption...', 'info');
+
+    const discountedTotal = Math.max(0, total - pointsPendingRedeem);
+    const customerPhone = document.getElementById('pointsCustomerPhone').value.trim();
+    const customerName = document.getElementById('pointsCustomerName')?.textContent || 'Walk-in Customer';
+
+    try {
+        const data = await safeFetch(URLS.sale_create_api, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+            body: JSON.stringify({
+                payment_method: 'Points',
+                is_credit: false,
+                amount_paid: discountedTotal,
+                cash_amount: 0,
+                mpesa_amount: 0,
+                bank_amount: 0,
+                buyer_phone: customerPhone,
+                buyer_name: customerName,
+                verified_customer_id: pointsCustomerId,
+                points_redeemed: pointsPendingRedeem,
+                points_to_award: 0,  // No points awarded when redeeming
+                cart_total: total,
+                skip_cart_clear: false
+            })
+        });
+
+        if (data.success) {
+            // Show success message
+            const savingsAmount = pointsPendingRedeem;
+            showStatus(`✅ Success! ${pointsPendingRedeem} points redeemed - Customer saved KSH ${savingsAmount.toLocaleString()}!`, 'success');
+            showToast(`🎉 Points redeemed! Customer saved KSH ${savingsAmount.toLocaleString()}`, 'success');
+            
+            if (data.points && data.points.balance !== undefined) {
+                showToast(`Remaining points balance: ${data.points.balance}`, 'info');
+            }
+            
+            // Open receipt for printing
+            window.open(`/sales/sale/${data.sale_id}/receipt/?auto_print=true`, '_blank');
+            
+            // Reset points redemption UI
+            setTimeout(() => {
+                // Clear points section
+                document.getElementById('pointsCustomerPhone').value = '';
+                document.getElementById('pointsToRedeem').value = '';
+                document.getElementById('pointsCustomerInfo').style.display = 'none';
+                document.getElementById('pointsAmountSection').style.display = 'none';
+                document.getElementById('pointsOtpSection').style.display = 'none';
+                pointsCustomerId = null;
+                pointsPendingRedeem = 0;
+                
+                // Reset payment method to Cash
+                selectPayment(document.querySelector('.payment-card[data-method="Cash"]'), 'Cash');
+                
+                // Reload the page to refresh cart and points
+                location.reload();
+            }, 3000);
+        } else {
+            throw new Error(data.error || 'Points redemption failed');
+        }
+    } catch(e) {
+        console.error('Points redemption error:', e);
+        showStatus(`❌ Redemption failed: ${escapeHtml(e.message)}`, 'error');
+        showToast(e.message, 'error');
+        
+        // Reset OTP section to allow retry
+        const btn = document.getElementById('verifyOtpBtn');
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '✅ Verify OTP & Complete Sale';
+        }
+    }
+}
+
+
+
 // UPDATE DISCOUNT PREVIEW BASED ON POINTS INPUT
 function updateDiscountPreview() {
     const points = parseInt(document.getElementById('pointsToRedeem').value) || 0;
@@ -1588,186 +1957,27 @@ function updateDiscountPreview() {
                 maximumFractionDigits: 2
             });
         }
-        if (sendOtpBtn) sendOtpBtn.style.display = 'block';
+        // Show the Send OTP button - customer must click it to receive OTP
+        if (sendOtpBtn) {
+            sendOtpBtn.style.display = 'block';
+            sendOtpBtn.innerHTML = `<i class="fas fa-paper-plane"></i> Send OTP to ${document.getElementById('pointsCustomerName')?.textContent || 'Customer'}`;
+        }
     } else {
         const discountedCard = document.getElementById('discountedTotalCard');
         if (discountedCard) discountedCard.style.display = 'none';
         if (sendOtpBtn) sendOtpBtn.style.display = 'none';
         
         if (points > pointsCustomerBalance && pointsCustomerBalance > 0) {
-            showToast(`Insufficient points. Available: ${Math.floor(pointsCustomerBalance)} points`, 'warning');
+            showToast(`⚠️ Insufficient points. Available: ${Math.floor(pointsCustomerBalance)} points`, 'warning');
         }
         if (points > total && total > 0) {
-            showToast(`Points cannot exceed cart total (KSH ${total.toLocaleString()})`, 'warning');
+            showToast(`⚠️ Points cannot exceed cart total (KSH ${total.toLocaleString()})`, 'warning');
         }
     }
 }
 
-// Add event listener for points input
-if (document.getElementById('pointsToRedeem')) {
-    document.getElementById('pointsToRedeem').addEventListener('input', updateDiscountPreview);
-}
 
 
-
-// SEND OTP FOR POINTS REDEMPTION
-async function sendPointsOtp() {
-    if (!pointsCustomerId) {
-        showToast('Please look up a registered customer first', 'error');
-        return;
-    }
-
-    const points = parseInt(document.getElementById('pointsToRedeem').value) || 0;
-    if (points <= 0) {
-        showToast('Enter how many points to redeem', 'error');
-        return;
-    }
-    if (points > pointsCustomerBalance) {
-        showToast(`Customer only has ${Math.floor(pointsCustomerBalance)} points`, 'error');
-        return;
-    }
-    if (points > total) {
-        showToast(`Cannot redeem more than KSH ${total.toLocaleString()} (the sale total)`, 'error');
-        return;
-    }
-
-    pointsPendingRedeem = points;
-    pendingRedeemPoints = points;
-
-    const btn = document.getElementById('sendPointsOtpBtn');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span> Sending OTP...';
-
-    try {
-        const data = await safeFetch(URLS.send_otp, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-            body: JSON.stringify({
-                phone: document.getElementById('pointsCustomerPhone').value.trim(),
-                purpose: 'redeem_points',
-                points: points
-            })
-        });
-
-        if (data.success) {
-            serverOtp = data.otp;
-            document.getElementById('pointsOtpSection').style.display = 'block';
-            // Clear and focus OTP inputs
-            for (let i = 0; i < 4; i++) {
-                document.getElementById(`pointsOtp${i}`).value = '';
-            }
-            document.getElementById('pointsOtp0').focus();
-            showToast('OTP sent to customer!', 'success');
-        } else {
-            showToast(data.error || 'Could not send OTP', 'error');
-        }
-    } catch(e) {
-        console.error('Send OTP error:', e);
-        showToast('Send OTP failed: ' + e.message, 'error');
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-paper-plane"></i> Send OTP to Customer';
-    }
-}
-
-
-
-
-// VERIFY OTP AND COMPLETE SALE
-async function verifyPointsOtp() {
-    const enteredOtp = ['pointsOtp0', 'pointsOtp1', 'pointsOtp2', 'pointsOtp3']
-        .map(id => document.getElementById(id).value).join('');
-
-    if (enteredOtp.length < 4) {
-        showToast('Enter the 4-digit OTP', 'error');
-        return;
-    }
-
-    const btn = document.getElementById('verifyOtpBtn');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span> Verifying...';
-    showStatus('Verifying OTP...', 'info');
-
-    try {
-        const data = await safeFetch(URLS.verify_otp, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-            body: JSON.stringify({
-                phone: document.getElementById('pointsCustomerPhone').value.trim(),
-                otp: enteredOtp,
-                purpose: 'redeem_points'
-            })
-        });
-
-        if (data.success) {
-            showToast('OTP verified! Processing sale...', 'success');
-            // Auto-submit the sale
-            await processPointsSale();
-        } else {
-            showToast(data.error || 'Invalid OTP', 'error');
-            btn.disabled = false;
-            btn.innerHTML = '✅ Verify OTP & Complete Sale';
-        }
-    } catch(e) {
-        console.error('OTP verify error:', e);
-        showToast('OTP verify failed: ' + e.message, 'error');
-        btn.disabled = false;
-        btn.innerHTML = '✅ Verify OTP & Complete Sale';
-    }
-}
-
-
-
-//PROCESS POINTS SALE - called after OTP verification
-async function processPointsSale() {
-    showStatus('<i class="fas fa-spinner fa-pulse"></i> Processing points redemption...', 'info');
-
-    const discountedTotal = Math.max(0, total - pointsPendingRedeem);
-
-    try {
-        const data = await safeFetch(URLS.sale_create_api, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-            body: JSON.stringify({
-                payment_method: 'Points',
-                is_credit: false,
-                amount_paid: discountedTotal,
-                cash_amount: 0,
-                mpesa_amount: 0,
-                bank_amount: 0,
-                buyer_phone: document.getElementById('pointsCustomerPhone').value.trim(),
-                buyer_name: document.getElementById('pointsCustomerName')?.textContent || 'Walk-in Customer',
-                verified_customer_id: pointsCustomerId,
-                points_redeemed: pointsPendingRedeem,
-                points_to_award: 0,
-                cart_total: total,
-                skip_cart_clear: false
-            })
-        });
-
-        if (data.success) {
-            showStatus(`✅ ${pointsPendingRedeem} points redeemed — KSH ${pointsPendingRedeem} discount applied!`, 'success');
-            showToast('Points redeemed successfully!', 'success');
-            if (data.points && data.points.balance !== undefined) {
-                showToast(`Remaining points balance: ${data.points.balance}`, 'info');
-            }
-            // Open receipt and reload
-            window.open(`/sales/sale/${data.sale_id}/receipt/?auto_print=true`, '_blank');
-            setTimeout(() => location.reload(), 2500);
-        } else {
-            throw new Error(data.error || 'Points redemption failed');
-        }
-    } catch(e) {
-        console.error('Points redemption error:', e);
-        showStatus(`❌ ${escapeHtml(e.message)}`, 'error');
-        showToast(e.message, 'error');
-        const btn = document.getElementById('verifyOtpBtn');
-        if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = '✅ Verify OTP & Complete Sale';
-        }
-    }
-}
 
 
 
@@ -1894,6 +2104,15 @@ document.addEventListener('DOMContentLoaded', function () {
         bankAmount.addEventListener('input', checkCanFinalize);
     }
     
+    // ============================================
+    // ADD THIS - POINTS REDEMPTION INPUT LISTENER
+    // ============================================
+    const pointsToRedeem = document.getElementById('pointsToRedeem');
+    if (pointsToRedeem) {
+        pointsToRedeem.addEventListener('input', updateDiscountPreview);
+        console.log('Points input listener added');
+    }    
+
     // Initialize card slideshow
     initCardSlideshow();
     
