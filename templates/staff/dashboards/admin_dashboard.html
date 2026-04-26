@@ -4,931 +4,601 @@
 {% block title %}Admin Dashboard - FieldMax{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-4">
-    <!-- System Overview Cards -->
-    <div class="row mb-4">
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="stat-card">
-                <div class="stat-value">{{ total_item_count|default:0 }}</div>
-                <div class="stat-label">Total Items in Stock</div>
-                <div class="stat-subtitle">{{ total_products|default:0 }} Unique Products</div>
-                <i class="fas fa-boxes stat-icon text-primary"></i>
-            </div>
-        </div>
+<div class="fm-dashboard">
 
+  <!-- Header -->
+  <div class="fm-header">
+    <div class="fm-header-left">
+      <div class="fm-logo-mark">FM</div>
+      <div>
+        <div class="fm-header-title">FieldMax Admin</div>
+        <div class="fm-header-sub">System Dashboard</div>
+      </div>
+    </div>
+    <div class="fm-header-right">
+      <div class="fm-date-badge">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <span id="currentDate"></span>
+      </div>
+      <div class="fm-pulse-dot"></div>
+      <span class="fm-live">LIVE</span>
+    </div>
+  </div>
 
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="stat-card">
-                <div class="stat-value">KSH {{ total_inventory_value|default:0|floatformat:0 }}</div>
-                <div class="stat-label">Total Inventory Value</div>
-                <div class="stat-subtitle">
-                    <i class="fas fa-chart-line"></i> Total Cost: KSH {{ total_inventory_cost|default:0|floatformat:0 }}
-                </div>
-                <i class="fas fa-money-bill-wave stat-icon text-success"></i>
-            </div>
-        </div>
-
-
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="stat-card">
-                <div class="stat-value">KSH {{ current_month_sales_value|default:0|floatformat:0 }}</div>
-                <div class="stat-label">Total Sales ({{ month_name }} {{ current_year }})</div>
-                <div class="stat-subtitle">
-                    {% if monthly_percentage_change > 0 %}
-                        <i class="fas fa-arrow-up text-success"></i> ↑ {{ monthly_percentage_change|floatformat:1 }}% from last month
-                    {% elif monthly_percentage_change < 0 %}
-                        <i class="fas fa-arrow-down text-danger"></i> ↓ {{ monthly_percentage_change|floatformat:1|cut:"-" }}% from last month
-                    {% else %}
-                        <i class="fas fa-minus text-secondary"></i> Same as last month
-                    {% endif %}
-                </div>
-                <i class="fas fa-shopping-cart stat-icon text-warning"></i>
-            </div>
-        </div>
-
-        
-        <div class="col-xl-3 col-md-6 mb-4">
-            <div class="stat-card">
-                <div class="stat-value">KSH {{ total_pending_credit_value|default:0|floatformat:0 }}</div>
-                <div class="stat-label">Pending Credit</div>
-                <div class="stat-subtitle">
-                    <div class="progress mb-2" style="height: 5px;">
-                        <div class="progress-bar bg-success" role="progressbar" 
-                             style="width: {{ payment_completion_percentage|default:0 }}%"></div>
-                    </div>
-                    <i class="fas fa-check-circle text-success"></i> {{ payment_completion_percentage|default:0|floatformat:1 }}% paid
-                </div>
-                <i class="fas fa-credit-card stat-icon text-info"></i>
-            </div>
-        </div>
+  <!-- KPI Strip -->
+  <div class="fm-kpi-grid">
+    <div class="fm-kpi fm-kpi--blue">
+      <div class="fm-kpi-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+      </div>
+      <div class="fm-kpi-body">
+        <div class="fm-kpi-value">{{ total_item_count|default:0 }}</div>
+        <div class="fm-kpi-label">Items in Stock</div>
+        <div class="fm-kpi-sub">{{ total_products|default:0 }} unique products</div>
+      </div>
+      <div class="fm-kpi-bar"></div>
     </div>
 
-    <!-- Management Actions Row -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header bg-sky text-white">
-                    <i class="fas fa-cog me-2"></i>
-                    Quick Management Actions
-                </div>
-                <div class="card-body">
-                    <div class="row g-4">
-                        <!-- Users Management Card -->
-                        <div class="col-xl-3 col-md-6">
-                            <div class="action-card">
-                                <div class="action-icon text-primary">
-                                    <i class="fas fa-users"></i>
-                                </div>
-                                <h5 class="action-title">Users Management</h5>
-                                <p class="action-description">Manage system users, roles, and permissions</p>
-                                <div class="action-buttons">
-                                    <a href="{% url 'staff:user_list' %}" class="btn btn-outline-primary btn-sm w-100 mb-2">
-                                        <i class="fas fa-eye me-2"></i>View Users
-                                    </a>
-                                    <a href="{% url 'admin:auth_user_add' %}" class="btn btn-primary btn-sm w-100" target="_blank">
-                                        <i class="fas fa-plus me-2"></i>Add New User
-                                    </a>
-                                </div>
-                                <div class="action-footer">
-                                    {{ total_users|default:0 }} Total Users | {{ active_users|default:0 }} Active
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Sales Management Card -->
-                        <div class="col-xl-3 col-md-6">
-                            <div class="action-card">
-                                <div class="action-icon text-success">
-                                    <i class="fas fa-shopping-cart"></i>
-                                </div>
-                                <h5 class="action-title">Sales Management</h5>
-                                <p class="action-description">Track sales, receipts, and transaction history</p>
-                                <div class="action-buttons">
-                                    <a href="{% url 'sales:sale_list' %}" class="btn btn-outline-success btn-sm w-100 mb-2">
-                                        <i class="fas fa-list me-2"></i>View Sales
-                                    </a>
-                                    <a href="{% url 'sales:sale_create' %}" class="btn btn-success btn-sm w-100">
-                                        <i class="fas fa-plus me-2"></i>New Sale
-                                    </a>
-                                </div>
-                                <div class="action-footer">
-                                    Today: KSH {{ today_sales|default:0|floatformat:0 }} | {{ today_sales_count|default:0 }} Transactions
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Credit Management Card -->
-                        <div class="col-xl-3 col-md-6">
-                            <div class="action-card">
-                                <div class="action-icon text-warning">
-                                    <i class="fas fa-credit-card"></i>
-                                </div>
-                                <h5 class="action-title">Credit Management</h5>
-                                <p class="action-description">Manage credit transactions and customer accounts</p>
-                                <div class="action-buttons">
-                                    <a href="{% url 'credit:transaction_list' %}" class="btn btn-outline-warning btn-sm w-100 mb-2">
-                                        <i class="fas fa-list me-2"></i>View Credits
-                                    </a>
-                                    <a href="{% url 'credit:transaction_create' %}" class="btn btn-warning btn-sm w-100">
-                                        <i class="fas fa-plus me-2"></i>New Credit
-                                    </a>
-                                </div>
-                                <div class="action-footer">
-                                    {{ pending_credit|default:0 }} Pending | KSH {{ total_credit|default:0|floatformat:0 }}
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Inventory Management Card -->
-                        <div class="col-xl-3 col-md-6">
-                            <div class="action-card">
-                                <div class="action-icon text-info">
-                                    <i class="fas fa-boxes"></i>
-                                </div>
-                                <h5 class="action-title">Inventory Management</h5>
-                                <p class="action-description">Manage products, stock, and categories</p>
-                                <div class="action-buttons">
-                                    <a href="{% url 'inventory:product_list' %}" class="btn btn-outline-info btn-sm w-100 mb-2">
-                                        <i class="fas fa-list me-2"></i>View Products
-                                    </a>
-                                    <a href="{% url 'inventory:product_add' %}" class="btn btn-info btn-sm w-100">
-                                        <i class="fas fa-plus me-2"></i>Add Product
-                                    </a>
-                                </div>
-                                <div class="action-footer">
-                                    {{ total_products|default:0 }} Products | {{ total_categories|default:0 }} Categories
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+    <div class="fm-kpi fm-kpi--emerald">
+      <div class="fm-kpi-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      </div>
+      <div class="fm-kpi-body">
+        <div class="fm-kpi-value">KSH {{ total_inventory_value|default:0|floatformat:0 }}</div>
+        <div class="fm-kpi-label">Inventory Value</div>
+        <div class="fm-kpi-sub">Cost: KSH {{ total_inventory_cost|default:0|floatformat:0 }}</div>
+      </div>
+      <div class="fm-kpi-bar"></div>
     </div>
 
-
-{% comment %}
-    <!-- Charts Row -->
-    <div class="row mb-4">
-        <div class="col-lg-8 mb-4">
-            <div class="card h-100">
-                <div class="card-header bg-sky text-white">
-                    <i class="fas fa-chart-line me-2"></i>
-                    Sales & Credit Overview (Last 30 Days)
-                </div>
-                <div class="card-body">
-                    <canvas id="overviewChart" height="300"></canvas>
-                </div>
-            </div>
+    <div class="fm-kpi fm-kpi--amber">
+      <div class="fm-kpi-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+      </div>
+      <div class="fm-kpi-body">
+        <div class="fm-kpi-value">KSH {{ current_month_sales_value|default:0|floatformat:0 }}</div>
+        <div class="fm-kpi-label">Sales — {{ month_name }} {{ current_year }}</div>
+        <div class="fm-kpi-sub fm-trend {% if monthly_percentage_change > 0 %}fm-trend--up{% elif monthly_percentage_change < 0 %}fm-trend--down{% endif %}">
+          {% if monthly_percentage_change > 0 %}
+            ↑ {{ monthly_percentage_change|floatformat:1 }}% vs last month
+          {% elif monthly_percentage_change < 0 %}
+            ↓ {{ monthly_percentage_change|floatformat:1|cut:"-" }}% vs last month
+          {% else %}
+            — Same as last month
+          {% endif %}
         </div>
-        <div class="col-lg-4 mb-4">
-            <div class="card h-100">
-                <div class="card-header bg-sky text-white">
-                    <i class="fas fa-chart-pie me-2"></i>
-                    Staff Distribution
-                </div>
-                <div class="card-body">
-                    <canvas id="staffChart" height="300"></canvas>
-                </div>
-            </div>
-        </div>
+      </div>
+      <div class="fm-kpi-bar"></div>
     </div>
-{% endcomment %}
 
-
-    <!-- Recent Activities Row -->
-    <div class="row">
-        <!-- Recent Sales -->
-        <div class="col-lg-4 mb-4">
-            <div class="card h-100">
-                <div class="card-header bg-sky text-white">
-                    <i class="fas fa-shopping-cart me-2"></i>
-                    Recent Sales
-                    <span class="badge bg-white text-sky ms-2">{{ recent_sales|length }}</span>
-                </div>
-                <div class="card-body p-0">
-                    <div class="list-group list-group-flush" style="max-height: 300px; overflow-y: auto;">
-                        {% for sale in recent_sales %}
-                        <div class="list-group-item list-group-item-action">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <strong>{{ sale.sale_id }}</strong>
-                                    <br>
-                                    <small class="text-muted">
-                                        <i class="fas fa-user me-1"></i>{{ sale.buyer_name|default:"Walk-in" }}
-                                    </small>
-                                </div>
-                                <div class="text-end">
-                                    <span class="fw-bold text-success">KSH {{ sale.total_amount|floatformat:0 }}</span>
-                                    <br>
-                                    <small class="text-muted">
-                                        <i class="fas fa-clock me-1"></i>{{ sale.sale_date|date:"H:i" }}
-                                    </small>
-                                </div>
-                            </div>
-                        </div>
-                        {% empty %}
-                        <div class="list-group-item text-center py-4">
-                            <i class="fas fa-shopping-cart fa-3x text-muted mb-3"></i>
-                            <p class="text-muted mb-0">No recent sales</p>
-                        </div>
-                        {% endfor %}
-                    </div>
-                </div>
-            </div>
+    <div class="fm-kpi fm-kpi--violet">
+      <div class="fm-kpi-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+      </div>
+      <div class="fm-kpi-body">
+        <div class="fm-kpi-value">KSH {{ total_pending_credit_value|default:0|floatformat:0 }}</div>
+        <div class="fm-kpi-label">Pending Credit</div>
+        <div class="fm-kpi-sub">
+          <div class="fm-mini-progress">
+            <div class="fm-mini-progress-fill" ></div>
+          </div>
+          {{ payment_completion_percentage|default:0|floatformat:1 }}% settled
         </div>
-
-        <!-- Recent Credits -->
-        <div class="col-lg-4 mb-4">
-            <div class="card h-100">
-                <div class="card-header bg-sky text-white">
-                    <i class="fas fa-credit-card me-2"></i>
-                    Recent Credit Transactions
-                    <span class="badge bg-white text-sky ms-2">{{ recent_credits|length }}</span>
-                </div>
-                <div class="card-body p-0">
-                    <div class="list-group list-group-flush" style="max-height: 300px; overflow-y: auto;">
-                        {% for credit in recent_credits %}
-                        <div class="list-group-item list-group-item-action">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <strong>{{ credit.transaction_id }}</strong>
-                                    <br>
-                                    <small class="text-muted">
-                                        <i class="fas fa-user me-1"></i>{{ credit.customer.full_name|truncatechars:20 }}
-                                    </small>
-                                </div>
-                                <div class="text-end">
-                                    <span class="fw-bold text-warning">KSH {{ credit.ceiling_price|floatformat:0 }}</span>
-                                    <br>
-                                    <span class="badge {% if credit.payment_status == 'paid' %}badge-success{% elif credit.payment_status == 'pending' %}badge-danger{% else %}badge-warning{% endif %}">
-                                        {{ credit.payment_status }}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                        {% empty %}
-                        <div class="list-group-item text-center py-4">
-                            <i class="fas fa-credit-card fa-3x text-muted mb-3"></i>
-                            <p class="text-muted mb-0">No recent credits</p>
-                        </div>
-                        {% endfor %}
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Recent Users -->
-        <div class="col-lg-4 mb-4">
-            <div class="card h-100">
-                <div class="card-header bg-sky text-white">
-                    <i class="fas fa-users me-2"></i>
-                    New Users
-                    <span class="badge bg-white text-sky ms-2">{{ recent_users|length }}</span>
-                </div>
-                <div class="card-body p-0">
-                    <div class="list-group list-group-flush" style="max-height: 300px; overflow-y: auto;">
-                        {% for user in recent_users %}
-                        <div class="list-group-item list-group-item-action">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <strong>{{ user.username }}</strong>
-                                    <br>
-                                    <small class="text-muted">
-                                        <i class="fas fa-envelope me-1"></i>{{ user.email }}
-                                    </small>
-                                </div>
-                                <small class="text-muted">
-                                    <i class="fas fa-calendar me-1"></i>{{ user.date_joined|date:"d M" }}
-                                </small>
-                            </div>
-                        </div>
-                        {% empty %}
-                        <div class="list-group-item text-center py-4">
-                            <i class="fas fa-users fa-3x text-muted mb-3"></i>
-                            <p class="text-muted mb-0">No new users</p>
-                        </div>
-                        {% endfor %}
-                    </div>
-                </div>
-            </div>
-        </div>
+      </div>
+      <div class="fm-kpi-bar"></div>
     </div>
+  </div>
+
+  <!-- Actions Row -->
+  <div class="fm-section-label">Quick Actions</div>
+  <div class="fm-actions-grid">
+    <!-- Users -->
+    <div class="fm-action-card">
+      <div class="fm-action-top">
+        <div class="fm-action-icon fm-action-icon--blue">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        </div>
+        <div class="fm-action-meta">{{ total_users|default:0 }} users &bull; {{ active_users|default:0 }} active</div>
+      </div>
+      <div class="fm-action-title">User Management</div>
+      <div class="fm-action-desc">Manage system users, roles & permissions</div>
+      <div class="fm-action-btns">
+        <a href="{% url 'staff:user_list' %}" class="fm-btn fm-btn--outline">View Users</a>
+        <a href="{% url 'admin:auth_user_add' %}" class="fm-btn fm-btn--solid fm-btn--blue" target="_blank">+ Add User</a>
+      </div>
+    </div>
+
+    <!-- Sales -->
+    <div class="fm-action-card">
+      <div class="fm-action-top">
+        <div class="fm-action-icon fm-action-icon--emerald">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        </div>
+        <div class="fm-action-meta">Today: KSH {{ today_sales|default:0|floatformat:0 }} &bull; {{ today_sales_count|default:0 }} txns</div>
+      </div>
+      <div class="fm-action-title">Sales</div>
+      <div class="fm-action-desc">Track sales, receipts & transaction history</div>
+      <div class="fm-action-btns">
+        <a href="{% url 'sales:sale_list' %}" class="fm-btn fm-btn--outline">View Sales</a>
+        <a href="{% url 'sales:sale_create' %}" class="fm-btn fm-btn--solid fm-btn--emerald">+ New Sale</a>
+      </div>
+    </div>
+
+    <!-- Credit -->
+    <div class="fm-action-card">
+      <div class="fm-action-top">
+        <div class="fm-action-icon fm-action-icon--amber">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+        </div>
+        <div class="fm-action-meta">{{ pending_credit|default:0 }} pending &bull; KSH {{ total_credit|default:0|floatformat:0 }}</div>
+      </div>
+      <div class="fm-action-title">Credit</div>
+      <div class="fm-action-desc">Manage credit transactions & accounts</div>
+      <div class="fm-action-btns">
+        <a href="{% url 'credit:transaction_list' %}" class="fm-btn fm-btn--outline">View Credits</a>
+        <a href="{% url 'credit:transaction_create' %}" class="fm-btn fm-btn--solid fm-btn--amber">+ New Credit</a>
+      </div>
+    </div>
+
+    <!-- Inventory -->
+    <div class="fm-action-card">
+      <div class="fm-action-top">
+        <div class="fm-action-icon fm-action-icon--violet">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+        </div>
+        <div class="fm-action-meta">{{ total_products|default:0 }} products &bull; {{ total_categories|default:0 }} categories</div>
+      </div>
+      <div class="fm-action-title">Inventory</div>
+      <div class="fm-action-desc">Manage products, stock levels & categories</div>
+      <div class="fm-action-btns">
+        <a href="{% url 'inventory:product_list' %}" class="fm-btn fm-btn--outline">View Products</a>
+        <a href="{% url 'inventory:product_add' %}" class="fm-btn fm-btn--solid fm-btn--violet">+ Add Product</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Activity Tables -->
+  <div class="fm-section-label">Recent Activity</div>
+  <div class="fm-activity-grid">
+
+    <!-- Recent Sales -->
+    <div class="fm-table-card">
+      <div class="fm-table-head">
+        <div class="fm-table-head-title">
+          <span class="fm-dot fm-dot--emerald"></span>
+          Recent Sales
+        </div>
+        <span class="fm-count-badge">{{ recent_sales|length }}</span>
+      </div>
+      <div class="fm-table-body">
+        {% for sale in recent_sales %}
+        <div class="fm-table-row">
+          <div class="fm-row-avatar fm-row-avatar--emerald">{{ sale.buyer_name|default:"W"|first|upper }}</div>
+          <div class="fm-row-info">
+            <div class="fm-row-primary">{{ sale.sale_id }}</div>
+            <div class="fm-row-secondary">{{ sale.buyer_name|default:"Walk-in" }}</div>
+          </div>
+          <div class="fm-row-right">
+            <div class="fm-row-amount fm-row-amount--emerald">KSH {{ sale.total_amount|floatformat:0 }}</div>
+            <div class="fm-row-time">{{ sale.sale_date|date:"H:i" }}</div>
+          </div>
+        </div>
+        {% empty %}
+        <div class="fm-empty">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+          <p>No recent sales</p>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Recent Credits -->
+    <div class="fm-table-card">
+      <div class="fm-table-head">
+        <div class="fm-table-head-title">
+          <span class="fm-dot fm-dot--amber"></span>
+          Credit Transactions
+        </div>
+        <span class="fm-count-badge">{{ recent_credits|length }}</span>
+      </div>
+      <div class="fm-table-body">
+        {% for credit in recent_credits %}
+        <div class="fm-table-row">
+          <div class="fm-row-avatar fm-row-avatar--amber">{{ credit.customer.full_name|first|upper }}</div>
+          <div class="fm-row-info">
+            <div class="fm-row-primary">{{ credit.transaction_id }}</div>
+            <div class="fm-row-secondary">{{ credit.customer.full_name|truncatechars:22 }}</div>
+          </div>
+          <div class="fm-row-right">
+            <div class="fm-row-amount fm-row-amount--amber">KSH {{ credit.ceiling_price|floatformat:0 }}</div>
+            <span class="fm-status-badge fm-status-badge--{% if credit.payment_status == 'paid' %}paid{% elif credit.payment_status == 'pending' %}pending{% else %}partial{% endif %}">
+              {{ credit.payment_status }}
+            </span>
+          </div>
+        </div>
+        {% empty %}
+        <div class="fm-empty">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+          <p>No credit transactions</p>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Recent Users -->
+    <div class="fm-table-card">
+      <div class="fm-table-head">
+        <div class="fm-table-head-title">
+          <span class="fm-dot fm-dot--blue"></span>
+          New Users
+        </div>
+        <span class="fm-count-badge">{{ recent_users|length }}</span>
+      </div>
+      <div class="fm-table-body">
+        {% for user in recent_users %}
+        <div class="fm-table-row">
+          <div class="fm-row-avatar fm-row-avatar--blue">{{ user.username|first|upper }}</div>
+          <div class="fm-row-info">
+            <div class="fm-row-primary">{{ user.username }}</div>
+            <div class="fm-row-secondary">{{ user.email }}</div>
+          </div>
+          <div class="fm-row-right">
+            <div class="fm-row-time">{{ user.date_joined|date:"d M" }}</div>
+          </div>
+        </div>
+        {% empty %}
+        <div class="fm-empty">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+          <p>No new users</p>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+  </div>
 </div>
 
-<!-- Chart Data - Hidden JSON Elements -->
-<div id="chartData" 
+<!-- Hidden chart data -->
+<div id="chartData"
      data-chart-labels="{{ chart_labels|safe }}"
      data-sales-data="{{ sales_data|safe }}"
      data-credit-data="{{ credit_data|safe }}"
      data-staff-positions="{{ staff_by_position_json|safe }}"
-     style="display: none;"></div>
+     style="display:none;"></div>
 {% endblock %}
 
 {% block extra_css %}
 <style>
-    /* Sky Blue Color Variables */
-    :root {
-        --sky-light: #e1f5fe;
-        --sky: #29b6f6;
-        --sky-dark: #0288d1;
-        --sky-gradient: linear-gradient(135deg, #29b6f6 0%, #0288d1 100%);
-    }
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
 
-    /* Title Background Sky Blue */
-    .page-title-section {
-        background: var(--sky-gradient);
-        padding: 25px 30px;
-        border-radius: 15px;
-        box-shadow: 0 4px 15px rgb(0, 0, 0);
-        margin-bottom: 25px;
-    }
-    
-    .page-title-section h2 {
-        font-weight: 600;
-        font-size: 1.8rem;
-        margin: 0;
-        text-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    
-    .page-title-section .text-white {
-        color: white !important;
-    }
-    
-    .page-title-section .opacity-75 {
-        opacity: 0.9;
-    }
-    
-    .page-title-section .badge {
-        font-size: 0.9rem;
-        padding: 12px 20px !important;
-        border-radius: 10px;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-    }
-    
-    .text-sky {
-        color: var(--sky-dark) !important;
-    }
-    
-    .bg-sky {
-        background: var(--sky-gradient) !important;
-    }
-    
-    /* Consistent Stat Cards */
-    .stat-card {
-        background: white;
-        border-radius: 15px;
-        padding: 25px;
-        position: relative;
-        overflow: hidden;
-        box-shadow: 0 2px 10px rgb(0, 0, 0);
-        transition: transform 0.3s ease, box-shadow 0.3s ease;
-        border: 1px solid #000000;
-        height: 100%;
-    }
-    
-    .stat-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 10px 25px rgb(0, 68, 255);
-        border-color: var(--sky);
-    }
-    
-    .stat-card .stat-value {
-        font-size: 2.2rem;
-        font-weight: 700;
-        margin-bottom: 5px;
-        color: #000000;
-        line-height: 1.2;
-    }
-    
-    .stat-card .stat-label {
-        color: #000000;
-        font-size: 0.9rem;
-        font-weight: 500;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    
-    .stat-card .stat-subtitle {
-        color: #000000;
-        font-size: 0.8rem;
-        margin-top: 5px;
-    }
-    
-    .stat-card .stat-icon {
-        position: absolute;
-        top: 20px;
-        right: 20px;
-        font-size: 3.5rem;
-        opacity: 5;
-        transition: opacity 0.3s ease;
-    }
-    
-    .stat-card:hover .stat-icon {
-        opacity: 5;
-    }
-    
-    /* Card styling */
-    .card {
-        border: none;
-        border-radius: 15px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.03);
-        background: white;
-        margin-bottom: 25px;
-        border: 1px solid #000000;
-        overflow: hidden;
-    }
-    
-    .card-header {
-        border-bottom: 1px solid #003a74;
-        padding: 18px 25px;
-        font-weight: 600;
-        font-size: 1.1rem;
-    }
-    
-    .card-header.bg-sky {
-        border-bottom: none;
-    }
-    
-    .card-header.bg-sky i {
-        color: white;
-    }
-    
-    .card-header .badge {
-        font-size: 0.8rem;
-        padding: 5px 10px;
-        border-radius: 20px;
-        background: white !important;
-        color: var(--sky-dark) !important;
-    }
-    
-    .card-body {
-        padding: 25px;
-    }
-    
-    .card-body.p-0 {
-        padding: 0 !important;
-    }
-    
-    /* Action Cards */
-    .action-card {
-        background: rgb(195, 201, 202);
-        border-radius: 12px;
-        padding: 20px;
-        text-align: center;
-        border: 1px solid #000000;
-        transition: transform 0.3s ease, box-shadow 0.3s ease;
-        height: 100%;
-        display: flex;
-        flex-direction: column;
-    }
-    
-    .action-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 10px 25px rgb(0, 0, 0);
-        border-color: var(--sky);
-    }
-    
-    .action-icon {
-        font-size: 3rem;
-        margin-bottom: 15px;
-    }
-    
-    .action-title {
-        font-size: 1.1rem;
-        font-weight: 600;
-        color: #0080ff;
-        margin-bottom: 10px;
-    }
-    
-    .action-description {
-        color: #104574;
-        font-size: 0.85rem;
-        margin-bottom: 20px;
-        flex-grow: 1;
-    }
-    
-    .action-buttons {
-        margin-bottom: 15px;
-    }
-    
-    .action-footer {
-        font-size: 0.8rem;
-        color: #6c757d;
-        padding-top: 10px;
-        border-top: 1px solid #eef2f6;
-    }
-    
-    /* Button styling */
-    .btn-primary {
-        background: linear-gradient(135deg, #4e73df 0%, #224abe 100%);
-        border: none;
-        border-radius: 8px;
-        padding: 8px 16px;
-        font-weight: 500;
-        font-size: 0.9rem;
-        transition: all 0.2s ease;
-        color: white;
-    }
-    
-    .btn-primary:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 5px 15px rgba(78,115,223,0.3);
-    }
-    
-    .btn-success {
-        background: linear-gradient(135deg, #1cc88a 0%, #13855c 100%);
-        border: none;
-        border-radius: 8px;
-        padding: 8px 16px;
-        font-weight: 500;
-        font-size: 0.9rem;
-        transition: all 0.2s ease;
-        color: white;
-    }
-    
-    .btn-success:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 5px 15px rgba(28,200,138,0.3);
-    }
-    
-    .btn-warning {
-        background: linear-gradient(135deg, #f6c23e 0%, #dda20a 100%);
-        border: none;
-        border-radius: 8px;
-        padding: 8px 16px;
-        font-weight: 500;
-        font-size: 0.9rem;
-        transition: all 0.2s ease;
-        color: white;
-    }
-    
-    .btn-warning:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 5px 15px rgba(246,194,62,0.3);
-    }
-    
-    .btn-info {
-        background: linear-gradient(135deg, #36b9cc 0%, #258391 100%);
-        border: none;
-        border-radius: 8px;
-        padding: 8px 16px;
-        font-weight: 500;
-        font-size: 0.9rem;
-        transition: all 0.2s ease;
-        color: white;
-    }
-    
-    .btn-info:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 5px 15px rgba(54,185,204,0.3);
-    }
-    
-    .btn-outline-primary {
-        border: 1px solid #4e73df;
-        color: #4e73df;
-        border-radius: 8px;
-        padding: 8px 16px;
-        font-weight: 500;
-        font-size: 0.9rem;
-        transition: all 0.2s ease;
-        background: white;
-    }
-    
-    .btn-outline-primary:hover {
-        background: #4e73df;
-        color: white;
-        transform: translateY(-2px);
-    }
-    
-    .btn-outline-success {
-        border: 1px solid #1cc88a;
-        color: #1cc88a;
-        border-radius: 8px;
-        padding: 8px 16px;
-        font-weight: 500;
-        font-size: 0.9rem;
-        transition: all 0.2s ease;
-        background: white;
-    }
-    
-    .btn-outline-success:hover {
-        background: #1cc88a;
-        color: white;
-        transform: translateY(-2px);
-    }
-    
-    .btn-outline-warning {
-        border: 1px solid #f6c23e;
-        color: #f6c23e;
-        border-radius: 8px;
-        padding: 8px 16px;
-        font-weight: 500;
-        font-size: 0.9rem;
-        transition: all 0.2s ease;
-        background: white;
-    }
-    
-    .btn-outline-warning:hover {
-        background: #f6c23e;
-        color: white;
-        transform: translateY(-2px);
-    }
-    
-    .btn-outline-info {
-        border: 1px solid #36b9cc;
-        color: #36b9cc;
-        border-radius: 8px;
-        padding: 8px 16px;
-        font-weight: 500;
-        font-size: 0.9rem;
-        transition: all 0.2s ease;
-        background: white;
-    }
-    
-    .btn-outline-info:hover {
-        background: #36b9cc;
-        color: white;
-        transform: translateY(-2px);
-    }
-    
-    .btn-sm {
-        padding: 6px 12px;
-        font-size: 0.85rem;
-    }
-    
-    /* List group styling */
-    .list-group-item {
-        border-left: none;
-        border-right: none;
-        padding: 12px 20px;
-        transition: background 0.2s ease;
-    }
-    
-    .list-group-item:first-child {
-        border-top: none;
-    }
-    
-    .list-group-item:last-child {
-        border-bottom: none;
-    }
-    
-    .list-group-item:hover {
-        background: #f8fafd;
-    }
-    
-    .list-group-item-action {
-        cursor: pointer;
-    }
-    
-    /* Badge styling */
-    .badge-success {
-        background: linear-gradient(135deg, #1cc88a 0%, #13855c 100%);
-        color: white;
-        padding: 4px 8px;
-        border-radius: 20px;
-        font-size: 0.7rem;
-        font-weight: 500;
-    }
-    
-    .badge-danger {
-        background: linear-gradient(135deg, #e74a3b 0%, #be2617 100%);
-        color: white;
-        padding: 4px 8px;
-        border-radius: 20px;
-        font-size: 0.7rem;
-        font-weight: 500;
-    }
-    
-    .badge-warning {
-        background: linear-gradient(135deg, #f6c23e 0%, #dda20a 100%);
-        color: white;
-        padding: 4px 8px;
-        border-radius: 20px;
-        font-size: 0.7rem;
-        font-weight: 500;
-    }
-    
-    /* Chart styling */
-    canvas {
-        display: block;
-        width: 100% !important;
-        height: 100% !important;
-        max-width: 100%;
-    }
-    
-    /* Responsive */
-    @media (max-width: 768px) {
-        .page-title-section {
-            padding: 20px;
-        }
-        
-        .page-title-section h2 {
-            font-size: 1.5rem;
-        }
-        
-        .stat-card .stat-value {
-            font-size: 1.8rem;
-        }
-        
-        .card-header {
-            padding: 15px 20px;
-        }
-        
-        .card-body {
-            padding: 20px;
-        }
-    }
-    
-    @media (max-width: 576px) {
-        .stat-card {
-            padding: 20px;
-        }
-        
-        .stat-card .stat-value {
-            font-size: 1.5rem;
-        }
-        
-        .action-card {
-            padding: 15px;
-        }
-    }
+:root {
+  --bg: #f4f6fb;
+  --surface: #ffffff;
+  --surface-2: #00b7ff;
+  --border: #000000;
+  --border-strong: #000000;
+  --text-primary: #000000;
+  --text-secondary: #002fff;
+  --text-tertiary: #3f0000;
+
+  --blue: #2563eb;
+  --blue-light: #eff6ff;
+  --blue-mid: #93c5fd;
+
+  --emerald: #059669;
+  --emerald-light: #ecfdf5;
+  --emerald-mid: #6ee7b7;
+
+  --amber: #d97706;
+  --amber-light: #fffbeb;
+  --amber-mid: #fcd34d;
+
+  --violet: #7c3aed;
+  --violet-light: #f5f3ff;
+  --violet-mid: #c4b5fd;
+
+  --red: #dc2626;
+  --red-light: #fef2f2;
+
+  --shadow-sm: 0 1px 3px rgba(15,23,42,0.06), 0 1px 2px rgba(15,23,42,0.04);
+  --shadow-md: 0 4px 12px rgba(15,23,42,0.08), 0 2px 4px rgba(15,23,42,0.04);
+  --shadow-lg: 0 10px 30px rgba(15,23,42,0.1), 0 4px 8px rgba(15,23,42,0.05);
+
+  --radius: 14px;
+  --radius-sm: 8px;
+  --radius-xs: 5px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+.fm-dashboard {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg);
+  min-height: 100vh;
+  padding: 28px;
+  color: var(--text-primary);
+}
+
+/* ── HEADER ── */
+.fm-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 28px;
+}
+.fm-header-left { display: flex; align-items: center; gap: 14px; }
+.fm-logo-mark {
+  width: 42px; height: 42px;
+  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  color: white; font-weight: 700; font-size: 14px;
+  letter-spacing: 0.5px;
+}
+.fm-header-title { font-size: 1.3rem; font-weight: 700; color: var(--text-primary); line-height: 1; }
+.fm-header-sub { font-size: 0.78rem; color: var(--text-secondary); margin-top: 2px; }
+.fm-header-right { display: flex; align-items: center; gap: 10px; }
+.fm-date-badge {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 20px; padding: 6px 14px;
+  font-size: 0.78rem; font-family: 'DM Mono', monospace;
+  color: var(--text-secondary);
+}
+.fm-pulse-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 0 0 rgba(16,185,129,0.4);
+  animation: pulse-ring 2s infinite;
+}
+@keyframes pulse-ring {
+  0%   { box-shadow: 0 0 0 0 rgba(16,185,129,0.4); }
+  70%  { box-shadow: 0 0 0 6px rgba(16,185,129,0); }
+  100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); }
+}
+.fm-live { font-size: 0.7rem; font-weight: 700; letter-spacing: 1px; color: #10b981; }
+
+/* ── SECTION LABEL ── */
+.fm-section-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  margin: 0 0 14px;
+}
+
+/* ── KPI GRID ── */
+.fm-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 28px;
+}
+.fm-kpi {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 22px 22px 16px;
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.fm-kpi:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
+.fm-kpi-icon {
+  width: 44px; height: 44px; border-radius: 11px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.fm-kpi--blue .fm-kpi-icon  { background: var(--blue-light);   color: var(--blue); }
+.fm-kpi--emerald .fm-kpi-icon { background: var(--emerald-light); color: var(--emerald); }
+.fm-kpi--amber .fm-kpi-icon  { background: var(--amber-light);  color: var(--amber); }
+.fm-kpi--violet .fm-kpi-icon  { background: var(--violet-light); color: var(--violet); }
+
+.fm-kpi-body { flex: 1; min-width: 0; }
+.fm-kpi-value {
+  font-size: 1.55rem; font-weight: 700;
+  color: var(--text-primary); line-height: 1.1;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.fm-kpi-label { font-size: 0.78rem; color: var(--text-secondary); margin-top: 4px; font-weight: 500; }
+.fm-kpi-sub { font-size: 0.72rem; color: var(--text-tertiary); margin-top: 2px; }
+
+.fm-kpi-bar {
+  position: absolute; bottom: 0; left: 0; right: 0; height: 3px;
+}
+.fm-kpi--blue .fm-kpi-bar    { background: linear-gradient(90deg, var(--blue), var(--blue-mid)); }
+.fm-kpi--emerald .fm-kpi-bar { background: linear-gradient(90deg, var(--emerald), var(--emerald-mid)); }
+.fm-kpi--amber .fm-kpi-bar   { background: linear-gradient(90deg, var(--amber), var(--amber-mid)); }
+.fm-kpi--violet .fm-kpi-bar  { background: linear-gradient(90deg, var(--violet), var(--violet-mid)); }
+
+.fm-trend { font-weight: 600; }
+.fm-trend--up   { color: var(--emerald) !important; }
+.fm-trend--down { color: var(--red) !important; }
+
+.fm-mini-progress {
+  display: inline-block; width: 60px; height: 3px;
+  background: var(--border); border-radius: 10px;
+  vertical-align: middle; margin-right: 5px; overflow: hidden;
+}
+.fm-mini-progress-fill {
+  height: 100%; background: var(--violet); border-radius: 10px;
+}
+
+/* ── ACTIONS GRID ── */
+.fm-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 28px;
+}
+.fm-action-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 22px;
+  display: flex; flex-direction: column;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.fm-action-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
+
+.fm-action-top {
+  display: flex; align-items: flex-start;
+  justify-content: space-between; margin-bottom: 14px;
+}
+.fm-action-icon {
+  width: 48px; height: 48px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+}
+.fm-action-icon--blue   { background: var(--blue-light);   color: var(--blue); }
+.fm-action-icon--emerald{ background: var(--emerald-light); color: var(--emerald); }
+.fm-action-icon--amber  { background: var(--amber-light);  color: var(--amber); }
+.fm-action-icon--violet { background: var(--violet-light); color: var(--violet); }
+
+.fm-action-meta {
+  font-size: 0.68rem; color: var(--text-tertiary);
+  font-family: 'DM Mono', monospace;
+  text-align: right; line-height: 1.5; padding-top: 2px;
+}
+.fm-action-title {
+  font-size: 1rem; font-weight: 700;
+  color: var(--text-primary); margin-bottom: 5px;
+}
+.fm-action-desc {
+  font-size: 0.8rem; color: var(--text-secondary);
+  line-height: 1.5; flex: 1; margin-bottom: 18px;
+}
+.fm-action-btns { display: flex; gap: 8px; }
+
+/* ── BUTTONS ── */
+.fm-btn {
+  flex: 1; text-align: center; text-decoration: none;
+  padding: 8px 10px; border-radius: var(--radius-sm);
+  font-size: 0.78rem; font-weight: 600;
+  transition: all 0.15s ease; display: block;
+  border: 1.5px solid transparent; white-space: nowrap;
+}
+.fm-btn--outline {
+  background: transparent; border-color: var(--border-strong);
+  color: var(--text-secondary);
+}
+.fm-btn--outline:hover { border-color: var(--text-secondary); color: var(--text-primary); }
+.fm-btn--solid { color: white; }
+.fm-btn--blue    { background: var(--blue); }
+.fm-btn--emerald { background: var(--emerald); }
+.fm-btn--amber   { background: var(--amber); }
+.fm-btn--violet  { background: var(--violet); }
+.fm-btn--blue:hover    { background: #1d4ed8; }
+.fm-btn--emerald:hover { background: #047857; }
+.fm-btn--amber:hover   { background: #b45309; }
+.fm-btn--violet:hover  { background: #6d28d9; }
+
+/* ── ACTIVITY TABLES ── */
+.fm-activity-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+.fm-table-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+.fm-table-head {
+  display: flex; align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.fm-table-head-title {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 0.88rem; font-weight: 600; color: var(--text-primary);
+}
+.fm-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.fm-dot--blue    { background: var(--blue); }
+.fm-dot--emerald { background: var(--emerald); }
+.fm-dot--amber   { background: var(--amber); }
+.fm-count-badge {
+  background: var(--border); color: var(--text-secondary);
+  font-size: 0.7rem; font-weight: 700;
+  padding: 2px 8px; border-radius: 20px;
+  font-family: 'DM Mono', monospace;
+}
+.fm-table-body { max-height: 320px; overflow-y: auto; }
+.fm-table-body::-webkit-scrollbar { width: 4px; }
+.fm-table-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+.fm-table-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.15s ease;
+}
+.fm-table-row:last-child { border-bottom: none; }
+.fm-table-row:hover { background: var(--surface-2); }
+
+.fm-row-avatar {
+  width: 34px; height: 34px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.8rem; font-weight: 700; flex-shrink: 0;
+}
+.fm-row-avatar--blue    { background: var(--blue-light);   color: var(--blue); }
+.fm-row-avatar--emerald { background: var(--emerald-light); color: var(--emerald); }
+.fm-row-avatar--amber   { background: var(--amber-light);  color: var(--amber); }
+
+.fm-row-info { flex: 1; min-width: 0; }
+.fm-row-primary { font-size: 0.82rem; font-weight: 600; color: var(--text-primary); font-family: 'DM Mono', monospace; }
+.fm-row-secondary { font-size: 0.72rem; color: var(--text-tertiary); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fm-row-right { text-align: right; flex-shrink: 0; }
+.fm-row-amount { font-size: 0.82rem; font-weight: 700; }
+.fm-row-amount--emerald { color: var(--emerald); }
+.fm-row-amount--amber   { color: var(--amber); }
+.fm-row-time { font-size: 0.68rem; color: var(--text-tertiary); font-family: 'DM Mono', monospace; margin-top: 2px; }
+
+.fm-status-badge {
+  display: inline-block;
+  font-size: 0.65rem; font-weight: 700;
+  padding: 2px 8px; border-radius: 20px;
+  text-transform: uppercase; letter-spacing: 0.5px; margin-top: 3px;
+}
+.fm-status-badge--paid    { background: var(--emerald-light); color: var(--emerald); }
+.fm-status-badge--pending { background: var(--red-light);     color: var(--red); }
+.fm-status-badge--partial { background: var(--amber-light);   color: var(--amber); }
+
+.fm-empty {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 40px 20px; color: var(--text-tertiary);
+}
+.fm-empty p { margin-top: 10px; font-size: 0.82rem; }
+
+/* ── RESPONSIVE ── */
+@media (max-width: 1200px) {
+  .fm-kpi-grid, .fm-actions-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 900px) {
+  .fm-activity-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 600px) {
+  .fm-dashboard { padding: 16px; }
+  .fm-kpi-grid, .fm-actions-grid { grid-template-columns: 1fr; }
+  .fm-kpi-value { font-size: 1.25rem; }
+}
 </style>
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-(function() {
-    'use strict';
-    
-    // Wait for DOM to be ready
-    document.addEventListener('DOMContentLoaded', function() {
-        // Get chart data from hidden div
-        var chartDataElement = document.getElementById('chartData');
-        
-        if (chartDataElement) {
-            try {
-                // Parse chart data
-                var chartLabels = JSON.parse(chartDataElement.dataset.chartLabels || '[]');
-                var salesData = JSON.parse(chartDataElement.dataset.salesData || '[]');
-                var creditData = JSON.parse(chartDataElement.dataset.creditData || '[]');
-                var staffPositions = JSON.parse(chartDataElement.dataset.staffPositions || '[]');
-                
-                // Overview Chart
-                var overviewChartCanvas = document.getElementById('overviewChart');
-                if (overviewChartCanvas && chartLabels.length > 0) {
-                    var ctx = overviewChartCanvas.getContext('2d');
-                    new Chart(ctx, {
-                        type: 'line',
-                        data: {
-                            labels: chartLabels,
-                            datasets: [
-                                {
-                                    label: 'Sales (KSH)',
-                                    data: salesData,
-                                    borderColor: '#1cc88a',
-                                    backgroundColor: 'rgba(28, 200, 138, 0.1)',
-                                    tension: 0.1,
-                                    fill: true,
-                                    pointRadius: 3,
-                                    pointHoverRadius: 5,
-                                    pointBackgroundColor: '#1cc88a',
-                                    pointBorderColor: 'white',
-                                    pointBorderWidth: 2
-                                },
-                                {
-                                    label: 'Credit (KSH)',
-                                    data: creditData,
-                                    borderColor: '#f6c23e',
-                                    backgroundColor: 'rgba(246, 194, 62, 0.1)',
-                                    tension: 0.1,
-                                    fill: true,
-                                    pointRadius: 3,
-                                    pointHoverRadius: 5,
-                                    pointBackgroundColor: '#f6c23e',
-                                    pointBorderColor: 'white',
-                                    pointBorderWidth: 2
-                                }
-                            ]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: true,
-                            animation: {
-                                duration: 500
-                            },
-                            plugins: {
-                                legend: {
-                                    position: 'top',
-                                    labels: {
-                                        usePointStyle: true,
-                                        pointStyle: 'circle'
-                                    }
-                                },
-                                tooltip: {
-                                    mode: 'index',
-                                    intersect: false,
-                                    callbacks: {
-                                        label: function(context) {
-                                            return context.dataset.label + ': KSH ' + context.raw.toLocaleString();
-                                        }
-                                    }
-                                }
-                            },
-                            scales: {
-                                y: {
-                                    beginAtZero: true,
-                                    ticks: {
-                                        callback: function(value) {
-                                            return 'KSH ' + value.toLocaleString();
-                                        }
-                                    },
-                                    grid: {
-                                        color: '#eef2f6'
-                                    }
-                                },
-                                x: {
-                                    grid: {
-                                        display: false
-                                    }
-                                }
-                            }
-                        }
-                    });
-                } else {
-                    var overviewContainer = document.getElementById('overviewChart');
-                    if (overviewContainer) {
-                        overviewContainer.parentNode.innerHTML = '<div class="alert alert-info m-3">No chart data available</div>';
-                    }
-                }
-                
-                // Staff Distribution Chart
-                var staffChartCanvas = document.getElementById('staffChart');
-                if (staffChartCanvas && staffPositions.length > 0) {
-                    var staffLabels = [];
-                    var staffCounts = [];
-                    var staffColors = ['#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74a3b', '#fd7e14', '#6f42c1', '#20c997'];
-                    
-                    for (var i = 0; i < staffPositions.length; i++) {
-                        staffLabels.push(staffPositions[i].position);
-                        staffCounts.push(staffPositions[i].count);
-                    }
-                    
-                    var staffCtx = staffChartCanvas.getContext('2d');
-                    new Chart(staffCtx, {
-                        type: 'doughnut',
-                        data: {
-                            labels: staffLabels,
-                            datasets: [{
-                                data: staffCounts,
-                                backgroundColor: staffColors.slice(0, staffLabels.length),
-                                borderWidth: 0,
-                                hoverOffset: 5
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: true,
-                            animation: {
-                                duration: 500
-                            },
-                            plugins: {
-                                legend: {
-                                    position: 'bottom',
-                                    labels: {
-                                        usePointStyle: true,
-                                        pointStyle: 'circle'
-                                    }
-                                },
-                                tooltip: {
-                                    callbacks: {
-                                        label: function(context) {
-                                            return context.label + ': ' + context.raw + ' staff';
-                                        }
-                                    }
-                                }
-                            },
-                            cutout: '60%'
-                        }
-                    });
-                } else {
-                    var staffContainer = document.getElementById('staffChart');
-                    if (staffContainer) {
-                        staffContainer.parentNode.innerHTML = '<div class="alert alert-info m-3">No staff data available</div>';
-                    }
-                }
-            } catch (e) {
-                console.error('Chart initialization error:', e);
-            }
-        }
-        
-        // Initialize tooltips
-        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[title]'));
-        tooltipTriggerList.map(function(tooltipTriggerEl) {
-            return new bootstrap.Tooltip(tooltipTriggerEl);
-        });
-    });
-})();
+document.getElementById('currentDate').textContent = new Date().toLocaleDateString('en-GB', {
+  weekday: 'short', day: 'numeric', month: 'short', year: 'numeric'
+});
 </script>
 {% endblock %}
