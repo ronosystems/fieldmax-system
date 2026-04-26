@@ -51,8 +51,10 @@ if not DEBUG:
     SESSION_COOKIE_HTTPONLY = True
     
     # CSRF Settings
-    CSRF_COOKIE_HTTPONLY = True
+    CSRF_COOKIE_HTTPONLY = False  
+    CSRF_COOKIE_SAMESITE = 'Lax'  
     CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default='').split(',')
+
 else:
     # Development settings
     SECURE_SSL_REDIRECT = False
