@@ -1,8 +1,11 @@
+# staff/models.py
+
 from django.contrib.auth import get_user_model
 from django.db import models
 from django.utils import timezone
-from django.db.models.signals import post_save
+from django.db.models.signals import post_save, post_migrate
 from django.dispatch import receiver
+from django.contrib.auth.models import Group
 from datetime import timedelta
 import random
 import string
@@ -14,7 +17,6 @@ User = get_user_model()
 # File Upload Path Functions
 # ============================================
 def passport_upload_path(instance, filename):
-    # Upload to: staff_documents/passport/{application_id}/{filename}
     return f'staff_documents/passport/{instance.id}/{filename}'
 
 def id_front_upload_path(instance, filename):
@@ -22,6 +24,34 @@ def id_front_upload_path(instance, filename):
 
 def id_back_upload_path(instance, filename):
     return f'staff_documents/id_back/{instance.id}/{filename}'
+
+
+# ============================================
+# SINGLE SOURCE OF TRUTH - Position to Group Mapping
+# ============================================
+POSITION_TO_GROUP_MAP = {
+    'administrator': 'Administrator',
+    'assistant_manager': 'Assistant Manager',
+    'sales_manager': 'Sales Manager',
+    'sales_agent': 'Sales Agent',
+    'cashier': 'Cashier',
+    'store_manager': 'Store Manager',
+    'credit_manager': 'Credit Manager',
+    'credit_officer': 'Credit Officer',
+    'customer_service': 'Customer Service',
+    'finance_manager': 'Finance Manager',
+    'security': 'Security Officer',
+    'cleaner': 'Cleaner',
+    'inventory_manager': 'Inventory Manager',
+    'mpesa_agent': 'M-Pesa Agent',
+}
+
+# Generate POSITION_CHOICES automatically from the map
+POSITION_CHOICES = [(key, value) for key, value in POSITION_TO_GROUP_MAP.items()]
+
+# Generate DEFAULT_GROUPS automatically from the map
+DEFAULT_GROUPS = list(POSITION_TO_GROUP_MAP.values())
+
 
 # ============================================
 # Staff Application Model
@@ -34,20 +64,8 @@ class StaffApplication(models.Model):
         ('under_review', 'Under Review'),
     ]
     
-    POSITION_CHOICES = [
-        ('administrator', 'Administrator'),
-        ('sales_manager', 'Sales Manager'),
-        ('sales_agent', 'Sales Agent'),
-        ('cashier', 'Cashier'),
-        ('store_manager', 'Store Manager'),
-        ('credit_manager', 'Credit Manager'),
-        ('credit_officer', 'Credit Officer'),
-        ('customer_service', 'Customer Service'),
-        ('finance_manager', 'Finance Manager'),
-        ('security', 'Security Officer'),
-        ('cleaner', 'Cleaner'),
-        ('inventory_manager', 'Inventory Manager'),
-    ]
+    # Use the global POSITION_CHOICES
+    POSITION_CHOICES = POSITION_CHOICES
     
     # Personal Information
     first_name = models.CharField(max_length=100)
@@ -61,7 +79,7 @@ class StaffApplication(models.Model):
     position = models.CharField(max_length=50, choices=POSITION_CHOICES)
     experience = models.TextField(blank=True)
     
-    # Document Uploads - ADDED max_length=500
+    # Document Uploads
     passport_photo = models.ImageField(upload_to=passport_upload_path, max_length=500)
     id_front = models.ImageField(upload_to=id_front_upload_path, max_length=500)
     id_back = models.ImageField(upload_to=id_back_upload_path, max_length=500)
@@ -107,10 +125,21 @@ class StaffApplication(models.Model):
         }
         return badges.get(self.status, 'secondary')
     
+    @classmethod
+    def get_group_for_position(cls, position):
+        """Get the group name for a given position"""
+        return POSITION_TO_GROUP_MAP.get(position)
+    
+    @classmethod
+    def get_all_groups(cls):
+        """Get all unique group names"""
+        return set(POSITION_TO_GROUP_MAP.values())
+    
     class Meta:
         ordering = ['-application_date']
         verbose_name = 'Staff Application'
         verbose_name_plural = 'Staff Applications'
+
 
 # ============================================
 # Staff Model (for verified staff members)
@@ -120,7 +149,7 @@ class Staff(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='staff_profile')
     staff_id = models.CharField(max_length=20, unique=True)
     id_number = models.CharField(max_length=50, unique=True, blank=True, null=True) 
-    position = models.CharField(max_length=50, choices=StaffApplication.POSITION_CHOICES)
+    position = models.CharField(max_length=50, choices=POSITION_CHOICES)
     department = models.CharField(max_length=100, blank=True)
     
     # ITP Verification fields
@@ -136,7 +165,7 @@ class Staff(models.Model):
     is_identity_verified = models.BooleanField(default=False)
     verification_notes = models.TextField(blank=True)
     
-    # Document uploads for verification - ADDED max_length=500
+    # Document uploads for verification
     id_front = models.ImageField(upload_to='verification/ids/', blank=True, null=True, max_length=500)
     id_back = models.ImageField(upload_to='verification/ids/', blank=True, null=True, max_length=500)
     passport_photo = models.ImageField(upload_to='verification/photos/', blank=True, null=True, max_length=500)
@@ -171,6 +200,7 @@ class Staff(models.Model):
     class Meta:
         verbose_name = 'Staff Member'
         verbose_name_plural = 'Staff Members'
+
 
 # ============================================
 # OTP Verification Model
@@ -208,7 +238,7 @@ class OTPVerification(models.Model):
             user=user, 
             purpose=purpose, 
             is_used=False
-        ).update(is_used=True)  # Mark as used (effectively invalid)
+        ).update(is_used=True)
         
         # Create new OTP
         otp = cls.objects.create(
@@ -240,6 +270,7 @@ class OTPVerification(models.Model):
         except cls.DoesNotExist:
             return False, "Invalid OTP code"
 
+
 # ============================================
 # User Profile Model
 # ============================================
@@ -253,13 +284,14 @@ class UserProfile(models.Model):
     def __str__(self):
         return f"{self.user.username}'s profile"
 
+
 # ============================================
 # User Status Model
 # ============================================
 class UserStatus(models.Model):
     """Extended user status management (One-to-One with Django User)"""
     user = models.OneToOneField(
-        User,  # This is the Django User model
+        User,
         on_delete=models.CASCADE,
         related_name='status'
     )
@@ -324,9 +356,11 @@ class UserStatus(models.Model):
             return False, 'suspended', f'Your account is suspended until {self.suspended_until}.'
         return True, None, None
 
+
 # ============================================
 # Signals
 # ============================================
+
 @receiver(post_save, sender=User)
 def create_user_profile(sender, instance, created, **kwargs):
     """Create UserProfile when User is created"""
@@ -345,82 +379,64 @@ def save_user_profile(sender, instance, **kwargs):
 def create_staff_profile_for_staff_users(sender, instance, created, **kwargs):
     """Create Staff profile for users that are staff members"""
     if created and instance.is_staff:
-        # Check if staff profile already exists
         if not hasattr(instance, 'staff_profile'):
             Staff.objects.create(
                 user=instance,
-                position='staff', 
+                position='sales_agent',  # Default position
             )
 
 
+# ============================================
+# Auto-create groups on migration
+# ============================================
+
+@receiver(post_migrate)
+def create_groups_on_migration(sender, **kwargs):
+    """Auto-create all default groups whenever migrations run"""
+    if sender.name == 'staff':
+        created_count = 0
+        existing_count = 0
+        
+        print("\n" + "=" * 60)
+        print("🔧 Auto-creating default groups...")
+        print("=" * 60)
+        
+        for group_name in DEFAULT_GROUPS:
+            group, created = Group.objects.get_or_create(name=group_name)
+            if created:
+                print(f"  ✅ Created group: {group_name}")
+                created_count += 1
+            else:
+                print(f"  • Group already exists: {group_name}")
+                existing_count += 1
+        
+        print("=" * 60)
+        print(f"📊 Summary: {created_count} created, {existing_count} existing")
+        print("✅ Groups are ready!")
+        print("=" * 60 + "\n")
 
 
+# ====================================================
+# Auto-create default admin user [DEVELOPER/SUPERUSER]
+# ====================================================
 
-
-class UserStatus(models.Model):
-    """Extended user status management (One-to-One with Django User)"""
-    user = models.OneToOneField(
-        User,  # This is the Django User model
-        on_delete=models.CASCADE,
-        related_name='status'
-    )
-    
-    # Lock fields
-    is_locked = models.BooleanField(default=False)
-    locked_at = models.DateTimeField(null=True, blank=True)
-    lock_reason = models.CharField(max_length=50, choices=[
-        ('failed_login', 'Multiple Failed Logins'),
-        ('suspicious', 'Suspicious Activity'),
-        ('admin', 'Admin Lock'),
-    ], blank=True)
-    failed_login_attempts = models.IntegerField(default=0)
-    last_failed_login = models.DateTimeField(null=True, blank=True)
-    
-    # Suspension fields
-    is_suspended = models.BooleanField(default=False)
-    suspended_at = models.DateTimeField(null=True, blank=True)
-    suspended_until = models.DateTimeField(null=True, blank=True)
-    suspension_reason = models.TextField(blank=True)
-    suspended_by = models.ForeignKey(
-        User,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name='suspended_users'
-    )
-    
-    # Deactivation tracking
-    deactivated_at = models.DateTimeField(null=True, blank=True)
-    deactivated_reason = models.TextField(blank=True)
-    deactivated_by = models.ForeignKey(
-        User,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name='deactivated_users'
-    )
-    
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    
-    class Meta:
-        verbose_name = 'User Status'
-        verbose_name_plural = 'User Statuses'
-        indexes = [
-            models.Index(fields=['is_locked', 'is_suspended']),
-            models.Index(fields=['user', 'is_locked']),
-        ]
-    
-    def __str__(self):
-        return f"{self.user.username} - {'Locked' if self.is_locked else 'Unlocked'} / {'Suspended' if self.is_suspended else 'Active'}"
-    
-    @property
-    def can_login(self):
-        """Check if user can login"""
-        if not self.user.is_active:
-            return False, 'deactivated', 'Your account has been deactivated.'
-        if self.is_locked:
-            return False, 'locked', 'Your account is temporarily locked.'
-        if self.is_suspended:
-            return False, 'suspended', f'Your account is suspended until {self.suspended_until}.'
-        return True, None, None
+@receiver(post_migrate)
+def create_default_admin(sender, **kwargs):
+    """Create default admin user if none exists"""
+    if sender.name == 'staff':
+        if not User.objects.filter(is_superuser=True).exists():
+            admin = User.objects.create_superuser(
+                username='RONOSYSTEMS',
+                email='ronosystems@gmail.com',
+                password='Kiprono@1997',
+                first_name='ELKANA',
+                last_name='KIPRONO'
+            )
+            # Assign to Administrator group
+            admin_group, _ = Group.objects.get_or_create(name='Administrator')
+            admin.groups.add(admin_group)
+            print("\n" + "=" * 60)
+            print("✅ Default admin user created!")
+            print(f"   Username: RONOSYSTEMS")
+            print(f"   Password: Kiprono@1997")
+            print("=" * 60 + "\n")
