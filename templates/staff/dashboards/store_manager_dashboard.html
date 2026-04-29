@@ -1,939 +1,1099 @@
-<!-- templates/staff/dashboards/store_manager_dashboard.html -->
 {% extends 'inventory/staff_base.html' %}
 {% load static %}
 
 {% block title %}Store Manager Dashboard - FieldMax{% endblock %}
 
 {% block extra_css %}
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-    .welcome-card {
-        background: linear-gradient(135deg, #04b4fa 0%, #02ebf3 100%);
-        color: rgb(0, 0, 0);
-        padding: 20px;
-        border-radius: 12px;
-        margin-bottom: 20px;
-        box-shadow: 0 5px 20px rgb(0, 0, 0);
-    }
-    
-    .welcome-title {
-        font-size: 2.2rem;
-        font-weight: 700;
-        margin-bottom: 10px;
-    }
-    
-    .welcome-subtitle {
-        opacity: 0.9;
-        font-size: 1.1rem;
-    }
-    
-    .date-badge {
-        background: rgb(255, 255, 255);
-        padding: 8px 15px;
-        border-radius: 50px;
-        display: inline-block;
-        margin-top: 15px;
-    }
-    
-    .quick-stats {
-        display: flex;
-        gap: 20px;
-        margin-top: 20px;
-        flex-wrap: wrap;
-    }
-    
-    .quick-stat-item {
-        background: rgb(255, 255, 255);
-        padding: 15px 25px;
-        border-radius: 12px;
-        backdrop-filter: blur(10px);
-        flex: 1;
-        min-width: 150px;
-        text-align: center;
-    }
-    
-    .quick-stat-value {
-        font-size: 1.8rem;
-        font-weight: 700;
-        line-height: 1;
-    }
-    
-    .quick-stat-label {
-        font-size: 0.85rem;
-        opacity: 0.8;
-        margin-top: 5px;
-    }
-    
-    .action-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-        gap: 15px;
-        margin-bottom: 30px;
-    }
-    
-    .action-card {
-        background: white;
-        border-radius: 12px;
-        padding: 20px 15px;
-        text-align: center;
-        text-decoration: none;
-        color: #333;
-        transition: all 0.3s;
-        border: 1px solid #e0e0e0;
-        box-shadow: 0 4px 6px rgb(0, 0, 0);
-    }
-    
-    .action-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 15px 30px rgb(0, 0, 0);
-        border-color: #667eea;
-    }
-    
-    .action-card i {
-        font-size: 2rem;
-        margin-bottom: 10px;
-        background: linear-gradient(135deg, #667eea, #0026ff);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-    }
-    
-    .action-card span {
-        display: block;
-        font-weight: 600;
-        font-size: 0.9rem;
-        margin-bottom: 5px;
-    }
-    
-    .action-card small {
-        color: #666;
-        font-size: 0.75rem;
-    }
-    
-    .chart-container {
-        background: white;
-        border-radius: 15px;
-        padding: 20px;
-        margin-bottom: 30px;
-        box-shadow: 0 4px 6px rgb(0, 0, 0);
-        height: 100%;
-    }
-    
-    .chart-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 20px;
-        padding-bottom: 15px;
-        border-bottom: 2px solid #f0f0f0;
-    }
-    
-    .chart-title {
-        font-size: 1.1rem;
-        font-weight: 600;
-        color: #000000;
-        margin: 0;
-    }
-    
-    .chart-title i {
-        color: #002fff;
-        margin-right: 8px;
-    }
-    
-    .chart-wrapper {
-        height: 250px;
-        position: relative;
-    }
-    
-    .progress-custom {
-        height: 8px;
-        border-radius: 4px;
-        background: #f0f0f0;
-        overflow: hidden;
-        margin-top: 8px;
-    }
-    
-    .progress-bar-custom {
-        height: 100%;
-        background: linear-gradient(90deg, #05ad3d, #269e01);
-        border-radius: 4px;
-    }
-    
-    .badge-trend-up {
-        background: #d4edda;
-        color: #155724;
-        padding: 3px 8px;
-        border-radius: 50px;
-        font-size: 0.7rem;
-        font-weight: 600;
-    }
-    
-    .badge-trend-down {
-        background: #f8d7da;
-        color: #721c24;
-        padding: 3px 8px;
-        border-radius: 50px;
-        font-size: 0.7rem;
-        font-weight: 600;
-    }
-    
-    .alert-item {
-        padding: 15px;
-        border-radius: 10px;
-        margin-bottom: 10px;
-        border-left: 4px solid;
-        transition: all 0.3s;
-    }
-    
-    .alert-item:hover {
-        transform: translateX(5px);
-    }
-    
-    .alert-item.warning {
-        background: #fff3cd;
-        border-left-color: #ffc107;
-    }
-    
-    .alert-item.danger {
-        background: #f8d7da;
-        border-left-color: #dc3545;
-    }
-    
-    .alert-item.success {
-        background: #d4edda;
-        border-left-color: #28a745;
-    }
-    
-    .activity-timeline {
-        position: relative;
-        padding-left: 30px;
-    }
-    
-    .activity-item {
-        position: relative;
-        padding-bottom: 20px;
-        border-left: 2px solid #e0e0e0;
-        padding-left: 20px;
-        margin-left: 10px;
-    }
-    
-    .activity-item:last-child {
-        border-left: none;
-    }
-    
-    .activity-icon {
-        position: absolute;
-        left: -34px;
-        top: 0;
-        width: 30px;
-        height: 30px;
-        border-radius: 50%;
-        background: white;
-        border: 2px solid #667eea;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: #667eea;
-    }
-    
-    .activity-content {
-        background: #f8f9fa;
-        padding: 15px;
-        border-radius: 10px;
-    }
-    
-    .activity-time {
-        font-size: 0.75rem;
-        color: #666;
-        margin-bottom: 5px;
-    }
-    
-    .return-card {
-        background: white;
-        border: 1px solid #e0e0e0;
-        border-radius: 12px;
-        padding: 15px;
-        margin-bottom: 15px;
-        transition: all 0.3s;
-    }
-    
-    .return-card:hover {
-        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-    }
-    
-    .return-status {
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        display: inline-block;
-        margin-right: 8px;
-    }
-    
-    .status-pending { background: #ffc107; }
-    .status-verified { background: #17a2b8; }
-    .status-approved { background: #28a745; }
-    .status-rejected { background: #dc3545; }
-    
-    .inventory-status {
-        display: inline-block;
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
-        margin-right: 5px;
-    }
-    
-    .status-normal { background: #28a745; }
-    .status-low { background: #ffc107; }
-    .status-critical { background: #dc3545; }
-    
-    @media (max-width: 768px) {
-        .welcome-title {
-            font-size: 1.5rem;
-        }
-        
-        .quick-stats {
-            flex-direction: column;
-        }
-        
-        .quick-stat-item {
-            width: 100%;
-        }
-        
-        .action-grid {
-            grid-template-columns: repeat(2, 1fr);
-        }
-    }
+/* ══════════════════════════════════════════════════
+   All styles scoped to .smd to avoid base conflicts
+   Base bg = #045270 (teal), cards = #ffffff
+   Navbar = #000, Sidebar = #142731
+══════════════════════════════════════════════════ */
+.smd {
+    font-family: 'Syne', system-ui, sans-serif;
+    padding-bottom: 20px;
+}
+
+/* ─── Typography helpers ─── */
+.smd .mono { font-family: 'DM Mono', monospace; }
+
+/* ─── Section label ─── */
+.smd .slbl {
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.55);
+    font-family: 'DM Mono', monospace;
+    margin: 0 0 10px;
+    display: block;
+}
+
+/* ══ HERO ══ */
+.smd .hero {
+    background: linear-gradient(135deg, #0a1628 0%, #0d2240 40%, #0a1e3d 100%);
+    border-radius: 20px;
+    padding: 26px 30px 22px;
+    margin-bottom: 18px;
+    border: 1px solid rgba(255,255,255,0.1);
+    position: relative;
+    overflow: hidden;
+}
+
+.smd .hero::before {
+    content: '';
+    position: absolute;
+    top: -80px; right: -80px;
+    width: 280px; height: 280px;
+    background: radial-gradient(circle, rgba(59,124,248,0.15) 0%, transparent 70%);
+    pointer-events: none;
+}
+
+.smd .hero::after {
+    content: '';
+    position: absolute;
+    bottom: -60px; left: 20%;
+    width: 200px; height: 200px;
+    background: radial-gradient(circle, rgba(15,214,138,0.08) 0%, transparent 70%);
+    pointer-events: none;
+}
+
+.smd .hero-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    position: relative;
+    z-index: 1;
+    margin-bottom: 20px;
+}
+
+.smd .hero-top h1 {
+    font-size: 1.65rem;
+    font-weight: 800;
+    color: #fff;
+    letter-spacing: -0.03em;
+    margin: 0 0 5px;
+    line-height: 1.1;
+}
+
+.smd .hero-meta {
+    font-size: 0.75rem;
+    color: rgba(255,255,255,0.45);
+    font-family: 'DM Mono', monospace;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.smd .hero-meta .sep { color: rgba(255,255,255,0.2); }
+
+.smd .live-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(15,214,138,0.12);
+    border: 1px solid rgba(15,214,138,0.25);
+    border-radius: 50px;
+    padding: 5px 12px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: #0fd68a;
+    letter-spacing: 0.06em;
+    font-family: 'DM Mono', monospace;
+}
+
+.smd .live-dot {
+    width: 6px; height: 6px;
+    background: #0fd68a;
+    border-radius: 50%;
+    animation: smd-pulse 2.2s ease-in-out infinite;
+}
+
+@keyframes smd-pulse {
+    0%,100% { opacity:1; transform:scale(1); }
+    50%      { opacity:0.35; transform:scale(0.65); }
+}
+
+/* Hero KPI row */
+.smd .hkpi-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    position: relative;
+    z-index: 1;
+}
+
+.smd .hkpi {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.09);
+    border-radius: 14px;
+    padding: 14px 16px;
+    transition: background 0.2s, transform 0.2s;
+}
+
+.smd .hkpi:hover {
+    background: rgba(255,255,255,0.1);
+    transform: translateY(-2px);
+}
+
+.smd .hkpi-lbl {
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.4);
+    font-family: 'DM Mono', monospace;
+    margin-bottom: 7px;
+}
+
+.smd .hkpi-val {
+    font-size: 1.85rem;
+    font-weight: 800;
+    color: #fff;
+    letter-spacing: -0.04em;
+    line-height: 1;
+}
+
+.smd .hkpi-val.sm { font-size: 1.25rem; font-family: 'DM Mono', monospace; }
+.smd .hkpi-sub  { font-size: 0.65rem; color: rgba(255,255,255,0.3); margin-top: 4px; }
+
+/* ══ QUICK ACTIONS ══ */
+.smd .qa-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 10px;
+    margin-bottom: 18px;
+}
+
+.smd .qa-btn {
+    background: #fff;
+    border: 1px solid #e8edf5;
+    border-radius: 14px;
+    padding: 14px 8px;
+    text-decoration: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 7px;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+}
+
+.smd .qa-btn::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--qa-c, #3b7cf8);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.2s;
+}
+
+.smd .qa-btn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 24px rgba(0,0,0,0.15);
+    border-color: #d0d9ea;
+}
+
+.smd .qa-btn:hover::after { transform: scaleX(1); }
+
+.smd .qa-ico {
+    width: 40px; height: 40px;
+    border-radius: 11px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.95rem;
+    background: var(--qa-bg, rgba(59,124,248,0.08));
+    color: var(--qa-c, #3b7cf8);
+    transition: transform 0.2s;
+}
+
+.smd .qa-btn:hover .qa-ico { transform: scale(1.1); }
+
+.smd .qa-lbl {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #0f172a;
+    text-align: center;
+    line-height: 1.2;
+}
+
+.smd .qa-sub {
+    font-size: 0.62rem;
+    color: #94a3b8;
+    text-align: center;
+}
+
+/* ══ PANEL / CARD ══ */
+.smd .panel {
+    background: #fff;
+    border: 1px solid #e8edf5;
+    border-radius: 18px;
+    overflow: hidden;
+    transition: box-shadow 0.2s;
+}
+
+.smd .panel:hover { box-shadow: 0 8px 30px rgba(0,0,0,0.1); }
+
+.smd .panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    border-bottom: 1px solid #f0f4fb;
+}
+
+.smd .panel-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #64748b;
+}
+
+.smd .panel-link {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #3b7cf8;
+    text-decoration: none;
+    letter-spacing: 0.02em;
+    transition: opacity 0.15s;
+}
+
+.smd .panel-link:hover { opacity: 0.65; }
+
+.smd .panel-body { padding: 16px 18px; }
+
+/* ══ GRID LAYOUTS ══ */
+.smd .g3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+.smd .g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+
+/* ══ DOUGHNUT ══ */
+.smd .chart-wrap { position: relative; padding: 16px 18px 0; }
+
+.smd .d-center {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    pointer-events: none;
+    padding-bottom: 16px;
+}
+
+.smd .d-cval {
+    font-size: 1.55rem;
+    font-weight: 800;
+    color: #0f172a;
+    letter-spacing: -0.04em;
+    line-height: 1;
+}
+
+.smd .d-clbl {
+    font-size: 0.58rem;
+    color: #94a3b8;
+    font-family: 'DM Mono', monospace;
+    letter-spacing: 0.1em;
+    margin-top: 2px;
+}
+
+.smd .leg-list { padding: 10px 18px 16px; }
+
+.smd .leg-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid #f0f4fb;
+    font-size: 0.78rem;
+}
+
+.smd .leg-row:last-child { border: none; padding-bottom: 0; }
+
+.smd .leg-left { display: flex; align-items: center; gap: 8px; color: #475569; }
+.smd .leg-dot  { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.smd .leg-val  { font-family: 'DM Mono', monospace; font-weight: 600; color: #0f172a; font-size: 0.82rem; }
+
+/* ══ CATEGORY BARS ══ */
+.smd .cat-item { margin-bottom: 13px; }
+.smd .cat-item:last-child { margin-bottom: 0; }
+
+.smd .cat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 5px;
+}
+
+.smd .cat-name { font-size: 0.78rem; font-weight: 600; color: #334155; }
+.smd .cat-val  { font-size: 0.68rem; color: #94a3b8; font-family: 'DM Mono', monospace; }
+
+.smd .cat-track { height: 5px; background: #f0f4fb; border-radius: 3px; overflow: hidden; }
+.smd .cat-fill  { height: 100%; border-radius: 3px; background: linear-gradient(90deg, #3b7cf8, #7c3aed); }
+
+/* ══ TIMELINE ══ */
+.smd .tl-scroll { overflow-y: auto; max-height: 295px; }
+.smd .tl-scroll::-webkit-scrollbar { width: 3px; }
+.smd .tl-scroll::-webkit-scrollbar-thumb { background: #e0e7ef; border-radius: 2px; }
+
+.smd .tl-item {
+    display: flex;
+    gap: 11px;
+    padding-bottom: 13px;
+    position: relative;
+}
+
+.smd .tl-item:last-child { padding-bottom: 0; }
+
+.smd .tl-line {
+    position: absolute;
+    left: 12px; top: 25px; bottom: 0;
+    width: 1px;
+    background: #f0f4fb;
+}
+
+.smd .tl-ico {
+    width: 25px; height: 25px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.58rem;
+    flex-shrink: 0;
+    position: relative; z-index: 1;
+}
+
+.smd .tl-ico.up   { background: rgba(13,184,122,0.1); color: #0db87a; }
+.smd .tl-ico.down { background: rgba(229,62,62,0.08); color: #e53e3e; }
+
+.smd .tl-name {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #0f172a;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 160px;
+}
+
+.smd .tl-meta { font-size: 0.65rem; color: #94a3b8; margin-top: 1px; }
+
+.smd .tl-qty {
+    display: inline-block;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.68rem;
+    font-weight: 600;
+    padding: 1px 7px;
+    border-radius: 4px;
+    margin-top: 3px;
+}
+
+.smd .tl-qty.pos { background: rgba(13,184,122,0.08); color: #0db87a; }
+.smd .tl-qty.neg { background: rgba(229,62,62,0.07);  color: #e53e3e; }
+
+/* ══ ALERTS ══ */
+.smd .al-scroll { overflow-y: auto; max-height: 350px; padding: 14px 18px; }
+.smd .al-scroll::-webkit-scrollbar { width: 3px; }
+.smd .al-scroll::-webkit-scrollbar-thumb { background: #e0e7ef; border-radius: 2px; }
+
+.smd .al-item {
+    border-radius: 11px;
+    border-left: 3px solid;
+    padding: 11px 13px;
+    margin-bottom: 9px;
+    cursor: pointer;
+    transition: transform 0.15s;
+}
+
+.smd .al-item:last-child { margin-bottom: 0; }
+.smd .al-item:hover { transform: translateX(4px); }
+.smd .al-item.crit { background: rgba(229,62,62,0.05); border-color: #e53e3e; }
+.smd .al-item.warn { background: rgba(217,119,6,0.05);  border-color: #d97706; }
+
+.smd .al-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 6px;
+}
+
+.smd .al-name { font-size: 0.8rem; font-weight: 700; color: #0f172a; }
+.smd .al-code { font-size: 0.65rem; color: #94a3b8; font-family: 'DM Mono', monospace; margin-top: 1px; }
+
+.smd .al-dismiss {
+    background: none;
+    border: 1px solid #e8edf5;
+    border-radius: 5px;
+    padding: 2px 7px;
+    font-size: 0.65rem;
+    color: #94a3b8;
+    cursor: pointer;
+    transition: all 0.15s;
+    flex-shrink: 0;
+}
+
+.smd .al-dismiss:hover { border-color: #0db87a; color: #0db87a; }
+
+.smd .al-tags { display: flex; gap: 5px; flex-wrap: wrap; }
+
+.smd .al-tag {
+    font-size: 0.62rem;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-family: 'DM Mono', monospace;
+}
+
+.smd .al-tag.stk  { background: rgba(59,124,248,0.07);  color: #3b7cf8; }
+.smd .al-tag.crit { background: rgba(229,62,62,0.08);   color: #e53e3e; }
+.smd .al-tag.warn { background: rgba(217,119,6,0.08);   color: #d97706; }
+
+.smd .al-bar { height: 3px; background: #f0f4fb; border-radius: 2px; margin-top: 7px; overflow: hidden; }
+.smd .al-fill { height: 100%; border-radius: 2px; background: #d97706; }
+.smd .al-fill.crit { background: #e53e3e; }
+
+/* ══ RANK TABLE ══ */
+.smd .rtbl { width: 100%; border-collapse: collapse; }
+
+.smd .rtbl th {
+    padding: 8px 14px;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #94a3b8;
+    border-bottom: 1px solid #f0f4fb;
+    text-align: left;
+    background: #fafbfd;
+    white-space: nowrap;
+}
+
+.smd .rtbl td {
+    padding: 11px 14px;
+    font-size: 0.78rem;
+    border-bottom: 1px solid #f0f4fb;
+    vertical-align: middle;
+    color: #475569;
+}
+
+.smd .rtbl tbody tr:last-child td { border-bottom: none; }
+.smd .rtbl tbody tr:hover td { background: #fafbfd; }
+
+.smd .rk  { font-family: 'DM Mono', monospace; font-size: 0.68rem; color: #cbd5e1; }
+.smd .pn  { font-weight: 700; color: #0f172a; line-height: 1.3; }
+.smd .pc  { font-size: 0.65rem; color: #94a3b8; font-family: 'DM Mono', monospace; }
+
+.smd .upill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 50px;
+    background: rgba(13,184,122,0.08);
+    color: #0db87a;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
+.smd .rval { font-family: 'DM Mono', monospace; font-size: 0.78rem; font-weight: 700; color: #0f172a; }
+.smd .tup  { font-size: 0.68rem; font-weight: 700; color: #0db87a; display: inline-flex; align-items: center; gap: 2px; }
+
+/* ══ RETURNS ══ */
+.smd .ret-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+.smd .ret-card {
+    background: #fafbfd;
+    border: 1px solid #e8edf5;
+    border-radius: 12px;
+    padding: 13px 15px;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.smd .ret-card:hover { border-color: #d0d9ea; box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
+
+.smd .ret-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 7px;
+}
+
+.smd .ret-id { font-family: 'DM Mono', monospace; font-size: 0.65rem; color: #94a3b8; }
+
+.smd .spill {
+    font-size: 0.6rem;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 50px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-family: 'DM Mono', monospace;
+}
+
+.smd .spill.submitted { background: rgba(217,119,6,0.08);  color: #d97706; }
+.smd .spill.verified  { background: rgba(59,124,248,0.08); color: #3b7cf8; }
+.smd .spill.approved  { background: rgba(13,184,122,0.08); color: #0db87a; }
+.smd .spill.rejected  { background: rgba(229,62,62,0.07);  color: #e53e3e; }
+
+.smd .ret-pn { font-size: 0.8rem; font-weight: 700; color: #0f172a; margin-bottom: 1px; }
+.smd .ret-pc { font-size: 0.65rem; color: #94a3b8; font-family: 'DM Mono', monospace; margin-bottom: 9px; }
+
+.smd .ret-foot {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.smd .ret-usr { font-size: 0.66rem; color: #94a3b8; line-height: 1.6; }
+
+.smd .ret-acts { display: flex; gap: 5px; }
+
+.smd .icobtn {
+    width: 26px; height: 26px;
+    border-radius: 6px;
+    border: 1px solid #e8edf5;
+    background: #fff;
+    display: flex; align-items: center; justify-content: center;
+    color: #94a3b8;
+    font-size: 0.7rem;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.smd .icobtn:hover           { border-color: #3b7cf8; color: #3b7cf8; background: rgba(59,124,248,0.05); }
+.smd .icobtn.yw:hover        { border-color: #d97706; color: #d97706; background: rgba(217,119,6,0.05); }
+
+/* ══ PRODUCTS TABLE ══ */
+.smd .ptbl { width: 100%; border-collapse: collapse; }
+
+.smd .ptbl th {
+    padding: 9px 14px;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #94a3b8;
+    border-bottom: 1px solid #f0f4fb;
+    text-align: left;
+    background: #fafbfd;
+    white-space: nowrap;
+}
+
+.smd .ptbl td {
+    padding: 11px 14px;
+    font-size: 0.78rem;
+    border-bottom: 1px solid #f0f4fb;
+    vertical-align: middle;
+    color: #475569;
+}
+
+.smd .ptbl tbody tr:last-child td { border-bottom: none; }
+.smd .ptbl tbody tr:hover td { background: #fafbfd; }
+
+.smd .pt1 { font-family: 'DM Mono', monospace; font-size: 0.76rem; font-weight: 600; color: #0f172a; }
+.smd .pt2 { font-size: 0.65rem; color: #94a3b8; font-family: 'DM Mono', monospace; }
+
+.smd code.sku {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.68rem;
+    color: #3b7cf8;
+    background: rgba(59,124,248,0.07);
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.smd .spk {
+    display: inline-block;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.66rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 50px;
+}
+
+.smd .spk.ok  { background: rgba(13,184,122,0.08);  color: #0db87a; }
+.smd .spk.low { background: rgba(217,119,6,0.08);   color: #d97706; }
+.smd .spk.out { background: rgba(229,62,62,0.07);   color: #e53e3e; }
+
+/* ══ COUNT BADGE ══ */
+.smd .cbadge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(229,62,62,0.08);
+    color: #e53e3e;
+    font-size: 0.6rem;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-family: 'DM Mono', monospace;
+    margin-left: 5px;
+    vertical-align: middle;
+}
+
+/* ══ EMPTY STATE ══ */
+.smd .empty {
+    text-align: center;
+    padding: 36px 20px;
+    color: #94a3b8;
+    font-size: 0.78rem;
+}
+
+.smd .empty i { font-size: 1.6rem; display: block; margin-bottom: 8px; opacity: 0.5; }
+
+/* ══ RESPONSIVE ══ */
+@media (max-width: 1100px) {
+    .smd .g3 { grid-template-columns: 1fr 1fr; }
+    .smd .g3 > *:last-child { grid-column: span 2; }
+}
+
+@media (max-width: 768px) {
+    .smd .hkpi-row { grid-template-columns: repeat(2, 1fr); }
+    .smd .qa-grid  { grid-template-columns: repeat(3, 1fr); }
+    .smd .g3, .smd .g2 { grid-template-columns: 1fr; }
+    .smd .g3 > *:last-child { grid-column: span 1; }
+    .smd .ret-grid { grid-template-columns: 1fr; }
+    .smd .hero { padding: 18px; }
+    .smd .hero-top h1 { font-size: 1.3rem; }
+}
+
+@media (max-width: 480px) {
+    .smd .qa-grid { grid-template-columns: repeat(2, 1fr); }
+}
 </style>
 {% endblock %}
 
-{% block page_icon %}fas fa-store{% endblock %}
-
-{% block page_title %}Store Manager Dashboard{% endblock %}
-
-{% block breadcrumb %}
-<li class="breadcrumb-item"><a href="{% url 'staff:store_manager_dashboard' %}">Dashboard</a></li>
-<li class="breadcrumb-item active">Overview</li>
-{% endblock %}
-
-{% block page_actions %}
-<div class="btn-group">
-    <a href="{% url 'inventory:product_add' %}" class="btn btn-primary-custom btn-custom">
-        <i class="fas fa-plus-circle me-2"></i>Add Product
-    </a>
-    <button type="button" class="btn btn-outline-custom btn-custom dropdown-toggle" data-bs-toggle="dropdown">
-        <i class="fas fa-download"></i>
-    </button>
-    <ul class="dropdown-menu dropdown-menu-end">
-        <li><h6 class="dropdown-header">Export Dashboard</h6></li>
-        <li><a class="dropdown-item" href="#"><i class="fas fa-file-pdf me-2 text-danger"></i>PDF Report</a></li>
-        <li><a class="dropdown-item" href="#"><i class="fas fa-file-excel me-2 text-success"></i>Excel Report</a></li>
-        <li><a class="dropdown-item" href="#"><i class="fas fa-print me-2 text-secondary"></i>Print</a></li>
-    </ul>
-</div>
-{% endblock %}
-
 {% block content %}
-<!-- Welcome Section -->
-<div class="welcome-card animate__animated animate__fadeIn">
-    <div class="row align-items-center">
-        <div class="col-lg-8">
-            <h1 class="welcome-title">
-                <i class="fas fa-store me-3"></i>Store Manager Dashboard
-            </h1>
-            <p class="welcome-subtitle">
-                <i class="fas fa-calendar-alt me-2"></i>{{ today|date:"l, F j, Y" }}
-                <span class="mx-2">|</span>
-                <i class="fas fa-clock me-2"></i>{{ today|time:"H:i" }}
-            </p>
-            
-            <div class="date-badge">
-                <i class="fas fa-chart-line me-2"></i>
-                <strong>{{ total_products|default:"0" }}</strong> total products |
-                <strong>{{ low_stock_products|default:"0" }}</strong> low stock |
-                <strong>{{ out_of_stock_products|default:"0" }}</strong> out of stock |
-                <strong>KES {{ total_stock_value|floatformat:0 }}</strong> value
-            </div>
+<div class="smd">
 
-            <div class="quick-stats">
-                <div class="quick-stat-item">
-                    <div class="quick-stat-value">{{ new_products_week|default:"0" }}</div>
-                    <div class="quick-stat-label">New This Week</div>
-                </div>
-                <div class="quick-stat-item">
-                    <div class="quick-stat-value">{{ available_products|default:"0" }}</div>
-                    <div class="quick-stat-label">Available</div>
-                </div>
-                <div class="quick-stat-item">
-                    <div class="quick-stat-value">{{ sold_products|default:"0" }}</div>
-                    <div class="quick-stat-label">Sold</div>
-                </div>
-                <div class="quick-stat-item">
-                    <div class="quick-stat-value">{{ pending_returns_count|default:"0" }}</div>
-                    <div class="quick-stat-label">pending Returns</div>
-                </div>
-                <div class="quick-stat-item">
-                    <div class="quick-stat-value">{{ verified_returns_count|default:"0" }}</div>
-                    <div class="quick-stat-label">Verified Returns</div>
-                </div>
-            </div>
+  <!-- HERO -->
+  <div class="hero">
+    <div class="hero-top">
+      <div>
+        <h1>Good morning, {{ request.user.get_full_name|default:request.user.username }} 👋</h1>
+        <div class="hero-meta">
+          <i class="fas fa-calendar-alt"></i>{{ today|date:"l, F j, Y" }}
+          <span class="sep">·</span>
+          <i class="fas fa-clock"></i>{{ today|time:"g:i A" }}
         </div>
+      </div>
+      <div class="live-pill">
+        <span class="live-dot"></span>Store Live
+      </div>
     </div>
-</div>
+    <div class="hkpi-row">
+      <div class="hkpi">
+        <div class="hkpi-lbl">Total Products</div>
+        <div class="hkpi-val">{{ total_products|default:"0" }}</div>
+        <div class="hkpi-sub">All categories</div>
+      </div>
+      <div class="hkpi">
+        <div class="hkpi-lbl">Stock Value</div>
+        <div class="hkpi-val sm">KES {{ total_stock_value|floatformat:0 }}</div>
+        <div class="hkpi-sub">Current inventory</div>
+      </div>
+      <div class="hkpi">
+        <div class="hkpi-lbl">Low Stock Alerts</div>
+        <div class="hkpi-val">{{ low_stock_products|default:"0" }}</div>
+        <div class="hkpi-sub">Need attention</div>
+      </div>
+      <div class="hkpi">
+        <div class="hkpi-lbl">Pending Returns</div>
+        <div class="hkpi-val">{{ pending_returns_count|default:"0" }}</div>
+        <div class="hkpi-sub">Awaiting review</div>
+      </div>
+    </div>
+  </div>
 
-<!-- Quick Actions -->
-<div class="action-grid">
-    <a href="{% url 'inventory:product_add' %}" class="action-card">
-        <i class="fas fa-plus-circle"></i>
-        <span>Add Product</span>
-        <small>Single item</small>
+  <!-- QUICK ACTIONS -->
+  <span class="slbl">Quick Actions</span>
+  <div class="qa-grid">
+    <a href="{% url 'inventory:product_add' %}" class="qa-btn" style="--qa-c:#3b7cf8;--qa-bg:rgba(59,124,248,0.08)">
+      <div class="qa-ico"><i class="fas fa-plus"></i></div>
+      <span class="qa-lbl">Add Product</span>
+      <span class="qa-sub">Single item</span>
     </a>
-    <a href="{% url 'inventory:product_bulk_add' %}" class="action-card">
-        <i class="fas fa-layer-group"></i>
-        <span>Bulk Add</span>
-        <small>Multiple items</small>
+    <a href="{% url 'inventory:product_bulk_add' %}" class="qa-btn" style="--qa-c:#7c3aed;--qa-bg:rgba(124,58,237,0.08)">
+      <div class="qa-ico"><i class="fas fa-layer-group"></i></div>
+      <span class="qa-lbl">Bulk Import</span>
+      <span class="qa-sub">Multiple items</span>
     </a>
-    <a href="{% url 'inventory:product_restock' %}" class="action-card">
-        <i class="fas fa-truck-loading"></i>
-        <span>Restock</span>
-        <small>Add quantity</small>
+    <a href="{% url 'inventory:product_restock' %}" class="qa-btn" style="--qa-c:#0db87a;--qa-bg:rgba(13,184,122,0.08)">
+      <div class="qa-ico"><i class="fas fa-truck"></i></div>
+      <span class="qa-lbl">Restock</span>
+      <span class="qa-sub">Update inventory</span>
     </a>
-    <a href="{% url 'inventory:return_product' %}" class="action-card">
-        <i class="fas fa-undo-alt"></i>
-        <span>Process Return</span>
-        <small>Customer return</small>
+    <a href="{% url 'inventory:return_product' %}" class="qa-btn" style="--qa-c:#d97706;--qa-bg:rgba(217,119,6,0.08)">
+      <div class="qa-ico"><i class="fas fa-undo-alt"></i></div>
+      <span class="qa-lbl">Process Return</span>
+      <span class="qa-sub">Customer returns</span>
     </a>
-    <a href="{% url 'inventory:stock_movements' %}" class="action-card">
-        <i class="fas fa-history"></i>
-        <span>Movements</span>
-        <small>View history</small>
+    <a href="{% url 'inventory:stock_movements' %}" class="qa-btn" style="--qa-c:#e53e3e;--qa-bg:rgba(229,62,62,0.08)">
+      <div class="qa-ico"><i class="fas fa-history"></i></div>
+      <span class="qa-lbl">Movements</span>
+      <span class="qa-sub">View history</span>
     </a>
-    <a href="{% url 'inventory:stock_alerts' %}" class="action-card">
-        <i class="fas fa-bell"></i>
-        <span>Alerts</span>
-        <small>{{ low_stock_alerts_count|default:"0" }} active</small>
+    <a href="{% url 'inventory:stock_alerts' %}" class="qa-btn" style="--qa-c:#0db87a;--qa-bg:rgba(13,184,122,0.08)">
+      <div class="qa-ico"><i class="fas fa-bell"></i></div>
+      <span class="qa-lbl">Alerts</span>
+      <span class="qa-sub">{{ low_stock_alerts_count|default:"0" }} active</span>
     </a>
-</div>
+  </div>
 
+  <!-- ANALYTICS -->
+  <span class="slbl">Analytics Overview</span>
+  <div class="g3">
 
-
-<!-- Charts Row -->
-<div class="row g-4 mb-4">
-    <!-- Stock Distribution Chart -->
-    <div class="col-xl-4">
-        <div class="chart-container">
-            <div class="chart-header">
-                <h5 class="chart-title">
-                    <i class="fas fa-chart-pie"></i>Stock Distribution
-                </h5>
-                <span class="badge bg-light text-dark">Today</span>
-            </div>
-            <div class="chart-wrapper">
-                <canvas id="stockChart"></canvas>
-            </div>
-            <div class="mt-3">
-                <div class="d-flex justify-content-between mb-2">
-                    <span><span class="inventory-status status-normal"></span> Available</span>
-                    <span class="fw-bold">{{ available_products|default:"0" }}</span>
-                </div>
-                <div class="d-flex justify-content-between mb-2">
-                    <span><span class="inventory-status status-low"></span> Low Stock</span>
-                    <span class="fw-bold">{{ low_stock_products|default:"0" }}</span>
-                </div>
-                <div class="d-flex justify-content-between">
-                    <span><span class="inventory-status status-critical"></span> Out of Stock</span>
-                    <span class="fw-bold">{{ out_of_stock|default:"0" }}</span>
-                </div>
-            </div>
+    <!-- Stock Distribution -->
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-title"><i class="fas fa-chart-pie" style="color:#3b7cf8"></i> Stock Distribution</span>
+        <span style="font-size:0.6rem;color:#94a3b8;font-family:'DM Mono',monospace">TODAY</span>
+      </div>
+      <div class="chart-wrap" style="position:relative">
+        <canvas id="stockChart" height="175"></canvas>
+        <div class="d-center">
+          <div class="d-cval">{{ total_products|default:"0" }}</div>
+          <div class="d-clbl">PRODUCTS</div>
         </div>
+      </div>
+      <div class="leg-list">
+        <div class="leg-row">
+          <div class="leg-left"><div class="leg-dot" style="background:#0db87a"></div>Available</div>
+          <div class="leg-val">{{ available_products|default:"0" }}</div>
+        </div>
+        <div class="leg-row">
+          <div class="leg-left"><div class="leg-dot" style="background:#d97706"></div>Low Stock</div>
+          <div class="leg-val">{{ low_stock_products|default:"0" }}</div>
+        </div>
+        <div class="leg-row">
+          <div class="leg-left"><div class="leg-dot" style="background:#e53e3e"></div>Out of Stock</div>
+          <div class="leg-val">{{ out_of_stock_products|default:"0" }}</div>
+        </div>
+      </div>
     </div>
 
-    <!-- Category Distribution -->
-    <div class="col-xl-4">
-        <div class="chart-container">
-            <div class="chart-header">
-                <h5 class="chart-title">
-                    <i class="fas fa-tags"></i>Top Categories
-                </h5>
-                <a href="{% url 'inventory:category_list' %}" class="text-primary small">View All</a>
-            </div>
-            <div>
-                {% for category in stock_by_category|slice:":5" %}
-                <div class="mb-3">
-                    <div class="d-flex justify-content-between mb-1">
-                        <span class="fw-bold">{{ category.name|truncatechars:20 }}</span>
-                        <span>{{ category.total_stock }} units</span>
-                    </div>
-                    <div class="progress-custom">
-                        {% with max_stock=stock_by_category.0.total_stock %}
-                        <div class="progress-bar-custom" style="width: {% if max_stock > 0 %}{% widthratio category.total_stock max_stock 100 %}{% else %}0{% endif %}%"></div>
-                        {% endwith %}
-                    </div>
-                </div>
-                {% empty %}
-                <p class="text-muted text-center py-4">No categories found</p>
-                {% endfor %}
-            </div>
+    <!-- Top Categories -->
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-title"><i class="fas fa-tags" style="color:#7c3aed"></i> Top Categories</span>
+        <a href="{% url 'inventory:category_list' %}" class="panel-link">View All →</a>
+      </div>
+      <div class="panel-body">
+        {% for category in stock_by_category|slice:":5" %}
+        <div class="cat-item">
+          <div class="cat-row">
+            <span class="cat-name">{{ category.name|truncatechars:22 }}</span>
+            <span class="cat-val">{{ category.total_stock }} units</span>
+          </div>
+          <div class="cat-track">
+            {% with max_stock=stock_by_category.0.total_stock %}
+            <div class="cat-fill" style="width:{% if max_stock > 0 %}{% widthratio category.total_stock max_stock 100 %}{% else %}0{% endif %}%"></div>
+            {% endwith %}
+          </div>
         </div>
+        {% empty %}
+        <p style="color:#94a3b8;font-size:0.78rem;text-align:center;padding:28px 0">No categories yet</p>
+        {% endfor %}
+      </div>
     </div>
 
     <!-- Recent Activity -->
-    <div class="col-xl-4">
-        <div class="chart-container">
-            <div class="chart-header">
-                <h5 class="chart-title">
-                    <i class="fas fa-history"></i>Recent Activity
-                </h5>
-                <a href="{% url 'inventory:stock_movements' %}" class="text-primary small">View All</a>
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-title"><i class="fas fa-history" style="color:#0db87a"></i> Recent Activity</span>
+        <a href="{% url 'inventory:stock_movements' %}" class="panel-link">View All →</a>
+      </div>
+      <div class="panel-body">
+        <div class="tl-scroll">
+          {% for entry in recent_movements|slice:":6" %}
+          <div class="tl-item">
+            {% if not forloop.last %}<div class="tl-line"></div>{% endif %}
+            <div class="tl-ico {% if entry.quantity > 0 %}up{% else %}down{% endif %}">
+              <i class="fas {% if entry.quantity > 0 %}fa-arrow-up{% else %}fa-arrow-down{% endif %}"></i>
             </div>
-            <div class="activity-timeline" style="max-height: 300px; overflow-y: auto;">
-                {% for entry in recent_movements|slice:":5" %}
-                <div class="activity-item">
-                    <div class="activity-icon">
-                        <i class="fas fa-{% if entry.quantity > 0 %}arrow-down{% else %}arrow-up{% endif %}"></i>
-                    </div>
-                    <div class="activity-content">
-                        <div class="activity-time">{{ entry.created_at|timesince }} ago</div>
-                        <div class="fw-bold">{{ entry.product.display_name|truncatechars:20 }}</div>
-                        <div class="d-flex justify-content-between mt-2">
-                            <span class="badge {% if entry.quantity > 0 %}bg-success{% else %}bg-danger{% endif %}">
-                                {% if entry.quantity > 0 %}+{% endif %}{{ entry.quantity }}
-                            </span>
-                            <small class="text-muted">{{ entry.created_by.username|default:"System" }}</small>
-                        </div>
-                    </div>
-                </div>
-                {% empty %}
-                <p class="text-muted text-center py-4">No recent activity</p>
-                {% endfor %}
+            <div>
+              <div class="tl-name">{{ entry.product.display_name|truncatechars:24 }}</div>
+              <div class="tl-meta">{{ entry.created_at|timesince }} ago · {{ entry.created_by.username|default:"System" }}</div>
+              <span class="tl-qty {% if entry.quantity > 0 %}pos{% else %}neg{% endif %}">{% if entry.quantity > 0 %}+{% endif %}{{ entry.quantity }}</span>
             </div>
+          </div>
+          {% empty %}
+          <div class="empty"><i class="fas fa-inbox"></i>No recent activity</div>
+          {% endfor %}
         </div>
+      </div>
     </div>
-</div>
+  </div>
 
-<!-- Stock Alerts and Top Selling (FIXED) -->
-<div class="row g-4 mb-4">
-    <!-- Stock Alerts - UPDATED with new StockAlert fields -->
-    <div class="col-xl-6">
-        <div class="table-container">
-            <div class="table-header">
-                <h5 class="table-title">
-                    <i class="fas fa-exclamation-triangle text-warning"></i>
-                    Stock Alerts
-                    {% if low_stock_alerts_count %}
-                    <span class="badge bg-danger ms-2">{{ low_stock_alerts_count }}</span>
-                    {% endif %}
-                </h5>
-                <a href="{% url 'inventory:stock_alerts' %}" class="view-all-link">View All</a>
-            </div>
-            
-            <div style="max-height: 350px; overflow-y: auto;">
-                {% for alert in low_stock_alerts %}
-                <div class="alert-item {% if alert.alert_type == 'outofstock' or alert.alert_type == 'needs_reorder' %}danger{% else %}warning{% endif %}">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <h6 class="mb-1 fw-bold">{{ alert.product.display_name }}</h6>
-                            <div class="small text-muted mb-2">
-                                <i class="fas fa-barcode me-1"></i>{{ alert.product.product_code }}
-                                {% if alert.product.sku_value %}
-                                | SKU: {{ alert.product.sku_value }}
-                                {% endif %}
-                            </div>
-                            <div class="d-flex gap-3">
-                                <span class="badge bg-dark">
-                                    Stock: {{ alert.current_stock }}
-                                </span>
-                                <span class="badge {% if alert.alert_type == 'needs_reorder' %}bg-danger{% elif alert.alert_type == 'lowstock' %}bg-warning{% elif alert.alert_type == 'outofstock' %}bg-secondary{% else %}bg-info{% endif %}">
-                                    {{ alert.get_alert_type_display }}
-                                </span>
-                                <span class="badge {% if alert.severity == 'critical' %}bg-danger{% elif alert.severity == 'danger' %}bg-danger{% elif alert.severity == 'warning' %}bg-warning{% else %}bg-info{% endif %}">
-                                    {{ alert.get_severity_display }}
-                                </span>
-                            </div>
-                        </div>
-                        <div class="btn-group">
-                            {% if alert.alert_type != 'outofstock' and alert.alert_type != 'damaged' %}
-                            <a href="{% url 'inventory:restock_product' alert.id %}" 
-                               class="btn btn-sm btn-warning" title="Restock">
-                                <i class="fas fa-truck"></i>
-                            </a>
-                            {% endif %}
-                            <a href="{% url 'inventory:product_detail' alert.product.id %}" 
-                               class="btn btn-sm btn-outline-secondary" title="View">
-                                <i class="fas fa-eye"></i>
-                            </a>
-                            <button type="button" 
-                                    class="btn btn-sm btn-outline-success" 
-                                    onclick="dismissAlert({{ alert.id }})"
-                                    title="Dismiss Alert">
-                                <i class="fas fa-check"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="mt-2">
-                        <div class="d-flex justify-content-between small mb-1">
-                            <span>Threshold: {{ alert.threshold }}</span>
-                            <span>{{ alert.current_stock }} / {{ alert.threshold }}</span>
-                        </div>
-                        <div class="progress-custom">
-                            {% if alert.threshold > 0 %}
-                                {% widthratio alert.current_stock alert.threshold 100 as percentage %}
-                                {% if percentage > 100 %}
-                                    <div class="progress-bar-custom" style="width: 100%"></div>
-                                {% else %}
-                                    <div class="progress-bar-custom" style="width: {{ percentage }}%"></div>
-                                {% endif %}
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-                {% empty %}
-                <div class="text-center py-5">
-                    <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
-                    <p class="mb-0">No stock alerts</p>
-                    <small class="text-muted">All products are at healthy levels</small>
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-    </div>
+  <!-- ALERTS + TOP SELLING -->
+  <div class="g2">
 
-    <!-- Top Selling Products -->
-    <div class="col-xl-6">
-        <div class="table-container">
-            <div class="table-header">
-                <h5 class="table-title">
-                    <i class="fas fa-chart-line text-success"></i>
-                    Top Selling Products
-                </h5>
-                <a href="#" class="view-all-link">View Sales</a>
+    <!-- Stock Alerts -->
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-title">
+          <i class="fas fa-exclamation-triangle" style="color:#d97706"></i>
+          Stock Alerts{% if low_stock_alerts_count %}<span class="cbadge">{{ low_stock_alerts_count }}</span>{% endif %}
+        </span>
+        <a href="{% url 'inventory:stock_alerts' %}" class="panel-link">Manage →</a>
+      </div>
+      <div class="al-scroll">
+        {% for alert in low_stock_alerts %}
+        <div class="al-item {% if alert.severity == 'critical' %}crit{% else %}warn{% endif %}">
+          <div class="al-head">
+            <div>
+              <div class="al-name">{{ alert.product.display_name }}</div>
+              <div class="al-code"><i class="fas fa-barcode" style="margin-right:3px"></i>{{ alert.product.product_code }}</div>
             </div>
-            
-            <div class="table-responsive">
-                <table class="table table-hover">
-                    <thead>
-                        <tr>
-                            <th>Product</th>
-                            <th>Sold</th>
-                            <th>Revenue</th>
-                            <th>Trend</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for item in top_selling %}
-                        <tr>
-                            <td>
-                                <div class="fw-bold">{{ item.product_name|truncatechars:20 }}</div>
-                                <small class="text-muted">{{ item.product_code }}</small>
-                            </td>
-                            <td>
-                                <span class="badge bg-success rounded-pill">{{ item.total_sold }}</span>
-                            </td>
-                            <td class="fw-bold">KES {{ item.total_revenue|floatformat:0 }}</td>
-                            <td>
-                                <span class="badge-trend-up">
-                                    <i class="fas fa-arrow-up me-1"></i>+12%
-                                </span>
-                            </td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="4" class="text-center py-4 text-muted">
-                                <i class="fas fa-shopping-cart fa-2x mb-3 d-block"></i>
-                                No sales data available
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Pending Returns -->
-<div class="table-container">
-    <div class="table-header">
-        <h5 class="table-title">
-            <i class="fas fa-undo-alt"></i>
-            Pending Return Requests
-            {% if pending_returns_count %}
-            <span class="badge bg-warning ms-2">{{ pending_returns_count }}</span>
-            {% endif %}
-        </h5>
-        <a href="{% url 'inventory:return_list' %}" class="view-all-link">Manage Returns</a>
-    </div>
-
-    <div class="row">
-        {% for return_request in pending_returns|slice:":4" %}
-        <div class="col-md-6">
-            <div class="return-card">
-                <div class="d-flex justify-content-between align-items-start mb-3">
-                    <div>
-                        <span class="return-status 
-                            {% if return_request.status == 'submitted' %}status-pending
-                            {% elif return_request.status == 'verified' %}status-verified
-                            {% elif return_request.status == 'approved' %}status-approved
-                            {% elif return_request.status == 'rejected' %}status-rejected
-                            {% elif return_request.status == 'mismatch' %}status-pending
-                            {% endif %}"></span>
-                        <span class="fw-bold">#{{ return_request.return_id|truncatechars:8 }}</span>
-                    </div>
-                    <span class="badge-status 
-                        {% if return_request.status == 'submitted' %}badge-pending
-                        {% elif return_request.status == 'verified' %}badge-review
-                        {% elif return_request.status == 'approved' %}badge-approved
-                        {% elif return_request.status == 'rejected' %}badge-rejected
-                        {% elif return_request.status == 'mismatch' %}badge-review
-                        {% else %}badge-pending
-                        {% endif %}">
-                        {{ return_request.get_status_display }}
-                    </span>
-                </div>
-                
-                <h6 class="mb-2">{{ return_request.product_name }}</h6>
-                <p class="small text-muted mb-3">
-                    <i class="fas fa-barcode me-1"></i>{{ return_request.product_code }}
-                    {% if return_request.sku_value %}
-                    | SKU: {{ return_request.sku_value }}
-                    {% endif %}
-                </p>
-                
-                <div class="d-flex justify-content-between align-items-center">
-                    <div class="small">
-                        <i class="far fa-user me-1"></i>{{ return_request.requested_by.username|default:"Unknown" }}
-                        <br>
-                        <i class="far fa-clock me-1"></i>{{ return_request.requested_at|timesince }} ago
-                    </div>
-                    
-                    <div class="btn-group">
-                        <a href="{% url 'inventory:return_detail' return_request.id %}" 
-                           class="btn btn-sm btn-outline-primary">
-                            <i class="fas fa-eye"></i>
-                        </a>
-                        {% if return_request.status == 'submitted' %}
-                        <a href="{% url 'inventory:return_verify' return_request.id %}" 
-                           class="btn btn-sm btn-outline-warning">
-                            <i class="fas fa-clipboard-check"></i>
-                        </a>
-                        {% endif %}
-                        {% if return_request.status == 'verified' %}
-                        <a href="{% url 'inventory:return_approve' return_request.id %}" 
-                           class="btn btn-sm btn-outline-success">
-                            <i class="fas fa-check"></i>
-                        </a>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
+            <button class="al-dismiss" onclick="dismissAlert({{ alert.id }})">
+              <i class="fas fa-check"></i> Dismiss
+            </button>
+          </div>
+          <div class="al-tags">
+            <span class="al-tag stk">Stock: {{ alert.current_stock }}</span>
+            <span class="al-tag {% if alert.severity == 'critical' %}crit{% else %}warn{% endif %}">{{ alert.get_severity_display }}</span>
+          </div>
+          <div class="al-bar">
+            <div class="al-fill {% if alert.severity == 'critical' %}crit{% endif %}"
+                 style="width:{% widthratio alert.current_stock alert.threshold 100 %}%"></div>
+          </div>
         </div>
         {% empty %}
-        <div class="col-12">
-            <div class="text-center py-5">
-                <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
-                <p class="mb-0 fw-bold">No pending return requests</p>
-                <small class="text-muted">All returns have been processed</small>
-            </div>
+        <div class="empty">
+          <i class="fas fa-check-circle" style="color:#0db87a;opacity:1"></i>
+          All products at healthy levels
         </div>
         {% endfor %}
-    </div>
-</div>
-
-<!-- Recently Added Products -->
-<div class="table-container">
-    <div class="table-header">
-        <h5 class="table-title">
-            <i class="fas fa-clock"></i>
-            Recently Added Products
-        </h5>
-        <a href="{% url 'inventory:product_list' %}" class="view-all-link">View All</a>
+      </div>
     </div>
 
-    <div class="table-responsive">
-        <table class="table table-hover">
-            <thead>
-                <tr>
-                    <th>Added</th>
-                    <th>Product</th>
-                    <th>Code/SKU</th>
-                    <th>Category</th>
-                    <th>Stock</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for product in recent_products|slice:":5" %}
-                <tr>
-                    <td>
-                        <div class="small fw-bold">{{ product.created_at|date:"H:i" }}</div>
-                        <small class="text-muted">{{ product.created_at|date:"M d" }}</small>
-                    </td>
-                    <td>
-                        <div class="fw-bold">{{ product.display_name|truncatechars:25 }}</div>
-                        {% if product.brand %}
-                            <small class="text-muted">{{ product.brand }} {{ product.model }}</small>
-                        {% endif %}
-                    </td>
-                    <td>
-                        <div><span class="badge bg-secondary">{{ product.product_code }}</span></div>
-                        {% if product.sku_value %}
-                            <small class="text-muted">SKU: {{ product.sku_value }}</small>
-                        {% endif %}
-                    </td>
-                    <td>{{ product.category.name }}</td>
-                    <td>
-                        {% if product.category.is_single_item %}
-                            <span class="badge bg-info">Single Item</span>
-                        {% else %}
-                            <span class="badge {% if product.quantity < 10 %}bg-warning{% else %}bg-success{% endif %}">
-                                {{ product.quantity }} units
-                            </span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        <span class="badge 
-                            {% if product.status == 'available' %}bg-success
-                            {% elif product.status == 'lowstock' %}bg-warning text-dark
-                            {% elif product.status == 'outofstock' %}bg-secondary
-                            {% elif product.status == 'sold' %}bg-secondary
-                            {% elif product.status == 'damaged' %}bg-dark
-                            {% elif product.status == 'reserved' %}bg-info
-                            {% endif %}">
-                            {{ product.get_status_display }}
-                        </span>
-                    </td>
-                    <td>
-                        <div class="btn-group">
-                            <a href="{% url 'inventory:product_detail' product.id %}" 
-                               class="btn btn-sm btn-outline-primary" title="View">
-                                <i class="fas fa-eye"></i>
-                            </a>
-                            <a href="{% url 'inventory:product_edit' product.id %}" 
-                               class="btn btn-sm btn-outline-secondary" title="Edit">
-                                <i class="fas fa-edit"></i>
-                            </a>
-                        </div>
-                    </td>
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="7" class="text-center py-4 text-muted">
-                        <i class="fas fa-box-open fa-2x mb-3 d-block"></i>
-                        No products found
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
+    <!-- Top Selling -->
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-title"><i class="fas fa-chart-line" style="color:#0db87a"></i> Top Selling Products</span>
+        <a href="#" class="panel-link">Full Report →</a>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="rtbl">
+          <thead>
+            <tr>
+              <th style="width:30px">#</th>
+              <th>Product</th>
+              <th>Units</th>
+              <th>Revenue</th>
+              <th>Trend</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in top_selling %}
+            <tr>
+              <td class="rk">{{ forloop.counter }}</td>
+              <td>
+                <div class="pn">{{ item.product_name|truncatechars:22 }}</div>
+                <div class="pc">{{ item.product_code }}</div>
+              </td>
+              <td><span class="upill">{{ item.total_sold }}</span></td>
+              <td><span class="rval">KES {{ item.total_revenue|floatformat:0 }}</span></td>
+              <td><span class="tup"><i class="fas fa-arrow-up"></i>+12%</span></td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5"><div class="empty"><i class="fas fa-chart-line"></i>No sales data</div></td></tr>
+            {% endfor %}
+          </tbody>
         </table>
+      </div>
     </div>
-</div>
+  </div>
 
-<!-- Dismiss Alert Modal (FIXED) -->
-<div class="modal fade" id="dismissModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header bg-success text-white">
-                <h5 class="modal-title">
-                    <i class="fas fa-check-circle me-2"></i>Dismiss Alert
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <form method="POST" action="" id="dismissForm">
-                {% csrf_token %}
-                <div class="modal-body">
-                    <p>Are you sure you want to dismiss this alert?</p>
-                    <div class="mb-3">
-                        <label for="reason" class="form-label">Reason (optional):</label>
-                        <textarea class="form-control" id="reason" name="reason" rows="2" placeholder="e.g., Restocked, Ordered, etc."></textarea>
-                    </div>
-                    <p class="text-muted small">
-                        <i class="fas fa-info-circle me-1"></i>
-                        The alert can be re-activated if stock levels drop again.
-                    </p>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-success">
-                        <i class="fas fa-check-circle me-2"></i>Dismiss
-                    </button>
-                </div>
-            </form>
-        </div>
+  <!-- PENDING RETURNS -->
+  <span class="slbl">Pending Return Requests{% if pending_returns_count %}<span class="cbadge">{{ pending_returns_count }}</span>{% endif %}</span>
+  <div class="panel" style="margin-bottom:14px">
+    <div class="panel-head">
+      <span class="panel-title"><i class="fas fa-undo-alt" style="color:#d97706"></i> Returns Queue</span>
+      <a href="{% url 'inventory:return_list' %}" class="panel-link">View All →</a>
     </div>
+    <div class="panel-body">
+      <div class="ret-grid">
+        {% for r in pending_returns|slice:":4" %}
+        <div class="ret-card">
+          <div class="ret-head">
+            <span class="ret-id">#{{ r.return_id|truncatechars:10 }}</span>
+            <span class="spill {% if r.status == 'submitted' %}submitted{% elif r.status == 'verified' %}verified{% elif r.status == 'approved' %}approved{% else %}rejected{% endif %}">{{ r.get_status_display }}</span>
+          </div>
+          <div class="ret-pn">{{ r.product_name }}</div>
+          <div class="ret-pc">{{ r.product_code }}</div>
+          <div class="ret-foot">
+            <div class="ret-usr">
+              <i class="far fa-user" style="margin-right:3px"></i>{{ r.requested_by.username|default:"Unknown" }}<br>
+              <i class="far fa-clock" style="margin-right:3px"></i>{{ r.requested_at|timesince }} ago
+            </div>
+            <div class="ret-acts">
+              <a href="{% url 'inventory:return_detail' r.id %}" class="icobtn"><i class="fas fa-eye"></i></a>
+              {% if r.status == 'submitted' %}
+              <a href="{% url 'inventory:return_verify' r.id %}" class="icobtn yw"><i class="fas fa-clipboard-check"></i></a>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        {% empty %}
+        <div style="grid-column:span 2">
+          <div class="empty"><i class="fas fa-check-circle" style="color:#0db87a;opacity:1"></i>No pending returns — all clear!</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- RECENTLY ADDED PRODUCTS -->
+  <span class="slbl">Recently Added Products</span>
+  <div class="panel">
+    <div class="panel-head">
+      <span class="panel-title"><i class="fas fa-clock" style="color:#7c3aed"></i> Recent Additions</span>
+      <a href="{% url 'inventory:product_list' %}" class="panel-link">All Products →</a>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="ptbl">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Product</th>
+            <th>Code / SKU</th>
+            <th>Category</th>
+            <th>Stock</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for product in recent_products|slice:":5" %}
+          <tr>
+            <td>
+              <div class="pt1">{{ product.created_at|date:"H:i" }}</div>
+              <div class="pt2">{{ product.created_at|date:"M d" }}</div>
+            </td>
+            <td>
+              <div class="pn">{{ product.display_name|truncatechars:26 }}</div>
+              {% if product.brand %}<div class="pc">{{ product.brand }}</div>{% endif %}
+            </td>
+            <td><code class="sku">{{ product.product_code }}</code></td>
+            <td>{{ product.category.name }}</td>
+            <td>
+              <span class="spk {% if product.quantity == 0 %}out{% elif product.quantity < 10 %}low{% else %}ok{% endif %}">{{ product.quantity }} units</span>
+            </td>
+            <td>
+              <span class="spk {% if product.status == 'available' %}ok{% elif product.status == 'lowstock' %}low{% elif product.status == 'outofstock' %}out{% else %}ok{% endif %}">{{ product.get_status_display }}</span>
+            </td>
+            <td>
+              <div style="display:flex;gap:5px">
+                <a href="{% url 'inventory:product_detail' product.id %}" class="icobtn"><i class="fas fa-eye"></i></a>
+                <a href="{% url 'inventory:product_edit' product.id %}" class="icobtn"><i class="fas fa-edit"></i></a>
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="7"><div class="empty"><i class="fas fa-box-open"></i>No products found</div></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div><!-- /smd -->
+
+<!-- DISMISS MODAL -->
+<div class="modal fade" id="dismissModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content" style="border-radius:16px;border:1px solid #e8edf5;">
+      <div class="modal-header" style="border-color:#f0f4fb;padding:16px 20px">
+        <h5 class="modal-title" style="font-size:0.9rem;font-weight:700;font-family:'Syne',sans-serif">
+          <i class="fas fa-check-circle text-success me-2"></i>Dismiss Alert
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" action="" id="dismissForm">
+        {% csrf_token %}
+        <div class="modal-body" style="padding:16px 20px">
+          <p class="text-muted small mb-3">Confirm dismissal of this stock alert?</p>
+          <div class="mb-3">
+            <label for="reason" class="form-label small fw-semibold">Reason (optional)</label>
+            <textarea class="form-control" id="reason" name="reason" rows="2"
+                      placeholder="e.g. Restocked, Ordered…" style="resize:none;font-size:0.82rem"></textarea>
+          </div>
+          <div class="alert alert-info small mb-0">
+            <i class="fas fa-info-circle me-1"></i>Alert reactivates automatically if stock drops again.
+          </div>
+        </div>
+        <div class="modal-footer" style="border-color:#f0f4fb;padding:12px 20px">
+          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-sm btn-primary">
+            <i class="fas fa-check-circle me-1"></i>Dismiss Alert
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
 <script>
-    // Dismiss Alert Function
-    window.dismissAlert = function(alertId) {
-        var modal = new bootstrap.Modal(document.getElementById('dismissModal'));
-        var form = document.getElementById('dismissForm');
-        var baseUrl = "{% url 'inventory:dismiss_alert' 0 %}";
-        form.action = baseUrl.replace('0', alertId);
-        modal.show();
-    };
+window.dismissAlert = function(alertId) {
+    var modal = new bootstrap.Modal(document.getElementById('dismissModal'));
+    document.getElementById('dismissForm').action =
+        "{% url 'inventory:dismiss_alert' 0 %}".replace('0', alertId);
+    modal.show();
+};
 
-    $(document).ready(function() {
-        // Initialize tooltips
-        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[title]'))
-        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-            return new bootstrap.Tooltip(tooltipTriggerEl)
-        });
+document.addEventListener('DOMContentLoaded', function () {
+    var ctx = document.getElementById('stockChart')?.getContext('2d');
+    if (!ctx) return;
 
-        // Stock Distribution Chart
-        var ctx = document.getElementById('stockChart').getContext('2d');
-        new Chart(ctx, {
-            type: 'doughnut',
-            data: {
-                labels: ['Available', 'Low Stock', 'Out of Stock'],
-                datasets: [{
-                    data: [
-                        {{ available_products|default:0 }},
-                        {{ low_stock_products|default:0 }},
-                        {{ out_of_stock|default:0 }}
-                    ],
-                    backgroundColor: [
-                        '#28a745',
-                        '#ffc107',
-                        '#dc3545'
-                    ],
-                    borderWidth: 0
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        display: false
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Available', 'Low Stock', 'Out of Stock'],
+            datasets: [{
+                data: [{{ available_products|default:0 }}, {{ low_stock_products|default:0 }}, {{ out_of_stock_products|default:0 }}],
+                backgroundColor: ['#0db87a', '#d97706', '#e53e3e'],
+                borderColor: '#ffffff',
+                borderWidth: 3,
+                hoverOffset: 8
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            cutout: '70%',
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: '#0f172a',
+                    borderColor: 'rgba(0,0,0,0.1)',
+                    borderWidth: 1,
+                    titleColor: '#e8ecf5',
+                    bodyColor: '#94a3b8',
+                    padding: 10,
+                    cornerRadius: 8,
+                    callbacks: {
+                        label: function(c) {
+                            var t = c.dataset.data.reduce(function(a,b){return a+b;},0);
+                            return ' ' + c.label + ': ' + c.parsed + ' (' + (t>0?((c.parsed/t)*100).toFixed(1):0) + '%)';
+                        }
                     }
-                },
-                cutout: '70%'
+                }
             }
-        });
+        }
+    });
 
-        // Auto-refresh every 5 minutes
-        setTimeout(function() {
-            location.reload();
-        }, 300000);
-
-        // Animate numbers
-        $('.stat-value').each(function() {
-            var $this = $(this);
-            var countTo = parseInt($this.text().replace(/,/g, ''));
-            
-            if (!isNaN(countTo) && countTo > 0) {
-                $({ countNum: 0 }).animate({ countNum: countTo }, {
-                    duration: 1000,
-                    easing: 'swing',
-                    step: function() {
-                        $this.text(Math.floor(this.countNum));
-                    },
-                    complete: function() {
-                        $this.text(this.countNum);
-                    }
-                });
-            }
-        });
+    [].slice.call(document.querySelectorAll('[title]')).forEach(function(el){
+        new bootstrap.Tooltip(el);
     });
 </script>
 {% endblock %}
