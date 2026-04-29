@@ -675,7 +675,16 @@
   <div class="hero">
     <div class="hero-top">
       <div>
-        <h1>Good morning, {{ request.user.get_full_name|default:request.user.username }} 👋</h1>
+        <h1 id="greet-heading">Hello, {{ request.user.get_full_name|default:request.user.username }} 👋</h1>
+        <script>
+        (function(){
+            var h = new Date().getHours();
+            var g = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+            var em = h < 12 ? '☀️' : h < 17 ? '🌤️' : '🌙';
+            var name = "{{ request.user.get_full_name|default:request.user.username }}";
+            document.getElementById('greet-heading').textContent = g + ', ' + name + ' ' + em;
+        })();
+        </script>
         <div class="hero-meta">
           <i class="fas fa-calendar-alt"></i>{{ today|date:"l, F j, Y" }}
           <span class="sep">·</span>
@@ -693,9 +702,9 @@
         <div class="hkpi-sub">All categories</div>
       </div>
       <div class="hkpi">
-        <div class="hkpi-lbl">Stock Value</div>
+        <div class="hkpi-lbl">Inventory Value</div>
         <div class="hkpi-val sm">KES {{ total_stock_value|floatformat:0 }}</div>
-        <div class="hkpi-sub">Current inventory</div>
+        <div class="hkpi-sub">Total stock worth</div>
       </div>
       <div class="hkpi">
         <div class="hkpi-lbl">Low Stock Alerts</div>
@@ -1095,5 +1104,6 @@ document.addEventListener('DOMContentLoaded', function () {
     [].slice.call(document.querySelectorAll('[title]')).forEach(function(el){
         new bootstrap.Tooltip(el);
     });
+});
 </script>
 {% endblock %}
