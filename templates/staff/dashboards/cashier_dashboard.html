@@ -20,6 +20,7 @@
         .navbar-left { display: flex; align-items: center; gap: 12px; flex: 1; }
         .navbar-left img { height: 60px; width: auto;  }
         .navbar-left h3 { margin: 0; font-size: 3rem; font-weight: 1000; }
+        .navbar-left2 { flex: 1; display: flex; justify-content: flex-end; align-items: center; gap: 15px; border: #000000; }
         .navbar-center { flex: 2; text-align: center; }
 
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&display=swap');
@@ -144,12 +145,26 @@
         .page {    display: none; }
         .page.active {    display: block;}
 
+        .price-card {    position: relative;    cursor: pointer;    transition: all 0.3s ease;}
+        .price-card .lock-overlay {    position: absolute;    top: 0;    left: 0;    right: 0;    bottom: 0;    background: rgba(0, 0, 0, 0.842);    border-radius: 20px;    display: flex;    flex-direction: column;    align-items: center;    justify-content: center;    color: white;    backdrop-filter: blur(5px);    transition: all 0.3s ease;    z-index: 10; }
+        .price-card .lock-overlay i {    font-size: 3rem;    margin-bottom: 10px;}
+        .price-card .lock-overlay span {    font-size: 1rem;    font-weight: bold;}
+        .price-card.unlocked .lock-overlay {    display: none;}
+        .price-card .price-value {    transition: all 0.3s ease;}
+        .price-card.unlocked {   border-color: #28a745 !important;    box-shadow: 0 0 20px rgba(40, 167, 69, 0.3);}
+        @keyframes pulse {    0%, 100% { transform: scale(1); opacity: 1; }    50% { transform: scale(1.1); opacity: 0.8; }}
+
     </style>
 </head>
 <body>
 
 <div class="top-navbar">
     <div class="navbar-left"><img src="{% static 'images/LOGO.jpg' %}" alt="FieldMax Logo"><h3>POS 🛒</h3></div>
+    <div class="navbar-left2">
+        <button class="price-check-nav-btn" onclick="showPriceCheckPage()" style="background: #ff6b35; border: none; padding: 8px 20px; border-radius: 30px; color: white; font-weight: bold; font-size: 1rem;">
+            <i class="fas fa-tag"></i> 🔍 PRICE CHECK
+        </button>
+    </div>
     <div class="navbar-center"><div class="digital-clock"><span class="clock-time" id="clockTime">00:00:00</span><span class="clock-date" id="clockDate">--</span></div></div>
     <div class="navbar-right"><div class="shop-info"><span class="shop-name">{{ current_shop.name|default:"Main" }} SHOP</span></div></div>
 </div>
@@ -205,6 +220,63 @@
 </div>
 
 <div class="main-content">
+
+<!-- PRICE CHECK PAGE - Complete Section -->
+<div id="pricecheck-page" class="page" style="display: none;">
+    <div class="product-search-area">
+        <div class="search-input-group">
+            <input type="text" id="priceCheckSearchInput" class="search-input" placeholder="Scan barcode or enter product code..." autofocus>
+            <button class="add-btn" onclick="searchProductForPriceCheck()" style="background: linear-gradient(135deg, #ff6b35, #ff8c42);">
+                <i class="fas fa-search"></i> Check Price
+            </button>
+        </div>
+        <small class="text-muted">Enter product code and click check to see pricing</small>
+    </div>
+
+    <!-- Two Cards Row -->
+    <div class="row g-4" style="margin-top: 20px;">
+        
+        <!-- Column A: Selling Price Card (Always visible) -->
+        <div class="col-md-6">
+            <div class="price-card selling-card" style="background: linear-gradient(135deg, #ffffff, #f8f9fa); border-radius: 20px; padding: 30px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.1); height: 100%;">
+                <div class="price-icon" style="font-size: 3rem; margin-bottom: 15px;">💰</div>
+                <h3 style="color: #2c3e50; margin-bottom: 10px;">SELLING PRICE</h3>
+                <div class="price-value" id="sellingPriceDisplay" style="font-size: 3rem; font-weight: 800; color: #28a745;">
+                    KSH 0.00
+                </div>
+                <div id="sellingProductName" style="color: #6c757d; margin-top: 10px;">—</div>
+            </div>
+        </div>
+
+        <!-- Column B: Best Price Card (Locked by default, click to reveal) -->
+        <div class="col-md-6">
+            <div class="price-card best-card" id="bestPriceCard" style="background: linear-gradient(135deg, #fff3e0, #ffe8cc); border-radius: 20px; padding: 30px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.1); height: 100%; border: 2px solid #ff8c42; position: relative; cursor: pointer;">
+                
+                <!-- Lock Overlay -->
+                <div class="lock-overlay" id="bestPriceLockOverlay">
+                    <i class="fas fa-lock"></i>
+                    <span>Click to Reveal Best Price</span>
+                    <small style="font-size: 0.8rem; margin-top: 5px;">Authorized staff only</small>
+                </div>
+                
+                <div class="price-icon" style="font-size: 3rem; margin-bottom: 15px;">⭐</div>
+                <h3 style="color: #e67e22; margin-bottom: 10px;">BEST PRICE</h3>
+                <div class="price-value" id="bestPriceDisplay" style="font-size: 3rem; font-weight: 800; color: #e67e22; filter: blur(5px); transition: filter 0.3s ease;">
+                    KSH 0.00
+                </div>
+                <div id="bestProductName" style="color: #6c757d; margin-top: 10px;">—</div>
+                <small id="savingsBadge" style="display: none; background: #28a745; color: white; padding: 5px 12px; border-radius: 20px; margin-top: 10px; font-weight: bold;"></small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Product Details Section -->
+    <div id="priceCheckDetails" style="margin-top: 30px; background: white; border-radius: 12px; padding: 20px; display: none;">
+        <h5><i class="fas fa-info-circle"></i> Product Information</h5>
+        <div id="productDetailsInfo"></div>
+    </div>
+</div>
+
     <!-- POS Page (Default) -->
     <div id="pos-page" class="page active">
         <div class="product-search-area">
@@ -630,28 +702,412 @@ function moveToNext(input, idx) {    if (input.value.length === 1 && idx < 3) { 
 function showPage(page) {
     const posPage = document.getElementById('pos-page');
     const registerPage = document.getElementById('register-page');
+    const priceCheckPage = document.getElementById('pricecheck-page');
     const productSearchInput = document.getElementById('productSearchInput');
     
-    if (page === 'pos') {
-        posPage.classList.add('active');
+    // Hide all pages
+    if (posPage) {
+        posPage.classList.remove('active');
+        posPage.style.display = 'none';
+    }
+    if (registerPage) {
         registerPage.classList.remove('active');
+        registerPage.style.display = 'none';
+    }
+    if (priceCheckPage) {
+        priceCheckPage.classList.remove('active');
+        priceCheckPage.style.display = 'none';
+    }
+    
+    if (page === 'pos') {
+        if (posPage) {
+            posPage.style.display = 'block';
+            posPage.classList.add('active');
+        }
         if (productSearchInput) productSearchInput.focus();
     } else if (page === 'register') {
-        posPage.classList.remove('active');
-        registerPage.classList.add('active');
-        
-        // Clear registration form when showing
-        document.getElementById('reg_phone').value = '';
-        document.getElementById('reg_name').value = '';
-        document.getElementById('reg_email').value = '';
-        document.getElementById('reg_id').value = '';
-        
-        // Focus on phone field
+        if (registerPage) {
+            registerPage.style.display = 'block';
+            registerPage.classList.add('active');
+        }
+        // Clear registration form
+        const regPhone = document.getElementById('reg_phone');
+        const regName = document.getElementById('reg_name');
+        if (regPhone) regPhone.value = '';
+        if (regName) regName.value = '';
         setTimeout(() => {
-            document.getElementById('reg_phone').focus();
+            if (regPhone) regPhone.focus();
         }, 100);
+    } else if (page === 'pricecheck') {
+        if (priceCheckPage) {
+            priceCheckPage.style.display = 'block';
+            priceCheckPage.classList.add('active');
+        }
+        setTimeout(() => {
+            const priceInput = document.getElementById('priceCheckSearchInput');
+            if (priceInput) priceInput.focus();
+        }, 100);
+        resetPriceCheckDisplay();
     }
 }
+
+
+
+
+
+
+// ============================================
+// BEST PRICE CARD UNLOCK FUNCTIONALITY
+// ============================================
+
+let isBestPriceUnlocked = false;
+let currentBestPriceValue = 0;
+let bestPriceLockTimer = null;
+
+// Initialize Best Price Card with lock
+function initBestPriceCard() {
+    const bestPriceCard = document.getElementById('bestPriceCard');
+    
+    if (bestPriceCard) {
+        // Add click event to unlock
+        bestPriceCard.addEventListener('click', function(e) {
+            // Don't trigger if clicking on check button or other elements
+            if (e.target.closest('.add-btn')) return;
+            unlockBestPrice();
+        });
+    }
+}
+
+// Clear auto-lock timer
+function clearBestPriceLockTimer() {
+    if (bestPriceLockTimer) {
+        clearTimeout(bestPriceLockTimer);
+        bestPriceLockTimer = null;
+    }
+}
+
+// Auto-lock best price after 5 seconds
+function scheduleBestPriceLock() {
+    clearBestPriceLockTimer();
+    bestPriceLockTimer = setTimeout(() => {
+        if (isBestPriceUnlocked) {
+            lockBestPrice();
+        }
+    }, 5000); // 5 seconds
+}
+
+// Lock Best Price (re-lock after timeout)
+function lockBestPrice() {
+    if (!isBestPriceUnlocked) return;
+    
+    isBestPriceUnlocked = false;
+    
+    const bestPriceCard = document.getElementById('bestPriceCard');
+    const bestPriceDisplay = document.getElementById('bestPriceDisplay');
+    const lockOverlay = document.getElementById('bestPriceLockOverlay');
+    
+    // Show lock overlay with fade effect
+    if (lockOverlay) {
+        lockOverlay.style.display = 'flex';
+        lockOverlay.style.opacity = '0';
+        setTimeout(() => {
+            lockOverlay.style.opacity = '1';
+        }, 50);
+    }
+    
+    // Add blur back
+    if (bestPriceDisplay) {
+        bestPriceDisplay.style.filter = 'blur(5px)';
+    }
+    
+    // Remove unlocked class
+    if (bestPriceCard) {
+        bestPriceCard.classList.remove('unlocked');
+    }
+    
+    // Show toast notification
+    showToast('🔒 Best price locked automatically after 5 seconds', 'warning');
+    
+    // Log to console for audit
+    console.log(`🔒 Best price locked at ${new Date().toLocaleString()}`);
+}
+
+// Unlock Best Price (called when card is clicked)
+function unlockBestPrice() {
+    // If already unlocked, just reset the timer
+    if (isBestPriceUnlocked) {
+        // Reset the timer - keep unlocked for another 5 seconds
+        scheduleBestPriceLock();
+        showToast('⏱️ Best price visible for another 5 seconds', 'info');
+        return;
+    }
+    
+    // Ask for confirmation
+    if (confirm('⚠️ REVEAL BEST PRICE?\n\nThis price is confidential and only for authorized staff.\n\nClick OK to reveal. It will auto-lock after 5 seconds.')) {
+        isBestPriceUnlocked = true;
+        
+        const bestPriceCard = document.getElementById('bestPriceCard');
+        const bestPriceDisplay = document.getElementById('bestPriceDisplay');
+        const lockOverlay = document.getElementById('bestPriceLockOverlay');
+        
+        // Remove lock overlay with fade effect
+        if (lockOverlay) {
+            lockOverlay.style.opacity = '0';
+            setTimeout(() => {
+                lockOverlay.style.display = 'none';
+            }, 300);
+        }
+        
+        // Remove blur
+        if (bestPriceDisplay) {
+            bestPriceDisplay.style.filter = 'blur(0px)';
+        }
+        
+        // Add unlocked class
+        if (bestPriceCard) {
+            bestPriceCard.classList.add('unlocked');
+        }
+        
+        // Show toast notification
+        showToast('🔓 Best price revealed - will auto-lock in 5 seconds', 'info');
+        
+        // Schedule auto-lock after 5 seconds
+        scheduleBestPriceLock();
+        
+        // Optional: Log to console for audit
+        console.log(`🔓 Best price revealed: KSH ${currentBestPriceValue} at ${new Date().toLocaleString()}`);
+    }
+}
+
+// Reset lock when searching new product
+function resetBestPriceLock() {
+    // Clear any pending timer
+    clearBestPriceLockTimer();
+    
+    isBestPriceUnlocked = false;
+    const bestPriceCard = document.getElementById('bestPriceCard');
+    const bestPriceDisplay = document.getElementById('bestPriceDisplay');
+    const lockOverlay = document.getElementById('bestPriceLockOverlay');
+    
+    if (bestPriceDisplay) {
+        bestPriceDisplay.style.filter = 'blur(5px)';
+    }
+    
+    if (lockOverlay) {
+        lockOverlay.style.opacity = '1';
+        lockOverlay.style.display = 'flex';
+    }
+    
+    if (bestPriceCard) {
+        bestPriceCard.classList.remove('unlocked');
+    }
+}
+
+
+
+
+// ============================================
+// PRICE CHECK FUNCTIONS - Using Real API
+// ============================================
+
+// Show Price Check Page
+function showPriceCheckPage() {
+    // Hide all pages
+    document.querySelectorAll('.page').forEach(page => {
+        page.classList.remove('active');
+        page.style.display = 'none';
+    });
+    
+    // Show price check page
+    const priceCheckPage = document.getElementById('pricecheck-page');
+    if (priceCheckPage) {
+        priceCheckPage.style.display = 'block';
+        priceCheckPage.classList.add('active');
+        
+        // Focus on search input
+        setTimeout(() => {
+            const searchInput = document.getElementById('priceCheckSearchInput');
+            if (searchInput) searchInput.focus();
+        }, 100);
+    }
+    
+    // Reset previous results
+    resetPriceCheckDisplay();
+}
+
+// Reset price check display
+function resetPriceCheckDisplay() {
+    const sellingPriceEl = document.getElementById('sellingPriceDisplay');
+    const bestPriceEl = document.getElementById('bestPriceDisplay');
+    const sellingNameEl = document.getElementById('sellingProductName');
+    const bestNameEl = document.getElementById('bestProductName');
+    const detailsDiv = document.getElementById('priceCheckDetails');
+    const savingsBadge = document.getElementById('savingsBadge');
+    
+    if (sellingPriceEl) sellingPriceEl.innerHTML = 'KSH 0.00';
+    if (bestPriceEl) {
+        bestPriceEl.innerHTML = 'KSH 0.00';
+        bestPriceEl.style.filter = 'blur(5px)';
+    }
+    if (sellingNameEl) sellingNameEl.innerHTML = '—';
+    if (bestNameEl) bestNameEl.innerHTML = '—';
+    if (detailsDiv) detailsDiv.style.display = 'none';
+    if (savingsBadge) savingsBadge.style.display = 'none';
+    
+    // Reset the lock state
+    resetBestPriceLock();
+}
+
+// Search product for price check - using your existing API
+async function searchProductForPriceCheck() {
+    const code = document.getElementById('priceCheckSearchInput').value.trim();
+    
+    if (!code) {
+        showToast('Please enter a product code or barcode', 'warning');
+        return;
+    }
+    
+    const btn = event?.target?.closest('button');
+    const originalText = btn ? btn.innerHTML : 'Check Price';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Searching...';
+    }
+    
+    showStatus('<i class="fas fa-spinner fa-pulse"></i> Fetching product pricing...', 'info');
+    
+    try {
+        // Use your existing product lookup API
+        const response = await fetch(`/staff/api/product-lookup/?q=${encodeURIComponent(code)}`, {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRFToken': CSRF
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success && data.products && data.products.length > 0) {
+            // Use the first product
+            const product = data.products[0];
+            
+            // Extract prices from product object
+            const sellingPrice = parseFloat(product.selling_price) || 0;
+            
+            // Best price logic
+            let bestPrice = parseFloat(product.best_price) || 0;
+            if (bestPrice === 0 && parseFloat(product.buying_price) > 0) {
+                const buyingPrice = parseFloat(product.buying_price) || 0;
+                if (buyingPrice > 0 && sellingPrice > buyingPrice) {
+                    const profitMargin = sellingPrice - buyingPrice;
+                    bestPrice = buyingPrice + (profitMargin * 0.5);
+                } else {
+                    bestPrice = sellingPrice * 0.9;
+                }
+            } else if (bestPrice === 0) {
+                bestPrice = sellingPrice * 0.85;
+            }
+            
+            // Store current best price for audit
+            currentBestPriceValue = bestPrice;
+            
+
+            // Reset lock when searching new product
+            resetBestPriceLock();
+
+
+            const productName = product.display_name || product.name || `Product ${code}`;
+            const skuValue = product.sku_value || product.barcode || 'N/A';
+            const productCode = product.product_code || code;
+            
+            // Update displays
+            const sellingPriceEl = document.getElementById('sellingPriceDisplay');
+            const bestPriceEl = document.getElementById('bestPriceDisplay');
+            const sellingNameEl = document.getElementById('sellingProductName');
+            const bestNameEl = document.getElementById('bestProductName');
+            
+            if (sellingPriceEl) {
+                sellingPriceEl.innerHTML = `KSH ${sellingPrice.toLocaleString('en-KE', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            }
+            if (bestPriceEl) {
+                bestPriceEl.innerHTML = `KSH ${bestPrice.toLocaleString('en-KE', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                // Keep blurred until unlocked
+                if (!isBestPriceUnlocked) {
+                    bestPriceEl.style.filter = 'blur(5px)';
+                }
+            }
+            if (sellingNameEl) {
+                sellingNameEl.innerHTML = `<i class="fas fa-box"></i> ${escapeHtml(productName)}`;
+            }
+            if (bestNameEl) {
+                bestNameEl.innerHTML = `<i class="fas fa-star"></i> ${escapeHtml(productName)}`;
+            }
+            
+            // Calculate and show savings if best price is lower
+            const savingsBadge = document.getElementById('savingsBadge');
+            if (sellingPrice > bestPrice && bestPrice > 0) {
+                const savings = sellingPrice - bestPrice;
+                const savingsPercent = Math.round((savings / sellingPrice) * 100);
+                if (savingsBadge) {
+                    savingsBadge.innerHTML = `💎 Save KSH ${savings.toLocaleString()} (${savingsPercent}% OFF)`;
+                    savingsBadge.style.display = 'inline-block';
+                }
+            } else if (savingsBadge) {
+                savingsBadge.style.display = 'none';
+            }
+            
+            // Show additional product details
+            const detailsDiv = document.getElementById('priceCheckDetails');
+            const detailsInfo = document.getElementById('productDetailsInfo');
+            if (detailsDiv && detailsInfo) {
+                const stockStatus = product.quantity > 0 ? 
+                    `<span class="text-success"><i class="fas fa-check-circle"></i> ${product.quantity} in stock</span>` : 
+                    '<span class="text-danger"><i class="fas fa-times-circle"></i> Out of stock</span>';
+                
+                detailsInfo.innerHTML = `
+                    <div class="row">
+                        <div class="col-md-6">
+                            <strong>Product Code:</strong> ${escapeHtml(productCode)}<br>
+                            <strong>SKU / Barcode:</strong> ${escapeHtml(skuValue)}<br>
+                            <strong>Category:</strong> ${escapeHtml(product.category_name || product.category || 'N/A')}
+                        </div>
+                        <div class="col-md-6">
+                            <strong>Stock:</strong> ${stockStatus}<br>
+                            <strong>Margin:</strong> ${sellingPrice > 0 && bestPrice > 0 ? Math.round(((sellingPrice - bestPrice)/sellingPrice)*100) + '%' : 'N/A'}<br>
+                            ${product.brand ? `<strong>Brand:</strong> ${escapeHtml(product.brand)}` : ''}
+                        </div>
+                    </div>
+                `;
+                detailsDiv.style.display = 'block';
+            }
+            
+            showToast(`✅ ${productName} - Selling: KSH ${sellingPrice.toFixed(2)} | Best: KSH ${bestPrice.toFixed(2)}`, 'success');
+            hideStatus();
+            
+        } else {
+            showToast(`❌ Product "${code}" not found`, 'error');
+            resetPriceCheckDisplay();
+            hideStatus();
+        }
+        
+    } catch (error) {
+        console.error('Price check error:', error);
+        showToast(`Error checking price: ${error.message}`, 'error');
+        resetPriceCheckDisplay();
+        hideStatus();
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+    }
+}
+
+
+
+
+
+
 
 // ============================================
 // REGISTRATION FORM HANDLING
@@ -2035,6 +2491,7 @@ function useCustomer() {
 }
 
 
+
 // Initialize everything when page loads
 document.addEventListener('DOMContentLoaded', function () {
     // Load cart
@@ -2076,6 +2533,21 @@ document.addEventListener('DOMContentLoaded', function () {
         pointsToRedeem.addEventListener('input', updateDiscountPreview);
         console.log('Points input listener added');
     }    
+
+    // Initialize Best Price Card Lock
+    initBestPriceCard();
+    
+    // Price check search enter key
+    const priceSearchInput = document.getElementById('priceCheckSearchInput');
+    if (priceSearchInput) {
+        priceSearchInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                searchProductForPriceCheck();
+            }
+        });
+    }
+
 
     // Initialize card slideshow
     initCardSlideshow();
