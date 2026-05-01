@@ -457,7 +457,6 @@ def staff_dashboard(request):
     try:
         staff_profile = request.user.staff_profile
     except AttributeError:
-        # User doesn't have a staff profile
         messages.error(request, "Staff profile not found. Please contact administrator.")
         return redirect('logout')
     
@@ -474,7 +473,6 @@ def staff_dashboard(request):
     if not staff_profile.is_identity_verified:
         # Check if verification is pending (documents submitted but not verified by admin)
         if staff_profile.verification_submitted_at and not staff_profile.is_identity_verified:
-            # Documents submitted, pending admin approval
             messages.info(request, "Your identity verification is pending admin approval. You'll be notified once verified.")
             return render(request, 'staff/pending_approval.html', {
                 'staff_profile': staff_profile,
@@ -486,18 +484,15 @@ def staff_dashboard(request):
         from datetime import timedelta
         
         if staff_profile.verification_code and staff_profile.verification_sent_at:
-            # Check if verification is expired (24 hours)
             time_diff = timezone.now() - staff_profile.verification_sent_at
             is_expired = time_diff > timedelta(hours=24)
             
             if is_expired:
-                # Generate new verification code
                 staff_profile.verification_code = generate_verification_code()
                 staff_profile.verification_sent_at = timezone.now()
                 staff_profile.verification_attempts = 0
                 staff_profile.save(update_fields=['verification_code', 'verification_sent_at', 'verification_attempts'])
                 
-                # Send new verification email
                 from .utils.email_verification import send_itp_verification_email
                 send_itp_verification_email(staff_profile, request)
                 
@@ -511,7 +506,6 @@ def staff_dashboard(request):
                     f"Your verification code expires in {hours_remaining}h {minutes_remaining}m."
                 )
         else:
-            # First time - generate and send verification code
             from .utils.email_verification import send_itp_verification_email
             from django.utils import timezone
             
@@ -520,99 +514,67 @@ def staff_dashboard(request):
             staff_profile.verification_attempts = 0
             staff_profile.save(update_fields=['verification_code', 'verification_sent_at', 'verification_attempts'])
             
-            # Send verification email
             send_itp_verification_email(staff_profile, request)
             messages.info(request, "Welcome! Please verify your identity to access the dashboard. A 6-digit verification code has been sent to your email.")
         
-        # Store intended URL and redirect to verification page
         request.session['intended_dashboard_url'] = request.path
         return redirect('staff:verify_identity', staff_id=staff_profile.id)
     
     # ============================================
-    # STEP 4: Superuser goes to admin dashboard
+    # STEP 4: CHECK GROUPS FIRST (BEFORE SUPERUSER!)
     # ============================================
-    if request.user.is_superuser:
-        intended_url = 'staff:admin_dashboard'
-    else:
-        # Get user's groups
-        user_groups = request.user.groups.values_list('name', flat=True)
-        logger.info(f"🔴 DASHBOARD - User {request.user.username} groups: {list(user_groups)}")
-        
-        # Define group to dashboard mapping
-        dashboard_routes = {
-            'Administrator': 'staff:admin_dashboard',
-            'Sales Manager': 'staff:sales_manager_dashboard',
-            'Sales Agent': 'staff:sales_agent_dashboard',
-            'Cashier': 'staff:cashier_dashboard',
-            'Store Manager': 'staff:store_manager_dashboard',
-            'Credit Manager': 'staff:credit_manager_dashboard',
-            'Credit Officer': 'staff:credit_officer_dashboard',
-            'Customer Service': 'staff:customer_service_dashboard',
-            'Finance Manager': 'staff:finance_manager_dashboard',
-            'Security Officer': 'staff:security_dashboard',
-            'Cleaner': 'staff:cleaner_dashboard',
-            'Assistant Manager': 'staff:supervisor_dashboard',
-            'Inventory Manager': 'staff:store_manager_dashboard',
-            'M-Pesa Agent': 'staff:mpesa_agent_dashboard', 
-        }
-        
-        # Find matching dashboard
-        intended_url = 'staff:staff_stats_dashboard'  # Default
-        for group_name, dashboard_url in dashboard_routes.items():
-            if group_name in user_groups:
-                intended_url = dashboard_url
-                logger.info(f"🔴 DASHBOARD - Matched group '{group_name}' to dashboard: {dashboard_url}")
-                break
-        
-        # Special handling for credit users (fallback)
-        if intended_url == 'staff:staff_stats_dashboard':
-            credit_groups = ['Credit Officer', 'Credit Manager']
-            for group in credit_groups:
-                if group in user_groups:
-                    if group == 'Credit Manager':
-                        intended_url = 'staff:credit_manager_dashboard'
-                    else:
-                        intended_url = 'staff:credit_officer_dashboard'
-                    logger.info(f"🔴 DASHBOARD - Credit fallback: {intended_url}")
-                    break
+    # Get user's groups
+    user_groups = request.user.groups.values_list('name', flat=True)
+    logger.info(f"🔴 DASHBOARD - User {request.user.username} groups: {list(user_groups)}")
+    
+    # Define group to dashboard mapping (PRIORITY ORDER)
+    dashboard_routes = {
+        'Cashier': 'staff:cashier_dashboard',  # Cashier first! (most important)
+        'Sales Agent': 'staff:sales_agent_dashboard',
+        'Sales Manager': 'staff:sales_manager_dashboard',
+        'Store Manager': 'staff:store_manager_dashboard',
+        'Inventory Manager': 'staff:store_manager_dashboard',
+        'Credit Manager': 'staff:credit_manager_dashboard',
+        'Credit Officer': 'staff:credit_officer_dashboard',
+        'Customer Service': 'staff:customer_service_dashboard',
+        'Finance Manager': 'staff:finance_manager_dashboard',
+        'Security Officer': 'staff:security_dashboard',
+        'M-Pesa Agent': 'staff:mpesa_agent_dashboard',
+        'Cleaner': 'staff:cleaner_dashboard',
+        'Assistant Manager': 'staff:supervisor_dashboard',
+        'Administrator': 'staff:admin_dashboard',  # Administrator last among groups
+    }
+    
+    # Find matching dashboard based on group (FIRST MATCH WINS)
+    intended_url = None
+    for group_name, dashboard_url in dashboard_routes.items():
+        if group_name in user_groups:
+            intended_url = dashboard_url
+            logger.info(f"🔴 DASHBOARD - Matched group '{group_name}' to dashboard: {dashboard_url}")
+            break
+    
+    # ============================================
+    # STEP 5: If no group found, THEN check superuser
+    # ============================================
+    if not intended_url:
+        if request.user.is_superuser:
+            intended_url = 'staff:admin_dashboard'
+            logger.info(f"🔴 DASHBOARD - No groups found, using superuser admin dashboard")
+        else:
+            intended_url = 'staff:staff_stats_dashboard'  # Default fallback
+            logger.info(f"🔴 DASHBOARD - No groups found, using default stats dashboard")
     
     logger.info(f"🔴 DASHBOARD - Final intended URL for {request.user.username}: {intended_url}")
-
-    # ============================================
-    # STEP 5: OTP CHECK - HARSHLY BYPASSED!
-    # ============================================
-    logger.info(f"🔴 OTP BYPASS - User {request.user.username} - OTP CHECK SKIPPED COMPLETELY")
-    logger.info(f"🔴 OTP BYPASS - Going directly to dashboard without OTP verification")
-            
-
- 
-    # ============================================
-    # STEP 5: Check if user requires OTP
-    # ============================================
-    """
-    logger.info(f"🔴 DASHBOARD - User {request.user.username} requires_otp: {requires_otp(request.user)}")
-    logger.info(f"🔴 DASHBOARD - Session otp_verified: {request.session.get('otp_verified')}")
-
-    if requires_otp(request.user):
-        logger.info(f"🔴 DASHBOARD - User requires OTP, checking session")
     
-        # Check if already verified in this session
-        if not request.session.get('otp_verified'):
-            logger.info(f"🔴 DASHBOARD - No OTP in session, redirecting to OTP page")
-            # Store intended URL and redirect to OTP page
-            request.session['intended_dashboard_url'] = intended_url
-            return redirect('staff:otp_verify')
-        else:
-            logger.info(f"🔴 DASHBOARD - OTP already verified in session")
-    """
-
-
     # ============================================
-    # STEP 6: If all checks passed, redirect directly
+    # STEP 6: OTP CHECK (commented out)
     # ============================================
-    logger.info(f"🔴 DASHBOARD - Redirecting {request.user.username} to: {intended_url}")
+    # OTP bypassed for now
+    
+    # ============================================
+    # STEP 7: Redirect to the intended dashboard
+    # ============================================
     return redirect(intended_url)
-
 
 
 

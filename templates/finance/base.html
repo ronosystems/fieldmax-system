@@ -14,17 +14,17 @@
     
     {% load static %}
     
-    <!-- Custom CSS - Finance specific colors -->
+    <!-- Custom CSS -->
     <style>
         :root {
-            --primary-color: #10b981;  /* Green for finance */
+            --primary-color: #10b981;
             --success-color: #10b981;
             --danger-color: #ef4444;
             --warning-color: #f59e0b;
             --info-color: #3b82f6;
             --dark-color: #1f2937;
             --light-bg: #f3f4f6;
-            --sidebar-bg: #064e3b;  /* Dark green for finance */
+            --sidebar-bg: #064e3b;
             --sidebar-hover: #065f46;
             --navbar-bg: #000000;
             --footer-bg: #065f46;
@@ -33,7 +33,7 @@
             --text-light: #f3f4f6;
             --border-color: #e5e7eb;
             --card-bg: #ffffff;
-            --main-content-bg: #ecfdf5; /* Light green background */
+            --main-content-bg: #ecfdf5;
         }
         
         [data-theme="dark"] {
@@ -137,8 +137,7 @@
             background: rgba(255, 255, 255, 0.1);
         }
         
-
-        /* Admin Switch Button - Updated to blue */
+        /* Admin Switch Button */
         .admin-switch-btn {
             display: flex;
             align-items: center;
@@ -180,14 +179,14 @@
             70% { box-shadow: 0 0 0 10px rgba(0, 140, 255, 0); }
             100% { box-shadow: 0 0 0 0 rgba(0, 140, 255, 0); }
         }
-
+        
         .navbar-notification {
             position: relative;
             color: var(--text-light);
             font-size: 1.25rem;
             cursor: pointer;
             transition: color 0.2s;
-            margin-right: 1.5rem; 
+            margin-right: 1.5rem;
         }
         
         .navbar-notification:hover {
@@ -360,11 +359,10 @@
             color: rgba(255, 255, 255, 0.8) !important;
         }
         
-        /* Sidebar section style */
         .sidebar-section {
             margin-bottom: 1.5rem;
             background: rgba(255, 255, 255, 0.1);
-            border-radius: 10px; 
+            border-radius: 10px;
             padding: 0.5rem;
         }
         
@@ -505,7 +503,7 @@
             border-radius: 4px;
         }
         
-        /* Content Cards - Finance specific */
+        /* Content Cards */
         .stat-card {
             background: var(--card-bg);
             border-radius: 15px;
@@ -584,22 +582,7 @@
             color: var(--text-primary);
         }
         
-        /* Loading Skeleton */
-        .skeleton-loader {
-            background: linear-gradient(90deg, var(--border-color) 25%, var(--light-bg) 50%, var(--border-color) 75%);
-            background-size: 200% 100%;
-            animation: loading 1.5s infinite;
-            border-radius: 4px;
-            height: 20px;
-            margin: 10px 0;
-        }
-        
-        @keyframes loading {
-            0% { background-position: 200% 0; }
-            100% { background-position: -200% 0; }
-        }
-        
-        /* Badge Styles - Finance specific */
+        /* Badge Styles */
         .badge-pending {
             background-color: #ef4444;
             color: white;
@@ -632,7 +615,7 @@
             font-weight: 500;
         }
         
-        /* Floating Admin Button - Updated to blue */
+        /* Floating Admin Button */
         .floating-admin-btn {
             position: fixed;
             bottom: 80px;
@@ -659,7 +642,7 @@
             color: white;
         }
         
-        /* Buttons - Finance specific */
+        /* Buttons */
         .btn-primary {
             background: linear-gradient(135deg, #10b981 0%, #0d9488 100%);
             border: none;
@@ -690,7 +673,6 @@
             color: white;
         }
         
-        /* Finance-specific styles */
         .finance-card {
             border-left: 4px solid #10b981;
         }
@@ -716,7 +698,6 @@
             }
         }
         
-        /* Responsive */
         @media (max-width: 768px) {
             .top-navbar {
                 padding: 0 1rem;
@@ -758,6 +739,7 @@
         <button class="sidebar-toggle" aria-label="Toggle sidebar menu" id="sidebarToggle">
             <i class="fas fa-bars"></i>
         </button>
+        
         <div class="navbar-brand">
             <img src="{% static 'images/LOGO.jpg' %}" alt="FieldMax Logo" height="40" class="me-2" style="max-height: 40px; width: auto;">
             FIELDMAX FINANCE
@@ -768,23 +750,22 @@
                 <i class="fas fa-moon"></i>
             </button>
 
-            <!-- ADMIN SWITCH BUTTON - Only visible to superusers -->
-            {% if request.user.is_superuser %}
+            <!-- Admin Switch Button - Only for Administrator group -->
+            {% if is_administrator %}
             <a href="{% url 'staff:staff_dashboard' %}" class="admin-switch-btn">
                 <i class="fas fa-crown"></i>
                 <span>Admin Dashboard</span>
-                <span class="badge">SUPERUSER</span>
+                <span class="badge">ADMIN</span>
             </a>
             {% endif %}
 
+            <!-- Notification Bell -->
             <a href="{% url 'staff:notifications_page' %}" class="navbar-notification" aria-label="Notifications">
                 <i class="far fa-bell"></i>
                 {% if notification_count > 0 %}
                 <span class="notification-badge">{{ notification_count }}</span>
                 {% endif %}
             </a>
-            
-            <div style="width: 20px;"></div>
             
             <div class="navbar-user" id="userMenu" role="button" aria-haspopup="true" aria-expanded="false">
                 <div class="user-avatar">
@@ -793,14 +774,12 @@
                 <div class="user-info">
                     <div class="user-name">{{ request.user.get_full_name|default:request.user.username }}</div>
                     <div class="user-role">
-                        {% if request.user.is_superuser %}
-                            Administrator
+                        {% if is_administrator %}
+                            ADMINISTRATOR
+                        {% elif request.user.is_superuser %}
+                            FINANCE MANAGER
                         {% else %}
-                            {% if request.user.position %}
-                                {{ request.user.position|title }}
-                            {% else %}
-                                Finance Manager
-                            {% endif %}
+                            FINANCE AGENT
                         {% endif %}
                     </div>
                 </div>
@@ -818,134 +797,97 @@
                 </a>
             </div>
             
-<!-- Main Navigation -->
-<div class="sidebar-section">
-    <div class="sidebar-section-title">MAIN</div>
-    <nav class="nav flex-column">
-        <!-- Dynamic Dashboard Button - Shows different button based on current page -->
-        {% if request.resolver_match.url_name == 'dashboard' %}
-            <!-- On Finance Dashboard → Show button to go to Manager Dashboard -->
-            <a class="nav-link" href="{% url 'staff:finance_manager_dashboard' %}">
-                <i class="fas fa-users-gear"></i> 
-                <span>Staff Dashboard</span>
-            </a>
-        {% else %}
-            <!-- On other pages → Show button to go to Finance Dashboard -->
-            <a class="nav-link" href="{% url 'finance:dashboard' %}">
-                <i class="fas fa-chart-pie"></i> 
-                <span>Finance Dashboard</span>
-            </a>
-        {% endif %}
-    </nav>
-</div>
-
+            <!-- Main Navigation -->
+            <div class="sidebar-section">
+                <div class="sidebar-section-title">MAIN</div>
+                <nav class="nav flex-column">
+                    {% if request.resolver_match.url_name == 'dashboard' %}
+                    <a class="nav-link" href="{% url 'staff:finance_manager_dashboard' %}">
+                        <i class="fas fa-users-gear"></i> 
+                        <span>Staff Dashboard</span>
+                    </a>
+                    {% else %}
+                    <a class="nav-link" href="{% url 'finance:dashboard' %}">
+                        <i class="fas fa-chart-pie"></i> 
+                        <span>Finance Dashboard</span>
+                    </a>
+                    {% endif %}
+                </nav>
+            </div>
             
             <!-- Financial Reports Section -->
             <div class="sidebar-section">
                 <div class="sidebar-section-title">FINANCIAL REPORTS</div>
                 <nav class="nav flex-column">
-                    <!-- Transactions -->
                     <a class="nav-link {% if 'transactions' in request.path %}active{% endif %}" href="{% url 'finance:financial_transactions' %}">
                         <i class="fas fa-exchange-alt"></i> <span>All Transactions</span>
                     </a>
-
-                    <!-- Income page -->
                     <a class="nav-link {% if 'income' in request.path %}active{% endif %}" href="{% url 'finance:financial_income' %}">
                         <i class="fas fa-money-bill-wave"></i> <span>Income</span>
                     </a>
-
-                    <!-- Expense page -->
                     <a class="nav-link {% if 'expenses' in request.path %}active{% endif %}" href="{% url 'finance:financial_expenses' %}">
                         <i class="fas fa-money-bill-wave"></i> <span>Expenses</span>
                     </a>
-
-                    <!-- Credit payments -->
                     <a class="nav-link {% if 'credit_payments' in request.path %}active{% endif %}" href="{% url 'credit:payment_add' %}">
                         <i class="fas fa-plus-circle"></i> <span>Credit Income</span>
                     </a>
                 </nav>
             </div>
 
-
-            <!-- Other Apps Navigation -->
+            <!-- Finance Accounts Section -->
             <div class="sidebar-section">
                 <div class="sidebar-section-title">FINANCE ACCOUNTS</div>
                 <nav class="nav flex-column">
-                    <!-- Cash Account -->
                     <a class="nav-link {% if 'cash_account' in request.path %}active{% endif %}" href="{% url 'finance:cash_account' %}">
                         <i class="fas fa-wallet"></i> <span>Cash Account</span>
                     </a>
-                    
-                    <!-- Bank Account -->
                     <a class="nav-link {% if 'bank_account' in request.path %}active{% endif %}" href="{% url 'finance:bank_account' %}">
                         <i class="fas fa-university"></i> <span>Bank Account</span>
                     </a>
-
-                    <!-- Credit Account -->
                     <a class="nav-link {% if 'credit_account' in request.path %}active{% endif %}" href="{% url 'finance:credit_account' %}">
                         <i class="fas fa-credit-card"></i> <span>Credit Account</span>
                     </a>
                 </nav>
             </div>
 
-
             <!-- Salary Management Section -->
             <div class="sidebar-section">
                 <div class="sidebar-section-title">SALARY MANAGEMENT</div>
                 <nav class="nav flex-column">
-                    <!-- Salary List -->
                     <a class="nav-link {% if 'salaries' in request.path %}active{% endif %}" href="{% url 'finance:salary_list' %}">
                         <i class="fas fa-money-bill-wave"></i> <span>All Salaries</span>
                     </a>
-                    
-                    <!-- Create Salary -->
                     <a class="nav-link {% if 'salary_create' in request.path %}active{% endif %}" href="{% url 'finance:salary_create' %}">
                         <i class="fas fa-plus-circle"></i> <span>Create Salary</span>
                     </a>
-
-                    <!-- Approve Salary -->
                     <a class="nav-link {% if 'salary_approve' in request.path %}active{% endif %}" href="{% url 'finance:salary_approve_list' %}">
                         <i class="fas fa-check-circle"></i> <span>Approve Salary</span>
                     </a>
-
-                    <!-- Pay Salary -->
                     <a class="nav-link {% if 'salary_pay' in request.path %}active{% endif %}" href="{% url 'finance:salary_pay_list' %}">
                         <i class="fas fa-hand-holding-usd"></i> <span>Pay Salary</span>
                     </a>
-
-                    <!-- Salary History -->
                     <a class="nav-link {% if 'salary_history' in request.path %}active{% endif %}" href="{% url 'finance:salary_history' %}">
                         <i class="fas fa-history"></i> <span>Salary History</span>
                     </a>
                 </nav>
             </div>
             
-
-            <!-- Commission Management Section (from credit app) -->
+            <!-- Commission Management Section -->
             <div class="sidebar-section">
                 <div class="sidebar-section-title">COMMISSION MANAGEMENT</div>
                 <nav class="nav flex-column">
-                    <!-- ALL Commissions -->
                     <a class="nav-link {% if 'commission_list' in request.path %}active{% endif %}" href="{% url 'finance:commission_list' %}">
                         <i class="fas fa-hand-holding-usd"></i> <span>All Commissions</span>
                     </a>
-
-                    <!-- Request Commissions -->
                     <a class="nav-link {% if 'commission_request' in request.path %}active{% endif %}" href="{% url 'finance:commission_request_list' %}">
                         <i class="fas fa-hand-holding-usd"></i> <span>Request Commissions</span>
                     </a>
-
-                    <!-- Approve Commissions -->
                     <a class="nav-link {% if 'commission_approve' in request.path %}active{% endif %}" href="{% url 'finance:commission_approve_list' %}">
                         <i class="fas fa-check-circle"></i> <span>Approve Commissions</span>
                     </a>
-
-                    <!-- Pay Commissions -->
                     <a class="nav-link {% if 'commission_pay' in request.path %}active{% endif %}" href="{% url 'finance:commission_pay_list' %}">
                         <i class="fas fa-hand-holding-usd"></i> <span>Pay Commissions</span>
                     </a>
-
-                    <!-- Commission History -->
                     <a class="nav-link {% if 'commission_history' in request.path %}active{% endif %}" href="{% url 'finance:commission_history' %}">
                         <i class="fas fa-history"></i> <span>Commission History</span>
                     </a>
@@ -960,10 +902,10 @@
             <!-- Logout Section -->
             <div class="sidebar-section mt-4">
                 <form method="post" action="{% url 'staff:logout' %}" id="logoutForm">
-                   {% csrf_token %}
-                   <button type="submit" class="nav-link w-100 text-start" style="background: var(--danger-color); border: none; color: white; border-radius: 10px;">
-                     <i class="fas fa-sign-out-alt"></i> <span>Logout</span>
-                   </button>
+                    {% csrf_token %}
+                    <button type="submit" class="nav-link w-100 text-start" style="background: var(--danger-color); border: none; color: white; border-radius: 10px;">
+                        <i class="fas fa-sign-out-alt"></i> <span>Logout</span>
+                    </button>
                 </form>
             </div>
         </div>
@@ -975,7 +917,7 @@
         {% if messages %}
             {% for message in messages %}
                 <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-                    {{ message }}
+                                    {{ message }}
                     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                 </div>
             {% endfor %}
@@ -999,22 +941,10 @@
         </div>
     </footer>
 
-    <!-- Floating Admin Button - Only for superusers -->
-    {% if request.user.is_superuser %}
+    <!-- Floating Admin Button - Only for Administrator group -->
+    {% if is_administrator %}
     <a href="{% url 'staff:staff_dashboard' %}" class="floating-admin-btn" data-bs-toggle="tooltip" title="Back to Admin Dashboard">
         <i class="fas fa-crown"></i>
-    </a>
-    {% endif %}
-    
-    <!-- Floating Commission Button - For all users -->
-    {% if my_pending_commission_count and my_pending_commission_count > 0 %}
-    <a href="#" class="floating-commission-btn" data-bs-toggle="tooltip" title="You have pending commissions!">
-        <i class="fas fa-coins"></i>
-        <span class="badge">{{ my_pending_commission_count }}</span>
-    </a>
-    {% else %}
-    <a href="#" class="floating-commission-btn" data-bs-toggle="tooltip" title="My Commissions">
-        <i class="fas fa-coins"></i>
     </a>
     {% endif %}
     

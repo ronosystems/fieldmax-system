@@ -1029,12 +1029,12 @@
                 <button type="submit"><i class="fas fa-search"></i></button>
             </form>
             
-            <!-- ADMIN SWITCH BUTTON - Only visible to superusers -->
-            {% if request.user.is_superuser %}
+            <!-- ADMIN SWITCH BUTTON - Only for Administrator group (FIXED) -->
+            {% if is_administrator %}
             <a href="{% url 'staff:staff_dashboard' %}" class="admin-switch-btn">
                 <i class="fas fa-crown"></i>
                 <span>Admin Dashboard</span>
-                <span class="badge">SUPERUSER</span>
+                <span class="badge">ADMIN</span>
             </a>
             {% endif %}
             
@@ -1053,12 +1053,14 @@
                     <div class="user-info">
                         <div class="user-name">{{ request.user.get_full_name|default:request.user.username }}</div>
                         <div class="user-role">
-                            {% if request.user.is_superuser %}
-                                Administrator
+                            {% if is_administrator %}
+                                ADMINISTRATOR
+                            {% elif request.user.is_superuser %}
+                                STORE MANAGER
                             {% elif request.user.is_staff %}
-                                Store Manager
+                                INVENTORY OFFICER
                             {% else %}
-                                Staff
+                                STORE ASSISTANT
                             {% endif %}
                         </div>
                     </div>
@@ -1072,7 +1074,7 @@
                         <form method="POST" action="{% url 'logout' %}" id="logout-form">
                             {% csrf_token %}
                             <button type="submit" class="dropdown-item" style="background: none; border: none; width: 100%; text-align: left;">
-                                <i class="fas fa-sign-out-alt me-2"></i>Logout
+                                <i class="fasfa-sign-out-alt me-2"></i>Logout
                             </button>
                         </form>
                     </li>
@@ -1230,8 +1232,8 @@
         </div>
     </footer>
 
-    <!-- Floating Admin Button - Only for superusers -->
-    {% if request.user.is_superuser %}
+    <!-- Floating Admin Button - Only for Administrator group (FIXED) -->
+    {% if is_administrator %}
     <a href="{% url 'staff:staff_dashboard' %}" class="floating-admin-btn" data-bs-toggle="tooltip" title="Back to Admin Dashboard">
         <i class="fas fa-crown"></i>
     </a>

@@ -982,6 +982,7 @@
     
     {% block extra_css %}{% endblock %}
 </head>
+
 <body data-theme="light">
     <!-- Centered Popup Alert Container -->
     <div id="alertContainer" class="alert-container"></div>
@@ -1001,16 +1002,17 @@
                 <i class="fas fa-moon"></i>
             </button>
 
-            <!-- ADMIN SWITCH BUTTON - Only visible to superusers -->
-            {% if request.user.is_superuser %}
+            <!-- ADMIN SWITCH BUTTON - Only for Administrator group (FIXED) -->
+            {% if is_administrator %}
             <a href="{% url 'staff:staff_dashboard' %}" class="admin-switch-btn">
                 <i class="fas fa-crown"></i>
                 <span>Admin Dashboard</span>
-                <span class="badge">SUPERUSER</span>
+                <span class="badge">ADMIN</span>
             </a>
             {% endif %}
 
-            {% if request.user.is_superuser %}
+            <!-- Notification Bell - Only for Administrators (FIXED) -->
+            {% if is_administrator %}
             <a href="{% url 'staff:notifications_page' %}" class="navbar-notification" aria-label="Notifications">
                 <i class="far fa-bell"></i>
                 {% if notification_count > 0 %}
@@ -1021,28 +1023,27 @@
             
             <div style="width: 20px;"></div>
             
-            <div class="navbar-user" id="userMenu" role="button" aria-haspopup="true" aria-expanded="false">
-                <div class="user-avatar">
-                    {{ request.user.first_name|first|default:request.user.username|first|upper }}
-                </div>
-                <div class="user-info">
-                    <div class="user-name">{{ request.user.get_full_name|default:request.user.username }}</div>
-                    <div class="user-role">
-                        {% if request.user.is_superuser %}
-                            Administrator
-                        {% else %}
-                            {% if request.user.position %}
-                                {{ request.user.position|title }}
-                            {% else %}
-                                Mpesa Cashier
-                            {% endif %}
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
+<div class="navbar-user" id="userMenu" role="button" aria-haspopup="true" aria-expanded="false">
+    <div class="user-avatar">
+        {{ request.user.first_name|first|default:request.user.username|first|upper }}
+    </div>
+    <div class="user-info">
+        <div class="user-name">{{ request.user.get_full_name|default:request.user.username }}</div>
+        <div class="user-role">
+            {% if is_administrator %}
+                ADMINISTRATOR
+            {% elif request.user.is_superuser %}
+                MPESA MANAGER
+            {% else %}
+                MPESA AGENT
+            {% endif %}
+        </div>
+    </div>
+</div>
         </div>
     </nav>
 
+    
     <!-- Fixed Sidebar -->
     <div class="sidebar" id="sidebar">
         <div class="p-4">
@@ -1085,7 +1086,7 @@
     </nav>
 </div>
 
-            <!-- Shop Management - SUPERUSER ONLY -->
+            <!-- Shop Management - SUPERUSER ONLY (KEPT AS IS) -->
             {% if request.user.is_superuser %}
             <div class="sidebar-section">
                 <div class="sidebar-section-title">SHOP MANAGEMENT</div>
@@ -1102,7 +1103,7 @@
                 </nav>
             </div>
 
-            <!-- Configuration - SUPERUSER ONLY -->
+            <!-- Configuration - SUPERUSER ONLY (KEPT AS IS) -->
             <div class="sidebar-section">
                 <div class="sidebar-section-title">CONFIGURATION</div>
                 <nav class="nav flex-column">
@@ -1148,8 +1149,8 @@
         </div>
     </footer>
 
-    <!-- Floating Admin Button - Only for superusers -->
-    {% if request.user.is_superuser %}
+    <!-- Floating Admin Button - Only for Administrator group (FIXED) -->
+    {% if is_administrator %}
     <a href="{% url 'staff:staff_dashboard' %}" class="floating-admin-btn" data-bs-toggle="tooltip" title="Back to Admin Dashboard">
         <i class="fas fa-crown"></i>
     </a>
