@@ -21,8 +21,24 @@ from .forms import (
 
 
 def is_staff_or_admin(user):
-    """Check if user is staff or admin"""
-    return user.is_staff or user.is_superuser
+    """Check if user is staff, admin, or M-Pesa Agent"""
+    # Superusers can access everything
+    if user.is_superuser:
+        return True
+    
+    # Django admin staff can access
+    if user.is_staff:
+        return True
+    
+    # M-Pesa Agents can access shop reports
+    if user.groups.filter(name='M-Pesa Agent').exists():
+        return True
+    
+    # Users with assigned shop can access
+    if hasattr(user, 'staff_profile') and user.staff_profile.assigned_shop:
+        return True
+    
+    return False
 
 def is_superuser(user):
     """Check if user is superuser"""
