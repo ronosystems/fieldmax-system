@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Technician Dashboard - FieldMax Workshop</title>
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f0f2f5;
+            overflow-x: hidden;
+        }
+        
+        /* Layout */
+        .app-container {
+            display: flex;
+            min-height: 100vh;
+        }
+        
+        /* Sidebar */
+        .sidebar {
+            width: 280px;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: white;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+            transition: all 0.3s;
+            z-index: 100;
+        }
+        
+        .sidebar-header {
+            padding: 25px 20px;
+            background: #28a745;
+            text-align: center;
+            border-bottom: 1px solid rgb(0, 217, 255);
+        }
+        
+        .sidebar-header h2 {
+            font-size: 22px;
+            margin-bottom: 5px;
+        }
+        
+        .sidebar-header p {
+            font-size: 12px;
+            opacity: 0.7;
+        }
+        
+        .nav-menu {
+            list-style: none;
+            padding: 20px 0;
+        }
+        
+        .nav-item {
+            margin-bottom: 5px;
+        }
+        
+        .nav-link {
+            display: flex;
+            align-items: center;
+            padding: 12px 20px;
+            color: rgba(255,255,255,0.8);
+            text-decoration: none;
+            transition: all 0.3s;
+            gap: 12px;
+        }
+        
+        .nav-link:hover {
+            background: rgba(255,255,255,0.1);
+            color: white;
+            padding-left: 25px;
+        }
+        
+        .nav-link.active {
+            background: #667eea;
+            color: white;
+            border-left: 3px solid #fff;
+        }
+        
+        .nav-icon {
+            font-size: 20px;
+            width: 24px;
+        }
+        
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            margin-left: 280px;
+            padding: 20px;
+        }
+        
+        /* Top Bar */
+        .top-bar {
+            background: white;
+            padding: 15px 25px;
+            border-radius: 12px;
+            margin-bottom: 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        
+        .page-title h1 {
+            font-size: 24px;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+        
+        .page-title p {
+            color: #7f8c8d;
+            font-size: 14px;
+        }
+        
+        /* Stats Cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+            cursor: pointer;
+            text-align: center;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-3px);
+        }
+        
+        .stat-card h3 {
+            font-size: 14px;
+            color: #7f8c8d;
+            margin-bottom: 10px;
+        }
+        
+        .stat-number {
+            font-size: 32px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        
+        .stat-trend {
+            font-size: 12px;
+            color: #27ae60;
+            margin-top: 5px;
+        }
+        
+        /* Alert */
+        .alert-info-custom {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+            padding: 12px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        /* Table Containers */
+        .table-container {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 25px;
+        }
+        
+        .table-header {
+            padding: 20px;
+            border-bottom: 2px solid #f0f2f5;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .table-header h3 {
+            font-size: 18px;
+            color: #2c3e50;
+            margin: 0;
+        }
+        
+        .badge-count {
+            background: #667eea;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #555;
+            font-size: 13px;
+        }
+        
+        tr:hover {
+            background: #f8f9fa;
+        }
+        
+        /* Status Badges */
+        .status-badge {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .status-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .status-in_progress {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        
+        .status-completed {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status-picked_up {
+            background: #e2e3e5;
+            color: #383d41;
+        }
+        
+        /* Buttons */
+        .btn-sm {
+            padding: 5px 12px;
+            font-size: 12px;
+            border-radius: 6px;
+            margin: 2px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+        }
+        
+        .btn-accept {
+            background: #28a745;
+            color: white;
+        }
+        
+        .btn-accept:hover {
+            background: #218838;
+        }
+        
+        .btn-progress {
+            background: #17a2b8;
+            color: white;
+        }
+        
+        .btn-progress:hover {
+            background: #138496;
+        }
+        
+        .btn-complete {
+            background: #ffc107;
+            color: #333;
+        }
+        
+        .btn-complete:hover {
+            background: #e0a800;
+        }
+        
+        .btn-view {
+            background: #667eea;
+            color: white;
+        }
+        
+        .btn-view:hover {
+            background: #5a67d8;
+        }
+        
+        /* Modal */
+        .modal-content {
+            border-radius: 12px;
+        }
+        
+        .modal-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 12px 12px 0 0;
+        }
+        
+
+        /* Website Button Style */
+        .website-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 20px;
+            padding: 12px 20px;
+            background: #28a745;
+            color: white;
+            text-decoration: none;
+            border-radius: 10px;
+            font-weight: 600;
+            transition: all 0.3s;
+            gap: 10px;
+        }
+        
+        .website-btn:hover {
+            background: #218838;
+            transform: translateY(-2px);
+            color: white;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+            
+            .main-content {
+                margin-left: 0;
+            }
+            
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .table-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+        }
+        
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .spinner-border {
+            width: 40px;
+            height: 40px;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h2>🔧 FSL WORKSHOP</h2>
+                <p>Technician Portal</p>
+            </div>
+
+            <!-- WEBSITE PAGE BUTTON - MOVED INSIDE SIDEBAR -->
+            <a href="{% url 'website:home' %}" class="website-btn">
+                <i class="fas fa-globe"></i> 
+                <span>WEBSITE PAGE</span>
+                <i class="fas fa-external-link-alt"></i>
+            </a>
+
+            <ul class="nav-menu">
+                <li class="nav-item">
+                    <a href="{% url 'staff:technician_dashboard' %}" class="nav-link active">
+                        <span class="nav-icon">📊</span>
+                        <span>Dashboard</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="{% url 'staff:technician_jobs' %}" class="nav-link">
+                        <span class="nav-icon">📋</span>
+                        <span>MY Jobs</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="{% url 'staff:technician_reports' %}" class="nav-link">
+                        <span class="nav-icon">📈</span>
+                        <span>My Reports</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Top Bar -->
+            <div class="top-bar">
+                <div class="page-title">
+                    <h1>🔧 Technician Dashboard</h1>
+                    <p>{{ today|date:"l, F j, Y" }}</p>
+                </div>
+            </div>
+
+            <!-- Technician Info -->
+            <div class="alert-info-custom">
+                <i class="fas fa-user-circle fa-2x"></i>
+                <div>
+                    <strong>Welcome back, {{ technician_name }}!</strong><br>
+                    {% if assigned_shop %}
+                    <small><i class="fas fa-store"></i> Assigned Shop: {{ assigned_shop.name }}</small>
+                    {% else %}
+                    <small><i class="fas fa-exclamation-triangle"></i> No shop assigned</small>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Stats Cards -->
+            <div class="stats-grid">
+                <div class="stat-card" onclick="scrollToSection('pendingJobs')">
+                    <h3><i class="fas fa-clock"></i> Pending Jobs</h3>
+                    <div class="stat-number">{{ pending_jobs|default:0 }}</div>
+                    <div class="stat-trend">Awaiting acceptance</div>
+                </div>
+                <div class="stat-card" onclick="scrollToSection('inProgressJobs')">
+                    <h3><i class="fas fa-wrench"></i> In Progress</h3>
+                    <div class="stat-number">{{ in_progress_jobs|default:0 }}</div>
+                    <div class="stat-trend">Being repaired</div>
+                </div>
+                <div class="stat-card" onclick="scrollToSection('completedJobs')">
+                    <h3><i class="fas fa-check-circle"></i> Completed</h3>
+                    <div class="stat-number">{{ completed_jobs|default:0 }}</div>
+                    <div class="stat-trend">Ready for pickup</div>
+                </div>
+                <div class="stat-card">
+                    <h3><i class="fas fa-chart-line"></i> Total Revenue</h3>
+                    <div class="stat-number">${{ total_revenue|floatformat:2|default:"0.00" }}</div>
+                    <div class="stat-trend">From completed jobs</div>
+                </div>
+            </div>
+
+            <!-- PENDING JOBS SECTION -->
+            <div class="table-container" id="pendingJobs">
+                <div class="table-header">
+                    <h3><i class="fas fa-clock"></i> Pending Jobs <span class="badge-count">{{ pending_jobs_list|length }}</span></h3>
+                    <small>Click "Accept" to start working on a job</small>
+                </div>
+                <div style="overflow-x: auto;">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Job ID</th>
+                                <th>Customer</th>
+                                <th>Device</th>
+                                <th>Issue</th>
+                                <th>Shop</th>
+                                <th>Amount</th>
+                                <th>Created</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for job in pending_jobs_list %}
+                            <tr>
+                                <td><strong>#{{ job.id }}</strong></td>
+                                <td>
+                                    {{ job.customer_name }}<br>
+                                    <small class="text-muted">{{ job.customer_phone|default:"No phone" }}</small>
+                                </a></td>
+                                <td>
+                                    {{ job.device_type }}<br>
+                                    <small class="text-muted">{{ job.device_model|default:"-" }}</small>
+                                </a></td>
+                                <td>{{ job.issue_description|truncatechars:50 }}</a></td>
+                                <td>{{ job.shop.name|default:"-" }}</a></td>
+                                <td class="fw-bold">${{ job.total_amount|floatformat:2 }}</a></td>
+                                <td>{{ job.created_at|date:"Y-m-d H:i" }}</a></td>
+                                <td>
+                                    <button class="btn-sm btn-accept" onclick="updateJobStatus({{ job.id }}, 'in_progress')">
+                                        <i class="fas fa-check"></i> Accept & Start
+                                    </button>
+                                </a></td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="8" class="text-center py-4">
+                                    <i class="fas fa-check-circle fa-2x text-muted mb-2"></i>
+                                    <p class="text-muted mb-0">No pending jobs assigned to you.</p>
+                                </a></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- IN PROGRESS JOBS SECTION -->
+            <div class="table-container" id="inProgressJobs">
+                <div class="table-header">
+                    <h3><i class="fas fa-wrench"></i> In Progress Jobs <span class="badge-count">{{ in_progress_jobs_list|length }}</span></h3>
+                    <small>Jobs you're currently working on</small>
+                </div>
+                <div style="overflow-x: auto;">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Job ID</th>
+                                <th>Customer</th>
+                                <th>Device</th>
+                                <th>Issue</th>
+                                <th>Shop</th>
+                                <th>Amount</th>
+                                <th>Started</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for job in in_progress_jobs_list %}
+                            <tr>
+                                <td><strong>#{{ job.id }}</strong></a></td>
+                                <td>
+                                    {{ job.customer_name }}<br>
+                                    <small class="text-muted">{{ job.customer_phone|default:"No phone" }}</small>
+                                </a></a></td>
+                                <td>
+                                    {{ job.device_type }}<br>
+                                    <small class="text-muted">{{ job.device_model|default:"-" }}</small>
+                                </a></a></td>
+                                <td>{{ job.issue_description|truncatechars:50 }}</a></a></td>
+                                <td>{{ job.shop.name|default:"-" }}</a></a></td>
+                                <td class="fw-bold">${{ job.total_amount|floatformat:2 }}</a></a></td>
+                                <td>{{ job.updated_at|date:"Y-m-d H:i" }}</a></a></td>
+                                <td>
+                                    <button class="btn-sm btn-complete" onclick="updateJobStatus({{ job.id }}, 'completed')">
+                                        <i class="fas fa-check-double"></i> Mark Complete
+                                    </button>
+                                    <button class="btn-sm btn-view" onclick="viewJobDetails({{ job.id }})">
+                                        <i class="fas fa-eye"></i> View
+                                    </button>
+                                </a></a></td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="8" class="text-center py-4">
+                                    <i class="fas fa-tools fa-2x text-muted mb-2"></i>
+                                    <p class="text-muted mb-0">No jobs in progress.</p>
+                                </a></a></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- COMPLETED JOBS SECTION -->
+            <div class="table-container" id="completedJobs">
+                <div class="table-header">
+                    <h3><i class="fas fa-check-circle"></i> Completed Jobs <span class="badge-count">{{ completed_jobs_list|length }}</span></h3>
+                    <small>Jobs ready for customer pickup</small>
+                </div>
+                <div style="overflow-x: auto;">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Job ID</th>
+                                <th>Customer</th>
+                                <th>Device</th>
+                                <th>Shop</th>
+                                <th>Amount</th>
+                                <th>Completed</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for job in completed_jobs_list %}
+                            <tr>
+                                <td><strong>#{{ job.id }}</strong></a></a></td>
+                                <td>
+                                    {{ job.customer_name }}<br>
+                                    <small class="text-muted">{{ job.customer_phone|default:"No phone" }}</small>
+                                </a></a></a></td>
+                                <td>
+                                    {{ job.device_type }}<br>
+                                    <small class="text-muted">{{ job.device_model|default:"-" }}</small>
+                                </a></a></a></td>
+                                <td>{{ job.shop.name|default:"-" }}</a></a></a></td>
+                                <td class="fw-bold">${{ job.total_amount|floatformat:2 }}</a>10</a></td>
+                                <td>{{ job.completed_at|date:"Y-m-d H:i"|default:job.updated_at|date:"Y-m-d H:i" }}</a></a></td>
+                                <td>
+                                    <button class="btn-sm btn-view" onclick="viewJobDetails({{ job.id }})">
+                                        <i class="fas fa-eye"></i> View Details
+                                    </button>
+                                </a></a></a></td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="7" class="text-center py-4">
+                                    <i class="fas fa-clipboard-list fa-2x text-muted mb-2"></i>
+                                    <p class="text-muted mb-0">No completed jobs yet.</p>
+                                </a>17</a></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Job Details Modal -->
+    <div class="modal fade" id="jobDetailsModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-info-circle"></i> Job Details</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="jobDetailsContent">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary"></div>
+                        <p class="mt-2">Loading job details...</p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // CSRF Token setup for AJAX
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+        
+        const csrftoken = getCookie('csrftoken');
+        
+        // Update job status
+        function updateJobStatus(jobId, newStatus) {
+            let confirmMessage = '';
+            let actionText = '';
+            
+            switch(newStatus) {
+                case 'in_progress':
+                    confirmMessage = 'Are you sure you want to accept and start this repair job?';
+                    actionText = 'accepting';
+                    break;
+                case 'completed':
+                    confirmMessage = 'Are you sure you have completed this repair job?';
+                    actionText = 'completing';
+                    break;
+                default:
+                    confirmMessage = 'Are you sure you want to update this job status?';
+                    actionText = 'updating';
+            }
+            
+            if (confirm(confirmMessage)) {
+                // Show loading indicator on the button
+                const button = event.target;
+                const originalText = button.innerHTML;
+                button.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Processing...';
+                button.disabled = true;
+                
+                fetch(`/workshop/technician-update-status/${jobId}/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken,
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify({
+                        status: newStatus
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showNotification('success', data.message);
+                        setTimeout(() => {
+                            location.reload();
+                        }, 1000);
+                    } else {
+                        showNotification('error', data.error || 'Failed to update job status');
+                        button.innerHTML = originalText;
+                        button.disabled = false;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showNotification('error', 'An error occurred. Please try again.');
+                    button.innerHTML = originalText;
+                    button.disabled = false;
+                });
+            }
+        }
+        
+        // View job details
+        function viewJobDetails(jobId) {
+            const modal = new bootstrap.Modal(document.getElementById('jobDetailsModal'));
+            const contentDiv = document.getElementById('jobDetailsContent');
+            
+            contentDiv.innerHTML = `
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary"></div>
+                    <p class="mt-2">Loading job details...</p>
+                </div>
+            `;
+            
+            modal.show();
+            
+            fetch(`/workshop/job/${jobId}/detail-ajax/`, {
+                method: 'GET',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    contentDiv.innerHTML = `
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6 class="fw-bold">Customer Information</h6>
+                                <table class="table table-sm">
+                                    <tr><td><strong>Name:</strong></td><td>${data.customer_name}</td></tr>
+                                    <tr><td><strong>Phone:</strong></td><td>${data.customer_phone || 'N/A'}</td></tr>
+                                </table>
+                                
+                                <h6 class="fw-bold mt-3">Device Information</h6>
+                                <table class="table table-sm">
+                                    <tr><td><strong>Type:</strong></td><td>${data.device_type}</td></tr>
+                                    <tr><td><strong>Model:</strong></td><td>${data.device_model || 'N/A'}</td></tr>
+                                    <tr><td><strong>Issue:</strong></td><td>${data.issue_description}</td></tr>
+                                </table>
+                            </div>
+                            <div class="col-md-6">
+                                <h6 class="fw-bold">Financial Details</h6>
+                                <table class="table table-sm">
+                                    <tr><td><strong>Material Cost:</strong></td><td>$${parseFloat(data.material_cost).toFixed(2)}</td></tr>
+                                    <tr><td><strong>Labor Cost:</strong></td><td>$${parseFloat(data.labor_cost).toFixed(2)}</td></tr>
+                                    <tr><td><strong>Total Amount:</strong></td><td class="fw-bold">$${parseFloat(data.total_amount).toFixed(2)}</td></tr>
+                                    <tr><td><strong>Amount Paid:</strong></td><td>$${parseFloat(data.amount_paid).toFixed(2)}</td></tr>
+                                    <tr><td><strong>Remaining Balance:</strong></td><td class="text-danger">$${parseFloat(data.remaining_balance).toFixed(2)}</td></tr>
+                                </table>
+                                
+                                <h6 class="fw-bold mt-3">Status</h6>
+                                <span class="status-badge status-${data.status}">
+                                    ${data.status_display}
+                                </span>
+                                ${data.notes ? `<p class="mt-2"><strong>Notes:</strong><br>${data.notes}</p>` : ''}
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    contentDiv.innerHTML = `
+                        <div class="alert alert-danger">
+                            Failed to load job details. Please try again.
+                        </div>
+                    `;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                contentDiv.innerHTML = `
+                    <div class="alert alert-danger">
+                        An error occurred. Please try again.
+                    </div>
+                `;
+            });
+        }
+        
+        // Show notification
+        function showNotification(type, message) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type === 'success' ? 'success' : 'danger'} alert-dismissible fade show position-fixed`;
+            alertDiv.style.top = '20px';
+            alertDiv.style.right = '20px';
+            alertDiv.style.zIndex = '9999';
+            alertDiv.style.minWidth = '300px';
+            alertDiv.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.body.appendChild(alertDiv);
+            
+            setTimeout(() => {
+                alertDiv.remove();
+            }, 3000);
+        }
+        
+        // Scroll to section
+        function scrollToSection(sectionId) {
+            const section = document.getElementById(sectionId);
+            if (section) {
+                section.scrollIntoView({ behavior: 'smooth' });
+            }
+        }
+    </script>
+</body>
+</html>

@@ -44,6 +44,7 @@ POSITION_TO_GROUP_MAP = {
     'cleaner': 'Cleaner',
     'inventory_manager': 'Inventory Manager',
     'mpesa_agent': 'M-Pesa Agent',
+    'technician': 'Technician',
 }
 
 # Generate POSITION_CHOICES automatically from the map

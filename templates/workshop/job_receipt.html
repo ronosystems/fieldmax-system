@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Job Receipt - Workshop Pro</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f0f2f5;
+            padding: 40px 20px;
+        }
+        
+        .receipt-container {
+            max-width: 500px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        /* Receipt Header */
+        .receipt-header {
+            background: linear-gradient(135deg, #008cff 0%, #00ffff 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .receipt-header h1 {
+            font-size: 28px;
+            margin-bottom: 5px;
+        }
+        
+        .receipt-header p {
+            opacity: 0.9;
+            font-size: 12px;
+        }
+        
+        .job-id {
+            background: rgba(255,255,255,0.2);
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 50px;
+            margin-top: 15px;
+            font-size: 14px;
+        }
+        
+        /* Receipt Body */
+        .receipt-body {
+            padding: 30px;
+        }
+        
+        .info-section {
+            margin-bottom: 25px;
+            border-bottom: 1px dashed #e0e0e0;
+            padding-bottom: 20px;
+        }
+        
+        .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #667eea;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 15px;
+        }
+        
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            font-size: 14px;
+        }
+        
+        .info-label {
+            color: #7f8c8d;
+            font-weight: 500;
+        }
+        
+        .info-value {
+            color: #2c3e50;
+            font-weight: 600;
+            text-align: right;
+        }
+        
+        /* Divider */
+        .divider {
+            border-top: 2px dashed #e0e0e0;
+            margin: 20px 0;
+        }
+        
+        /* Financial Section */
+        .financial-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            font-size: 14px;
+        }
+        
+        .total-row {
+            background: #f8f9fa;
+            padding: 12px 15px;
+            border-radius: 10px;
+            margin-top: 10px;
+        }
+        
+        .total-row .info-label,
+        .total-row .info-value {
+            font-weight: 700;
+            font-size: 16px;
+        }
+        
+        .paid-row {
+            color: #27ae60;
+        }
+        
+        .balance-row {
+            color: #e74c3c;
+        }
+        
+        /* Status Badge */
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .status-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        /* Footer */
+        .receipt-footer {
+            background: #f8f9fa;
+            padding: 20px 30px;
+            text-align: center;
+            border-top: 1px solid #e0e0e0;
+        }
+        
+        .receipt-footer p {
+            font-size: 12px;
+            color: #7f8c8d;
+            margin-bottom: 15px;
+        }
+        
+        .btn-group {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #5a67d8;
+        }
+        
+        .btn-secondary {
+            background: #e2e8f0;
+            color: #4a5568;
+        }
+        
+        .btn-secondary:hover {
+            background: #cbd5e0;
+        }
+        
+        .btn-print {
+            background: #28a745;
+            color: white;
+        }
+        
+        .btn-print:hover {
+            background: #218838;
+        }
+        
+        /* Print Styles */
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+            
+            .btn-group {
+                display: none;
+            }
+            
+            .receipt-container {
+                box-shadow: none;
+                border-radius: 0;
+            }
+            
+            .receipt-header {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+        }
+        
+        /* Responsive */
+        @media (max-width: 500px) {
+            .receipt-container {
+                margin: 0;
+                border-radius: 0;
+            }
+            
+            .receipt-header {
+                padding: 20px;
+            }
+            
+            .receipt-body {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="receipt-container">
+        <!-- Header -->
+        <div class="receipt-header">
+            <h1>🔧 FIELDMAX ELECTRONICS</h1>
+            <p>Repair Receipt </p>
+            <div class="job-id">
+                REPAIR JOB ID: #{{ job.id }}
+            </div>
+        </div>
+        
+        <!-- Body -->
+        <div class="receipt-body">
+            <!-- Customer Information -->
+            <div class="info-section">
+                <div class="section-title">👤 CUSTOMER INFORMATION</div>
+                <div class="info-row">
+                    <span class="info-label">Customer Name:</span>
+                    <span class="info-value">{{ job.customer_name }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Phone Number:</span>
+                    <span class="info-value">{{ job.customer_phone|default:"Not provided" }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Date Created:</span>
+                    <span class="info-value">{{ job.created_at|date:"F j, Y g:i A" }}</span>
+                </div>
+            </div>
+            
+            <!-- Device Information -->
+            <div class="info-section">
+                <div class="section-title">📱 DEVICE INFORMATION</div>
+                <div class="info-row">
+                    <span class="info-label">Device Type:</span>
+                    <span class="info-value">{{ job.device_type }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Device Model:</span>
+                    <span class="info-value">{{ job.device_model|default:"Not specified" }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Issue Description:</span>
+                    <span class="info-value">{{ job.issue_description|truncatechars:50 }}</span>
+                </div>
+            </div>
+            
+            <!-- Assignment Information -->
+            <div class="info-section">
+                <div class="section-title">🔧 ASSIGNMENT DETAILS</div>
+                <div class="info-row">
+                    <span class="info-label">Shop Branch:</span>
+                    <span class="info-value">{{ job.shop.name|default:"Not assigned" }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Assigned Technician:</span>
+                    <span class="info-value">{{ job.technician_name|default:"Pending assignment" }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Repair Period:</span>
+                    <span class="info-value">{{ job.warranty_days }} days</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Job Status:</span>
+                    <span class="info-value">
+                        <span class="status-badge status-{{ job.status }}">
+                            {% if job.status == 'pending' %}⏳ Pending
+                            {% elif job.status == 'in_progress' %}🔧 In Progress
+                            {% elif job.status == 'completed' %}✅ Completed
+                            {% elif job.status == 'picked_up' %}📦 Picked Up
+                            {% endif %}
+                        </span>
+                    </span>
+                </div>
+            </div>
+            
+            <div class="divider"></div>
+            
+            <!-- Financial Details -->
+            <div class="info-section">
+                <div class="section-title">💰 FINANCIAL DETAILS</div>
+                <div class="financial-row total-row">
+                    <span class="info-label">Total Amount:</span>
+                    <span class="info-value">${{ job.total_amount|floatformat:2 }}</span>
+                </div>
+                <div class="financial-row paid-row">
+                    <span class="info-label">Amount Paid:</span>
+                    <span class="info-value">${{ job.amount_paid|floatformat:2 }}</span>
+                </div>
+                <div class="financial-row balance-row">
+                    <span class="info-label">Remaining Balance:</span>
+                    <span class="info-value">${{ job.remaining_balance|floatformat:2 }}</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Footer -->
+        <div class="receipt-footer">
+            <p>Thank you for choosing our repair service.<br>
+            Please present this receipt when picking up your device.</p>
+            
+            <div class="btn-group">
+                <button onclick="window.print()" class="btn btn-print">
+                    🖨️ Print Receipt
+                </button>
+                <a href="{% url 'workshop:job_detail' job.id %}" class="btn btn-primary">
+                    View Job Details
+                </a>
+                <a href="{% url 'workshop:job_list' %}" class="btn btn-secondary">
+                    All Jobs
+                </a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

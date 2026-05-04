@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{% if job %}Edit{% else %}Create New{% endif %} Repair Job - Workshop</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f0f2f5;
+            overflow-x: hidden;
+        }
+        
+        /* Layout */
+        .app-container {
+            display: flex;
+            min-height: 100vh;
+        }
+        
+        /* Sidebar */
+        .sidebar {
+            width: 280px;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: white;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+            transition: all 0.3s;
+            z-index: 100;
+        }
+        
+        .sidebar-header {
+            padding: 25px 20px;
+            background: #28a745;
+            text-align: center;
+            border-bottom: 1px solid rgb(0, 217, 255);
+        }
+        
+        .sidebar-header h2 {
+            font-size: 22px;
+            margin-bottom: 5px;
+        }
+        
+        .sidebar-header p {
+            font-size: 12px;
+            opacity: 0.7;
+        }
+        
+        .nav-menu {
+            list-style: none;
+            padding: 20px 0;
+        }
+        
+        .nav-item {
+            margin-bottom: 5px;
+        }
+        
+        .nav-link {
+            display: flex;
+            align-items: center;
+            padding: 12px 20px;
+            color: rgba(255,255,255,0.8);
+            text-decoration: none;
+            transition: all 0.3s;
+            gap: 12px;
+        }
+        
+        .nav-link:hover {
+            background: rgba(255,255,255,0.1);
+            color: white;
+            padding-left: 25px;
+        }
+        
+        .nav-link.active {
+            background: #667eea;
+            color: white;
+            border-left: 3px solid #fff;
+        }
+        
+        .nav-icon {
+            font-size: 20px;
+            width: 24px;
+        }
+        
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            margin-left: 280px;
+            padding: 20px;
+        }
+        
+        /* Top Bar */
+        .top-bar {
+            background: white;
+            padding: 15px 25px;
+            border-radius: 12px;
+            margin-bottom: 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .page-title h1 {
+            font-size: 24px;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+        
+        .page-title p {
+            color: #7f8c8d;
+            font-size: 14px;
+        }
+        
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .user-name {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        
+        /* Form Container */
+        .form-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .form-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px 30px;
+        }
+        
+        .form-header h2 {
+            font-size: 20px;
+            margin-bottom: 5px;
+        }
+        
+        .form-header p {
+            opacity: 0.9;
+            font-size: 13px;
+        }
+        
+        /* Form Body */
+        .form-body {
+            padding: 30px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+            font-size: 14px;
+        }
+        
+        label .required {
+            color: #e74c3c;
+            margin-left: 4px;
+        }
+        
+        input[type="text"],
+        input[type="tel"],
+        input[type="number"],
+        select,
+        textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        
+        input:focus,
+        select:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+        
+        /* Section Title */
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 20px;
+            margin-top: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        /* Financial Summary */
+        .financial-summary {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+        
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .summary-row:last-child {
+            border-bottom: none;
+        }
+        
+        .summary-label {
+            font-weight: 600;
+            color: #555;
+        }
+        
+        .summary-value {
+            font-weight: 700;
+            font-size: 16px;
+        }
+        
+        .summary-total {
+            background: #667eea;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 6px;
+            margin-top: 10px;
+        }
+        
+        .summary-total .summary-label,
+        .summary-total .summary-value {
+            color: white;
+        }
+        
+        /* Buttons */
+        .form-actions {
+            display: flex;
+            gap: 15px;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #e0e0e0;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+        }
+        
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #5a67d8;
+            transform: translateY(-1px);
+        }
+        
+        .btn-secondary {
+            background: #e2e8f0;
+            color: #4a5568;
+        }
+        
+        .btn-secondary:hover {
+            background: #cbd5e0;
+        }
+        
+        .btn-danger {
+            background: #e74c3c;
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background: #c0392b;
+        }
+        
+        /* Messages */
+        .messages {
+            margin-bottom: 20px;
+        }
+        
+        .alert {
+            padding: 12px 20px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+        }
+        
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        /* Help Text */
+        .help-text {
+            font-size: 12px;
+            color: #6c757d;
+            margin-top: 5px;
+        }
+        
+        /* Loading Spinner */
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Floating Admin Button */
+        .floating-admin-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.8rem;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            transition: all 0.3s;
+            z-index: 1050;
+            text-decoration: none;
+            animation: pulse 2s infinite;
+        }
+        
+        .floating-admin-btn:hover {
+            transform: scale(1.1);
+            background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+            color: white;
+        }
+        
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(102, 126, 234, 0.4); }
+            70% { box-shadow: 0 0 0 15px rgba(102, 126, 234, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(102, 126, 234, 0); }
+        }
+        
+
+        /* Website Button Style */
+        .website-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 20px;
+            padding: 12px 20px;
+            background: #28a745;
+            color: white;
+            text-decoration: none;
+            border-radius: 10px;
+            font-weight: 600;
+            transition: all 0.3s;
+            gap: 10px;
+        }
+        
+        .website-btn:hover {
+            background: #218838;
+            transform: translateY(-2px);
+            color: white;
+        }
+
+        /* Status Badge Preview */
+        .status-preview {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-top: 8px;
+        }
+        
+        .status-preview-pending { background: #fff3cd; color: #856404; }
+        .status-preview-in_progress { background: #d1ecf1; color: #0c5460; }
+        .status-preview-completed { background: #d4edda; color: #155724; }
+        .status-preview-picked_up { background: #e2e3e5; color: #383d41; }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+            
+            .main-content {
+                margin-left: 0;
+            }
+            
+            .form-row {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+            
+            .form-actions {
+                flex-direction: column;
+            }
+            
+            .btn {
+                width: 100%;
+            }
+            
+            .floating-admin-btn {
+                width: 50px;
+                height: 50px;
+                font-size: 1.4rem;
+                bottom: 20px;
+                right: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h2>🛠️FIELDMAX WORKSHOP</h2>
+                <p>Repair Management System</p>
+            </div>
+
+            <!-- WEBSITE PAGE BUTTON - MOVED INSIDE SIDEBAR -->
+            <a href="{% url 'website:home' %}" class="website-btn">
+                <i class="fas fa-globe"></i> 
+                <span>WEBSITE PAGE</span>
+                <i class="fas fa-external-link-alt"></i>
+            </a>
+
+            <ul class="nav-menu">
+                <li class="nav-item">
+                    <a href="{% url 'workshop:dashboard' %}" class="nav-link">
+                        <span class="nav-icon">📊</span>
+                        <span>Dashboard</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="{% url 'workshop:job_list' %}" class="nav-link">
+                        <span class="nav-icon">📋</span>
+                        <span>All Jobs</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="{% url 'workshop:job_create' %}" class="nav-link active">
+                        <span class="nav-icon">➕</span>
+                        <span>New Job</span>
+                    </a>
+                </li>
+
+                <li class="nav-item">
+                    <a href="{% url 'workshop:pickup_page' %}" class="nav-link">
+                        <span class="nav-icon">📦</span>
+                        <span>Customer Pickup</span>
+                    </a>
+                </li>
+
+                <li class="nav-item">
+                    <a href="{% url 'workshop:reports' %}" class="nav-link">
+                        <span class="nav-icon">📈</span>
+                        <span>Reports</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Top Bar -->
+            <div class="top-bar">
+                <div class="page-title">
+                    <h1>{% if job %}✏️ Edit Repair Job #{{ job.id }}{% else %}➕ Create New Repair Job{% endif %}</h1>
+                    <p>{% if job %}Update the repair job details below{% else %}Fill in the details to create a new repair job{% endif %}</p>
+                </div>
+                <div class="user-info">
+                    <span class="user-name">👋 {{ request.user.get_full_name|default:request.user.username }}</span>
+                </div>
+            </div>
+
+            <!-- Messages -->
+            {% if messages %}
+            <div class="messages">
+                {% for message in messages %}
+                <div class="alert alert-{% if message.tags == 'error' %}error{% else %}{{ message.tags }}{% endif %}">
+                    {{ message }}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- Form Container -->
+            <div class="form-container">
+                <div class="form-header">
+                    <h2>{% if job %}Edit Repair Job{% else %}New Repair Job Form{% endif %}</h2>
+                    <p>Please fill in all required fields marked with <span style="color: #ffc107;">*</span></p>
+                </div>
+
+                <div class="form-body">
+                    <form method="post" id="repairJobForm">
+                        {% csrf_token %}
+                        
+                        <!-- Customer Information Section -->
+                        <div class="section-title">
+                            <span>👤</span> Customer Information
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Customer Name <span class="required">*</span></label>
+                                <input type="text" name="customer_name" required 
+                                       value="{{ job.customer_name|default:'' }}"
+                                       placeholder="Enter customer full name">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Customer Phone</label>
+                                <input type="tel" name="customer_phone" 
+                                       value="{{ job.customer_phone|default:'' }}"
+                                       placeholder="e.g., 0712345678">
+                                <div class="help-text">Contact number for SMS updates</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Device Information Section -->
+                        <div class="section-title">
+                            <span>📱</span> Device Information
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Device Type <span class="required">*</span></label>
+                                <select name="device_type" required>
+                                    <option value="">Select device type</option>
+                                    <option value="iPhone" {% if job.device_type == 'iPhone' %}selected{% endif %}>iPhone</option>
+                                    <option value="Samsung" {% if job.device_type == 'Samsung' %}selected{% endif %}>Samsung</option>
+                                    <option value="Huawei" {% if job.device_type == 'Huawei' %}selected{% endif %}>Huawei</option>
+                                    <option value="Tecno" {% if job.device_type == 'Tecno' %}selected{% endif %}>Tecno</option>
+                                    <option value="Infinix" {% if job.device_type == 'Infinix' %}selected{% endif %}>Infinix</option>
+                                    <option value="Oppo" {% if job.device_type == 'Oppo' %}selected{% endif %}>Oppo</option>
+                                    <option value="Vivo" {% if job.device_type == 'Vivo' %}selected{% endif %}>Vivo</option>
+                                    <option value="Google Pixel" {% if job.device_type == 'Google Pixel' %}selected{% endif %}>Google Pixel</option>
+                                    <option value="Laptop" {% if job.device_type == 'Laptop' %}selected{% endif %}>Laptop</option>
+                                    <option value="Tablet" {% if job.device_type == 'Tablet' %}selected{% endif %}>Tablet</option>
+                                    <option value="Other" {% if job.device_type == 'Other' %}selected{% endif %}>Other</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Device Model</label>
+                                <input type="text" name="device_model" 
+                                       value="{{ job.device_model|default:'' }}"
+                                       placeholder="e.g., iPhone 14 Pro, Galaxy S23">
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Issue Description <span class="required">*</span></label>
+                            <textarea name="issue_description" required 
+                                      placeholder="Describe the problem the customer is experiencing...">{{ job.issue_description|default:'' }}</textarea>
+                        </div>
+                        
+                        <!-- Shop & Technician Section -->
+                        <div class="section-title">
+                            <span>🏪</span> Shop & Technician Assignment
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Shop Branch <span class="required">*</span></label>
+                                <select name="shop" id="shopSelect" required>
+                                    <option value="">Select shop branch</option>
+                                    {% for shop in shops %}
+                                        <option value="{{ shop.id }}" {% if job.shop.id == shop.id %}selected{% endif %}>
+                                            {{ shop.name }} ({{ shop.code }})
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                                <div class="help-text">Select the shop where the repair will be done</div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Assigned Technician <span class="required">*</span></label>
+                                <select name="technician_id" id="technicianSelect" class="technician-select" required>
+                                    <option value="">-- First select a shop --</option>
+                                </select>
+                                <div class="help-text">Technicians available at the selected shop</div>
+                                <div id="loadingIndicator" style="display: none; margin-top: 5px;">
+                                    <span class="loading-spinner"></span> Loading technicians...
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Financial Section -->
+                        <div class="section-title">
+                            <span>💰</span> Financial Details
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Material Cost ($)</label>
+                                <input type="number" name="material_cost" id="material_cost" 
+                                       step="0.01" min="0" 
+                                       value="{{ job.material_cost|default:'0.00' }}"
+                                       oninput="calculateTotal()">
+                                <div class="help-text">Cost of spare parts and materials used</div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Labor Cost ($)</label>
+                                <input type="number" name="labor_cost" id="labor_cost" 
+                                       step="0.01" min="0" 
+                                       value="{{ job.labor_cost|default:'0.00' }}"
+                                       oninput="calculateTotal()">
+                                <div class="help-text">Service and repair charges</div>
+                            </div>
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Amount Paid ($)</label>
+                                <input type="number" name="amount_paid" id="amount_paid" 
+                                       step="0.01" min="0" 
+                                       value="{{ job.amount_paid|default:'0.00' }}"
+                                       oninput="calculateBalance()">
+                                <div class="help-text">Amount already paid by customer</div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Warranty Period (days)</label>
+                                <input type="number" name="warranty_days" 
+                                       value="{{ job.warranty_days|default:'30' }}">
+                                <div class="help-text">Warranty duration in days</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Live Financial Summary -->
+                        <div class="financial-summary">
+                            <div class="summary-row">
+                                <span class="summary-label">Material Cost:</span>
+                                <span class="summary-value" id="display_material">$0.00</span>
+                            </div>
+                            <div class="summary-row">
+                                <span class="summary-label">Labor Cost:</span>
+                                <span class="summary-value" id="display_labor">$0.00</span>
+                            </div>
+                            <div class="summary-row">
+                                <span class="summary-label">Total Amount:</span>
+                                <span class="summary-value" id="display_total">$0.00</span>
+                            </div>
+                            <div class="summary-row">
+                                <span class="summary-label">Amount Paid:</span>
+                                <span class="summary-value" id="display_paid">$0.00</span>
+                            </div>
+                            <div class="summary-total">
+                                <div class="summary-row">
+                                    <span class="summary-label">Remaining Balance:</span>
+                                    <span class="summary-value" id="display_balance">$0.00</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Status Section -->
+                        <div class="section-title">
+                            <span>📌</span> Job Status
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Status</label>
+                            <select name="status" id="statusSelect" onchange="updateStatusPreview()">
+                                <option value="pending" {% if job.status == 'pending' %}selected{% endif %}>
+                                    ⏳ Pending
+                                </option>
+                                <option value="in_progress" {% if job.status == 'in_progress' %}selected{% endif %}>
+                                    🔧 In Progress
+                                </option>
+                                <option value="completed" {% if job.status == 'completed' %}selected{% endif %}>
+                                    ✅ Completed
+                                </option>
+                                <option value="picked_up" {% if job.status == 'picked_up' %}selected{% endif %}>
+                                    📦 Picked Up
+                                </option>
+                            </select>
+                            <div id="statusPreview" class="status-preview"></div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Notes (Optional)</label>
+                            <textarea name="notes" placeholder="Any additional notes about the repair...">{{ job.notes|default:'' }}</textarea>
+                        </div>
+                        
+                        <!-- Form Actions -->
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary">
+                                {% if job %}💾 Update Job{% else %}➕ Create Job{% endif %}
+                            </button>
+                            <a href="{% url 'workshop:job_list' %}" class="btn btn-secondary">
+                                ❌ Cancel
+                            </a>
+                            {% if job %}
+                            <a href="{% url 'workshop:job_delete' job.id %}" class="btn btn-danger" 
+                               onclick="return confirm('Are you sure you want to delete this job?')">
+                                🗑️ Delete Job
+                            </a>
+                            {% endif %}
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Admin Button - Only for Superusers -->
+    {% if request.user.is_superuser %}
+    <a href="{% url 'staff:staff_dashboard' %}" class="floating-admin-btn" data-bs-toggle="tooltip" title="Back to Admin Dashboard">
+        <i class="fas fa-crown"></i>
+    </a>
+    {% endif %}
+
+    <script>
+        // Get CSRF token for AJAX requests
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+        
+        // Load technicians based on selected shop
+        function loadTechnicians(shopId) {
+            const technicianSelect = document.getElementById('technicianSelect');
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            
+            if (!shopId) {
+                technicianSelect.innerHTML = '<option value="">-- First select a shop --</option>';
+                technicianSelect.disabled = true;
+                return;
+            }
+            
+            // Show loading
+            loadingIndicator.style.display = 'block';
+            technicianSelect.innerHTML = '<option value="">Loading technicians...</option>';
+            technicianSelect.disabled = true;
+            
+            // Fetch technicians via AJAX
+            fetch(`/workshop/get-technicians-by-shop/?shop_id=${shopId}`, {
+                method: 'GET',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            })
+            .then(response => response.json())
+            .then(data => {
+                loadingIndicator.style.display = 'none';
+                
+                if (data.technicians && data.technicians.length > 0) {
+                    let options = '<option value="">-- Select Technician --</option>';
+                    data.technicians.forEach(tech => {
+                        const shopInfo = tech.shop_name ? ` (${tech.shop_name})` : '';
+                        options += `<option value="${tech.id}">🔧 ${tech.name} - ${tech.position}${shopInfo}</option>`;
+                    });
+                    technicianSelect.innerHTML = options;
+                    technicianSelect.disabled = false;
+                } else {
+                    technicianSelect.innerHTML = '<option value="">No technicians available at this shop</option>';
+                    technicianSelect.disabled = true;
+                }
+            })
+            .catch(error => {
+                loadingIndicator.style.display = 'none';
+                console.error('Error loading technicians:', error);
+                technicianSelect.innerHTML = '<option value="">Error loading technicians</option>';
+                technicianSelect.disabled = true;
+            });
+        }
+        
+        // Update status preview
+        function updateStatusPreview() {
+            const status = document.getElementById('statusSelect').value;
+            const previewDiv = document.getElementById('statusPreview');
+            let statusText = '';
+            let statusClass = '';
+            
+            switch(status) {
+                case 'pending':
+                    statusText = '⏳ Pending - Awaiting assignment or start';
+                    statusClass = 'status-preview-pending';
+                    break;
+                case 'in_progress':
+                    statusText = '🔧 In Progress - Currently being repaired';
+                    statusClass = 'status-preview-in_progress';
+                    break;
+                case 'completed':
+                    statusText = '✅ Completed - Ready for customer pickup';
+                    statusClass = 'status-preview-completed';
+                    break;
+                case 'picked_up':
+                    statusText = '📦 Picked Up - Job completed and closed';
+                    statusClass = 'status-preview-picked_up';
+                    break;
+                default:
+                    statusText = '';
+                    statusClass = '';
+            }
+            
+            previewDiv.innerHTML = statusText;
+            previewDiv.className = 'status-preview ' + statusClass;
+        }
+        
+        // Calculate total and balance
+        function calculateTotal() {
+            let material = parseFloat(document.getElementById('material_cost').value) || 0;
+            let labor = parseFloat(document.getElementById('labor_cost').value) || 0;
+            let total = material + labor;
+            
+            document.getElementById('display_material').textContent = '$' + material.toFixed(2);
+            document.getElementById('display_labor').textContent = '$' + labor.toFixed(2);
+            document.getElementById('display_total').textContent = '$' + total.toFixed(2);
+            
+            calculateBalance();
+        }
+        
+        function calculateBalance() {
+            let material = parseFloat(document.getElementById('material_cost').value) || 0;
+            let labor = parseFloat(document.getElementById('labor_cost').value) || 0;
+            let total = material + labor;
+            let paid = parseFloat(document.getElementById('amount_paid').value) || 0;
+            let balance = total - paid;
+            
+            document.getElementById('display_paid').textContent = '$' + paid.toFixed(2);
+            let balanceElement = document.getElementById('display_balance');
+            balanceElement.textContent = '$' + Math.abs(balance).toFixed(2);
+            
+            if (balance < 0) {
+                balanceElement.style.color = '#e74c3c';
+                balanceElement.textContent = '($' + Math.abs(balance).toFixed(2) + ')';
+            } else if (balance === 0) {
+                balanceElement.style.color = '#27ae60';
+            } else {
+                balanceElement.style.color = '#e67e22';
+            }
+        }
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            calculateTotal();
+            updateStatusPreview();
+            
+            // Add input event listeners
+            document.getElementById('material_cost').addEventListener('input', calculateTotal);
+            document.getElementById('labor_cost').addEventListener('input', calculateTotal);
+            document.getElementById('amount_paid').addEventListener('input', calculateBalance);
+            
+            // Shop selection change - load technicians
+            const shopSelect = document.getElementById('shopSelect');
+            if (shopSelect) {
+                // If editing existing job, load technicians for the selected shop
+                const currentShopId = shopSelect.value;
+                if (currentShopId) {
+                    loadTechnicians(currentShopId);
+                }
+                
+                shopSelect.addEventListener('change', function() {
+                    loadTechnicians(this.value);
+                });
+            }
+        });
+        
+        // Form validation
+        document.getElementById('repairJobForm').addEventListener('submit', function(e) {
+            let customerName = document.querySelector('input[name="customer_name"]').value.trim();
+            let deviceType = document.querySelector('select[name="device_type"]').value;
+            let issueDesc = document.querySelector('textarea[name="issue_description"]').value.trim();
+            let shopId = document.querySelector('select[name="shop"]').value;
+            let technicianId = document.querySelector('select[name="technician_id"]').value;
+            
+            if (!customerName) {
+                alert('Please enter customer name');
+                e.preventDefault();
+                return false;
+            }
+            
+            if (!deviceType) {
+                alert('Please select device type');
+                e.preventDefault();
+                return false;
+            }
+            
+            if (!issueDesc) {
+                alert('Please enter issue description');
+                e.preventDefault();
+                return false;
+            }
+            
+            if (!shopId) {
+                alert('Please select a shop branch');
+                e.preventDefault();
+                return false;
+            }
+            
+            if (!technicianId) {
+                alert('Please select a technician to assign this job');
+                e.preventDefault();
+                return false;
+            }
+            
+            return true;
+        });
+    </script>
+</body>
+</html>

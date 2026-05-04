@@ -86,6 +86,7 @@ INSTALLED_APPS = [
     'staff',
     'credit',
     'shops',
+    'workshop',
 ]
 
 MIDDLEWARE = [

@@ -15,6 +15,7 @@ urlpatterns = [
     path('staff/', include('staff.urls')),
     path('credit/', include('credit.urls')),
     path('shops/', include('shops.urls')),
+    path('workshop/', include('workshop.urls')), 
     
     # Authentication URLs - Use custom form
     path('login/', auth_views.LoginView.as_view(

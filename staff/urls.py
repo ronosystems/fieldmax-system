@@ -1,4 +1,3 @@
-# staff/urls.py
 from django.urls import path
 from . import views
 from .views import diagnostic_email
@@ -40,6 +39,15 @@ urlpatterns = [
     path('mpesa-agent-dashboard/', views.mpesa_agent_dashboard, name='mpesa_agent_dashboard'),
     path('security-dashboard/', views.security_dashboard, name='security_dashboard'),
     path('cleaner-dashboard/', views.cleaner_dashboard, name='cleaner_dashboard'),
+    
+    # ============================================
+    # TECHNICIAN DASHBOARD (NEW)
+    # ============================================
+    path('technician-dashboard/', views.technician_dashboard, name='technician_dashboard'),
+    path('technician-jobs/', views.technician_jobs, name='technician_jobs'),
+    path('technician-reports/', views.technician_reports, name='technician_reports'),
+    path('technician-performance/', views.technician_performance, name='technician_performance'),
+    path('technician-update-job/<int:job_id>/', views.technician_update_job_status, name='technician_update_job_status'),
     
     # ============================================
     # USER MANAGEMENT - All using <int:pk> consistently

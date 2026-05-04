@@ -529,7 +529,10 @@ def staff_dashboard(request):
     
     # Define group to dashboard mapping (PRIORITY ORDER)
     dashboard_routes = {
-        'Cashier': 'staff:cashier_dashboard',  # Cashier first! (most important)
+        'Technician': 'staff:technician_dashboard', 
+        'Senior Technician': 'staff:technician_dashboard', 
+        'Workshop Technician': 'staff:technician_dashboard', 
+        'Cashier': 'staff:cashier_dashboard',
         'Sales Agent': 'staff:sales_agent_dashboard',
         'Sales Manager': 'staff:sales_manager_dashboard',
         'Store Manager': 'staff:store_manager_dashboard',
@@ -542,7 +545,7 @@ def staff_dashboard(request):
         'M-Pesa Agent': 'staff:mpesa_agent_dashboard',
         'Cleaner': 'staff:cleaner_dashboard',
         'Assistant Manager': 'staff:supervisor_dashboard',
-        'Administrator': 'staff:admin_dashboard',  # Administrator last among groups
+        'Administrator': 'staff:admin_dashboard',
     }
     
     # Find matching dashboard based on group (FIRST MATCH WINS)
@@ -2128,6 +2131,499 @@ def product_lookup_api(request):
             'debug': {'error': str(e)}
         }, status=500)
 
+
+
+
+# ============================================
+# TECHNICIAN DASHBOARD - FIXED VERSION
+# ============================================
+@login_required
+@dashboard_for_role('Technician', 'Senior Technician', 'Workshop Technician')
+def technician_dashboard(request):
+    """Dashboard for workshop technicians - shows assigned repair jobs"""
+    from workshop.models import RepairJob
+    from shops.models import ShopBranch
+    from django.db.models import Sum, Count
+    from decimal import Decimal
+    from datetime import timedelta
+    
+    prepare_dashboard_messages(request, 'Technician')
+    
+    today = timezone.now().date()
+    
+    # Get technician's name from staff profile or user
+    try:
+        staff_profile = Staff.objects.get(user=request.user)
+        technician_name = staff_profile.user.get_full_name() or staff_profile.user.username
+        assigned_shop = staff_profile.assigned_shop
+    except:
+        technician_name = request.user.get_full_name() or request.user.username
+        assigned_shop = None
+    
+    # Get jobs assigned to this technician
+    jobs = RepairJob.objects.filter(technician_name=technician_name).select_related('shop')
+    
+    # Statistics
+    total_jobs = jobs.count()
+    pending_jobs = jobs.filter(status='pending').count()
+    in_progress_jobs = jobs.filter(status='in_progress').count()
+    completed_jobs = jobs.filter(status='completed').count()
+    picked_up_jobs = jobs.filter(status='picked_up').count()
+    
+    # Financial stats
+    total_revenue = jobs.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+    
+    # Lists for each status
+    pending_jobs_list = jobs.filter(status='pending').order_by('-created_at')
+    in_progress_jobs_list = jobs.filter(status='in_progress').order_by('-updated_at')
+    completed_jobs_list = jobs.filter(status='completed').order_by('-completed_at')
+    
+    context = {
+        'technician_name': technician_name,
+        'assigned_shop': assigned_shop,
+        'total_jobs': total_jobs,
+        'pending_jobs': pending_jobs,
+        'in_progress_jobs': in_progress_jobs,
+        'completed_jobs': completed_jobs,
+        'picked_up_jobs': picked_up_jobs,
+        'total_revenue': total_revenue,
+        'pending_jobs_list': pending_jobs_list,
+        'in_progress_jobs_list': in_progress_jobs_list,
+        'completed_jobs_list': completed_jobs_list,
+        'today': today,
+    }
+    
+    return render(request, 'staff/dashboards/technician_dashboard.html', context)
+
+
+# ============================================
+# TECHNICIAN JOB UPDATE (AJAX)
+# ============================================
+@login_required
+@dashboard_for_role('Technician', 'Senior Technician', 'Workshop Technician')
+def technician_update_job_status(request, job_id):
+    """Update job status via AJAX for technicians"""
+    from workshop.models import RepairJob
+    
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    
+    try:
+        job = get_object_or_404(RepairJob, id=job_id)
+        
+        # Get technician name
+        try:
+            staff_profile = Staff.objects.get(user=request.user)
+            technician_name = staff_profile.user.get_full_name() or staff_profile.user.username
+        except:
+            technician_name = request.user.get_full_name() or request.user.username
+        
+        # Check if job belongs to this technician
+        if job.technician_name != technician_name and not request.user.is_superuser:
+            return JsonResponse({'error': 'You are not assigned to this job'}, status=403)
+        
+        new_status = request.POST.get('status')
+        notes = request.POST.get('notes', '')
+        
+        if new_status in ['pending', 'in_progress', 'completed', 'picked_up']:
+            old_status = job.status
+            job.status = new_status
+            
+            if notes:
+                job.notes = notes
+            
+            # Auto-set timestamps
+            if new_status == 'completed' and not job.completed_at:
+                job.completed_at = timezone.now()
+            elif new_status == 'picked_up' and not job.picked_up_at:
+                job.picked_up_at = timezone.now()
+            
+            job.save()
+            
+            logger.info(f"Technician {technician_name} updated job #{job.id} from {old_status} to {new_status}")
+            
+            return JsonResponse({
+                'success': True,
+                'message': f'Job status updated to {job.get_status_display()}',
+                'new_status': new_status,
+                'status_display': job.get_status_display()
+            })
+        else:
+            return JsonResponse({'error': 'Invalid status'}, status=400)
+            
+    except Exception as e:
+        logger.error(f"Error updating job status: {str(e)}")
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+# ============================================
+# TECHNICIAN MY JOBS
+# ============================================
+# ============================================
+# TECHNICIAN MY JOBS - ONLY OWN JOBS
+# ============================================
+@login_required
+@dashboard_for_role('Technician', 'Senior Technician', 'Workshop Technician')
+def technician_jobs(request):
+    """List only jobs assigned to the logged-in technician"""
+    from workshop.models import RepairJob
+    from shops.models import ShopBranch
+    from django.core.paginator import Paginator
+    from decimal import Decimal
+    
+    prepare_dashboard_messages(request, 'Technician')
+    
+    # Get technician's name
+    try:
+        staff_profile = Staff.objects.get(user=request.user)
+        technician_name = staff_profile.user.get_full_name() or staff_profile.user.username
+    except:
+        technician_name = request.user.get_full_name() or request.user.username
+    
+    today = timezone.now().date()
+    
+    # Get ONLY jobs assigned to this technician
+    jobs = RepairJob.objects.filter(technician_name=technician_name).select_related('shop')
+    
+    # Search
+    search_query = request.GET.get('search', '')
+    if search_query:
+        jobs = jobs.filter(
+            Q(customer_name__icontains=search_query) |
+            Q(customer_phone__icontains=search_query) |
+            Q(device_type__icontains=search_query) |
+            Q(device_model__icontains=search_query)
+        )
+    
+    # Filter by status
+    status_filter = request.GET.get('status', '')
+    if status_filter:
+        jobs = jobs.filter(status=status_filter)
+    
+    # Filter by shop
+    shop_filter = request.GET.get('shop', '')
+    if shop_filter:
+        jobs = jobs.filter(shop_id=shop_filter)
+    
+    # Calculate stats
+    total_jobs = jobs.count()
+    pending_count = jobs.filter(status='pending').count()
+    in_progress_count = jobs.filter(status='in_progress').count()
+    completed_count = jobs.filter(status='completed').count()
+    picked_up_count = jobs.filter(status='picked_up').count()
+    total_revenue = jobs.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+    
+    # Pagination
+    paginator = Paginator(jobs, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    # Get shops for filter
+    shops = ShopBranch.objects.filter(is_active=True)
+    
+    context = {
+        'jobs': page_obj,
+        'technician_name': technician_name,
+        'search_query': search_query,
+        'status_filter': status_filter,
+        'shop_filter': shop_filter,
+        'shops': shops,
+        'total_jobs': total_jobs,
+        'pending_count': pending_count,
+        'in_progress_count': in_progress_count,
+        'completed_count': completed_count,
+        'picked_up_count': picked_up_count,
+        'total_revenue': total_revenue,
+        'today': today,
+    }
+    
+    return render(request, 'workshop/technician_jobs.html', context)
+
+
+# ============================================
+# TECHNICIAN PERFORMANCE
+# ============================================
+@login_required
+@dashboard_for_role('Technician', 'Senior Technician', 'Workshop Technician')
+def technician_performance(request):
+    """Performance report for technician"""
+    from workshop.models import RepairJob
+    from decimal import Decimal
+    from datetime import timedelta
+    
+    # Get technician name
+    try:
+        staff_profile = Staff.objects.get(user=request.user)
+        technician_name = staff_profile.user.get_full_name() or staff_profile.user.username
+    except:
+        technician_name = request.user.get_full_name() or request.user.username
+    
+    # Date range filters
+    today = timezone.now().date()
+    date_from = request.GET.get('date_from', (today - timedelta(days=30)).isoformat())
+    date_to = request.GET.get('date_to', today.isoformat())
+    
+    # Filter jobs by date range
+    jobs = RepairJob.objects.filter(
+        technician_name=technician_name,
+        created_at__date__gte=date_from,
+        created_at__date__lte=date_to
+    )
+    
+    # Statistics
+    total_jobs = jobs.count()
+    completed_jobs = jobs.filter(status='completed').count()
+    in_progress_jobs = jobs.filter(status='in_progress').count()
+    
+    # Financial performance
+    total_revenue = jobs.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+    total_material_cost = jobs.aggregate(total=Sum('material_cost'))['total'] or Decimal('0.00')
+    total_labor_cost = jobs.aggregate(total=Sum('labor_cost'))['total'] or Decimal('0.00')
+    net_profit = total_revenue - total_material_cost
+    
+    # Average job value
+    avg_job_value = total_revenue / total_jobs if total_jobs > 0 else 0
+    
+    # Average completion time
+    completed_jobs_list = jobs.filter(status='completed', completed_at__isnull=False)
+    avg_completion_hours = 0
+    if completed_jobs_list.exists():
+        total_hours = 0
+        for job in completed_jobs_list:
+            time_diff = job.completed_at - job.created_at
+            total_hours += time_diff.total_seconds() / 3600
+        avg_completion_hours = total_hours / completed_jobs_list.count()
+    
+    # Monthly performance
+    monthly_labels = []
+    monthly_jobs = []
+    monthly_revenue = []
+    
+    for i in range(5, -1, -1):
+        month_date = today.replace(day=1) - timedelta(days=30*i)
+        month_start = month_date.replace(day=1)
+        if month_date.month == 12:
+            month_end = month_date.replace(year=month_date.year+1, month=1, day=1) - timedelta(days=1)
+        else:
+            month_end = month_date.replace(month=month_date.month+1, day=1) - timedelta(days=1)
+        
+        monthly_labels.append(month_date.strftime('%b %Y'))
+        
+        month_jobs = jobs.filter(
+            created_at__date__gte=month_start,
+            created_at__date__lte=month_end
+        )
+        monthly_jobs.append(month_jobs.count())
+        monthly_revenue.append(float(month_jobs.aggregate(total=Sum('total_amount'))['total'] or 0))
+    
+    context = {
+        'technician_name': technician_name,
+        'date_from': date_from,
+        'date_to': date_to,
+        'total_jobs': total_jobs,
+        'completed_jobs': completed_jobs,
+        'in_progress_jobs': in_progress_jobs,
+        'total_revenue': total_revenue,
+        'total_material_cost': total_material_cost,
+        'total_labor_cost': total_labor_cost,
+        'net_profit': net_profit,
+        'avg_job_value': avg_job_value,
+        'avg_completion_hours': round(avg_completion_hours, 1),
+        'monthly_labels': monthly_labels,
+        'monthly_jobs': monthly_jobs,
+        'monthly_revenue': monthly_revenue,
+        'today': today,
+    }
+    
+    return render(request, 'staff/dashboards/technician_performance.html', context)
+
+
+
+
+
+
+# ============================================
+# TECHNICIAN REPORTS - ONLY OWN DATA
+# ============================================
+@login_required
+@dashboard_for_role('Technician', 'Senior Technician', 'Workshop Technician')
+def technician_reports(request):
+    """Reports for technician - shows only their own data"""
+    from workshop.models import RepairJob
+    from django.db.models import Sum, Count, Q
+    from decimal import Decimal
+    from datetime import timedelta
+    import json
+    
+    today = timezone.now().date()
+    
+    # Get technician's name
+    try:
+        staff_profile = Staff.objects.get(user=request.user)
+        technician_name = staff_profile.user.get_full_name() or staff_profile.user.username
+    except:
+        technician_name = request.user.get_full_name() or request.user.username
+    
+    # Date range filters
+    date_from = request.GET.get('date_from', (today - timedelta(days=30)).isoformat())
+    date_to = request.GET.get('date_to', today.isoformat())
+    
+    # Get ONLY jobs assigned to this technician
+    jobs = RepairJob.objects.filter(
+        technician_name=technician_name,
+        created_at__date__gte=date_from,
+        created_at__date__lte=date_to
+    )
+    
+    # ============================================
+    # STATISTICS CARDS
+    # ============================================
+    total_jobs = jobs.count()
+    completed_jobs = jobs.filter(status='completed').count()
+    in_progress_jobs = jobs.filter(status='in_progress').count()
+    pending_jobs = jobs.filter(status='pending').count()
+    picked_up_jobs = jobs.filter(status='picked_up').count()
+    
+    # Financial stats
+    total_revenue = jobs.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+    total_paid = jobs.aggregate(total=Sum('amount_paid'))['total'] or Decimal('0.00')
+    total_material_cost = jobs.aggregate(total=Sum('material_cost'))['total'] or Decimal('0.00')
+    total_labor_cost = jobs.aggregate(total=Sum('labor_cost'))['total'] or Decimal('0.00')
+    net_profit = total_revenue - total_material_cost
+    profit_margin = (net_profit / total_revenue * 100) if total_revenue > 0 else 0
+    avg_job_value = total_revenue / total_jobs if total_jobs > 0 else 0
+    
+    # ============================================
+    # CHART DATA - Last 30 days (only technician's jobs)
+    # ============================================
+    chart_labels = []
+    revenue_data = []
+    jobs_data = []
+    
+    for i in range(29, -1, -1):
+        date = today - timedelta(days=i)
+        chart_labels.append(date.strftime('%d %b'))
+        
+        day_jobs = jobs.filter(created_at__date=date)
+        day_revenue = day_jobs.aggregate(total=Sum('total_amount'))['total'] or 0
+        revenue_data.append(float(day_revenue))
+        jobs_data.append(day_jobs.count())
+    
+    # ============================================
+    # STATUS DISTRIBUTION
+    # ============================================
+    status_data = {
+        'pending': pending_jobs,
+        'in_progress': in_progress_jobs,
+        'completed': completed_jobs,
+        'picked_up': picked_up_jobs,
+    }
+    
+    # ============================================
+    # MONTHLY PERFORMANCE (Last 6 months)
+    # ============================================
+    monthly_labels = []
+    monthly_jobs = []
+    monthly_revenue = []
+    
+    for i in range(5, -1, -1):
+        month_date = today.replace(day=1) - timedelta(days=30*i)
+        month_start = month_date.replace(day=1)
+        if month_date.month == 12:
+            month_end = month_date.replace(year=month_date.year+1, month=1, day=1) - timedelta(days=1)
+        else:
+            month_end = month_date.replace(month=month_date.month+1, day=1) - timedelta(days=1)
+        
+        monthly_labels.append(month_date.strftime('%b %Y'))
+        
+        month_jobs = jobs.filter(
+            created_at__date__gte=month_start,
+            created_at__date__lte=month_end
+        )
+        monthly_jobs.append(month_jobs.count())
+        monthly_revenue.append(float(month_jobs.aggregate(total=Sum('total_amount'))['total'] or 0))
+    
+    # ============================================
+    # DEVICE TYPE BREAKDOWN
+    # ============================================
+    device_stats = jobs.values('device_type').annotate(
+        count=Count('id'),
+        revenue=Sum('total_amount')
+    ).order_by('-count')[:5]
+    
+    device_labels = [d['device_type'] for d in device_stats]
+    device_counts = [d['count'] for d in device_stats]
+    device_revenue = [float(d['revenue'] or 0) for d in device_stats]
+    
+    # ============================================
+    # RECENT JOBS
+    # ============================================
+    recent_jobs = jobs.order_by('-created_at')[:10]
+    
+    # ============================================
+    # PERFORMANCE METRICS
+    # ============================================
+    # Average completion time
+    completed_with_time = jobs.filter(status='completed', completed_at__isnull=False)
+    avg_completion_hours = 0
+    if completed_with_time.exists():
+        total_hours = 0
+        for job in completed_with_time:
+            time_diff = job.completed_at - job.created_at
+            total_hours += time_diff.total_seconds() / 3600
+        avg_completion_hours = total_hours / completed_with_time.count()
+    
+    # Completion rate
+    completion_rate = (completed_jobs / total_jobs * 100) if total_jobs > 0 else 0
+    
+    # Daily average
+    days_with_jobs = jobs.dates('created_at', 'day').count()
+    daily_avg = total_jobs / days_with_jobs if days_with_jobs > 0 else 0
+    
+    context = {
+        'technician_name': technician_name,
+        'date_from': date_from,
+        'date_to': date_to,
+        'today': today,
+        
+        # Stats
+        'total_jobs': total_jobs,
+        'completed_jobs': completed_jobs,
+        'in_progress_jobs': in_progress_jobs,
+        'pending_jobs': pending_jobs,
+        'picked_up_jobs': picked_up_jobs,
+        
+        # Financial
+        'total_revenue': total_revenue,
+        'total_paid': total_paid,
+        'total_material_cost': total_material_cost,
+        'total_labor_cost': total_labor_cost,
+        'net_profit': net_profit,
+        'profit_margin': profit_margin,
+        'avg_job_value': avg_job_value,
+        
+        # Performance metrics
+        'avg_completion_hours': round(avg_completion_hours, 1),
+        'completion_rate': round(completion_rate, 1),
+        'daily_avg': round(daily_avg, 1),
+        
+        # Chart data
+        'chart_labels': json.dumps(chart_labels),
+        'revenue_data': json.dumps(revenue_data),
+        'jobs_data': json.dumps(jobs_data),
+        'status_data': json.dumps(status_data),
+        'monthly_labels': json.dumps(monthly_labels),
+        'monthly_jobs': monthly_jobs,
+        'monthly_revenue': monthly_revenue,
+        'device_labels': json.dumps(device_labels),
+        'device_counts': device_counts,
+        'device_revenue': device_revenue,
+        
+        # Recent jobs
+        'recent_jobs': recent_jobs,
+    }
+    
+    return render(request, 'workshop/technician_reports.html', context)
 
 
 

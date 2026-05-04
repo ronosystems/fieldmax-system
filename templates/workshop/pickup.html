@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Customer Pickup - Workshop Pro</title>
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f0f2f5;
+            overflow-x: hidden;
+        }
+        
+        /* Layout */
+        .app-container {
+            display: flex;
+            min-height: 100vh;
+        }
+        
+        /* Sidebar */
+        .sidebar {
+            width: 280px;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: white;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+            transition: all 0.3s;
+            z-index: 100;
+        }
+        
+        .sidebar-header {
+            padding: 25px 20px;
+            background: #28a745;
+            text-align: center;
+            border-bottom: 1px solid rgb(0, 217, 255);
+        }
+        
+        .sidebar-header h2 {
+            font-size: 22px;
+            margin-bottom: 5px;
+        }
+        
+        .sidebar-header p {
+            font-size: 12px;
+            opacity: 0.7;
+        }
+        
+        .nav-menu {
+            list-style: none;
+            padding: 20px 0;
+        }
+        
+        .nav-item {
+            margin-bottom: 5px;
+        }
+        
+        .nav-link {
+            display: flex;
+            align-items: center;
+            padding: 12px 20px;
+            color: rgba(255,255,255,0.8);
+            text-decoration: none;
+            transition: all 0.3s;
+            gap: 12px;
+        }
+        
+        .nav-link:hover {
+            background: rgba(255,255,255,0.1);
+            color: white;
+            padding-left: 25px;
+        }
+        
+        .nav-link.active {
+            background: #667eea;
+            color: white;
+            border-left: 3px solid #fff;
+        }
+        
+        .nav-icon {
+            font-size: 20px;
+            width: 24px;
+        }
+        
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            margin-left: 280px;
+            padding: 20px;
+        }
+        
+        /* Top Bar */
+        .top-bar {
+            background: white;
+            padding: 15px 25px;
+            border-radius: 12px;
+            margin-bottom: 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        
+        .page-title h1 {
+            font-size: 24px;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+        
+        .page-title p {
+            color: #7f8c8d;
+            font-size: 14px;
+        }
+        
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .user-name {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        
+        /* Pickup Container */
+        .pickup-container {
+            max-width: 700px;
+            margin: 0 auto;
+        }
+        
+        /* Search Card */
+        .search-card {
+            background: white;
+            border-radius: 16px;
+            padding: 25px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 25px;
+        }
+        
+        .search-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .search-input-group {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .search-input-group input {
+            flex: 1;
+            padding: 12px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+        
+        .search-input-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .search-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .search-btn:hover {
+            background: #5a67d8;
+            transform: translateY(-2px);
+        }
+        
+        /* Job Details Card */
+        .job-card {
+            background: white;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            display: none;
+        }
+        
+        .job-card-header {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .job-card-header h2 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+        
+        .job-card-header p {
+            opacity: 0.9;
+        }
+        
+        .job-card-body {
+            padding: 25px;
+        }
+        
+        .info-section {
+            margin-bottom: 20px;
+            border-bottom: 1px solid #e0e0e0;
+            padding-bottom: 15px;
+        }
+        
+        .info-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #667eea;
+            text-transform: uppercase;
+            margin-bottom: 12px;
+        }
+        
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            font-size: 14px;
+        }
+        
+        .info-label {
+            color: #7f8c8d;
+            font-weight: 500;
+        }
+        
+        .info-value {
+            color: #2c3e50;
+            font-weight: 600;
+            text-align: right;
+        }
+        
+        .balance-row {
+            background: #fff3cd;
+            padding: 10px 15px;
+            border-radius: 10px;
+            margin-top: 10px;
+        }
+        
+        .balance-row .info-label,
+        .balance-row .info-value {
+            color: #856404;
+        }
+        
+        .warranty-badge {
+            display: inline-block;
+            background: #d1ecf1;
+            color: #0c5460;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        /* Handover Button */
+        .handover-btn {
+            width: 100%;
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            border: none;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 10px;
+        }
+        
+        .handover-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(40, 167, 69, 0.3);
+        }
+        
+        .handover-btn:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        /* Alert Messages */
+        .alert-message {
+            padding: 12px 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .alert-info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        
+        /* Loading Spinner */
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .spinner {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Success Animation */
+        .success-animation {
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .checkmark {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: #28a745;
+            margin: 0 auto 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .checkmark i {
+            font-size: 40px;
+            color: white;
+        }
+        
+        /* Floating Admin Button */
+        .floating-admin-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.8rem;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            transition: all 0.3s;
+            z-index: 1050;
+            text-decoration: none;
+            animation: pulse 2s infinite;
+        }
+        
+        .floating-admin-btn:hover {
+            transform: scale(1.1);
+            background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+            color: white;
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+        }
+        
+        .floating-admin-btn .admin-btn-text {
+            display: none;
+            font-size: 12px;
+            margin-left: 5px;
+            position: absolute;
+            right: 70px;
+            background: #2c3e50;
+            padding: 5px 10px;
+            border-radius: 20px;
+            white-space: nowrap;
+        }
+        
+        .floating-admin-btn:hover .admin-btn-text {
+            display: inline;
+        }
+        /* Website Button Style */
+        .website-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 20px;
+            padding: 12px 20px;
+            background: #28a745;
+            color: white;
+            text-decoration: none;
+            border-radius: 10px;
+            font-weight: 600;
+            transition: all 0.3s;
+            gap: 10px;
+        }
+        
+        .website-btn:hover {
+            background: #218838;
+            transform: translateY(-2px);
+            color: white;
+        }
+
+
+        /* Pulse animation */
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(102, 126, 234, 0.4); }
+            70% { box-shadow: 0 0 0 15px rgba(102, 126, 234, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(102, 126, 234, 0); }
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+            
+            .main-content {
+                margin-left: 0;
+            }
+            
+            .search-input-group {
+                flex-direction: column;
+            }
+            
+            .floating-admin-btn {
+                width: 50px;
+                height: 50px;
+                font-size: 1.4rem;
+                bottom: 20px;
+                right: 20px;
+            }
+            
+            .floating-admin-btn .admin-btn-text {
+                display: none !important;
+            }
+        }
+        
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h2>🛠️FIELDMAX WORKSHOP</h2>
+                <p>Repair Management System</p>
+            </div>
+
+            <!-- WEBSITE PAGE BUTTON - MOVED INSIDE SIDEBAR -->
+            <a href="{% url 'website:home' %}" class="website-btn">
+                <i class="fas fa-globe"></i> 
+                <span>WEBSITE PAGE</span>
+                <i class="fas fa-external-link-alt"></i>
+            </a>
+
+            <ul class="nav-menu">
+                <li class="nav-item">
+                    <a href="{% url 'workshop:dashboard' %}" class="nav-link">
+                        <span class="nav-icon">📊</span>
+                        <span>Dashboard</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="{% url 'workshop:job_list' %}" class="nav-link">
+                        <span class="nav-icon">📋</span>
+                        <span>All Repairs</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="{% url 'workshop:job_create' %}" class="nav-link">
+                        <span class="nav-icon">➕</span>
+                        <span>New Repair</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="{% url 'workshop:pickup_page' %}" class="nav-link active">
+                        <span class="nav-icon">📦</span>
+                        <span>Customer Pickup</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="{% url 'workshop:reports' %}" class="nav-link">
+                        <span class="nav-icon">📈</span>
+                        <span>Reports</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Top Bar -->
+            <div class="top-bar">
+                <div class="page-title">
+                    <h1><i class="fas fa-box"></i> Customer Pickup</h1>
+                    <p>Enter Job ID to handover repaired device to customer</p>
+                </div>
+                <div class="user-info">
+                    <span class="user-name">👋 {{ request.user.get_full_name|default:request.user.username }}</span>
+                </div>
+            </div>
+
+            <!-- Alert Messages -->
+            <div id="alertMessage" class="alert-message"></div>
+            
+            <!-- Search Card -->
+            <div class="search-card">
+                <div class="search-title">
+                    <i class="fas fa-search"></i> Find Repair Job
+                </div>
+                <div class="search-input-group">
+                    <input type="text" id="jobIdInput" placeholder="Enter Job ID (e.g., 123)" autocomplete="off">
+                    <button class="search-btn" onclick="searchJob()">
+                        <i class="fas fa-search"></i> Search
+                    </button>
+                </div>
+                <div class="loading" id="searchLoading">
+                    <div class="spinner"></div>
+                    <p class="mt-2">Searching...</p>
+                </div>
+            </div>
+            
+            <!-- Job Details Card (Hidden by default) -->
+            <div id="jobCard" class="job-card">
+                <div class="job-card-header">
+                    <h2><i class="fas fa-check-circle"></i> Job Found</h2>
+                    <p>Ready for pickup</p>
+                </div>
+                <div class="job-card-body">
+                    <div class="info-section">
+                        <div class="info-title"><i class="fas fa-user"></i> Customer Information</div>
+                        <div class="info-row">
+                            <span class="info-label">Job ID:</span>
+                            <span class="info-value" id="jobId">-</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Customer Name:</span>
+                            <span class="info-value" id="customerName">-</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Phone Number:</span>
+                            <span class="info-value" id="customerPhone">-</span>
+                        </div>
+                    </div>
+                    
+                    <div class="info-section">
+                        <div class="info-title"><i class="fas fa-mobile-alt"></i> Device Information</div>
+                        <div class="info-row">
+                            <span class="info-label">Device Type:</span>
+                            <span class="info-value" id="deviceType">-</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Device Model:</span>
+                            <span class="info-value" id="deviceModel">-</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Issue Description:</span>
+                            <span class="info-value" id="issueDescription">-</span>
+                        </div>
+                    </div>
+                    
+                    <div class="info-section">
+                        <div class="info-title"><i class="fas fa-tools"></i> Repair Details</div>
+                        <div class="info-row">
+                            <span class="info-label">Shop Branch:</span>
+                            <span class="info-value" id="shopName">-</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Technician:</span>
+                            <span class="info-value" id="technicianName">-</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Completed Date:</span>
+                            <span class="info-value" id="completedDate">-</span>
+                        </div>
+                    </div>
+                    
+                    <div class="info-section">
+                        <div class="info-title"><i class="fas fa-money-bill-wave"></i> Payment Summary</div>
+                        <div class="info-row">
+                            <span class="info-label">Total Amount:</span>
+                            <span class="info-value" id="totalAmount">-</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Amount Paid:</span>
+                            <span class="info-value" id="amountPaid">-</span>
+                        </div>
+                        <div class="info-row balance-row" id="balanceRow">
+                            <span class="info-label">Remaining Balance:</span>
+                            <span class="info-value" id="remainingBalance">-</span>
+                        </div>
+                    </div>
+                    
+                    <div class="info-section">
+                        <div class="info-title"><i class="fas fa-shield-alt"></i> Warranty</div>
+                        <div class="info-row">
+                            <span class="info-label">Warranty Period:</span>
+                            <span class="info-value" id="warranty">-</span>
+                        </div>
+                    </div>
+                    
+                    <button class="handover-btn" onclick="processPickup()">
+                        <i class="fas fa-hand-peace"></i> Handover to Customer
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Success Card (Hidden by default) -->
+            <div id="successCard" class="job-card" style="display: none;">
+                <div class="job-card-header" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
+                    <div class="success-animation">
+                        <div class="checkmark">
+                            <i class="fas fa-check"></i>
+                        </div>
+                        <h2>Handover Successful!</h2>
+                        <p>The device has been handed over to the customer</p>
+                    </div>
+                </div>
+                <div class="job-card-body">
+                    <div class="alert alert-success text-center" style="background: #d4edda; color: #155724; border: 1px solid #c3e6cb; border-radius: 10px; padding: 15px;">
+                        <i class="fas fa-check-circle"></i> Job status updated to "Picked Up"
+                    </div>
+                    <button class="handover-btn" onclick="resetForm()" style="background: #667eea;">
+                        <i class="fas fa-search"></i> Search Another Job
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Admin Button - Only for Superusers/Administrators -->
+    {% if request.user.is_superuser %}
+    <a href="{% url 'staff:staff_dashboard' %}" 
+       class="floating-admin-btn" 
+       id="adminFloatingBtn"
+       data-bs-toggle="tooltip" 
+       data-bs-placement="left" 
+       title="Back to Admin Dashboard">
+        <i class="fas fa-crown"></i>
+        <span class="admin-btn-text">Admin Dashboard</span>
+    </a>
+    {% endif %}
+
+    <!-- Scripts -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // Initialize Bootstrap tooltips
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl)
+        });
+        
+        let currentJob = null;
+        
+        // CSRF Token setup
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+        
+        const csrftoken = getCookie('csrftoken');
+        
+        // Search for job
+        async function searchJob() {
+            const jobId = document.getElementById('jobIdInput').value.trim();
+            
+            if (!jobId) {
+                showAlert('Please enter a Job ID', 'error');
+                return;
+            }
+            
+            // Show loading
+            document.getElementById('searchLoading').style.display = 'block';
+            document.getElementById('jobCard').style.display = 'none';
+            document.getElementById('successCard').style.display = 'none';
+            hideAlert();
+            
+            try {
+                const response = await fetch(`/workshop/search-job-for-pickup/?job_id=${jobId}`);
+                const data = await response.json();
+                
+                document.getElementById('searchLoading').style.display = 'none';
+                
+                if (data.success) {
+                    currentJob = data.job;
+                    displayJobDetails(currentJob);
+                    document.getElementById('jobCard').style.display = 'block';
+                } else {
+                    showAlert(data.error, 'error');
+                }
+            } catch (error) {
+                document.getElementById('searchLoading').style.display = 'none';
+                showAlert('An error occurred. Please try again.', 'error');
+                console.error('Error:', error);
+            }
+        }
+        
+        // Display job details
+        function displayJobDetails(job) {
+            document.getElementById('jobId').textContent = `#${job.id}`;
+            document.getElementById('customerName').textContent = job.customer_name;
+            document.getElementById('customerPhone').textContent = job.customer_phone;
+            document.getElementById('deviceType').textContent = job.device_type;
+            document.getElementById('deviceModel').textContent = job.device_model;
+            document.getElementById('issueDescription').textContent = job.issue_description.substring(0, 100) + (job.issue_description.length > 100 ? '...' : '');
+            document.getElementById('shopName').textContent = job.shop_name;
+            document.getElementById('technicianName').textContent = job.technician_name;
+            document.getElementById('completedDate').textContent = job.completed_at;
+            document.getElementById('totalAmount').textContent = `$${parseFloat(job.total_amount).toFixed(2)}`;
+            document.getElementById('amountPaid').textContent = `$${parseFloat(job.amount_paid).toFixed(2)}`;
+            
+            const remainingBalance = parseFloat(job.remaining_balance);
+            const balanceElement = document.getElementById('remainingBalance');
+            const balanceRow = document.getElementById('balanceRow');
+            
+            if (remainingBalance > 0) {
+                balanceElement.textContent = `$${remainingBalance.toFixed(2)}`;
+                balanceElement.style.color = '#e74c3c';
+                balanceRow.style.display = 'flex';
+            } else {
+                balanceElement.textContent = `$0.00 - Fully Paid`;
+                balanceElement.style.color = '#27ae60';
+                balanceRow.style.display = 'flex';
+            }
+            
+            document.getElementById('warranty').innerHTML = `<span class="warranty-badge"><i class="fas fa-calendar-alt"></i> ${job.warranty_days} days warranty</span>`;
+        }
+        
+        // Process pickup
+        async function processPickup() {
+            if (!currentJob) return;
+            
+            const confirmMessage = `Are you sure you want to handover the device to ${currentJob.customer_name}?\n\nThis will mark the job as "Picked Up" and close it.`;
+            
+            if (!confirm(confirmMessage)) return;
+            
+            // Disable button and show loading
+            const handoverBtn = document.querySelector('.handover-btn');
+            const originalText = handoverBtn.innerHTML;
+            handoverBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+            handoverBtn.disabled = true;
+            
+            try {
+                const response = await fetch(`/workshop/process-pickup/${currentJob.id}/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken,
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById('jobCard').style.display = 'none';
+                    document.getElementById('successCard').style.display = 'block';
+                    showAlert(data.message, 'success');
+                } else {
+                    showAlert(data.error, 'error');
+                    handoverBtn.innerHTML = originalText;
+                    handoverBtn.disabled = false;
+                }
+            } catch (error) {
+                showAlert('An error occurred. Please try again.', 'error');
+                handoverBtn.innerHTML = originalText;
+                handoverBtn.disabled = false;
+                console.error('Error:', error);
+            }
+        }
+        
+        // Reset form for new search
+        function resetForm() {
+            document.getElementById('jobIdInput').value = '';
+            document.getElementById('jobCard').style.display = 'none';
+            document.getElementById('successCard').style.display = 'none';
+            document.getElementById('searchLoading').style.display = 'none';
+            hideAlert();
+            currentJob = null;
+            document.getElementById('jobIdInput').focus();
+        }
+        
+        // Show alert message
+        function showAlert(message, type) {
+            const alertDiv = document.getElementById('alertMessage');
+            alertDiv.className = `alert-message alert-${type}`;
+            alertDiv.innerHTML = `<i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'}"></i> ${message}`;
+            alertDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                if (type !== 'success') {
+                    alertDiv.style.display = 'none';
+                }
+            }, 5000);
+        }
+        
+        // Hide alert
+        function hideAlert() {
+            const alertDiv = document.getElementById('alertMessage');
+            alertDiv.style.display = 'none';
+        }
+        
+        // Enter key to search
+        document.getElementById('jobIdInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                searchJob();
+            }
+        });
+        
+        // Auto-focus on page load
+        document.getElementById('jobIdInput').focus();
+    </script>
+</body>
+</html>

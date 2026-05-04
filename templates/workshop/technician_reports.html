@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Reports - Technician Dashboard</title>
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f0f2f5;
+            overflow-x: hidden;
+        }
+        
+        /* Layout */
+        .app-container {
+            display: flex;
+            min-height: 100vh;
+        }
+        
+        /* Sidebar */
+        .sidebar {
+            width: 280px;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: white;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+            transition: all 0.3s;
+            z-index: 100;
+        }
+        
+        .sidebar-header {
+            padding: 25px 20px;
+            background: #28a745;
+            text-align: center;
+            border-bottom: 1px solid rgb(0, 217, 255);
+        }
+        
+        .sidebar-header h2 {
+            font-size: 22px;
+            margin-bottom: 5px;
+        }
+        
+        .sidebar-header p {
+            font-size: 12px;
+            opacity: 0.7;
+        }
+        
+        .nav-menu {
+            list-style: none;
+            padding: 20px 0;
+        }
+        
+        .nav-item {
+            margin-bottom: 5px;
+        }
+        
+        .nav-link {
+            display: flex;
+            align-items: center;
+            padding: 12px 20px;
+            color: rgba(255,255,255,0.8);
+            text-decoration: none;
+            transition: all 0.3s;
+            gap: 12px;
+        }
+        
+        .nav-link:hover {
+            background: rgba(255,255,255,0.1);
+            color: white;
+            padding-left: 25px;
+        }
+        
+        .nav-link.active {
+            background: #667eea;
+            color: white;
+            border-left: 3px solid #fff;
+        }
+        
+        .nav-icon {
+            font-size: 20px;
+            width: 24px;
+        }
+        
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            margin-left: 280px;
+            padding: 20px;
+        }
+        
+        /* Top Bar */
+        .top-bar {
+            background: white;
+            padding: 15px 25px;
+            border-radius: 12px;
+            margin-bottom: 25px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        
+        .page-title h1 {
+            font-size: 24px;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+        
+        .page-title p {
+            color: #7f8c8d;
+            font-size: 14px;
+        }
+        
+        .btn-print {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        
+        /* Filter Bar */
+        .filter-bar {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 25px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .filter-form {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: flex-end;
+        }
+        
+        .filter-group {
+            flex: 1;
+            min-width: 150px;
+        }
+        
+        .filter-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #555;
+            font-size: 12px;
+        }
+        
+        .filter-group input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        
+        .btn-filter {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        
+        .stat-card h3 {
+            font-size: 14px;
+            color: #7f8c8d;
+            margin-bottom: 10px;
+        }
+        
+        .stat-number {
+            font-size: 28px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        
+        .stat-positive {
+            color: #27ae60;
+        }
+        
+        /* Two Columns */
+        .two-columns {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 25px;
+            margin-bottom: 25px;
+        }
+        
+        /* Chart Containers */
+        .chart-container {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .chart-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #2c3e50;
+            border-left: 4px solid #667eea;
+            padding-left: 12px;
+        }
+        
+        canvas {
+            max-height: 250px;
+            width: 100%;
+        }
+        
+
+        /* Website Button Style */
+        .website-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 20px;
+            padding: 12px 20px;
+            background: #28a745;
+            color: white;
+            text-decoration: none;
+            border-radius: 10px;
+            font-weight: 600;
+            transition: all 0.3s;
+            gap: 10px;
+        }
+        
+        .website-btn:hover {
+            background: #218838;
+            transform: translateY(-2px);
+            color: white;
+        }
+
+        /* Tables */
+        .data-table {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 25px;
+        }
+        
+        .table-header {
+            padding: 15px 20px;
+            background: #f8f9fa;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        
+        .table-header h3 {
+            margin: 0;
+            font-size: 18px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #555;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        
+        .status-pending { background: #fff3cd; color: #856404; }
+        .status-in_progress { background: #d1ecf1; color: #0c5460; }
+        .status-completed { background: #d4edda; color: #155724; }
+        .status-picked_up { background: #e2e3e5; color: #383d41; }
+        
+        .btn-link {
+            color: #667eea;
+            text-decoration: none;
+        }
+        
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+            .main-content {
+                margin-left: 0;
+            }
+            .two-columns {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        @media print {
+            .sidebar, .top-bar, .filter-bar, .btn-print, .no-print {
+                display: none;
+            }
+            .main-content {
+                margin-left: 0;
+                padding: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h2>🔧 FSL WORKSHOP</h2>
+                <p>Technician Portal</p>
+            </div>
+
+            <!-- WEBSITE PAGE BUTTON - MOVED INSIDE SIDEBAR -->
+            <a href="{% url 'website:home' %}" class="website-btn">
+                <i class="fas fa-globe"></i> 
+                <span>WEBSITE PAGE</span>
+                <i class="fas fa-external-link-alt"></i>
+            </a>
+
+            <ul class="nav-menu">
+                <li class="nav-item">
+                    <a href="{% url 'staff:technician_dashboard' %}" class="nav-link">
+                        <span class="nav-icon">📊</span>
+                        <span>Dashboard</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="{% url 'staff:technician_jobs' %}" class="nav-link">
+                        <span class="nav-icon">📋</span>
+                        <span>My Jobs</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="{% url 'staff:technician_reports' %}" class="nav-link active">
+                        <span class="nav-icon">📈</span>
+                        <span>My Reports</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Top Bar -->
+            <div class="top-bar">
+                <div class="page-title">
+                    <h1>📊 My Performance Reports</h1>
+                    <p>Technician: <strong>{{ technician_name }}</strong></p>
+                </div>
+                <button onclick="window.print()" class="btn-print no-print">
+                    <i class="fas fa-print"></i> Print Report
+                </button>
+            </div>
+
+            <!-- Date Filter -->
+            <div class="filter-bar no-print">
+                <form method="get" class="filter-form">
+                    <div class="filter-group">
+                        <label>📅 From Date</label>
+                        <input type="date" name="date_from" value="{{ date_from }}">
+                    </div>
+                    <div class="filter-group">
+                        <label>📅 To Date</label>
+                        <input type="date" name="date_to" value="{{ date_to }}">
+                    </div>
+                    <div class="filter-group">
+                        <button type="submit" class="btn-filter">🔍 Generate Report</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Statistics Overview -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3><i class="fas fa-tasks"></i> Total Jobs</h3>
+                    <div class="stat-number">{{ total_jobs }}</div>
+                </div>
+                <div class="stat-card">
+                    <h3><i class="fas fa-check-circle"></i> Completed</h3>
+                    <div class="stat-number stat-positive">{{ completed_jobs }}</div>
+                </div>
+                <div class="stat-card">
+                    <h3><i class="fas fa-chart-line"></i> Total Revenue</h3>
+                    <div class="stat-number stat-positive">${{ total_revenue|floatformat:2 }}</div>
+                </div>
+                <div class="stat-card">
+                    <h3><i class="fas fa-percent"></i> Completion Rate</h3>
+                    <div class="stat-number stat-positive">{{ completion_rate }}%</div>
+                </div>
+            </div>
+
+            <!-- Financial Stats -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3><i class="fas fa-box"></i> Material Cost</h3>
+                    <div class="stat-number">${{ total_material_cost|floatformat:2 }}</div>
+                </div>
+                <div class="stat-card">
+                    <h3><i class="fas fa-wrench"></i> Labor Cost</h3>
+                    <div class="stat-number">${{ total_labor_cost|floatformat:2 }}</div>
+                </div>
+                <div class="stat-card">
+                    <h3><i class="fas fa-money-bill"></i> Net Profit</h3>
+                    <div class="stat-number stat-positive">${{ net_profit|floatformat:2 }}</div>
+                </div>
+                <div class="stat-card">
+                    <h3><i class="fas fa-hourglass-half"></i> Avg Completion</h3>
+                    <div class="stat-number">{{ avg_completion_hours }} hrs</div>
+                </div>
+            </div>
+
+            <!-- Charts -->
+            <div class="two-columns">
+                <div class="chart-container">
+                    <div class="chart-title">📈 Daily Revenue (Last 30 Days)</div>
+                    <canvas id="revenueChart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-title">📊 Jobs Completed (Last 30 Days)</div>
+                    <canvas id="jobsChart"></canvas>
+                </div>
+            </div>
+
+            <div class="two-columns">
+                <div class="chart-container">
+                    <div class="chart-title">🥧 Jobs by Status</div>
+                    <canvas id="statusChart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-title">📱 Top Device Types</div>
+                    <canvas id="deviceChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Monthly Performance -->
+            <div class="data-table">
+                <div class="table-header">
+                    <h3>📅 Monthly Performance</h3>
+                </div>
+                <div style="overflow-x: auto;">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Month</th>
+                                <th>Jobs Completed</th>
+                                <th>Revenue</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for month in monthly_labels %}
+                            <tr>
+                                <td>{{ month }}</td>
+                                <td>{{ monthly_jobs|slice:forloop.counter0|first }}</td>
+                                <td class="stat-positive">${{ monthly_revenue|slice:forloop.counter0|first|floatformat:2 }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Device Breakdown -->
+            <div class="data-table">
+                <div class="table-header">
+                    <h3>📱 Device Type Breakdown</h3>
+                </div>
+                <div style="overflow-x: auto;">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Device Type</th>
+                                <th>Jobs Repaired</th>
+                                <th>Revenue Generated</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for device in device_labels|safe %}
+                            <tr>
+                                <td><strong>{{ device }}</strong></th>
+                                <td>{{ device_counts|slice:forloop.counter0|first }}</td>
+                                <td class="stat-positive">${{ device_revenue|slice:forloop.counter0|first|floatformat:2 }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="3" class="text-center">No device data available</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Recent Jobs -->
+            <div class="data-table">
+                <div class="table-header">
+                    <h3>📋 Recent Jobs</h3>
+                </div>
+                <div style="overflow-x: auto;">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Job ID</th>
+                                <th>Customer</th>
+                                <th>Device</th>
+                                <th>Status</th>
+                                <th>Amount</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for job in recent_jobs %}
+                            <tr>
+                                <td>#{{ job.id }}</td>
+                                <td>{{ job.customer_name }}</td>
+                                <td>{{ job.device_type }} {{ job.device_model }}</td>
+                                <td>
+                                    <span class="status-badge status-{{ job.status }}">
+                                        {{ job.get_status_display }}
+                                    </span>
+                                </td>
+                                <td class="stat-positive">${{ job.total_amount|floatformat:2 }}</td>
+                                <td>{{ job.created_at|date:"Y-m-d" }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="6" class="text-center">No jobs found</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Performance Summary -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3><i class="fas fa-chart-line"></i> Average Job Value</h3>
+                    <div class="stat-number stat-positive">${{ avg_job_value|floatformat:2 }}</div>
+                </div>
+                <div class="stat-card">
+                    <h3><i class="fas fa-percent"></i> Profit Margin</h3>
+                    <div class="stat-number stat-positive">{{ profit_margin|floatformat:1 }}%</div>
+                </div>
+                <div class="stat-card">
+                    <h3><i class="fas fa-calendar-day"></i> Daily Average</h3>
+                    <div class="stat-number">{{ daily_avg }} jobs/day</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Revenue Chart
+        const revenueCtx = document.getElementById('revenueChart').getContext('2d');
+        new Chart(revenueCtx, {
+            type: 'line',
+            data: {
+                labels: {{ chart_labels|safe }},
+                datasets: [{
+                    label: 'Revenue ($)',
+                    data: {{ revenue_data|safe }},
+                    borderColor: '#667eea',
+                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: { legend: { position: 'top' } }
+            }
+        });
+
+        // Jobs Chart
+        const jobsCtx = document.getElementById('jobsChart').getContext('2d');
+        new Chart(jobsCtx, {
+            type: 'bar',
+            data: {
+                labels: {{ chart_labels|safe }},
+                datasets: [{
+                    label: 'Jobs Completed',
+                    data: {{ jobs_data|safe }},
+                    backgroundColor: '#28a745',
+                    borderRadius: 8
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: { legend: { position: 'top' } }
+            }
+        });
+
+        // Status Distribution Chart
+        const statusCtx = document.getElementById('statusChart').getContext('2d');
+        const statusData = {{ status_data|safe }};
+        new Chart(statusCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Pending', 'In Progress', 'Completed', 'Picked Up'],
+                datasets: [{
+                    data: [statusData.pending, statusData.in_progress, statusData.completed, statusData.picked_up],
+                    backgroundColor: ['#ffc107', '#17a2b8', '#28a745', '#6c757d'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: { legend: { position: 'bottom' } }
+            }
+        });
+
+        // Device Chart
+        const deviceCtx = document.getElementById('deviceChart').getContext('2d');
+        new Chart(deviceCtx, {
+            type: 'bar',
+            data: {
+                labels: {{ device_labels|safe }},
+                datasets: [{
+                    label: 'Number of Repairs',
+                    data: {{ device_counts|safe }},
+                    backgroundColor: '#3498db',
+                    borderRadius: 8
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                indexAxis: 'y',
+                plugins: { legend: { position: 'top' } }
+            }
+        });
+    </script>
+</body>
+</html>
