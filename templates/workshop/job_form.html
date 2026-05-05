@@ -136,7 +136,7 @@
         }
         
         .form-header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #00e1ff 0%, #0019fc 100%);
             color: white;
             padding: 20px 30px;
         }
@@ -191,13 +191,13 @@
             border-radius: 6px;
             font-size: 14px;
             transition: all 0.3s;
-        }
+        }3
         
         input:focus,
         select:focus,
         textarea:focus {
             outline: none;
-            border-color: #667eea;
+            border-color: #0933f0;
             box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
         
@@ -646,7 +646,7 @@
                         
                         <div class="form-row">
                             <div class="form-group">
-                                <label>Material Cost ($)</label>
+                                <label>Material Cost (KSH)</label>
                                 <input type="number" name="material_cost" id="material_cost" 
                                        step="0.01" min="0" 
                                        value="{{ job.material_cost|default:'0.00' }}"
@@ -655,7 +655,7 @@
                             </div>
                             
                             <div class="form-group">
-                                <label>Labor Cost ($)</label>
+                                <label>Labor Cost (KSH)</label>
                                 <input type="number" name="labor_cost" id="labor_cost" 
                                        step="0.01" min="0" 
                                        value="{{ job.labor_cost|default:'0.00' }}"
@@ -666,7 +666,7 @@
                         
                         <div class="form-row">
                             <div class="form-group">
-                                <label>Amount Paid ($)</label>
+                                <label>Amount Paid (KSH)</label>
                                 <input type="number" name="amount_paid" id="amount_paid" 
                                        step="0.01" min="0" 
                                        value="{{ job.amount_paid|default:'0.00' }}"
@@ -686,24 +686,24 @@
                         <div class="financial-summary">
                             <div class="summary-row">
                                 <span class="summary-label">Material Cost:</span>
-                                <span class="summary-value" id="display_material">$0.00</span>
+                                <span class="summary-value" id="display_material">KSH 0.00</span>
                             </div>
                             <div class="summary-row">
                                 <span class="summary-label">Labor Cost:</span>
-                                <span class="summary-value" id="display_labor">$0.00</span>
+                                <span class="summary-value" id="display_labor">KSH 0.00</span>
                             </div>
                             <div class="summary-row">
                                 <span class="summary-label">Total Amount:</span>
-                                <span class="summary-value" id="display_total">$0.00</span>
+                                <span class="summary-value" id="display_total">KSH 0.00</span>
                             </div>
                             <div class="summary-row">
                                 <span class="summary-label">Amount Paid:</span>
-                                <span class="summary-value" id="display_paid">$0.00</span>
+                                <span class="summary-value" id="display_paid">KSH 0.00</span>
                             </div>
                             <div class="summary-total">
                                 <div class="summary-row">
                                     <span class="summary-label">Remaining Balance:</span>
-                                    <span class="summary-value" id="display_balance">$0.00</span>
+                                    <span class="summary-value" id="display_balance">KSH 0.00</span>
                                 </div>
                             </div>
                         </div>
@@ -799,7 +799,7 @@
             technicianSelect.disabled = true;
             
             // Fetch technicians via AJAX
-            fetch(`/workshop/get-technicians-by-shop/?shop_id=${shopId}`, {
+            fetch(`/workshop/get-technicians-by-shop/?shop_id=KSH {shopId}`, {
                 method: 'GET',
                 headers: {
                     'X-Requested-With': 'XMLHttpRequest',
@@ -812,8 +812,8 @@
                 if (data.technicians && data.technicians.length > 0) {
                     let options = '<option value="">-- Select Technician --</option>';
                     data.technicians.forEach(tech => {
-                        const shopInfo = tech.shop_name ? ` (${tech.shop_name})` : '';
-                        options += `<option value="${tech.id}">🔧 ${tech.name} - ${tech.position}${shopInfo}</option>`;
+                        const shopInfo = tech.shop_name ? ` (KSH {tech.shop_name})` : '';
+                        options += `<option value="KSH {tech.id}">🔧 KSH {tech.name} - KSH {tech.position}KSH {shopInfo}</option>`;
                     });
                     technicianSelect.innerHTML = options;
                     technicianSelect.disabled = false;
@@ -869,9 +869,9 @@
             let labor = parseFloat(document.getElementById('labor_cost').value) || 0;
             let total = material + labor;
             
-            document.getElementById('display_material').textContent = '$' + material.toFixed(2);
-            document.getElementById('display_labor').textContent = '$' + labor.toFixed(2);
-            document.getElementById('display_total').textContent = '$' + total.toFixed(2);
+            document.getElementById('display_material').textContent = 'KSH ' + material.toFixed(2);
+            document.getElementById('display_labor').textContent = 'KSH ' + labor.toFixed(2);
+            document.getElementById('display_total').textContent = 'KSH ' + total.toFixed(2);
             
             calculateBalance();
         }
@@ -883,13 +883,13 @@
             let paid = parseFloat(document.getElementById('amount_paid').value) || 0;
             let balance = total - paid;
             
-            document.getElementById('display_paid').textContent = '$' + paid.toFixed(2);
+            document.getElementById('display_paid').textContent = 'KSH ' + paid.toFixed(2);
             let balanceElement = document.getElementById('display_balance');
-            balanceElement.textContent = '$' + Math.abs(balance).toFixed(2);
+            balanceElement.textContent = 'KSH ' + Math.abs(balance).toFixed(2);
             
             if (balance < 0) {
                 balanceElement.style.color = '#e74c3c';
-                balanceElement.textContent = '($' + Math.abs(balance).toFixed(2) + ')';
+                balanceElement.textContent = '(KSH ' + Math.abs(balance).toFixed(2) + ')';
             } else if (balance === 0) {
                 balanceElement.style.color = '#27ae60';
             } else {
