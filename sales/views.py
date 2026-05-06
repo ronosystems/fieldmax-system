@@ -15,10 +15,13 @@ import africastalking
 from datetime import timedelta, datetime, date
 from finance.kopokopo_service import stk_push_request, clean_phone_number
 from finance.models import MpesaTransaction
-from sales.models import Sale, SaleItem, generate_custom_sale_id, Customer, LoyaltySettings, LoyaltyTransaction
+from sales.models import Sale, SaleItem, PaymentRecord, generate_custom_sale_id, Customer, LoyaltySettings, LoyaltyTransaction
 from inventory.models import Product, StockEntry
 from django.core.paginator import Paginator
 from django.contrib.auth.models import User
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
+
 
 logger = logging.getLogger(__name__)
 
@@ -3586,7 +3589,6 @@ def complete_sale_payment(request, sale_id):
         traceback.print_exc()
         return JsonResponse({'success': False, 'error': str(e)})
     
-
     
 
 
@@ -3606,3 +3608,222 @@ def delete_pending_sale(request, sale_id):
     except Exception as e:
         logger.error(f"Error deleting pending sale: {str(e)}")
         return JsonResponse({'success': False, 'error': str(e)})
+
+
+
+
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def create_split_payment_sale(request):
+    """
+    Handle split payment sales with multiple payment methods
+    Integration with existing Sale, SaleItem, and Customer models
+    """
+    
+    try:
+        data = json.loads(request.body)
+        
+        # Extract data
+        cart_items = data.get('cart_items', [])
+        split_payments = data.get('split_payments', [])
+        total_amount = Decimal(str(data.get('cart_total', 0)))
+        total_paid = Decimal(str(data.get('amount_paid', 0)))
+        points_redeemed_total = data.get('points_redeemed', 0)
+        
+        # Validate payment totals
+        calculated_total = sum(Decimal(str(p.get('amount', 0))) for p in split_payments)
+        if abs(calculated_total - total_paid) > 0.01:
+            return JsonResponse({
+                'error': f'Payment total mismatch: {calculated_total} vs {total_paid}'
+            }, status=400)
+        
+        # Get or create customer
+        verified_customer_id = data.get('verified_customer_id')
+        customer = None
+        if verified_customer_id:
+            from .models import Customer
+            try:
+                customer = Customer.objects.get(id=verified_customer_id)
+            except Customer.DoesNotExist:
+                customer = None
+        
+        # Start database transaction
+        with transaction.atomic():
+            # Generate sale ID using your existing system
+            from .models import generate_custom_sale_id
+            sale_id = generate_custom_sale_id()
+            
+            # Calculate original subtotal (before points discount)
+            original_subtotal = total_amount + Decimal(str(points_redeemed_total))
+            
+            # Create sale record
+            sale = Sale.objects.create(
+                sale_id=sale_id,
+                seller=request.user if request.user.is_authenticated else None,
+                buyer_name=data.get('buyer_name', 'Walk-in Customer'),
+                buyer_phone=data.get('buyer_phone', ''),
+                buyer_id_number=data.get('buyer_id_number', ''),
+                total_amount=total_amount,
+                amount_paid=total_paid,
+                payment_method='Split',  # Indicate split payment
+                is_split_payment=True,
+                is_credit=False,
+                points_redeemed=points_redeemed_total,
+                points_discount=Decimal(str(points_redeemed_total)),
+                original_subtotal=original_subtotal,
+                subtotal=original_subtotal,
+            )
+            
+            # Track change amount for cash payments
+            total_cash = sum(p.get('amount', 0) for p in split_payments if p.get('method') == 'Cash')
+            change_amount = max(Decimal('0'), Decimal(str(total_cash)) - total_amount)
+            
+            # Create individual payment records
+            for payment in split_payments:
+                method = payment['method']
+                amount = Decimal(str(payment['amount']))
+                
+                payment_record = PaymentRecord.objects.create(
+                    sale=sale,
+                    method=method,
+                    amount=amount,
+                    processed_by=request.user if request.user.is_authenticated else None,
+                )
+                
+                # Set method-specific fields
+                if method == 'Cash':
+                    payment_record.cash_tendered = amount
+                    payment_record.cash_change = change_amount if payment == split_payments[-1] else Decimal('0')
+                    
+                elif method == 'M-Pesa':
+                    payment_record.mpesa_phone = payment.get('phone', '')
+                    payment_record.mpesa_transaction_id = payment.get('transactionId', '')
+                    payment_record.mpesa_checkout_request_id = payment.get('checkout_request_id', '')
+                    
+                elif method == 'Card':
+                    payment_record.bank_name = payment.get('bank', '')
+                    payment_record.card_last_four = payment.get('card_last_four', '')
+                    
+                elif method == 'Points':
+                    payment_record.points_redeemed = payment.get('points', 0)
+                
+                payment_record.save()
+            
+            # Store payment breakdown as JSON
+            sale.payment_breakdown = {
+                'payments': [
+                    {
+                        'method': p.method,
+                        'amount': float(p.amount),
+                        'details': {
+                            'bank': p.bank_name,
+                            'mpesa_transaction': p.mpesa_transaction_id,
+                            'points': p.points_redeemed
+                        }
+                    }
+                    for p in sale.payment_records.all()
+                ]
+            }
+            sale.save(update_fields=['payment_breakdown'])
+            
+            # Create sale items and process inventory
+            from inventory.models import StockEntry
+            from .models import SaleItem
+            
+            for item in cart_items:
+                from inventory.models import Product
+                product = Product.objects.select_for_update().get(
+                    product_code=item.get('product_code')
+                )
+                
+                quantity = item.get('quantity', 1)
+                unit_price = Decimal(str(item.get('price', 0)))
+                total_price = unit_price * quantity
+                
+                # Create sale item
+                sale_item = SaleItem.objects.create(
+                    sale=sale,
+                    product=product,
+                    product_code=product.product_code,
+                    product_name=product.display_name or product.name,
+                    sku_value=product.sku_value or '',
+                    quantity=quantity,
+                    unit_price=unit_price,
+                    total_price=total_price
+                )
+                
+                # Process the sale (deduct stock using your existing method)
+                sale_item.process_sale()
+            
+            # Process loyalty points if customer exists
+            points_earned = 0
+            if customer and points_redeemed_total == 0:
+                # Award points (1% of sale value as per your Customer model)
+                points_earned = customer.add_points_from_sale(
+                    sale, 
+                    description=f"Points earned from split payment sale"
+                )
+            
+            # Handle points redemption if applicable
+            if points_redeemed_total > 0 and customer:
+                # Redeem points (your existing Customer.redeem_points method)
+                cash_value = customer.redeem_points(
+                    points_redeemed_total,
+                    sale=sale,
+                    description=f"Points redeemed in split payment sale"
+                )
+            
+            # Return success response
+            return JsonResponse({
+                'success': True,
+                'sale_id': sale.sale_id,
+                'sale_number': sale.sale_id,
+                'message': 'Split payment sale completed successfully',
+                'payment_breakdown': [
+                    {'method': p.method, 'amount': float(p.amount)} 
+                    for p in sale.payment_records.all()
+                ],
+                'points_earned': float(points_earned) if points_earned else 0,
+                'points_redeemed': points_redeemed_total,
+                'change_amount': float(change_amount) if change_amount > 0 else 0
+            })
+            
+    except Exception as e:
+        logger.error(f"Split payment sale error: {str(e)}", exc_info=True)
+        return JsonResponse({'error': f'Sale failed: {str(e)}'}, status=500)
+
+
+@require_http_methods(["GET"])
+def get_sale_payment_details(request, sale_id):
+    """Get detailed payment breakdown for a sale"""
+    
+    try:
+        from .models import Sale
+        sale = Sale.objects.get(sale_id=sale_id)
+        
+        payment_records = sale.payment_records.all()
+        
+        return JsonResponse({
+            'success': True,
+            'sale_id': sale.sale_id,
+            'total_amount': float(sale.total_amount),
+            'amount_paid': float(sale.amount_paid),
+            'change_amount': float(sale.change),
+            'is_split_payment': sale.is_split_payment,
+            'payments': [
+                {
+                    'method': record.method,
+                    'amount': float(record.amount),
+                    'bank_name': record.bank_name,
+                    'mpesa_phone': record.mpesa_phone,
+                    'mpesa_transaction_id': record.mpesa_transaction_id,
+                    'points_redeemed': record.points_redeemed,
+                    'created_at': record.created_at.isoformat()
+                }
+                for record in payment_records
+            ]
+        })
+        
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)

@@ -211,6 +211,18 @@ class Sale(models.Model):
     )
     reversal_reason = models.TextField(blank=True, null=True)
 
+    # for split payments
+    is_split_payment = models.BooleanField(
+        default=False,
+        help_text="Whether this sale used multiple payment methods"
+    )
+    payment_breakdown = models.JSONField(
+        default=dict,
+        blank=True,
+        null=True,
+        help_text="JSON breakdown of split payments"
+    )
+    
     class Meta:
         db_table = 'sales'
         ordering = ['-sale_date']
@@ -609,6 +621,84 @@ class SaleItem(models.Model):
             profit_per_unit = self.unit_price - self.product.buying_price
             return float((profit_per_unit / self.product.buying_price) * 100)
         return 0.0
+
+
+
+
+
+
+
+# ============================================
+# PAYMENT RECORD MODEL - FOR SPLIT PAYMENTS
+# ============================================
+
+class PaymentRecord(models.Model):
+    """
+    Individual payment records for split payments
+    One sale can have multiple payment records (Cash, M-Pesa, Card, Points)
+    """
+    
+    PAYMENT_METHODS = [
+        ('Cash', 'Cash'),
+        ('M-Pesa', 'M-Pesa'),
+        ('Card', 'Card/Bank'),
+        ('Points', 'Loyalty Points'),
+    ]
+    
+    sale = models.ForeignKey(
+        'Sale', 
+        on_delete=models.CASCADE, 
+        related_name='payment_records'
+    )
+    method = models.CharField(max_length=20, choices=PAYMENT_METHODS)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    
+    # Cash specific fields
+    cash_tendered = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    cash_change = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    
+    # M-Pesa specific fields
+    mpesa_phone = models.CharField(max_length=20, blank=True, null=True)
+    mpesa_transaction_id = models.CharField(max_length=50, blank=True, null=True)
+    mpesa_checkout_request_id = models.CharField(max_length=100, blank=True, null=True)
+    
+    # Card/Bank specific fields
+    bank_name = models.CharField(max_length=50, blank=True, null=True)
+    card_last_four = models.CharField(max_length=4, blank=True, null=True)
+    
+    # Points specific fields
+    points_redeemed = models.IntegerField(default=0)
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    processed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='processed_payments'
+    )
+    
+    class Meta:
+        db_table = 'payment_records'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['sale', 'method']),
+            models.Index(fields=['mpesa_transaction_id']),
+        ]
+        verbose_name = 'Payment Record'
+        verbose_name_plural = 'Payment Records'
+    
+    def __str__(self):
+        return f"{self.method} - KSH {self.amount} for Sale #{self.sale.sale_id}"
+    
+    @property
+    def display_amount(self):
+        return f"KSH {self.amount:,.2f}"
+
+
+
+
 
 
 # ==================================

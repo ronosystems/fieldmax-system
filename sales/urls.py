@@ -46,6 +46,11 @@ urlpatterns = [
     path('api/items-by-week/', views.items_by_week_api, name='items_by_week_api'),
     path('api/items-by-month/', views.items_by_month_api, name='items_by_month_api'),
     path('api/sale-details/<int:sale_id>/', views.sale_details_api, name='sale_details_api'),
+
+
+    # Split payment endpoints
+    path('api/sale/split-payment/', views.create_split_payment_sale, name='split_payment_sale'),
+    path('api/sale/<str:sale_id>/payment-details/', views.get_sale_payment_details, name='sale_payment_details'),
     
     # M-PESA PAYMENT API
     path('api/check-payment/<str:sale_id>/', views.check_payment_status, name='check_payment_status'),
