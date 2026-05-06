@@ -54,7 +54,9 @@ urlpatterns = [
     
     # M-PESA PAYMENT API
     path('api/check-payment/<str:sale_id>/', views.check_payment_status, name='check_payment_status'),
+    path('api/mpesa/check-pending/', views.check_mpesa_pending, name='check_mpesa_pending'),
     path('api/check-payment-by-phone/', views.check_payment_by_phone, name='check_payment_by_phone'),
+    path('api/mpesa/cancel-pending/', views.cancel_pending_mpesa, name='cancel_pending_mpesa'),
     path('api/send-otp/', views.send_otp, name='send_otp'),
     path('api/verify-otp/', views.verify_otp, name='verify_otp'),
     

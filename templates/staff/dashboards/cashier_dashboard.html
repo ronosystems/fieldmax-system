@@ -512,6 +512,86 @@
             <i class="fas fa-check-double"></i> Complete Sale
         </button>
     </div>
+
+<!-- Single Payment Mode Inputs (Hidden by default) -->
+<div id="cashInput" style="display: none;">
+    <div class="payment-input-area">
+        <h6>💵 Cash Payment</h6>
+        <input type="number" id="cashAmount" class="form-input" placeholder="Amount received" oninput="calculateCashChange()">
+        <div>Change: <strong id="changeAmount" style="color:#28a745;">KSH 0.00</strong></div>
+    </div>
+</div>
+
+<div id="mpesaInput" style="display: none;">
+    <div class="payment-input-area">
+        <h6>📱 M-Pesa Payment</h6>
+        <input type="tel" id="mpesaPhone" class="form-input" placeholder="Customer phone number">
+        <button class="action-btn" id="sendStkBtn" onclick="sendMpesaSTK()">Send STK Push</button>
+        <div class="progress-track"><div class="progress-fill" id="mpesaProgress" style="width:0%"></div></div>
+        <div id="mpesaStatusArea" style="display:none;"><i class="fas fa-spinner fa-pulse"></i> Waiting for PIN...</div>
+        <div id="mpesaSuccessMsg" class="status-card success" style="display:none;">✅ Payment confirmed!</div>
+        <div id="mpesaFailedMsg" class="status-card error" style="display:none;">❌ Payment failed</div>
+    </div>
+</div>
+
+<div id="bankInput" style="display: none;">
+    <div class="payment-input-area">
+        <h6>💳 Bank/Card Payment</h6>
+        <div class="bank-grid">
+            <div class="bank-option" onclick="selectBank(this,'Equity')">Equity</div>
+            <div class="bank-option" onclick="selectBank(this,'KCB')">KCB</div>
+            <div class="bank-option" onclick="selectBank(this,'Co-op')">Co-op</div>
+            <div class="bank-option" onclick="selectBank(this,'Absa')">Absa</div>
+            <div class="bank-option" onclick="selectBank(this,'Stanbic')">Stanbic</div>
+            <div class="bank-option" onclick="selectBank(this,'NCBA')">NCBA</div>
+        </div>
+        <input type="number" id="bankAmount" class="form-input" placeholder="Amount" oninput="checkCanFinalize()">
+    </div>
+</div>
+
+<div id="pointsInput" style="display: none;">
+    <div class="payment-input-area">
+        <h6>⭐ Points Payment</h6>
+        <input type="tel" id="pointsCustomerPhone" class="form-input" placeholder="Customer phone number" oninput="onPointsCustomerPhoneInput(this.value)">
+        <div id="pointsCustomerInfo" style="display: none; margin-bottom: 10px; padding: 8px; background: #e8f5e9; border-radius: 8px;">
+            <strong id="pointsCustomerName"></strong><br>
+            Available: <strong id="pointsCustomerBalance">0</strong> pts
+            <input type="hidden" id="pointsVerifiedCustomerId">
+            <input type="hidden" id="pointsCustomerBalanceValue">
+        </div>
+        <div id="pointsAmountSection" style="display: none;">
+            <div class="points-amount-card">
+                <div class="points-amount-label">Cart Total:</div>
+                <div class="points-amount-value">KSH <span id="pointsCartTotal">0.00</span></div>
+                <div class="points-amount-label" style="margin-top: 10px;">Points to Redeem:</div>
+                <input type="number" id="pointsToRedeem" class="form-input" placeholder="Enter points (1pt = KSH1)" min="0">
+                <div class="points-amount-label">Available Points: <strong id="pointsAvailableDisplay">0 pts</strong></div>
+                <div id="discountedTotalCard" style="display: none; margin-top: 10px; padding: 10px; background: #d4edda; border-radius: 8px;">
+                    <strong>💰 Amount to Pay After Redemption:</strong><br>
+                    <span style="font-size: 24px; font-weight: bold; color: #28a745;">KSH <span id="discountedTotal">0.00</span></span>
+                </div>
+                <button class="action-btn" id="sendPointsOtpBtn" style="display: none; margin-top: 10px;" onclick="sendPointsOtp()">Send OTP to Customer</button>
+            </div>
+        </div>
+        <div id="pointsOtpSection" class="points-otp-section" style="display: none;">
+            <div class="otp-row">
+                <input type="text" maxlength="1" class="otp-digit" id="pointsOtp0" onkeyup="moveToNextPoints(this,0)">
+                <input type="text" maxlength="1" class="otp-digit" id="pointsOtp1" onkeyup="moveToNextPoints(this,1)">
+                <input type="text" maxlength="1" class="otp-digit" id="pointsOtp2" onkeyup="moveToNextPoints(this,2)">
+                <input type="text" maxlength="1" class="otp-digit" id="pointsOtp3" onkeyup="moveToNextPoints(this,3)">
+            </div>
+            <button class="action-btn" id="verifyOtpBtn" onclick="verifyPointsOtp()">✅ Verify OTP & Complete Sale</button>
+        </div>
+    </div>
+</div>
+
+<!-- Single Payment Finalize Button -->
+<div id="singlePaymentBtnArea" style="margin-top: 15px; display: none;">
+    <button class="finalize-sale-btn" onclick="finalizeSale()" id="finalizeSaleSingleBtn" disabled>
+        <i class="fas fa-check-double"></i> Complete Sale
+    </button>
+</div>
+
 </div>
 </div>
 
@@ -635,6 +715,7 @@ let currentSaleId    = null;
 let mpesaConfirmed   = false;
 
 // Points OTP
+let phoneTimer;
 let serverOtp          = null;
 let pendingRedeemPoints = 0;
 let pointsPhoneTimer;
@@ -767,9 +848,15 @@ function showPage(page) {
 
 
 
-// ============================================
-// BEST PRICE CARD UNLOCK FUNCTIONALITY
-// ============================================
+
+
+
+
+
+
+// ===================================================
+// ✅✅✅✅ START PRICE CHECK FUNCTIONALITY ✅✅✅
+// ===================================================
 
 // Initialize Best Price Card with lock
 function initBestPriceCard() {
@@ -910,12 +997,6 @@ function resetBestPriceLock() {
     }
 }
 
-
-
-
-// ============================================
-// PRICE CHECK FUNCTIONS - Using Real API
-// ============================================
 
 // Show Price Check Page
 function showPriceCheckPage() {
@@ -1109,6 +1190,161 @@ async function searchProductForPriceCheck() {
         }
     }
 }
+// ================================================
+// ✅✅✅✅ END PRICE CHECK FUNCTIONALITY ✅✅✅
+// =================================================
+
+
+
+
+
+
+
+
+
+
+
+// ===================================================
+// ✅✅✅✅ IMAGE SLIDESHOW FUNCTIONALITY ✅✅✅✅
+// ===================================================
+function initCardSlideshow() {
+    const cardContainers = document.querySelectorAll('.card-slideshow');
+    
+    cardContainers.forEach((container) => {
+        const cardSlides = container.querySelectorAll('.card-slide');
+        if (!cardSlides.length) return;
+        
+        let currentCardSlide = 0;
+        const totalCardSlides = cardSlides.length;
+        let cardSlideInterval;
+        
+        function showCardSlide(index) {
+            cardSlides.forEach(slide => slide.classList.remove('active'));
+            cardSlides[index].classList.add('active');
+            currentCardSlide = index;
+        }
+        
+        function nextCardSlide() {
+            let next = (currentCardSlide + 1) % totalCardSlides;
+            showCardSlide(next);
+        }
+        
+        function startCardSlideshow() {
+            if (cardSlideInterval) clearInterval(cardSlideInterval);
+            cardSlideInterval = setInterval(nextCardSlide, 5000);
+        }
+        
+        function stopCardSlideshow() {
+            if (cardSlideInterval) clearInterval(cardSlideInterval);
+        }
+        
+        showCardSlide(0);
+        startCardSlideshow();
+        
+        // Pause on hover
+        container.addEventListener('mouseenter', stopCardSlideshow);
+        container.addEventListener('mouseleave', startCardSlideshow);
+    });
+}
+
+
+//INSLIDE SHOW
+function initSlideshow() {
+    const slides = document.querySelectorAll('.slide');
+    const captionElement = document.getElementById('slideCaption');
+    const indicatorsContainer = document.getElementById('slideIndicators');
+    
+    if (!slides.length || !captionElement || !indicatorsContainer) {
+        console.log('Slideshow elements not found');
+        return;
+    }
+    
+    // Image captions for each slide
+    const captions = [
+        'FieldMax Shop - Your One Stop Shop',
+        'Electronics & Gadgets',
+        'Car Chargers - Fast Charging',
+        'Professional Repair Services',
+        'Tecno Latest Models Available',
+        'Smart Watches Collection',
+        'Premium Watches',
+        'Quality Headsets',
+        'Wireless Headsets',
+        'Expert Phone Repair'
+    ];
+    
+    // Clear existing indicators
+    indicatorsContainer.innerHTML = '';
+    
+    // Create indicators
+    slides.forEach((_, index) => {
+        const dot = document.createElement('div');
+        dot.classList.add('dot');
+        if (index === 0) dot.classList.add('active');
+        dot.addEventListener('click', () => showSlide(index, slides, captions, indicatorsContainer));
+        indicatorsContainer.appendChild(dot);
+    });
+    
+    let currentSlide = 0;
+    const totalSlides = slides.length;
+    let slideInterval;
+    
+    // Function to show a specific slide
+    window.showSlide = function(index, slidesParam, captionsParam, indicatorsParam) {
+        const slidesToUse = slidesParam || slides;
+        const captionsToUse = captionsParam || captions;
+        const indicatorsToUse = indicatorsParam || indicatorsContainer;
+        
+        // Remove active class from all slides and dots
+        slidesToUse.forEach(slide => slide.classList.remove('active'));
+        const dots = indicatorsToUse.querySelectorAll('.dot');
+        dots.forEach(dot => dot.classList.remove('active'));
+        
+        // Add active class to current slide and dot
+        slidesToUse[index].classList.add('active');
+        dots[index].classList.add('active');
+        
+        // Update caption
+        if (captionElement) {
+            captionElement.textContent = captionsToUse[index] || 'Special Offer';
+        }
+        
+        currentSlide = index;
+    };
+    
+    // Function to show next slide
+    function nextSlide() {
+        let next = (currentSlide + 1) % totalSlides;
+        showSlide(next, slides, captions, indicatorsContainer);
+    }
+    
+    // Start automatic slideshow
+    function startSlideshow() {
+        if (slideInterval) clearInterval(slideInterval);
+        slideInterval = setInterval(nextSlide, 5000); // Change every 5 seconds
+    }
+    
+    // Stop slideshow
+    function stopSlideshow() {
+        if (slideInterval) clearInterval(slideInterval);
+    }
+    
+    // Initialize with first slide
+    showSlide(0, slides, captions, indicatorsContainer);
+    startSlideshow();
+    
+    // Pause on hover
+    const slideshowContainer = document.querySelector('.slideshow-container');
+    if (slideshowContainer) {
+        slideshowContainer.addEventListener('mouseenter', stopSlideshow);
+        slideshowContainer.addEventListener('mouseleave', startSlideshow);
+    }
+}
+// ===================================================
+// ✅✅✅✅ END IMAGE SLIDESHOW FUNCTIONALITY ✅✅✅✅
+// ===================================================
+
+
 
 
 
@@ -1117,8 +1353,316 @@ async function searchProductForPriceCheck() {
 
 
 // ============================================
-// REGISTRATION FORM HANDLING
+// ✅✅✅✅ START CUSTOMER LOOKUP ✅✅✅✅
 // ============================================
+
+function lookupCustomer() {
+    const phone = document.getElementById('customer-phone-input').value.trim();
+    if (!phone) {
+        showToast('Enter phone number', 'error');
+        return;
+    }
+    
+    safeFetch(`${URLS.customer_search}?phone=${encodeURIComponent(phone)}`)
+        .then(data => {
+            if (data.customers && data.customers.length > 0) {
+                const customer = data.customers[0];
+                document.getElementById('cust-name').textContent = customer.name;
+                document.getElementById('cust-points').textContent = Math.floor(customer.points);
+                document.getElementById('cust-spent').textContent = customer.total_spent.toLocaleString();
+                document.getElementById('customer-info').style.display = 'block';
+                
+                // Store customer data
+                window.selectedCustomer = {
+                    id: customer.id,
+                    name: customer.name,
+                    phone: customer.phone,
+                    points: customer.points
+                };
+                showToast(`Customer found: ${customer.name}`, 'success');
+            } else {
+                showToast('Customer not found. Please register.', 'warning');
+                document.getElementById('customer-info').style.display = 'none';
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('Error looking up customer', 'error');
+        });
+}
+
+//USE SELECTED CUSTOMER
+function useCustomer() {
+    if (window.selectedCustomer) {
+        // Update the main customer fields
+        const customerPhoneInput = document.getElementById('customerPhone');
+        const customerNameSpan = document.getElementById('customerName');
+        const customerPointsSpan = document.getElementById('customerPoints');
+        const verifiedCustomerIdInput = document.getElementById('verifiedCustomerId');
+        const customerInfoDiv = document.getElementById('customerInfo');
+        
+        if (customerPhoneInput) customerPhoneInput.value = window.selectedCustomer.phone;
+        if (customerNameSpan) customerNameSpan.textContent = window.selectedCustomer.name;
+        if (customerPointsSpan) customerPointsSpan.textContent = Math.floor(window.selectedCustomer.points);
+        if (verifiedCustomerIdInput) verifiedCustomerIdInput.value = window.selectedCustomer.id;
+        if (customerInfoDiv) customerInfoDiv.style.display = 'block';
+        
+        // Also update points redemption section if visible
+        if (document.getElementById('pointsCustomerPhone')) {
+            document.getElementById('pointsCustomerPhone').value = window.selectedCustomer.phone;
+            // Trigger customer lookup in points section
+            onPointsCustomerPhoneInput(window.selectedCustomer.phone);
+        }
+        
+        // Close sidebar customer info
+        document.getElementById('customer-info').style.display = 'none';
+        document.getElementById('customer-phone-input').value = '';
+        
+        showToast(`Customer selected: ${window.selectedCustomer.name}`, 'success');
+        
+        // Trigger points display update
+        if (typeof updatePointsCartTotal === 'function') {
+            updatePointsCartTotal();
+        }
+    } else {
+        showToast('No customer selected', 'warning');
+    }
+}
+
+//ONCUSTOMER PHONE INPUT
+function onCustomerPhoneInput(phone) {
+    clearTimeout(phoneTimer);
+    document.getElementById('customerInfo').style.display = 'none';
+    document.getElementById('verifiedCustomerId').value   = '';
+    customerId            = null;
+    customerPointsBalance = 0;
+    if (phone.replace(/\D/g,'').length < 9) return;
+    phoneTimer = setTimeout(() => lookupCustomer(phone), 500);
+}
+
+//LOOKUP CUSTOMER
+async function lookupCustomer(phone) {
+    try {
+        const data = await safeFetch(
+            `${URLS.customer_search}?phone=${encodeURIComponent(phone)}`
+        );
+        if (data.customers && data.customers.length > 0) {
+            const c = data.customers[0];
+            customerId            = c.id;
+            customerPointsBalance = parseFloat(c.points) || 0;
+            document.getElementById('verifiedCustomerId').value        = c.id;
+            document.getElementById('customerName').textContent        = c.name;
+            document.getElementById('customerPoints').textContent      = Math.floor(customerPointsBalance);
+            document.getElementById('customerPointsValue').textContent = Math.floor(customerPointsBalance);
+            document.getElementById('customerInfo').style.display      = 'block';
+            if (selectedPayment === 'Points') {
+                document.getElementById('sendOtpBtn').style.display = 'block';
+            }
+            showToast(`Customer: ${c.name} — ${Math.floor(c.points)} pts`, 'success');
+        } else {
+            customerId = null;
+            document.getElementById('customerInfo').style.display = 'none';
+        }
+    } catch(e) {
+        console.error('Customer lookup failed:', e.message);
+    }
+}
+
+// ============================================
+// ✅✅✅✅ END CUSTOMER LOOKUP ✅✅✅✅
+// ============================================
+
+
+
+
+
+
+
+
+
+
+// ============================================
+// CASH CHANGE CALCULATOR
+// ============================================
+function calculateCashChange() {
+    const paid   = parseFloat(document.getElementById('cashAmount').value) || 0;
+    const change = paid - total;
+    const el     = document.getElementById('changeAmount');
+    if (change < 0) {
+        el.style.color = '#dc3545';
+        el.textContent = `Short KSH ${Math.abs(change).toLocaleString()}`;
+    } else {
+        el.style.color = '#28a745';
+        el.textContent = `KSH ${change.toLocaleString()}`;
+    }
+    checkCanFinalize();
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// ============================================
+// ✅✅✅✅ START REGISTRATION FORM 
+// ============================================
+
+//REGISTER CUSTOMER
+function registerCustomer() {
+    const phone = document.getElementById('customer-phone-input').value.trim();
+    if (phone) {
+        window.location.href = `/sales/customer/register/?phone=${encodeURIComponent(phone)}`;
+    } else {
+        window.location.href = '/sales/customer/register/';
+    }
+}
+
+
+
+//SUBMIT CUSTOMER REGISTRATION FORM
+async function submitCustomerRegistration(event) {
+    event.preventDefault(); // Prevent normal form submission
+    
+    // Get form values
+    const phone = document.getElementById('reg_phone').value.trim();
+    const name = document.getElementById('reg_name').value.trim();
+    const email = document.getElementById('reg_email').value.trim();
+    const idNumber = document.getElementById('reg_id').value.trim();
+    
+    // Clear previous errors
+    document.getElementById('reg_phone_error').style.display = 'none';
+    document.getElementById('reg_name_error').style.display = 'none';
+    
+    // Validate
+    let hasError = false;
+    
+    if (!phone) {
+        document.getElementById('reg_phone_error').textContent = 'Phone number is required';
+        document.getElementById('reg_phone_error').style.display = 'block';
+        hasError = true;
+    } else {
+        // Validate phone format
+        const cleanPhone = phone.replace(/\D/g, '');
+        if (cleanPhone.length < 9 || cleanPhone.length > 12) {
+            document.getElementById('reg_phone_error').textContent = 'Please enter a valid phone number (10-12 digits)';
+            document.getElementById('reg_phone_error').style.display = 'block';
+            hasError = true;
+        }
+    }
+    
+    if (!name) {
+        document.getElementById('reg_name_error').textContent = 'Full name is required';
+        document.getElementById('reg_name_error').style.display = 'block';
+        hasError = true;
+    }
+    
+    if (hasError) return;
+    
+    // Disable button and show loading
+    const btn = document.getElementById('registerCustomerBtn');
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Registering...';
+    
+    try {
+        // Create FormData object for traditional form submission
+        const formData = new FormData();
+        formData.append('phone_number', phone);
+        formData.append('full_name', name);
+        formData.append('email', email);
+        formData.append('id_number', idNumber);
+        formData.append('csrfmiddlewaretoken', CSRF);
+        
+        const response = await fetch('/sales/customer/register/', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        });
+        
+        // Check if response is JSON or redirect
+        const contentType = response.headers.get('content-type');
+        
+        if (contentType && contentType.includes('application/json')) {
+            const data = await response.json();
+            if (data.success) {
+                showToast(`✅ Customer ${name} registered successfully! Welcome bonus: ${data.welcome_points || 100} points`, 'success');
+                
+                // Clear form
+                document.getElementById('reg_phone').value = '';
+                document.getElementById('reg_name').value = '';
+                document.getElementById('reg_email').value = '';
+                document.getElementById('reg_id').value = '';
+                
+                // Auto-fill in customer lookup fields
+                const customerPhoneInput = document.getElementById('customer-phone-input');
+                if (customerPhoneInput) {
+                    customerPhoneInput.value = phone;
+                    // Trigger lookup
+                    setTimeout(() => {
+                        lookupCustomer();
+                    }, 500);
+                }
+                
+                // Also update main customer fields
+                const mainCustomerPhone = document.getElementById('customerPhone');
+                if (mainCustomerPhone) {
+                    mainCustomerPhone.value = phone;
+                    onCustomerPhoneInput(phone);
+                }
+                
+                // Switch back to POS page after 1.5 seconds
+                setTimeout(() => {
+                    showPage('pos');
+                    showToast('Customer ready for checkout!', 'success');
+                }, 1500);
+            } else {
+                showToast(data.error || 'Registration failed', 'error');
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        } else {
+            // If redirect happened, registration was successful
+            showToast(`✅ Customer ${name} registered successfully!`, 'success');
+            
+            // Clear form
+            document.getElementById('reg_phone').value = '';
+            document.getElementById('reg_name').value = '';
+            document.getElementById('reg_email').value = '';
+            document.getElementById('reg_id').value = '';
+            
+            // Auto-fill customer phone
+            const customerPhoneInput = document.getElementById('customer-phone-input');
+            if (customerPhoneInput) {
+                customerPhoneInput.value = phone;
+                setTimeout(() => {
+                    lookupCustomer();
+                }, 500);
+            }
+            
+            // Switch back to POS
+            setTimeout(() => {
+                showPage('pos');
+            }, 1500);
+        }
+        
+    } catch (error) {
+        console.error('Registration error:', error);
+        showToast('Registration failed: ' + error.message, 'error');
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    }
+}
+
 
 // Phone number normalization function (add if not exists)
 function normalizePhoneNumber(phone) {
@@ -1178,25 +1722,282 @@ if (registerForm) {
     });
 }
 
+// ============================================
+// ✅✅✅✅ END REGISTRATION FORM  ✅✅
+// ============================================
+
+
+
+
+
+
+
 
 
 
 
 
 // ============================================
-// SPLIT PAYMENT SYSTEM
+//  ✅✅✅✅  START  CART LOAD  SYSTEM ✅✅
 // ============================================
 
+// ADD TO CART
+async function addToCart() {
+    const code = document.getElementById('productSearchInput').value.trim();
+    if (!code) { showToast('Enter a product code or barcode', 'error'); return; }
+
+    const customPriceRaw = document.getElementById('customPrice').value.trim();
+    const hasCustom      = customPriceRaw !== '' && !isNaN(parseFloat(customPriceRaw));
+
+    try {
+        const data = await safeFetch(URLS.add_to_cart, {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+            body:    JSON.stringify({
+                product_code:     code,
+                quantity:         1,
+                custom_price:     hasCustom ? parseFloat(customPriceRaw) : null,
+                allow_price_edit: hasCustom
+            })
+        });
+
+        if (data.success) {
+            cart = data.cart || [];
+            renderCart();
+            document.getElementById('productSearchInput').value = '';
+            document.getElementById('customPrice').value        = '';
+            document.getElementById('productSearchInput').focus();
+            showToast(data.message || 'Added to cart', 'success');
+        } else {
+            showToast(data.error || 'Could not add product', 'error');
+        }
+    } catch(e) {
+        showToast('Add to cart failed: ' + e.message, 'error');
+    }
+}
+
+// ============================================
+// UPDATE QTY  — must send price so backend can
+// identify the correct cart row
+// ============================================
+async function updateQty(productCode, price, qty) {
+    const newQty = Math.max(1, parseInt(qty) || 1);
+    try {
+        const data = await safeFetch(URLS.update_cart, {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+            body:    JSON.stringify({ product_code: productCode, price: price, quantity: newQty })
+        });
+        if (data.success) {
+            cart = data.cart || [];
+            renderCart();
+        } else {
+            showToast(data.error || 'Update failed', 'error');
+            loadCart();
+        }
+    } catch(e) {
+        showToast('Update failed: ' + e.message, 'error');
+        loadCart();
+    }
+}
+
+// ============================================
+// REMOVE — must send price so backend can
+// identify the correct cart row
+// ============================================
+async function removeItem(productCode, price) {
+    try {
+        const data = await safeFetch(URLS.remove_from_cart, {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+            body:    JSON.stringify({ product_code: productCode, price: price })
+        });
+        if (data.success) {
+            cart = data.cart || [];
+            renderCart();
+        } else {
+            showToast(data.error || 'Remove failed', 'error');
+        }
+    } catch(e) {
+        showToast('Remove failed: ' + e.message, 'error');
+    }
+}
+
+
+// CLEAR CART
+async function clearCart() {
+    if (!confirm('Clear entire cart?')) return;
+    try {
+        await safeFetch(URLS.clear_cart, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': CSRF }
+        });
+        cart = [];
+        renderCart();
+        hideStatus();
+        showToast('Cart cleared', 'success');
+    } catch(e) {
+        showToast('Clear cart failed: ' + e.message, 'error');
+    }
+}
+
+//LOAD CART
+async function loadCart() {
+    try {
+        const data = await safeFetch(URLS.get_cart);
+        if (data.success) {
+            cart = data.cart || [];
+            renderCart();
+        }
+    } catch(e) {
+        console.error('loadCart failed:', e.message);
+        showToast('Could not load cart: ' + e.message, 'error');
+    }
+}
+
+
+
+// RENDER CART
+function renderCart() {
+    const tbody = document.getElementById('cartTableBody');
+    if (!cart.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:#999;">Cart is empty — scan or enter a product code</td></tr>';
+        calculateTotals();
+        
+        // ✅ RESET SPLIT PAYMENTS WHEN CART IS EMPTY
+        if (isSplitPaymentEnabled) {
+            splitPayments = [];
+            renderSplitPaymentsList();
+            updateSplitPaymentSummary();
+            checkSplitFinalizeReady();
+        }
+        return;
+    }
+    tbody.innerHTML = cart.map(item => `
+        <tr>
+            <td>
+                <strong>${escapeHtml(item.name)}</strong>
+                ${item.sku_value ? `<br><small style="color:#888;">SKU: ${escapeHtml(item.sku_value)}</small>` : ''}
+                <br><small style="color:#aaa;">${escapeHtml(item.product_code)}</small>
+            </td>
+            <td>KSH ${(item.price || 0).toLocaleString()}</td>
+            <td>
+                ${item.is_single
+                    ? '<span style="color:#888;">×1</span>'
+                    : `<input type="number" class="quantity-input" value="${item.quantity}" min="1"
+                         onchange="updateQty('${escapeHtml(item.product_code)}', ${item.price}, this.value)">`
+                }
+            </td>
+            <td>KSH ${((item.price || 0) * item.quantity).toLocaleString()}</td>
+            <td>
+                <button class="remove-btn"
+                        onclick="removeItem('${escapeHtml(item.product_code)}', ${item.price})"
+                        title="Remove">
+                    <i class="fas fa-times"></i>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+    calculateTotals();
+}
+
+
+//CALCULATE TOTALS
+function calculateTotals() {
+    subtotal = cart.reduce((s, i) => s + (parseFloat(i.price) * i.quantity), 0);
+    total = subtotal;
+    document.getElementById('subtotalDisplay').textContent = formatMoney(subtotal);
+    document.getElementById('totalDisplay').textContent = formatMoney(total);
+    
+    // ✅ UPDATE SPLIT PAYMENT SUMMARY WHEN CART CHANGES
+    if (isSplitPaymentEnabled) {
+        updateSplitPaymentSummary();
+        checkSplitFinalizeReady();
+    }
+    
+    resetFinalizeButton();
+}
+
+
+
+//RESET FINALIZE BUTTON
+function resetFinalizeButton() {
+    const btn = document.getElementById('finalizeSaleBtn');
+    if (!btn) return;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-check-double"></i> Complete Sale';
+}
+
+
+//CHECK IF CAN FINALIZE SALE
+function checkCanFinalize() {
+    const btn = document.getElementById('finalizeSaleBtn');
+    if (!btn || !cart.length || total <= 0) { 
+        if (btn) btn.disabled = true; 
+        return; 
+    }
+    let ready = false;
+    if (selectedPayment === 'Cash') {
+        const paid = parseFloat(document.getElementById('cashAmount').value) || 0;
+        ready = paid >= total;
+        if (ready) {
+            showStatus(`✅ Ready to complete KSH ${total.toLocaleString()} cash sale`, 'success');
+        } else {
+            hideStatus();
+        }
+    } else if (selectedPayment === 'Card') {
+        const paid = parseFloat(document.getElementById('bankAmount').value) || 0;
+        ready = selectedBankName !== null && paid >= total;
+        if (ready) {
+            showStatus(`✅ Ready to complete KSH ${total.toLocaleString()} bank card sale`, 'success');
+        } else {
+            hideStatus();
+        }
+    }
+    btn.disabled = !ready;
+}
+// ============================================
+//  ✅✅✅✅  END  CART LOAD  SYSTEM ✅✅
+// ============================================
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// ============================================
+//  ✅✅✅✅ START SPLIT PAYMENT SYSTEM ✅✅
+// ============================================
 // Toggle split payment mode
 function toggleSplitPayment() {
     const checkbox = document.getElementById('enableSplitPayment');
     isSplitPaymentEnabled = checkbox.checked;
     
+    const splitFinalizeBtn = document.getElementById('finalizeSaleBtnArea');
+    const singleFinalizeBtn = document.getElementById('singlePaymentBtnArea');
+    const splitPaymentsContainer = document.getElementById('splitPaymentsContainer');
+    const paymentMethodsList = document.getElementById('paymentMethodsList');
+    const singlePaymentMethods = document.getElementById('singlePaymentMethods');
+    
     if (isSplitPaymentEnabled) {
+        // Show split payment UI
+        if (splitPaymentsContainer) splitPaymentsContainer.style.display = 'block';
+        if (paymentMethodsList) paymentMethodsList.style.display = 'block';
+        if (splitFinalizeBtn) splitFinalizeBtn.style.display = 'block';
+        if (singleFinalizeBtn) singleFinalizeBtn.style.display = 'none';
+        if (singlePaymentMethods) singlePaymentMethods.style.display = 'none';
+        
         // Initialize split payments
         splitPayments = [];
         renderSplitPaymentsList();
-        document.getElementById('splitPaymentsContainer').style.display = 'block';
         showToast('Split payment mode enabled. Add payment methods below.', 'info');
     } else {
         // Switch to single payment mode
@@ -1205,9 +2006,13 @@ function toggleSplitPayment() {
             return;
         }
         splitPayments = [];
-        document.getElementById('splitPaymentsContainer').style.display = 'none';
+        if (splitPaymentsContainer) splitPaymentsContainer.style.display = 'none';
+        if (paymentMethodsList) paymentMethodsList.style.display = 'none';
+        if (splitFinalizeBtn) splitFinalizeBtn.style.display = 'none';
+        if (singleFinalizeBtn) singleFinalizeBtn.style.display = 'block';
+        if (singlePaymentMethods) singlePaymentMethods.style.display = 'block';
         hideAllSplitInputs();
-        showToast('Split payment mode disabled', 'info');
+        showToast('Split payment mode disabled - using single payment', 'info');
     }
     
     updateSplitPaymentSummary();
@@ -1387,7 +2192,6 @@ function addToSplitPayments(payment) {
 }
 
 // Send M-Pesa STK for split payment
-// Send M-Pesa STK for split payment - FIXED VERSION
 async function sendSplitMpesaPayment() {
     if (!splitPendingMpesa) {
         // Try to get values directly from inputs
@@ -1464,7 +2268,6 @@ async function sendSplitMpesaPayment() {
 
 
 // Poll M-Pesa payment status
-// Poll M-Pesa payment status - FIXED VERSION
 function pollSplitMpesaPayment(checkoutId, amount) {
     let attempts = 0;
     const maxAttempts = 20; // 60 seconds max (3 seconds * 20)
@@ -1631,7 +2434,10 @@ function updateSplitPaymentSummary() {
     // Update the parent div content
     const remainingDiv = document.getElementById('splitRemaining');
     if (remainingDiv) {
-        if (remaining <= 0) {
+        if (total === 0) {
+            remainingDiv.innerHTML = '<strong>🛒 Cart is empty</strong>';
+            remainingDiv.style.color = '#6c757d';
+        } else if (remaining <= 0) {
             remainingDiv.innerHTML = '<strong>✅ Fully Paid!</strong>';
             remainingDiv.style.color = '#28a745';
         } else {
@@ -1647,7 +2453,7 @@ function updateSplitPaymentSummary() {
 function checkSplitFinalizeReady() {
     const btn = document.getElementById('finalizeSaleBtn');
     const totalPaid = getTotalPaid();
-    const isReady = isSplitPaymentEnabled && cart.length > 0 && totalPaid >= total;
+    const isReady = isSplitPaymentEnabled && cart.length > 0 && totalPaid >= total && total > 0;
     
     if (btn) {
         btn.disabled = !isReady;
@@ -1660,10 +2466,17 @@ function checkSplitFinalizeReady() {
                 showStatus(`⚠️ Remaining to pay: KSH ${(total - totalPaid).toLocaleString()}`, 'warning');
             } else if (cart.length === 0) {
                 hideStatus();
+                if (total === 0) {
+                    showStatus('🛒 Cart is empty. Add products to continue.', 'info');
+                    setTimeout(() => hideStatus(), 3000);
+                }
             }
         }
     }
 }
+
+
+
 
 // Load customer for points split payment
 async function loadSplitPointsCustomer(phone) {
@@ -1752,7 +2565,8 @@ function selectSplitBank(element, bankName) {
     element.classList.add('selected');
 }
 
-// Finalize split payment sale
+
+
 // Finalize split payment sale
 async function finalizeSplitSale() {
     if (!isSplitPaymentEnabled) {
@@ -1866,6 +2680,48 @@ async function finalizeSplitSale() {
             // ✅ RESET MPESA PENDING
             splitPendingMpesa = null;
             
+            // ✅ CLEAR MPESA INPUT FIELDS - ADD THIS!
+            const mpesaPhoneInput = document.getElementById('splitMpesaPhone');
+            const mpesaAmountInput = document.getElementById('splitMpesaAmount');
+            if (mpesaPhoneInput) {
+                mpesaPhoneInput.value = '';
+                mpesaPhoneInput.placeholder = 'Customer phone number for M-Pesa';
+            }
+            if (mpesaAmountInput) {
+                mpesaAmountInput.value = '';
+                mpesaAmountInput.placeholder = 'Amount to pay with M-Pesa';
+            }
+            
+            // ✅ CLEAR MPESA STATUS
+            const mpesaStatusDiv = document.getElementById('splitMpesaStatus');
+            if (mpesaStatusDiv) mpesaStatusDiv.innerHTML = '';
+            
+            // ✅ RESET MPESA PROGRESS BAR
+            const progressFill = document.querySelector('#mpesaInputArea .progress-fill');
+            if (progressFill) progressFill.style.width = '0%';
+            
+            // ✅ RESET MPESA SEND BUTTON
+            const mpesaSendBtn = document.querySelector('#mpesaInputArea .action-btn[onclick*="sendSplitMpesaPayment"]');
+            if (mpesaSendBtn) {
+                mpesaSendBtn.disabled = false;
+                mpesaSendBtn.innerHTML = 'Send STK Push';
+            }
+            
+            // ✅ CLEAR BANK INPUT FIELDS
+            const bankAmountInput = document.getElementById('splitBankAmount');
+            if (bankAmountInput) bankAmountInput.value = '';
+            
+            // ✅ CLEAR CASH INPUT FIELDS
+            const cashAmountInput = document.getElementById('splitCashAmount');
+            if (cashAmountInput) cashAmountInput.value = '';
+            
+            // ✅ CLEAR POINTS INPUT FIELDS
+            const pointsAmountInput = document.getElementById('splitPointsAmount');
+            if (pointsAmountInput) pointsAmountInput.value = '';
+            const splitPointsInfo = document.getElementById('splitPointsInfo');
+            if (splitPointsInfo) splitPointsInfo.style.display = 'none';
+            splitPointsCustomer = null;
+            
             // ✅ HIDE ALL INPUT AREAS
             hideAllSplitInputs();
             
@@ -1886,6 +2742,7 @@ async function finalizeSplitSale() {
         btn.innerHTML = '<i class="fas fa-check-double"></i> Complete Split Payment Sale';
     }
 }
+
 
 
 
@@ -1911,6 +2768,49 @@ function resetForNewSale() {
     document.getElementById('customerInfo').style.display = 'none';
     customerId = null;
     
+    // ✅ CLEAR MPESA INPUT FIELDS
+    const mpesaPhoneInput = document.getElementById('splitMpesaPhone');
+    const mpesaAmountInput = document.getElementById('splitMpesaAmount');
+    if (mpesaPhoneInput) {
+        mpesaPhoneInput.value = '';
+        mpesaPhoneInput.placeholder = 'Customer phone number for M-Pesa';
+    }
+    if (mpesaAmountInput) {
+        mpesaAmountInput.value = '';
+        mpesaAmountInput.placeholder = 'Amount to pay with M-Pesa';
+    }
+    
+    // ✅ CLEAR MPESA STATUS
+    const mpesaStatusDiv = document.getElementById('splitMpesaStatus');
+    if (mpesaStatusDiv) mpesaStatusDiv.innerHTML = '';
+    
+    // ✅ RESET MPESA PROGRESS BAR
+    const progressFill = document.querySelector('#mpesaInputArea .progress-fill');
+    if (progressFill) progressFill.style.width = '0%';
+    
+    // ✅ RESET MPESA SEND BUTTON
+    const mpesaSendBtn = document.querySelector('#mpesaInputArea .action-btn[onclick*="sendSplitMpesaPayment"]');
+    if (mpesaSendBtn) {
+        mpesaSendBtn.disabled = false;
+        mpesaSendBtn.innerHTML = 'Send STK Push';
+    }
+    
+    // ✅ CLEAR BANK INPUT
+    const bankAmountInput = document.getElementById('splitBankAmount');
+    if (bankAmountInput) bankAmountInput.value = '';
+    document.querySelectorAll('.bank-option.selected').forEach(b => b.classList.remove('selected'));
+    
+    // ✅ CLEAR CASH INPUT
+    const cashAmountInput = document.getElementById('splitCashAmount');
+    if (cashAmountInput) cashAmountInput.value = '';
+    
+    // ✅ CLEAR POINTS INPUT
+    const pointsAmountInput = document.getElementById('splitPointsAmount');
+    if (pointsAmountInput) pointsAmountInput.value = '';
+    const splitPointsInfo = document.getElementById('splitPointsInfo');
+    if (splitPointsInfo) splitPointsInfo.style.display = 'none';
+    splitPointsCustomer = null;
+    
     // Hide all input areas
     hideAllSplitInputs();
     
@@ -1922,6 +2822,42 @@ function resetForNewSale() {
     
     showToast('Ready for new sale!', 'success');
 }
+
+// ============================================
+//  ✅✅✅✅ END SPLIT PAYMENT SYSTEM ✅✅
+// ============================================
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1982,417 +2918,18 @@ function selectBank(element, bankName) {
     checkCanFinalize();
 }
 
-// ============================================
-// CART — LOAD & RENDER
-// ============================================
-async function loadCart() {
-    try {
-        const data = await safeFetch(URLS.get_cart);
-        if (data.success) {
-            cart = data.cart || [];
-            renderCart();
-        }
-    } catch(e) {
-        console.error('loadCart failed:', e.message);
-        showToast('Could not load cart: ' + e.message, 'error');
-    }
-}
-
-
-
-// Renders the cart table based on the current `cart` state.
-function renderCart() {
-    const tbody = document.getElementById('cartTableBody');
-    if (!cart.length) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:#999;">Cart is empty — scan or enter a product code</td></tr>';
-        calculateTotals();
-        return;
-    }
-    tbody.innerHTML = cart.map(item => `
-        <tr>
-            <td>
-                <strong>${escapeHtml(item.name)}</strong>
-                ${item.sku_value ? `<br><small style="color:#888;">SKU: ${escapeHtml(item.sku_value)}</small>` : ''}
-                <br><small style="color:#aaa;">${escapeHtml(item.product_code)}</small>
-            </td>
-            <td>KSH ${(item.price || 0).toLocaleString()}</td>
-            <td>
-                ${item.is_single
-                    ? '<span style="color:#888;">×1</span>'
-                    : `<input type="number" class="quantity-input" value="${item.quantity}" min="1"
-                         onchange="updateQty('${escapeHtml(item.product_code)}', ${item.price}, this.value)">`
-                }
-            </td>
-            <td>KSH ${((item.price || 0) * item.quantity).toLocaleString()}</td>
-            <td>
-                <button class="remove-btn"
-                        onclick="removeItem('${escapeHtml(item.product_code)}', ${item.price})"
-                        title="Remove">
-                    <i class="fas fa-times"></i>
-                </button>
-            </td>
-        </tr>`
-    ).join('');
-    calculateTotals();
-}
-
-
-
-function calculateTotals() {
-    subtotal = cart.reduce((s, i) => s + (parseFloat(i.price) * i.quantity), 0);
-    total = subtotal;
-    document.getElementById('subtotalDisplay').textContent = formatMoney(subtotal);
-    document.getElementById('totalDisplay').textContent = formatMoney(total);
-    resetFinalizeButton();
-}
-
-
-
-
-function resetFinalizeButton() {
-    const btn = document.getElementById('finalizeSaleBtn');
-    if (!btn) return;
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-check-double"></i> Complete Sale';
-}
 
 
 
 
 
 
-function checkCanFinalize() {
-    const btn = document.getElementById('finalizeSaleBtn');
-    if (!btn || !cart.length || total <= 0) { 
-        if (btn) btn.disabled = true; 
-        return; 
-    }
-    let ready = false;
-    if (selectedPayment === 'Cash') {
-        const paid = parseFloat(document.getElementById('cashAmount').value) || 0;
-        ready = paid >= total;
-        if (ready) {
-            showStatus(`✅ Ready to complete KSH ${total.toLocaleString()} cash sale`, 'success');
-        } else {
-            hideStatus();
-        }
-    } else if (selectedPayment === 'Card') {
-        const paid = parseFloat(document.getElementById('bankAmount').value) || 0;
-        ready = selectedBankName !== null && paid >= total;
-        if (ready) {
-            showStatus(`✅ Ready to complete KSH ${total.toLocaleString()} bank card sale`, 'success');
-        } else {
-            hideStatus();
-        }
-    }
-    btn.disabled = !ready;
-}
-
-
-
-//============================================
-// Customer Registration via AJAX
-//=============================================
-async function submitCustomerRegistration(event) {
-    event.preventDefault(); // Prevent normal form submission
-    
-    // Get form values
-    const phone = document.getElementById('reg_phone').value.trim();
-    const name = document.getElementById('reg_name').value.trim();
-    const email = document.getElementById('reg_email').value.trim();
-    const idNumber = document.getElementById('reg_id').value.trim();
-    
-    // Clear previous errors
-    document.getElementById('reg_phone_error').style.display = 'none';
-    document.getElementById('reg_name_error').style.display = 'none';
-    
-    // Validate
-    let hasError = false;
-    
-    if (!phone) {
-        document.getElementById('reg_phone_error').textContent = 'Phone number is required';
-        document.getElementById('reg_phone_error').style.display = 'block';
-        hasError = true;
-    } else {
-        // Validate phone format
-        const cleanPhone = phone.replace(/\D/g, '');
-        if (cleanPhone.length < 9 || cleanPhone.length > 12) {
-            document.getElementById('reg_phone_error').textContent = 'Please enter a valid phone number (10-12 digits)';
-            document.getElementById('reg_phone_error').style.display = 'block';
-            hasError = true;
-        }
-    }
-    
-    if (!name) {
-        document.getElementById('reg_name_error').textContent = 'Full name is required';
-        document.getElementById('reg_name_error').style.display = 'block';
-        hasError = true;
-    }
-    
-    if (hasError) return;
-    
-    // Disable button and show loading
-    const btn = document.getElementById('registerCustomerBtn');
-    const originalText = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span> Registering...';
-    
-    try {
-        // Create FormData object for traditional form submission
-        const formData = new FormData();
-        formData.append('phone_number', phone);
-        formData.append('full_name', name);
-        formData.append('email', email);
-        formData.append('id_number', idNumber);
-        formData.append('csrfmiddlewaretoken', CSRF);
-        
-        const response = await fetch('/sales/customer/register/', {
-            method: 'POST',
-            body: formData,
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest'
-            }
-        });
-        
-        // Check if response is JSON or redirect
-        const contentType = response.headers.get('content-type');
-        
-        if (contentType && contentType.includes('application/json')) {
-            const data = await response.json();
-            if (data.success) {
-                showToast(`✅ Customer ${name} registered successfully! Welcome bonus: ${data.welcome_points || 100} points`, 'success');
-                
-                // Clear form
-                document.getElementById('reg_phone').value = '';
-                document.getElementById('reg_name').value = '';
-                document.getElementById('reg_email').value = '';
-                document.getElementById('reg_id').value = '';
-                
-                // Auto-fill in customer lookup fields
-                const customerPhoneInput = document.getElementById('customer-phone-input');
-                if (customerPhoneInput) {
-                    customerPhoneInput.value = phone;
-                    // Trigger lookup
-                    setTimeout(() => {
-                        lookupCustomer();
-                    }, 500);
-                }
-                
-                // Also update main customer fields
-                const mainCustomerPhone = document.getElementById('customerPhone');
-                if (mainCustomerPhone) {
-                    mainCustomerPhone.value = phone;
-                    onCustomerPhoneInput(phone);
-                }
-                
-                // Switch back to POS page after 1.5 seconds
-                setTimeout(() => {
-                    showPage('pos');
-                    showToast('Customer ready for checkout!', 'success');
-                }, 1500);
-            } else {
-                showToast(data.error || 'Registration failed', 'error');
-                btn.disabled = false;
-                btn.innerHTML = originalText;
-            }
-        } else {
-            // If redirect happened, registration was successful
-            showToast(`✅ Customer ${name} registered successfully!`, 'success');
-            
-            // Clear form
-            document.getElementById('reg_phone').value = '';
-            document.getElementById('reg_name').value = '';
-            document.getElementById('reg_email').value = '';
-            document.getElementById('reg_id').value = '';
-            
-            // Auto-fill customer phone
-            const customerPhoneInput = document.getElementById('customer-phone-input');
-            if (customerPhoneInput) {
-                customerPhoneInput.value = phone;
-                setTimeout(() => {
-                    lookupCustomer();
-                }, 500);
-            }
-            
-            // Switch back to POS
-            setTimeout(() => {
-                showPage('pos');
-            }, 1500);
-        }
-        
-    } catch (error) {
-        console.error('Registration error:', error);
-        showToast('Registration failed: ' + error.message, 'error');
-        btn.disabled = false;
-        btn.innerHTML = originalText;
-    }
-}
 
 
 
 
 
 
-// ============================================
-// ADD TO CART
-// ============================================
-async function addToCart() {
-    const code = document.getElementById('productSearchInput').value.trim();
-    if (!code) { showToast('Enter a product code or barcode', 'error'); return; }
-
-    const customPriceRaw = document.getElementById('customPrice').value.trim();
-    const hasCustom      = customPriceRaw !== '' && !isNaN(parseFloat(customPriceRaw));
-
-    try {
-        const data = await safeFetch(URLS.add_to_cart, {
-            method:  'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-            body:    JSON.stringify({
-                product_code:     code,
-                quantity:         1,
-                custom_price:     hasCustom ? parseFloat(customPriceRaw) : null,
-                allow_price_edit: hasCustom
-            })
-        });
-
-        if (data.success) {
-            cart = data.cart || [];
-            renderCart();
-            document.getElementById('productSearchInput').value = '';
-            document.getElementById('customPrice').value        = '';
-            document.getElementById('productSearchInput').focus();
-            showToast(data.message || 'Added to cart', 'success');
-        } else {
-            showToast(data.error || 'Could not add product', 'error');
-        }
-    } catch(e) {
-        showToast('Add to cart failed: ' + e.message, 'error');
-    }
-}
-
-// ============================================
-// UPDATE QTY  — must send price so backend can
-// identify the correct cart row
-// ============================================
-async function updateQty(productCode, price, qty) {
-    const newQty = Math.max(1, parseInt(qty) || 1);
-    try {
-        const data = await safeFetch(URLS.update_cart, {
-            method:  'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-            body:    JSON.stringify({ product_code: productCode, price: price, quantity: newQty })
-        });
-        if (data.success) {
-            cart = data.cart || [];
-            renderCart();
-        } else {
-            showToast(data.error || 'Update failed', 'error');
-            loadCart();
-        }
-    } catch(e) {
-        showToast('Update failed: ' + e.message, 'error');
-        loadCart();
-    }
-}
-
-// ============================================
-// REMOVE — must send price so backend can
-// identify the correct cart row
-// ============================================
-async function removeItem(productCode, price) {
-    try {
-        const data = await safeFetch(URLS.remove_from_cart, {
-            method:  'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-            body:    JSON.stringify({ product_code: productCode, price: price })
-        });
-        if (data.success) {
-            cart = data.cart || [];
-            renderCart();
-        } else {
-            showToast(data.error || 'Remove failed', 'error');
-        }
-    } catch(e) {
-        showToast('Remove failed: ' + e.message, 'error');
-    }
-}
-
-// ============================================
-// CLEAR CART
-// ============================================
-async function clearCart() {
-    if (!confirm('Clear entire cart?')) return;
-    try {
-        await safeFetch(URLS.clear_cart, {
-            method: 'POST',
-            headers: { 'X-CSRFToken': CSRF }
-        });
-        cart = [];
-        renderCart();
-        hideStatus();
-        showToast('Cart cleared', 'success');
-    } catch(e) {
-        showToast('Clear cart failed: ' + e.message, 'error');
-    }
-}
-
-// ============================================
-// CUSTOMER LOOKUP
-// ============================================
-let phoneTimer;
-function onCustomerPhoneInput(phone) {
-    clearTimeout(phoneTimer);
-    document.getElementById('customerInfo').style.display = 'none';
-    document.getElementById('verifiedCustomerId').value   = '';
-    customerId            = null;
-    customerPointsBalance = 0;
-    if (phone.replace(/\D/g,'').length < 9) return;
-    phoneTimer = setTimeout(() => lookupCustomer(phone), 500);
-}
-
-async function lookupCustomer(phone) {
-    try {
-        const data = await safeFetch(
-            `${URLS.customer_search}?phone=${encodeURIComponent(phone)}`
-        );
-        if (data.customers && data.customers.length > 0) {
-            const c = data.customers[0];
-            customerId            = c.id;
-            customerPointsBalance = parseFloat(c.points) || 0;
-            document.getElementById('verifiedCustomerId').value        = c.id;
-            document.getElementById('customerName').textContent        = c.name;
-            document.getElementById('customerPoints').textContent      = Math.floor(customerPointsBalance);
-            document.getElementById('customerPointsValue').textContent = Math.floor(customerPointsBalance);
-            document.getElementById('customerInfo').style.display      = 'block';
-            if (selectedPayment === 'Points') {
-                document.getElementById('sendOtpBtn').style.display = 'block';
-            }
-            showToast(`Customer: ${c.name} — ${Math.floor(c.points)} pts`, 'success');
-        } else {
-            customerId = null;
-            document.getElementById('customerInfo').style.display = 'none';
-        }
-    } catch(e) {
-        console.error('Customer lookup failed:', e.message);
-    }
-}
-
-// ============================================
-// CASH CHANGE CALCULATOR
-// ============================================
-function calculateCashChange() {
-    const paid   = parseFloat(document.getElementById('cashAmount').value) || 0;
-    const change = paid - total;
-    const el     = document.getElementById('changeAmount');
-    if (change < 0) {
-        el.style.color = '#dc3545';
-        el.textContent = `Short KSH ${Math.abs(change).toLocaleString()}`;
-    } else {
-        el.style.color = '#28a745';
-        el.textContent = `KSH ${change.toLocaleString()}`;
-    }
-    checkCanFinalize();
-}
 
 
 
@@ -3152,97 +3689,9 @@ function updateDiscountPreview() {
 
 
 
-
-
 // ============================================
-// INITIALIZATION
+// ✅✅✅ START INITIALIZE DASHBOARD ✅✅✅
 // ============================================
-// ============================================
-// SIDEBAR CUSTOMER LOOKUP FUNCTIONS
-// ============================================
-
-function lookupCustomer() {
-    const phone = document.getElementById('customer-phone-input').value.trim();
-    if (!phone) {
-        showToast('Enter phone number', 'error');
-        return;
-    }
-    
-    safeFetch(`${URLS.customer_search}?phone=${encodeURIComponent(phone)}`)
-        .then(data => {
-            if (data.customers && data.customers.length > 0) {
-                const customer = data.customers[0];
-                document.getElementById('cust-name').textContent = customer.name;
-                document.getElementById('cust-points').textContent = Math.floor(customer.points);
-                document.getElementById('cust-spent').textContent = customer.total_spent.toLocaleString();
-                document.getElementById('customer-info').style.display = 'block';
-                
-                // Store customer data
-                window.selectedCustomer = {
-                    id: customer.id,
-                    name: customer.name,
-                    phone: customer.phone,
-                    points: customer.points
-                };
-                showToast(`Customer found: ${customer.name}`, 'success');
-            } else {
-                showToast('Customer not found. Please register.', 'warning');
-                document.getElementById('customer-info').style.display = 'none';
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            showToast('Error looking up customer', 'error');
-        });
-}
-
-function registerCustomer() {
-    const phone = document.getElementById('customer-phone-input').value.trim();
-    if (phone) {
-        window.location.href = `/sales/customer/register/?phone=${encodeURIComponent(phone)}`;
-    } else {
-        window.location.href = '/sales/customer/register/';
-    }
-}
-
-function useCustomer() {
-    if (window.selectedCustomer) {
-        // Update the main customer fields
-        const customerPhoneInput = document.getElementById('customerPhone');
-        const customerNameSpan = document.getElementById('customerName');
-        const customerPointsSpan = document.getElementById('customerPoints');
-        const verifiedCustomerIdInput = document.getElementById('verifiedCustomerId');
-        const customerInfoDiv = document.getElementById('customerInfo');
-        
-        if (customerPhoneInput) customerPhoneInput.value = window.selectedCustomer.phone;
-        if (customerNameSpan) customerNameSpan.textContent = window.selectedCustomer.name;
-        if (customerPointsSpan) customerPointsSpan.textContent = Math.floor(window.selectedCustomer.points);
-        if (verifiedCustomerIdInput) verifiedCustomerIdInput.value = window.selectedCustomer.id;
-        if (customerInfoDiv) customerInfoDiv.style.display = 'block';
-        
-        // Also update points redemption section if visible
-        if (document.getElementById('pointsCustomerPhone')) {
-            document.getElementById('pointsCustomerPhone').value = window.selectedCustomer.phone;
-            // Trigger customer lookup in points section
-            onPointsCustomerPhoneInput(window.selectedCustomer.phone);
-        }
-        
-        // Close sidebar customer info
-        document.getElementById('customer-info').style.display = 'none';
-        document.getElementById('customer-phone-input').value = '';
-        
-        showToast(`Customer selected: ${window.selectedCustomer.name}`, 'success');
-        
-        // Trigger points display update
-        if (typeof updatePointsCartTotal === 'function') {
-            updatePointsCartTotal();
-        }
-    } else {
-        showToast('No customer selected', 'warning');
-    }
-}
-
-
 
 // Initialize everything when page loads
 document.addEventListener('DOMContentLoaded', function () {
@@ -3317,141 +3766,9 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 // ============================================
-// IMAGE SLIDESHOW FUNCTIONALITY
+// ✅✅✅ END INITIALIZE DASHBOARD ✅✅✅
 // ============================================
-function initCardSlideshow() {
-    const cardContainers = document.querySelectorAll('.card-slideshow');
-    
-    cardContainers.forEach((container) => {
-        const cardSlides = container.querySelectorAll('.card-slide');
-        if (!cardSlides.length) return;
-        
-        let currentCardSlide = 0;
-        const totalCardSlides = cardSlides.length;
-        let cardSlideInterval;
-        
-        function showCardSlide(index) {
-            cardSlides.forEach(slide => slide.classList.remove('active'));
-            cardSlides[index].classList.add('active');
-            currentCardSlide = index;
-        }
-        
-        function nextCardSlide() {
-            let next = (currentCardSlide + 1) % totalCardSlides;
-            showCardSlide(next);
-        }
-        
-        function startCardSlideshow() {
-            if (cardSlideInterval) clearInterval(cardSlideInterval);
-            cardSlideInterval = setInterval(nextCardSlide, 5000);
-        }
-        
-        function stopCardSlideshow() {
-            if (cardSlideInterval) clearInterval(cardSlideInterval);
-        }
-        
-        showCardSlide(0);
-        startCardSlideshow();
-        
-        // Pause on hover
-        container.addEventListener('mouseenter', stopCardSlideshow);
-        container.addEventListener('mouseleave', startCardSlideshow);
-    });
-}
 
-
-//INSLIDE SHOW
-function initSlideshow() {
-    const slides = document.querySelectorAll('.slide');
-    const captionElement = document.getElementById('slideCaption');
-    const indicatorsContainer = document.getElementById('slideIndicators');
-    
-    if (!slides.length || !captionElement || !indicatorsContainer) {
-        console.log('Slideshow elements not found');
-        return;
-    }
-    
-    // Image captions for each slide
-    const captions = [
-        'FieldMax Shop - Your One Stop Shop',
-        'Electronics & Gadgets',
-        'Car Chargers - Fast Charging',
-        'Professional Repair Services',
-        'Tecno Latest Models Available',
-        'Smart Watches Collection',
-        'Premium Watches',
-        'Quality Headsets',
-        'Wireless Headsets',
-        'Expert Phone Repair'
-    ];
-    
-    // Clear existing indicators
-    indicatorsContainer.innerHTML = '';
-    
-    // Create indicators
-    slides.forEach((_, index) => {
-        const dot = document.createElement('div');
-        dot.classList.add('dot');
-        if (index === 0) dot.classList.add('active');
-        dot.addEventListener('click', () => showSlide(index, slides, captions, indicatorsContainer));
-        indicatorsContainer.appendChild(dot);
-    });
-    
-    let currentSlide = 0;
-    const totalSlides = slides.length;
-    let slideInterval;
-    
-    // Function to show a specific slide
-    window.showSlide = function(index, slidesParam, captionsParam, indicatorsParam) {
-        const slidesToUse = slidesParam || slides;
-        const captionsToUse = captionsParam || captions;
-        const indicatorsToUse = indicatorsParam || indicatorsContainer;
-        
-        // Remove active class from all slides and dots
-        slidesToUse.forEach(slide => slide.classList.remove('active'));
-        const dots = indicatorsToUse.querySelectorAll('.dot');
-        dots.forEach(dot => dot.classList.remove('active'));
-        
-        // Add active class to current slide and dot
-        slidesToUse[index].classList.add('active');
-        dots[index].classList.add('active');
-        
-        // Update caption
-        if (captionElement) {
-            captionElement.textContent = captionsToUse[index] || 'Special Offer';
-        }
-        
-        currentSlide = index;
-    };
-    
-    // Function to show next slide
-    function nextSlide() {
-        let next = (currentSlide + 1) % totalSlides;
-        showSlide(next, slides, captions, indicatorsContainer);
-    }
-    
-    // Start automatic slideshow
-    function startSlideshow() {
-        if (slideInterval) clearInterval(slideInterval);
-        slideInterval = setInterval(nextSlide, 5000); // Change every 5 seconds
-    }
-    
-    // Stop slideshow
-    function stopSlideshow() {
-        if (slideInterval) clearInterval(slideInterval);
-    }
-    
-    // Initialize with first slide
-    showSlide(0, slides, captions, indicatorsContainer);
-    startSlideshow();
-    
-    // Pause on hover
-    const slideshowContainer = document.querySelector('.slideshow-container');
-    if (slideshowContainer) {
-        slideshowContainer.addEventListener('mouseenter', stopSlideshow);
-        slideshowContainer.addEventListener('mouseleave', startSlideshow);
-    }
-}
 
 </script>
 </body>

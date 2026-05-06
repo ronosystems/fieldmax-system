@@ -3612,6 +3612,90 @@ def delete_pending_sale(request, sale_id):
 
 
 
+@login_required
+def check_mpesa_pending(request):
+    """Check if there's a pending M-Pesa transaction for a phone number"""
+    try:
+        phone_number = request.GET.get('phone', '')
+        if not phone_number:
+            return JsonResponse({'has_pending': False})
+        
+        cleaned_phone = normalize_phone(phone_number)
+        
+        from finance.models import MpesaTransaction
+        from datetime import timedelta
+        
+        # Find pending transaction in last 5 minutes
+        time_threshold = timezone.now() - timedelta(minutes=5)
+        pending_trans = MpesaTransaction.objects.filter(
+            phone_number__icontains=cleaned_phone,
+            status='pending',
+            created_at__gte=time_threshold
+        ).first()
+        
+        if pending_trans:
+            # Calculate seconds remaining (2 minutes total from creation)
+            elapsed = (timezone.now() - pending_trans.created_at).total_seconds()
+            remaining = max(0, 120 - elapsed)
+            
+            return JsonResponse({
+                'has_pending': True,
+                'seconds_remaining': remaining,
+                'checkout_id': pending_trans.checkout_request_id
+            })
+        
+        return JsonResponse({'has_pending': False})
+        
+    except Exception as e:
+        logger.error(f"Error checking pending M-Pesa: {str(e)}")
+        return JsonResponse({'has_pending': False})
+
+
+
+@login_required
+def cancel_pending_mpesa(request):
+    """Cancel/clear pending M-Pesa transaction for a phone number"""
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            phone_number = data.get('phone_number', '')
+            
+            if not phone_number:
+                return JsonResponse({'success': False, 'error': 'Phone number required'})
+            
+            cleaned_phone = normalize_phone(phone_number)
+            
+            # Find pending transactions for this phone
+            from finance.models import MpesaTransaction
+            pending_transactions = MpesaTransaction.objects.filter(
+                phone_number__icontains=cleaned_phone,
+                status='pending',
+                created_at__gte=timezone.now() - timedelta(minutes=30)
+            )
+            
+            # Mark them as cancelled/expired
+            count = pending_transactions.update(
+                status='expired',
+                result_desc='Cancelled by user',
+                updated_at=timezone.now()
+            )
+            
+            return JsonResponse({
+                'success': True,
+                'message': f'Cancelled {count} pending transaction(s)',
+                'count': count
+            })
+            
+        except Exception as e:
+            logger.error(f"Error cancelling pending M-Pesa: {str(e)}")
+            return JsonResponse({'success': False, 'error': str(e)})
+    
+    return JsonResponse({'success': False, 'error': 'Invalid method'})
+
+
+
+
+
 
 @require_http_methods(["POST"])
 @csrf_exempt
