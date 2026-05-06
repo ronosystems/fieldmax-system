@@ -3696,7 +3696,6 @@ def cancel_pending_mpesa(request):
 
 
 
-
 @require_http_methods(["POST"])
 @csrf_exempt
 def create_split_payment_sale(request):
@@ -3713,7 +3712,8 @@ def create_split_payment_sale(request):
         split_payments = data.get('split_payments', [])
         total_amount = Decimal(str(data.get('cart_total', 0)))
         total_paid = Decimal(str(data.get('amount_paid', 0)))
-        points_redeemed_total = data.get('points_redeemed', 0)
+        points_redeemed_total = int(data.get('points_redeemed', 0))
+        points_redeemed_customer_id = data.get('points_redeemed_customer_id')
         
         # Validate payment totals
         calculated_total = sum(Decimal(str(p.get('amount', 0))) for p in split_payments)
@@ -3722,35 +3722,65 @@ def create_split_payment_sale(request):
                 'error': f'Payment total mismatch: {calculated_total} vs {total_paid}'
             }, status=400)
         
-        # Get or create customer
-        verified_customer_id = data.get('verified_customer_id')
-        customer = None
-        if verified_customer_id:
-            from .models import Customer
-            try:
-                customer = Customer.objects.get(id=verified_customer_id)
-            except Customer.DoesNotExist:
-                customer = None
-        
         # Start database transaction
         with transaction.atomic():
             # Generate sale ID using your existing system
             from .models import generate_custom_sale_id
             sale_id = generate_custom_sale_id()
             
+            # ============================================
+            # FIRST: Get customer info for points redemption
+            # ============================================
+            points_customer = None
+            buyer_name = data.get('buyer_name', 'Walk-in Customer')
+            buyer_phone = data.get('buyer_phone', '')
+            points_customer_id = None
+            
+            if points_redeemed_total > 0 and points_redeemed_customer_id:
+                from .models import Customer
+                try:
+                    points_customer = Customer.objects.select_for_update().get(id=points_redeemed_customer_id)
+                    points_customer_id = points_customer.id
+                    
+                    # Check if customer has enough points
+                    if points_customer.points_balance < points_redeemed_total:
+                        raise ValueError(f"Insufficient points. Available: {points_customer.points_balance}, Requested: {points_redeemed_total}")
+                    
+                    # USE THE CUSTOMER'S NAME AND PHONE FOR THE SALE
+                    buyer_name = points_customer.full_name
+                    buyer_phone = points_customer.phone_number
+                    
+                    logger.info(f"✅ Points redemption by customer: {points_customer.full_name} ({points_customer.phone_number})")
+                    logger.info(f"   Redeeming {points_redeemed_total} points, current balance: {points_customer.points_balance}")
+                    
+                except Customer.DoesNotExist:
+                    logger.warning(f"Customer {points_redeemed_customer_id} not found for points redemption")
+            
+            # Also check for regular customer lookup (without points redemption)
+            verified_customer_id = data.get('verified_customer_id')
+            if not points_customer and verified_customer_id:
+                from .models import Customer
+                try:
+                    regular_customer = Customer.objects.get(id=verified_customer_id)
+                    buyer_name = regular_customer.full_name
+                    buyer_phone = regular_customer.phone_number
+                    logger.info(f"✅ Regular customer: {regular_customer.full_name}")
+                except Customer.DoesNotExist:
+                    pass
+            
             # Calculate original subtotal (before points discount)
             original_subtotal = total_amount + Decimal(str(points_redeemed_total))
             
-            # Create sale record
+            # Create sale record with CORRECT customer name
             sale = Sale.objects.create(
                 sale_id=sale_id,
                 seller=request.user if request.user.is_authenticated else None,
-                buyer_name=data.get('buyer_name', 'Walk-in Customer'),
-                buyer_phone=data.get('buyer_phone', ''),
-                buyer_id_number=data.get('buyer_id_number', ''),
+                buyer_name=buyer_name,  # NOW USING CUSTOMER NAME
+                buyer_phone=buyer_phone,  # NOW USING CUSTOMER PHONE
+                buyer_id_number=points_customer.id_number if points_customer else data.get('buyer_id_number', ''),
                 total_amount=total_amount,
                 amount_paid=total_paid,
-                payment_method='Split',  # Indicate split payment
+                payment_method='Split',
                 is_split_payment=True,
                 is_credit=False,
                 points_redeemed=points_redeemed_total,
@@ -3762,6 +3792,30 @@ def create_split_payment_sale(request):
             # Track change amount for cash payments
             total_cash = sum(p.get('amount', 0) for p in split_payments if p.get('method') == 'Cash')
             change_amount = max(Decimal('0'), Decimal(str(total_cash)) - total_amount)
+            
+            # ============================================
+            # Handle points redemption - DEDUCT POINTS
+            # ============================================
+            if points_redeemed_total > 0 and points_customer:
+                # Deduct points
+                points_customer.points_balance -= points_redeemed_total
+                points_customer.total_spent += original_subtotal
+                points_customer.total_purchases += 1
+                points_customer.last_purchase_date = timezone.now()
+                points_customer.save()
+                
+                # Record the redemption
+                from .models import LoyaltyTransaction
+                LoyaltyTransaction.objects.create(
+                    customer=points_customer,
+                    points=-points_redeemed_total,
+                    transaction_type='redeemed',
+                    sale=sale,
+                    description=f"Redeemed {points_redeemed_total} points for sale #{sale.sale_id}"
+                )
+                
+                logger.info(f"✅ Points redeemed: {points_redeemed_total} deducted from customer {points_customer.phone_number}")
+                logger.info(f"   New balance: {points_customer.points_balance}")
             
             # Create individual payment records
             for payment in split_payments:
@@ -3791,6 +3845,7 @@ def create_split_payment_sale(request):
                     
                 elif method == 'Points':
                     payment_record.points_redeemed = payment.get('points', 0)
+                    payment_record.customer = points_customer
                 
                 payment_record.save()
             
@@ -3837,28 +3892,33 @@ def create_split_payment_sale(request):
                     total_price=total_price
                 )
                 
-                # Process the sale (deduct stock using your existing method)
+                # Process the sale (deduct stock)
                 sale_item.process_sale()
             
-            # Process loyalty points if customer exists
+            # Award loyalty points ONLY if points were NOT redeemed
             points_earned = 0
-            if customer and points_redeemed_total == 0:
-                # Award points (1% of sale value as per your Customer model)
-                points_earned = customer.add_points_from_sale(
-                    sale, 
-                    description=f"Points earned from split payment sale"
-                )
+            new_balance = points_customer.points_balance if points_customer else 0
             
-            # Handle points redemption if applicable
-            if points_redeemed_total > 0 and customer:
-                # Redeem points (your existing Customer.redeem_points method)
-                cash_value = customer.redeem_points(
-                    points_redeemed_total,
-                    sale=sale,
-                    description=f"Points redeemed in split payment sale"
-                )
+            if points_redeemed_total == 0 and points_customer:
+                # Award points (1% of sale value)
+                points_to_award = int(total_amount / 100)
+                if points_to_award > 0:
+                    points_customer.points_balance += points_to_award
+                    points_customer.save()
+                    
+                    from .models import LoyaltyTransaction
+                    LoyaltyTransaction.objects.create(
+                        customer=points_customer,
+                        points=points_to_award,
+                        transaction_type='earned',
+                        sale=sale,
+                        description=f"Points earned from split payment sale"
+                    )
+                    points_earned = points_to_award
+                    new_balance = points_customer.points_balance
+                    logger.info(f"✅ Points awarded: {points_earned} to customer {points_customer.phone_number}")
             
-            # Return success response
+            # Return success response with customer info
             return JsonResponse({
                 'success': True,
                 'sale_id': sale.sale_id,
@@ -3868,14 +3928,17 @@ def create_split_payment_sale(request):
                     {'method': p.method, 'amount': float(p.amount)} 
                     for p in sale.payment_records.all()
                 ],
-                'points_earned': float(points_earned) if points_earned else 0,
+                'points_earned': points_earned,
                 'points_redeemed': points_redeemed_total,
+                'new_points_balance': new_balance,
+                'customer_name': buyer_name,
+                'customer_phone': buyer_phone,
                 'change_amount': float(change_amount) if change_amount > 0 else 0
             })
             
     except Exception as e:
         logger.error(f"Split payment sale error: {str(e)}", exc_info=True)
-        return JsonResponse({'error': f'Sale failed: {str(e)}'}, status=500)
+        return JsonResponse({'success': False, 'error': f'Sale failed: {str(e)}'}, status=500)
 
 
 @require_http_methods(["GET"])

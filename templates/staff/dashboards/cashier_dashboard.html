@@ -392,7 +392,7 @@
     <div style="margin-bottom: 15px;">
         <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
             <input type="checkbox" id="enableSplitPayment" onchange="toggleSplitPayment()">
-            <span><i class="fas fa-random"></i> Enable Split Payment (Multiple Methods)</span>
+            <span><i class="fas fa-random"></i>( PAYMENT METHODS )</span>
         </label>
     </div>
 
@@ -420,11 +420,9 @@
 
     <!-- Split Payments List -->
     <div id="splitPaymentsContainer" style="margin-bottom: 15px;">
-        <div class="section-title">💰 Payment Breakdown</div>
+        <div class="section-title">💰 PAYMENT BREAKDOWN</div>
         <div id="paymentsList" style="max-height: 300px; overflow-y: auto;">
-            <div style="text-align: center; color: #999; padding: 20px;">
-                No payment methods added yet. Click "Add" buttons above.
-            </div>
+            <div style="text-align: center; color: #999; padding: 20px;"></div>
         </div>
         <div id="paymentSummary" style="margin-top: 10px; padding: 10px; background: #f8f9fa; border-radius: 8px;">
             <div><strong>Total to Pay:</strong> KSH <span id="splitTotalToPay">0.00</span></div>
@@ -480,6 +478,12 @@
                 Available: <span id="splitPointsBalance">0</span> pts
             </div>
             <input type="number" id="splitPointsAmount" class="form-input" placeholder="Points to redeem (1pt = KSH1)" oninput="updateSplitPayment('Points')">
+        
+            <!-- ADD THIS SEND OTP BUTTON -->
+            <button class="action-btn" id="sendSplitPointsOtpBtn" onclick="sendSplitPointsOtp()" style="margin-bottom: 10px;">
+                <i class="fas fa-paper-plane"></i> Send OTP to Customer
+            </button>
+        
             <div id="splitPointsOtpSection" style="display: none;">
                 <div class="otp-row">
                     <input type="text" maxlength="1" class="otp-digit" id="splitOtp0" onkeyup="moveToNextSplitOtp(this,0)">
@@ -497,7 +501,7 @@
 
     <!-- Customer Section -->
     <div class="customer-section">
-        <div class="section-title">👤 Customer Lookup</div>
+        <div class="section-title">👤 CUSTOMER LOOKUP</div>
         <input type="tel" id="customerPhone" class="form-input" placeholder="Phone number (for loyalty points)" oninput="onCustomerPhoneInput(this.value)">
         <div id="customerInfo" class="customer-info">
             <strong id="customerName"></strong><br>
@@ -1826,18 +1830,25 @@ async function removeItem(productCode, price) {
 
 // CLEAR CART
 async function clearCart() {
-    if (!confirm('Clear entire cart?')) return;
     try {
-        await safeFetch(URLS.clear_cart, {
+        const response = await safeFetch(URLS.clear_cart, {
             method: 'POST',
             headers: { 'X-CSRFToken': CSRF }
         });
-        cart = [];
-        renderCart();
-        hideStatus();
-        showToast('Cart cleared', 'success');
+        if (response.success) {
+            cart = [];
+            renderCart();
+            hideStatus();
+            showToast('Cart cleared', 'success');
+            return true;
+        } else {
+            showToast('Could not clear cart', 'error');
+            return false;
+        }
     } catch(e) {
+        console.error('Clear cart error:', e);
         showToast('Clear cart failed: ' + e.message, 'error');
+        return false;
     }
 }
 
@@ -2181,14 +2192,27 @@ function addToSplitPayments(payment) {
         document.getElementById('bankInputArea').style.display = 'none';
         document.querySelectorAll('.bank-option').forEach(b => b.classList.remove('selected'));
     } else if (payment.method === 'Points') {
+        // Points are handled in verifySplitPointsOtp - just hide the area
         document.getElementById('splitPointsAmount').value = '';
         document.getElementById('pointsInputArea').style.display = 'none';
-        document.getElementById('splitPointsOtpSection').style.display = 'block';
+        document.getElementById('splitPointsOtpSection').style.display = 'none';
+        // Clear OTP inputs
+        for (let i = 0; i < 4; i++) {
+            if (document.getElementById(`splitOtp${i}`)) {
+                document.getElementById(`splitOtp${i}`).value = '';
+            }
+        }
+        // Reset split points customer
+        splitPointsCustomer = null;
+        document.getElementById('splitPointsInfo').style.display = 'none';
     }
     
     renderSplitPaymentsList();
     updateSplitPaymentSummary();
     checkSplitFinalizeReady();
+    
+    // Show success toast
+    showToast(`✅ ${payment.method} payment of KSH ${payment.amount.toLocaleString()} added!`, 'success');
 }
 
 // Send M-Pesa STK for split payment
@@ -2239,7 +2263,7 @@ async function sendSplitMpesaPayment() {
             // Show waiting indicator
             const statusDiv = document.getElementById('splitMpesaStatus');
             if (statusDiv) {
-                statusDiv.innerHTML = '<div class="status-card info"><i class="fas fa-spinner fa-pulse"></i> Waiting for PIN entry...</div>';
+                statusDiv.innerHTML = '<div class="status-card info"><i class="fas fa-spinner fa-pulse"></i> Waiting......</div>';
             }
             
             // Poll for payment confirmation
@@ -2358,7 +2382,7 @@ function renderSplitPaymentsList() {
     const container = document.getElementById('paymentsList');
     
     if (!splitPayments.length) {
-        container.innerHTML = '<div style="text-align: center; color: #999; padding: 20px;">No payment methods added yet. Click "Add" buttons above.</div>';
+        container.innerHTML = '<div style="text-align: center; color: #999; border-color: #000000; padding: 20px;"></div>';
         return;
     }
     
@@ -2514,7 +2538,79 @@ function moveToNextSplitOtp(input, idx) {
     }
 }
 
-// Verify OTP for points redemption
+// Send OTP for split payment points redemption
+async function sendSplitPointsOtp() {
+    // Validate customer exists
+    if (!splitPointsCustomer) {
+        showToast('Please look up a customer first', 'error');
+        return;
+    }
+
+    // Validate points to redeem
+    const points = parseFloat(document.getElementById('splitPointsAmount').value) || 0;
+    if (points <= 0) {
+        showToast('Enter how many points to redeem', 'error');
+        return;
+    }
+    
+    // Validate customer has enough points
+    if (points > splitPointsCustomer.points) {
+        showToast(`Customer only has ${splitPointsCustomer.points} points available`, 'error');
+        return;
+    }
+    
+    // Validate points don't exceed remaining balance
+    const remaining = total - getTotalPaid();
+    if (points > remaining) {
+        showToast(`Points cannot exceed remaining balance of KSH ${remaining.toLocaleString()}`, 'error');
+        return;
+    }
+
+    const btn = document.getElementById('sendSplitPointsOtpBtn');
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Sending OTP...';
+
+    try {
+        const data = await safeFetch(URLS.send_otp, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+            body: JSON.stringify({
+                phone: splitPointsCustomer.phone,
+                purpose: 'redeem_points',
+                points: points,
+                amount: remaining,
+                discounted_amount: Math.max(0, remaining - points)
+            })
+        });
+
+        if (data.success) {
+            showToast('✅ OTP sent to customer!', 'success');
+            showStatus('📱 OTP sent to customer. Ask customer to provide the code.', 'info');
+            
+            // Show OTP section
+            document.getElementById('splitPointsOtpSection').style.display = 'block';
+            
+            // Clear OTP inputs
+            for (let i = 0; i < 4; i++) {
+                document.getElementById(`splitOtp${i}`).value = '';
+            }
+            document.getElementById('splitOtp0').focus();
+            
+        } else {
+            showToast(data.error || 'Could not send OTP', 'error');
+        }
+    } catch(e) {
+        console.error('Send OTP error:', e);
+        showToast('Send OTP failed: ' + e.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    }
+}
+
+
+// Verify OTP for points redemption - ensure customer ID is stored
 async function verifySplitPointsOtp() {
     const otp = ['splitOtp0', 'splitOtp1', 'splitOtp2', 'splitOtp3']
         .map(id => document.getElementById(id).value).join('');
@@ -2525,6 +2621,19 @@ async function verifySplitPointsOtp() {
     }
     
     const pointsAmount = parseFloat(document.getElementById('splitPointsAmount').value) || 0;
+    
+    if (pointsAmount <= 0) {
+        showToast('Please enter points amount first', 'error');
+        return;
+    }
+    
+    // Show loading state on verify button
+    const verifyBtn = document.querySelector('#pointsInputArea .action-btn:last-child');
+    const originalText = verifyBtn ? verifyBtn.innerHTML : 'Verify OTP & Complete';
+    if (verifyBtn) {
+        verifyBtn.disabled = true;
+        verifyBtn.innerHTML = '<span class="spinner"></span> Verifying...';
+    }
     
     try {
         const data = await safeFetch(URLS.verify_otp, {
@@ -2539,23 +2648,57 @@ async function verifySplitPointsOtp() {
         });
         
         if (data.success) {
-            showToast('OTP verified! Points added to payment', 'success');
-            // Add points payment
+            showToast('✅ OTP verified! Points ready to redeem', 'success');
+            
+            // IMPORTANT: Store the customer ID with the points payment
+            // Add points payment to split payments list with customer ID
             addToSplitPayments({
                 method: 'Points',
                 amount: pointsAmount,
-                customerId: splitPointsCustomer.id,
+                customerId: splitPointsCustomer.id,  // Make sure this is set
                 customerName: splitPointsCustomer.name,
                 points: pointsAmount,
                 verified: true
             });
+            
+            // Hide the points input area and OTP section
             document.getElementById('splitPointsOtpSection').style.display = 'none';
             document.getElementById('pointsInputArea').style.display = 'none';
+            
+            // Clear OTP inputs
+            for (let i = 0; i < 4; i++) {
+                document.getElementById(`splitOtp${i}`).value = '';
+            }
+            
+            // Clear points amount input
+            document.getElementById('splitPointsAmount').value = '';
+            
+            // Show success message
+            showStatus(`✅ Points payment of KSH ${pointsAmount.toLocaleString()} added! Points will be deducted upon sale completion.`, 'success');
+            
+            // Update the payment summary
+            updateSplitPaymentSummary();
+            renderSplitPaymentsList();
+            
+            // Check if ready to finalize
+            checkSplitFinalizeReady();
+            
         } else {
-            showToast('Invalid OTP. Please try again.', 'error');
+            showToast(data.error || 'Invalid OTP. Please try again.', 'error');
+            // Clear OTP inputs for retry
+            for (let i = 0; i < 4; i++) {
+                document.getElementById(`splitOtp${i}`).value = '';
+            }
+            document.getElementById('splitOtp0').focus();
         }
     } catch(e) {
-        showToast('OTP verification failed', 'error');
+        console.error('OTP verification error:', e);
+        showToast('OTP verification failed: ' + e.message, 'error');
+    } finally {
+        if (verifyBtn) {
+            verifyBtn.disabled = false;
+            verifyBtn.innerHTML = originalText;
+        }
     }
 }
 
@@ -2588,13 +2731,25 @@ async function finalizeSplitSale() {
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner"></span> Processing split payment sale...';
     
+    // Get the customer ID for points redemption
+    let pointsCustomerIdForRedemption = null;
+    let pointsRedeemedTotal = 0;
+    
+    // Find points payment and get customer ID
+    const pointsPayment = splitPayments.find(p => p.method === 'Points');
+    if (pointsPayment) {
+        pointsCustomerIdForRedemption = pointsPayment.customerId;
+        pointsRedeemedTotal = pointsPayment.points || pointsPayment.amount;
+        console.log(`Points redemption: ${pointsRedeemedTotal} points for customer ${pointsCustomerIdForRedemption}`);
+    }
+    
     const splitPaymentsData = splitPayments.map(p => ({
         method: p.method,
         amount: p.amount,
         bank: p.bank,
         phone: p.phone,
         transactionId: p.transactionId,
-        points: p.points,
+        points: p.points || (p.method === 'Points' ? p.amount : 0),
         customerId: p.customerId
     }));
     
@@ -2615,10 +2770,13 @@ async function finalizeSplitSale() {
         buyer_phone: document.getElementById('customerPhone').value.trim(),
         buyer_name: document.getElementById('customerName')?.textContent || 'Walk-in Customer',
         verified_customer_id: customerId || null,
-        points_redeemed: splitPaymentsData.filter(p => p.method === 'Points').reduce((sum, p) => sum + (p.points || 0), 0),
+        points_redeemed: pointsRedeemedTotal,
+        points_redeemed_customer_id: pointsCustomerIdForRedemption,
         points_to_award: customerId ? Math.floor(total / 100) : 0,
         skip_cart_clear: false
     };
+    
+    console.log('Split payment payload:', payload);
     
     try {
         const data = await safeFetch('/sales/api/sale/split-payment/', {
@@ -2642,94 +2800,21 @@ async function finalizeSplitSale() {
             
             if (data.points_redeemed > 0) {
                 showToast(`⭐ ${data.points_redeemed} points redeemed (KSH ${data.points_redeemed.toLocaleString()} saved)!`, 'success');
+                // Update the customer points display if available
+                if (data.new_points_balance !== undefined) {
+                    showToast(`💰 Remaining points balance: ${data.new_points_balance}`, 'info');
+                }
             }
             
             if (data.change_amount > 0) {
                 showToast(`💰 Change due: KSH ${data.change_amount.toLocaleString()}`, 'info');
             }
             
-            // ✅ OPEN RECEIPT
+            // OPEN RECEIPT
             window.open(`/sales/sale/${data.sale_id}/receipt/?auto_print=true`, '_blank');
             
-            // ✅ CLEAR CART (This clears the backend cart)
-            await clearCart();
-            
-            // ✅ RESET ALL SPLIT PAYMENT STATE
-            splitPayments = [];
-            renderSplitPaymentsList();
-            
-            // ✅ RESET PAYMENT MODE (but keep split payment enabled)
-            const splitCheckbox = document.getElementById('enableSplitPayment');
-            if (splitCheckbox && !splitCheckbox.checked) {
-                splitCheckbox.checked = true;
-                isSplitPaymentEnabled = true;
-            }
-            
-            // ✅ RESET UI
-            updateSplitPaymentSummary();
-            
-            // ✅ RESET BUTTON
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-check-double"></i> Complete Split Payment Sale';
-            
-            // ✅ CLEAR CUSTOMER INFO
-            document.getElementById('customerPhone').value = '';
-            document.getElementById('customerInfo').style.display = 'none';
-            customerId = null;
-            
-            // ✅ RESET MPESA PENDING
-            splitPendingMpesa = null;
-            
-            // ✅ CLEAR MPESA INPUT FIELDS - ADD THIS!
-            const mpesaPhoneInput = document.getElementById('splitMpesaPhone');
-            const mpesaAmountInput = document.getElementById('splitMpesaAmount');
-            if (mpesaPhoneInput) {
-                mpesaPhoneInput.value = '';
-                mpesaPhoneInput.placeholder = 'Customer phone number for M-Pesa';
-            }
-            if (mpesaAmountInput) {
-                mpesaAmountInput.value = '';
-                mpesaAmountInput.placeholder = 'Amount to pay with M-Pesa';
-            }
-            
-            // ✅ CLEAR MPESA STATUS
-            const mpesaStatusDiv = document.getElementById('splitMpesaStatus');
-            if (mpesaStatusDiv) mpesaStatusDiv.innerHTML = '';
-            
-            // ✅ RESET MPESA PROGRESS BAR
-            const progressFill = document.querySelector('#mpesaInputArea .progress-fill');
-            if (progressFill) progressFill.style.width = '0%';
-            
-            // ✅ RESET MPESA SEND BUTTON
-            const mpesaSendBtn = document.querySelector('#mpesaInputArea .action-btn[onclick*="sendSplitMpesaPayment"]');
-            if (mpesaSendBtn) {
-                mpesaSendBtn.disabled = false;
-                mpesaSendBtn.innerHTML = 'Send STK Push';
-            }
-            
-            // ✅ CLEAR BANK INPUT FIELDS
-            const bankAmountInput = document.getElementById('splitBankAmount');
-            if (bankAmountInput) bankAmountInput.value = '';
-            
-            // ✅ CLEAR CASH INPUT FIELDS
-            const cashAmountInput = document.getElementById('splitCashAmount');
-            if (cashAmountInput) cashAmountInput.value = '';
-            
-            // ✅ CLEAR POINTS INPUT FIELDS
-            const pointsAmountInput = document.getElementById('splitPointsAmount');
-            if (pointsAmountInput) pointsAmountInput.value = '';
-            const splitPointsInfo = document.getElementById('splitPointsInfo');
-            if (splitPointsInfo) splitPointsInfo.style.display = 'none';
-            splitPointsCustomer = null;
-            
-            // ✅ HIDE ALL INPUT AREAS
-            hideAllSplitInputs();
-            
-            // ✅ SHOW SUCCESS AND READY FOR NEXT SALE
-            showToast('✅ Sale complete! Ready for next customer.', 'success');
-            
-            // ✅ FOCUS ON PRODUCT SEARCH FOR NEXT SALE
-            document.getElementById('productSearchInput').focus();
+            // RESET FOR NEXT SALE
+            await resetForNewSale();
             
         } else {
             throw new Error(data.error || 'Sale failed');
@@ -2745,30 +2830,36 @@ async function finalizeSplitSale() {
 
 
 
-
 // Reset for new sale without page reload
-function resetForNewSale() {
-    // Clear cart
-    clearCart();
+async function resetForNewSale() {
+    // Clear cart from backend
+    await clearCart();
+    
+    // Reset cart array
+    cart = [];
+    subtotal = 0;
+    total = 0;
     
     // Reset split payments
     splitPayments = [];
     renderSplitPaymentsList();
     updateSplitPaymentSummary();
     
-    // Ensure split payment is enabled
-    const splitCheckbox = document.getElementById('enableSplitPayment');
-    if (splitCheckbox && !splitCheckbox.checked) {
-        splitCheckbox.checked = true;
-        isSplitPaymentEnabled = true;
-    }
+    // Reset payment method selection
+    selectedPayment = 'Cash';
+    selectedBankName = null;
     
-    // Clear customer
+    // Reset customer
     document.getElementById('customerPhone').value = '';
     document.getElementById('customerInfo').style.display = 'none';
     customerId = null;
+    customerPointsBalance = 0;
     
-    // ✅ CLEAR MPESA INPUT FIELDS
+    // Reset split payment specific variables
+    splitPendingMpesa = null;
+    splitPointsCustomer = null;
+    
+    // Clear M-Pesa input fields
     const mpesaPhoneInput = document.getElementById('splitMpesaPhone');
     const mpesaAmountInput = document.getElementById('splitMpesaAmount');
     if (mpesaPhoneInput) {
@@ -2780,47 +2871,93 @@ function resetForNewSale() {
         mpesaAmountInput.placeholder = 'Amount to pay with M-Pesa';
     }
     
-    // ✅ CLEAR MPESA STATUS
+    // Clear M-Pesa status
     const mpesaStatusDiv = document.getElementById('splitMpesaStatus');
     if (mpesaStatusDiv) mpesaStatusDiv.innerHTML = '';
     
-    // ✅ RESET MPESA PROGRESS BAR
+    // Reset M-Pesa progress bar
     const progressFill = document.querySelector('#mpesaInputArea .progress-fill');
     if (progressFill) progressFill.style.width = '0%';
     
-    // ✅ RESET MPESA SEND BUTTON
+    // Reset M-Pesa send button
     const mpesaSendBtn = document.querySelector('#mpesaInputArea .action-btn[onclick*="sendSplitMpesaPayment"]');
     if (mpesaSendBtn) {
         mpesaSendBtn.disabled = false;
         mpesaSendBtn.innerHTML = 'Send STK Push';
     }
     
-    // ✅ CLEAR BANK INPUT
+    // Clear bank input
     const bankAmountInput = document.getElementById('splitBankAmount');
     if (bankAmountInput) bankAmountInput.value = '';
     document.querySelectorAll('.bank-option.selected').forEach(b => b.classList.remove('selected'));
     
-    // ✅ CLEAR CASH INPUT
+    // Clear cash input
     const cashAmountInput = document.getElementById('splitCashAmount');
     if (cashAmountInput) cashAmountInput.value = '';
     
-    // ✅ CLEAR POINTS INPUT
+    // Clear points input
     const pointsAmountInput = document.getElementById('splitPointsAmount');
     if (pointsAmountInput) pointsAmountInput.value = '';
     const splitPointsInfo = document.getElementById('splitPointsInfo');
     if (splitPointsInfo) splitPointsInfo.style.display = 'none';
-    splitPointsCustomer = null;
     
-    // Hide all input areas
+    // Clear single payment inputs
+    const singleCashAmount = document.getElementById('cashAmount');
+    if (singleCashAmount) singleCashAmount.value = '';
+    const changeAmount = document.getElementById('changeAmount');
+    if (changeAmount) changeAmount.textContent = 'KSH 0.00';
+    const bankSingleAmount = document.getElementById('bankAmount');
+    if (bankSingleAmount) bankSingleAmount.value = '';
+    const mpesaPhoneSingle = document.getElementById('mpesaPhone');
+    if (mpesaPhoneSingle) mpesaPhoneSingle.value = '';
+    
+    // Clear points single section
+    const pointsCustomerPhone = document.getElementById('pointsCustomerPhone');
+    if (pointsCustomerPhone) pointsCustomerPhone.value = '';
+    const pointsToRedeem = document.getElementById('pointsToRedeem');
+    if (pointsToRedeem) pointsToRedeem.value = '';
+    const pointsCustomerInfo = document.getElementById('pointsCustomerInfo');
+    if (pointsCustomerInfo) pointsCustomerInfo.style.display = 'none';
+    const pointsAmountSection = document.getElementById('pointsAmountSection');
+    if (pointsAmountSection) pointsAmountSection.style.display = 'none';
+    const pointsOtpSection = document.getElementById('pointsOtpSection');
+    if (pointsOtpSection) pointsOtpSection.style.display = 'none';
+    const discountedTotalCard = document.getElementById('discountedTotalCard');
+    if (discountedTotalCard) discountedTotalCard.style.display = 'none';
+    const pointsAvailableDisplay = document.getElementById('pointsAvailableDisplay');
+    if (pointsAvailableDisplay) pointsAvailableDisplay.textContent = '0 pts';
+    
+    // Reset points variables
+    pointsCustomerId = null;
+    pointsCustomerBalance = 0;
+    pointsPendingRedeem = 0;
+    
+    // Hide all split input areas
     hideAllSplitInputs();
     
-    // Reset M-Pesa
-    splitPendingMpesa = null;
+    // Hide single payment input areas
+    document.getElementById('cashInput').style.display = 'none';
+    document.getElementById('mpesaInput').style.display = 'none';
+    document.getElementById('bankInput').style.display = 'none';
+    document.getElementById('pointsInput').style.display = 'none';
+    
+    // Reset payment method cards - set Cash as active
+    document.querySelectorAll('#singlePaymentMethods .payment-card').forEach(card => {
+        card.classList.remove('active');
+    });
+    const cashCard = document.querySelector('#singlePaymentMethods .payment-card[onclick*="Cash"]');
+    if (cashCard) cashCard.classList.add('active');
+    
+    // Reset the render cart display
+    renderCart();
     
     // Focus on product search
     document.getElementById('productSearchInput').focus();
     
-    showToast('Ready for new sale!', 'success');
+    // Clear any status messages
+    hideStatus();
+    
+    showToast('Ready for new sale! Cart cleared.', 'success');
 }
 
 // ============================================
@@ -2948,7 +3085,7 @@ async function finalizeSale() {
     if (selectedPayment === 'M-Pesa') { showToast('Use the STK Push button for M-Pesa', 'error'); return; }
     if (selectedPayment === 'Points') { showToast('Complete OTP verification first', 'error'); return; }
 
-    const btn = document.getElementById('finalizeSaleBtn');
+    const btn = document.getElementById('finalizeSaleSingleBtn'); 
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner"></span> Processing...';
     showStatus('<i class="fas fa-spinner fa-pulse"></i> Processing sale...', 'info');
