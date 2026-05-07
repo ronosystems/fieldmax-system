@@ -1,20 +1,12 @@
 from django.contrib import admin
 from django import forms
-from .models import Supplier, Category, Product, ProductImage, StockEntry, StockAlert, ProductReview
+from django.contrib.auth.admin import UserAdmin
+from django.contrib.auth.models import User
 from django.utils.html import format_html
 from django.db.models import Count, Sum
 from decimal import Decimal
-from django.contrib.auth.admin import UserAdmin
-from django.contrib.auth.models import User
 
-
-from django.contrib import admin
-from django.contrib.auth.admin import UserAdmin
-from django.contrib.auth.models import User
-from django.utils.html import format_html
-
-
-
+from .models import Supplier, Category, Product, ProductImage, StockEntry, StockAlert, ProductReview
 
 
 # ====================================
@@ -22,14 +14,12 @@ from django.utils.html import format_html
 # ====================================
 
 class CustomUserAdmin(UserAdmin):
-    # SIMPLE list_display - no custom methods first
     list_display = ['username', 'email', 'first_name', 'last_name', 'is_staff', 'is_superuser', 'is_active']
     list_filter = ['is_staff', 'is_superuser', 'is_active']
     search_fields = ['username', 'email', 'first_name', 'last_name']
     list_per_page = 25
     list_display_links = ['username']
     
-    # Fieldsets for user detail page
     fieldsets = (
         ('📋 BASIC INFORMATION', {
             'fields': ('username', 'password', 'email')
@@ -47,7 +37,6 @@ class CustomUserAdmin(UserAdmin):
         }),
     )
     
-    # Actions
     actions = ['make_active', 'make_inactive', 'make_staff', 'remove_staff']
     actions_on_top = True
     actions_on_bottom = False
@@ -75,11 +64,6 @@ class CustomUserAdmin(UserAdmin):
 # Unregister the default User admin and register our custom one
 admin.site.unregister(User)
 admin.site.register(User, CustomUserAdmin)
-
-
-
-
-
 
 
 # ====================================
@@ -117,6 +101,7 @@ class ProductAdminForm(forms.ModelForm):
         
         return cleaned_data
 
+
 # ====================================
 # INLINE CLASSES
 # ====================================
@@ -126,6 +111,7 @@ class ProductImageInline(admin.TabularInline):
     extra = 1
     fields = ['image', 'is_primary', 'order']
     classes = ['collapse']
+
 
 # ====================================
 # SUPPLIER ADMIN
@@ -150,6 +136,7 @@ class SupplierAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
     )
+
 
 # ====================================
 # CATEGORY ADMIN
@@ -180,15 +167,6 @@ class CategoryAdmin(admin.ModelAdmin):
     )
 
 
-
-
-
-
-
-
-
-
-
 # ====================================
 # PRODUCT ADMIN - MAIN
 # ====================================
@@ -197,28 +175,22 @@ class CategoryAdmin(admin.ModelAdmin):
 class ProductAdmin(admin.ModelAdmin):
     form = ProductAdminForm
     
-    # ====================================
-    # LIST DISPLAY - ALL COLUMNS
-    # ====================================
     list_display = [
-        'product_code',           # Product Code
-        'display_name',            # Product Name
-        'category_name',           # Category
-        'buying_price_display',    # Cost Price
-        'selling_price_display',   # Selling Price
-        'best_price_display',      # Best Price
-        'sku_display',             # SKU
-        'barcode_display',         # Barcode
-        'stock_display',           # Stock
-        'status_display',          # Status
-        'condition_display',       # Condition
+        'product_code',
+        'display_name',
+        'category_name',
+        'buying_price_display',
+        'selling_price_display',
+        'best_price_display',
+        'sku_display',
+        'barcode_display',
+        'stock_display',
+        'status_display',
+        'condition_display',
     ]
     
     list_display_links = ['product_code', 'display_name']
     
-    # ====================================
-    # SEARCH CONFIGURATION
-    # ====================================
     search_fields = [
         'product_code', 
         'name', 
@@ -226,44 +198,43 @@ class ProductAdmin(admin.ModelAdmin):
         'model', 
         'sku_value', 
         'barcode',
+        'serial_number',
+        'imei_number',
         'description',
     ]
-    search_help_text = "Search by product code, name, brand, model, SKU, or barcode"
+    search_help_text = "Search by product code, name, brand, model, SKU, serial, IMEI, or barcode"
     
-    # ====================================
-    # READONLY FIELDS
-    # ====================================
+    # ✅ FIXED: Removed 'view_count' and 'sales_count' (they don't exist in your model)
     readonly_fields = [
         'product_code', 
+        'barcode',
         'created_at', 
         'updated_at', 
-        'view_count', 
-        'sales_count',
         'profit_calculation',
     ]
     
-    # ====================================
-    # INLINES
-    # ====================================
     inlines = [ProductImageInline]
-    
-    # ====================================
-    # LAYOUT OPTIONS
-    # ====================================
     save_on_top = True
     list_per_page = 25
     show_full_result_count = True
     
-    # ====================================
-    # FIELDSETS - FORM LAYOUT
-    # ====================================
     fieldsets = (
         ('📋 BASIC INFORMATION', {
             'fields': (
-                ('product_code', 'name'),
-                ('category', 'owner'),
+                ('product_code', 'barcode'),
+                ('name', 'category'),
+                ('owner',),
             ),
             'classes': ('wide',),
+        }),
+        
+        ('🔢 UNIQUE IDENTIFIERS', {
+            'fields': (
+                ('serial_number', 'imei_number'),
+                'sku_value',
+            ),
+            'classes': ('wide',),
+            'description': 'For single items: provide either Serial Number OR IMEI Number (for phones)',
         }),
         
         ('💰 PRICING DETAILS', {
@@ -276,9 +247,8 @@ class ProductAdmin(admin.ModelAdmin):
         
         ('📦 INVENTORY TRACKING', {
             'fields': (
-                ('sku_value', 'barcode'),
-                ('quantity', 'reorder_level'),
-                'last_restocked',
+                ('quantity', 'reserved_quantity'),
+                ('reorder_level', 'last_restocked'),
             ),
             'classes': ('wide',),
         }),
@@ -305,60 +275,59 @@ class ProductAdmin(admin.ModelAdmin):
         
         ('📊 STATUS & TRACKING', {
             'fields': (
-                ('status', 'is_featured'),
+                'status',
                 'is_active',
-                ('view_count', 'sales_count'),
+            ),
+            'classes': ('wide', 'collapse'),
+        }),
+        
+        ('⚠️ LOSS TRACKING', {
+            'fields': (
+                ('is_stolen_or_lost', 'loss_type'),
+                ('loss_reported_date', 'loss_reported_by'),
+                'loss_notes',
+                ('police_report_number', 'police_station'),
+                ('insurance_claim_filed', 'insurance_claim_number', 'insurance_claim_amount'),
+                ('insurance_payout_amount', 'insurance_payout_date'),
+                ('recovered_date', 'recovered_by'),
+                'recovery_notes',
             ),
             'classes': ('wide', 'collapse'),
         }),
         
         ('📅 SYSTEM METADATA', {
-            'fields': ('created_at', 'updated_at'),
+            'fields': ('created_at', 'updated_at', 'last_modified_by'),
             'classes': ('wide', 'collapse'),
         }),
     )
     
-    # ====================================
-    # ACTIONS
-    # ====================================
     actions = ['mark_as_available', 'mark_as_sold', 'mark_as_featured']
     actions_on_top = True
     actions_on_bottom = False
     
-    # ====================================
-    # CUSTOM METHODS FOR DISPLAY
-    # ====================================
-    
     def get_queryset(self, request):
-        """Optimize queryset"""
         return super().get_queryset(request).select_related('category', 'supplier', 'owner')
     
-    # Product Name
+    # Display Methods
     def display_name(self, obj):
         try:
-            if obj.brand and obj.model:
-                return f"{obj.brand} {obj.model}"
-            return obj.name or obj.product_code or "Unnamed"
+            return obj.display_name
         except:
             return "Error"
     display_name.short_description = 'Product'
     display_name.admin_order_field = 'name'
     
-    # Category
     def category_name(self, obj):
         try:
             if not obj.category:
                 return "-"
-            if obj.category.is_single_item:
-                return f"📱 {obj.category.name}"
-            else:
-                return f"📦 {obj.category.name}"
+            icon = "📱" if obj.category.is_single_item else "📦"
+            return f"{icon} {obj.category.name}"
         except:
             return "-"
     category_name.short_description = 'Category'
     category_name.admin_order_field = 'category__name'
     
-    # Buying Price - UPDATED TO KSH
     def buying_price_display(self, obj):
         try:
             if obj.buying_price:
@@ -369,7 +338,6 @@ class ProductAdmin(admin.ModelAdmin):
     buying_price_display.short_description = 'Cost (KSH)'
     buying_price_display.admin_order_field = 'buying_price'
     
-    # Selling Price - UPDATED TO KSH
     def selling_price_display(self, obj):
         try:
             if obj.selling_price:
@@ -380,7 +348,6 @@ class ProductAdmin(admin.ModelAdmin):
     selling_price_display.short_description = 'Sell (KSH)'
     selling_price_display.admin_order_field = 'selling_price'
     
-    # Best Price - UPDATED TO KSH
     def best_price_display(self, obj):
         try:
             if obj.best_price:
@@ -391,53 +358,43 @@ class ProductAdmin(admin.ModelAdmin):
     best_price_display.short_description = 'Best (KSH)'
     best_price_display.admin_order_field = 'best_price'
     
-    # SKU
     def sku_display(self, obj):
         try:
             if obj.sku_value:
                 sku = str(obj.sku_value)
-                if len(sku) > 15:
-                    sku = sku[:12] + "..."
-                return sku
+                return sku[:15] + "..." if len(sku) > 15 else sku
             return "-"
         except:
             return "-"
-    sku_display.short_description = 'SKU'
-    sku_display.admin_order_field = 'sku_value'
+    sku_display.short_description = 'Legacy SKU'
     
-    # Barcode
     def barcode_display(self, obj):
         try:
             if obj.barcode:
-                barcode = str(obj.barcode)
-                if len(barcode) > 15:
-                    barcode = barcode[:12] + "..."
-                return barcode
+                bc = str(obj.barcode)
+                return bc[:15] + "..." if len(bc) > 15 else bc
             return "-"
         except:
             return "-"
     barcode_display.short_description = 'Barcode'
-    barcode_display.admin_order_field = 'barcode'
     
-    # Stock
     def stock_display(self, obj):
         try:
             qty = obj.quantity or 0
             
             if obj.category and obj.category.is_single_item:
-                return "✓" if qty > 0 else "✗"
+                return "✓ In Stock" if qty > 0 else "✗ Out of Stock"
             else:
                 if obj.reorder_level and qty <= obj.reorder_level and qty > 0:
-                    return f"{qty} ⚠️"
+                    return f"{qty} ⚠️ (Reorder)"
                 elif qty == 0:
-                    return "0 ❌"
+                    return "0 ❌ (Out of Stock)"
                 return str(qty)
         except:
             return "0"
     stock_display.short_description = 'Stock'
     stock_display.admin_order_field = 'quantity'
     
-    # Status
     def status_display(self, obj):
         try:
             status_map = {
@@ -447,6 +404,9 @@ class ProductAdmin(admin.ModelAdmin):
                 'damaged': '⚠️ Damaged',
                 'lowstock': '⚠️ Low Stock',
                 'outofstock': '❌ Out of Stock',
+                'stolen': '⚠️ Stolen/Lost',
+                'writeoff': '📝 Written Off',
+                'recalled': '🔙 Recalled',
             }
             return status_map.get(obj.status, obj.get_status_display() or 'Unknown')
         except:
@@ -454,7 +414,6 @@ class ProductAdmin(admin.ModelAdmin):
     status_display.short_description = 'Status'
     status_display.admin_order_field = 'status'
     
-    # Condition
     def condition_display(self, obj):
         try:
             return obj.get_condition_display() or 'Unknown'
@@ -463,23 +422,23 @@ class ProductAdmin(admin.ModelAdmin):
     condition_display.short_description = 'Condition'
     condition_display.admin_order_field = 'condition'
     
-    # Profit Calculation - UPDATED TO KSH
     def profit_calculation(self, obj):
         try:
             if obj.buying_price and obj.selling_price:
                 profit = obj.selling_price - obj.buying_price
                 margin = (profit / obj.buying_price * 100) if obj.buying_price > 0 else 0
                 
-                return (f"Profit: KSH {profit:,.0f} | Margin: {margin:.1f}%")
+                color = "#27ae60" if profit > 0 else "#e74c3c" if profit < 0 else "#95a5a6"
+                return format_html(
+                    '<span style="color: {}; font-weight: bold;">Profit: KSH {:,.0f} | Margin: {:.1f}%</span>',
+                    color, profit, margin
+                )
             return "Set buying and selling prices to see profit"
         except:
             return "Error calculating profit"
     profit_calculation.short_description = 'Profit Analysis'
     
-    # ====================================
-    # ACTIONS
-    # ====================================
-    
+    # Actions
     def mark_as_available(self, request, queryset):
         updated = queryset.update(status='available')
         self.message_user(request, f'{updated} products marked as available.')
@@ -494,16 +453,6 @@ class ProductAdmin(admin.ModelAdmin):
         updated = queryset.update(is_featured=True)
         self.message_user(request, f'{updated} products marked as featured.')
     mark_as_featured.short_description = "Mark selected as Featured"
-
-
-
-
-
-
-
-
-
-
 
 
 # ====================================
@@ -524,7 +473,7 @@ class StockEntryAdmin(admin.ModelAdmin):
         'created_at_colored'
     ]
     search_fields = ['product__product_code', 'product__name', 'reference_id', 'notes']
-    readonly_fields = ['total_amount', 'created_at', 'stock_before', 'stock_after']
+    readonly_fields = ['total_amount', 'created_at']
     raw_id_fields = ['product', 'created_by']
     date_hierarchy = 'created_at'
     
@@ -534,10 +483,6 @@ class StockEntryAdmin(admin.ModelAdmin):
         }),
         ('Financial Information', {
             'fields': (('unit_price', 'total_amount'),)
-        }),
-        ('Stock Impact', {
-            'fields': ('stock_before', 'stock_after'),
-            'classes': ('wide',),
         }),
         ('Reference Information', {
             'fields': ('reference_id', 'notes', 'created_by')
@@ -558,10 +503,11 @@ class StockEntryAdmin(admin.ModelAdmin):
     
     def entry_type_colored(self, obj):
         colors = {
-            'purchase': '#27ae60',  # Green
-            'sale': '#e74c3c',       # Red
-            'reversal': '#f39c12',    # Orange
-            'adjustment': '#3498db',  # Blue
+            'purchase': '#27ae60',
+            'sale': '#e74c3c',
+            'reversal': '#f39c12',
+            'adjustment': '#3498db',
+            'return': '#9b59b6',
         }
         color = colors.get(obj.entry_type, '#95a5a6')
         return format_html(
@@ -601,68 +547,6 @@ class StockEntryAdmin(admin.ModelAdmin):
             )
         return "-"
     created_at_colored.short_description = 'Created'
-    
-    def stock_before(self, obj):
-        """Calculate stock before this entry"""
-        try:
-            # Sum all entries before this one
-            entries_before = StockEntry.objects.filter(
-                product=obj.product,
-                created_at__lt=obj.created_at
-            ).aggregate(total=Sum('quantity'))['total'] or 0
-            
-            # Add initial product quantity? This depends on your logic
-            # For now, just show entries sum
-            return entries_before
-        except:
-            return "N/A"
-    stock_before.short_description = 'Stock Before'
-    
-    def stock_after(self, obj):
-        """Calculate stock after this entry"""
-        try:
-            entries_total = StockEntry.objects.filter(
-                product=obj.product,
-                created_at__lte=obj.created_at
-            ).aggregate(total=Sum('quantity'))['total'] or 0
-            return entries_total
-        except:
-            return "N/A"
-    stock_after.short_description = 'Stock After'
-    
-    actions = ['revert_entry']
-    
-    def revert_entry(self, request, queryset):
-        """Create reversal entries for selected entries"""
-        count = 0
-        for entry in queryset:
-            try:
-                # Create reversal entry
-                StockEntry.objects.create(
-                    product=entry.product,
-                    quantity=-entry.quantity,  # Reverse the quantity
-                    entry_type='reversal',
-                    unit_price=entry.unit_price,
-                    total_amount=entry.total_amount,
-                    reference_id=f"REV-{entry.id}",
-                    notes=f"Reversal of entry #{entry.id}",
-                    created_by=request.user
-                )
-                count += 1
-            except Exception as e:
-                self.message_user(request, f"Error reverting entry #{entry.id}: {str(e)}", level='ERROR')
-        
-        self.message_user(request, f'Created {count} reversal entries.')
-    revert_entry.short_description = "Reverse selected entries"
-
-
-
-
-
-
-
-
-
 
 
 # ====================================
@@ -681,24 +565,9 @@ class StockAlertAdmin(admin.ModelAdmin):
         'is_dismissed',
         'last_alerted'
     ]
-    list_filter = [
-        'alert_type', 
-        'severity', 
-        'is_active', 
-        'is_dismissed'
-    ]
-    search_fields = [
-        'product__name', 
-        'product__product_code',
-        'product__sku_value'
-    ]
-    readonly_fields = [
-        'current_stock', 
-        'alert_count', 
-        'created_at', 
-        'updated_at', 
-        'last_alerted'
-    ]
+    list_filter = ['alert_type', 'severity', 'is_active', 'is_dismissed']
+    search_fields = ['product__name', 'product__product_code']
+    readonly_fields = ['current_stock', 'alert_count', 'created_at', 'updated_at', 'last_alerted']
     list_editable = ['is_active']
     
     fieldsets = (
@@ -719,14 +588,6 @@ class StockAlertAdmin(admin.ModelAdmin):
     
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('product', 'dismissed_by')
-    
-    def has_delete_permission(self, request, obj=None):
-        # Allow deletion for superusers only
-        return request.user.is_superuser
-
-
-
-
 
 
 # ====================================

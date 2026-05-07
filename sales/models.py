@@ -19,16 +19,18 @@ logger = logging.getLogger(__name__)
 
 
 # ============================================
-# SALE COUNTER MODEL
+# UNIFIED COUNTER MODEL (SALE ID = ETR Receipt)
 # ============================================
 
 class SaleCounter(models.Model):
     """
-    Tracks sale counters per year for generating sequential sale IDs
-    This ensures uniqueness even with concurrent transactions
+    Single counter for both Sale ID and ETR Receipt Number
+    Sale ID: SALE-00001, SALE-00002, SALE-00003...
+    ETR Receipt: 00001, 00002, 00003...
+    Both share the same sequential number
     """
-    year = models.PositiveIntegerField(unique=True, primary_key=True)
-    counter = models.PositiveIntegerField(default=0)
+    counter = models.PositiveIntegerField(default=0)  # Start at 0, first will be 1 -> 00001
+    last_used = models.DateTimeField(auto_now=True)
     
     class Meta:
         db_table = 'sale_counters'
@@ -36,46 +38,66 @@ class SaleCounter(models.Model):
         verbose_name_plural = 'Sale Counters'
     
     def __str__(self):
-        return f"Year {self.year}: {self.counter} sales"
+        return f"Sale/ETR Counter: {self.counter:05d}"
 
 
 # ============================================
-# SALE ID GENERATOR
+# SALE ID & ETR RECEIPT GENERATOR (SAME NUMBER)
 # ============================================
 
-def generate_custom_sale_id() -> str:
+def generate_next_counter() -> int:
     """
-    Generate sale ID using dedicated counter table
-    Format: FSL{YEAR}{SEQUENTIAL_NUMBER}
-    Examples: FSL2025001, FSL2025002, FSL2025003
+    Generate next sequential counter number
+    Starts from 1 -> 00001, then 2 -> 00002, etc.
     
-    Features:
-    - Atomic counter increment (no race conditions)
-    - Year-based reset (counter restarts each year)
-    - Zero-padded 3-digit counter
+    Returns:
+        int: The next counter number
     """
-    current_year = timezone.now().year
-    
     with transaction.atomic():
-        # Get or create counter for current year with database lock
+        # Get or create counter with database lock
         counter_obj, created = SaleCounter.objects.select_for_update().get_or_create(
-            year=current_year,
+            pk=1,
             defaults={'counter': 0}
         )
         
         # Increment counter atomically
         counter_obj.counter += 1
-        counter_obj.save(update_fields=['counter'])
+        counter_obj.save(update_fields=['counter', 'last_used'])
         
-        # Format: FSL + YEAR + COUNTER (zero-padded to 3 digits)
-        sale_id = f"FSL{current_year}{counter_obj.counter:03d}"
+        logger.info(f"[COUNTER GENERATED] Counter: {counter_obj.counter:05d}")
         
-        logger.info(
-            f"[SALE ID GENERATED] Year: {current_year} | "
-            f"Counter: {counter_obj.counter} | Sale ID: {sale_id}"
-        )
-        
-        return sale_id
+        return counter_obj.counter
+
+
+def generate_sale_id() -> str:
+    """
+    Generate sale ID using the unified counter
+    Format: SALE-00001, SALE-00002, SALE-00003...
+    """
+    counter = generate_next_counter()
+    sale_id = f"SALE-{counter:05d}"
+    
+    logger.info(f"[SALE ID GENERATED] Sale ID: {sale_id}")
+    
+    return sale_id
+
+
+def generate_etr_receipt_number(counter: int = None) -> str:
+    """
+    Generate ETR receipt number (same number as Sale ID)
+    Format: 00001, 00002, 00003...
+    
+    Args:
+        counter: Optional counter number (if not provided, generates new one)
+    """
+    if counter is None:
+        counter = generate_next_counter()
+    
+    receipt_number = f"{counter:05d}"
+    
+    logger.info(f"[ETR RECEIPT GENERATED] Receipt: {receipt_number}")
+    
+    return receipt_number
 
 
 # ==================================
@@ -87,7 +109,7 @@ class Sale(models.Model):
     Represents ONE TRANSACTION (not one item)
     - Each sale can have multiple items (stored in SaleItem)
     - One receipt number per sale
-    - One row in sales table per transaction
+    - Sale ID and ETR Receipt Number are the same sequential number
     """
 
     PAYMENT_METHODS = [
@@ -105,7 +127,23 @@ class Sale(models.Model):
     ]
     
     batch_id = models.CharField(max_length=50, blank=True, null=True)
-    sale_id = models.CharField(max_length=40, primary_key=True, editable=False)
+    
+    # Sale ID (same as ETR receipt number but with SALE- prefix)
+    sale_id = models.CharField(
+        max_length=40, 
+        primary_key=True, 
+        editable=False, 
+        default=generate_sale_id
+    )
+    
+    # The sequential number (shared between sale_id and etr_receipt_number)
+    sequence_number = models.PositiveIntegerField(
+        unique=True,
+        editable=False,
+        null=True,
+        blank=True,
+        help_text="Sequential number shared with ETR receipt"
+    )
     
     # Transaction details
     seller = models.ForeignKey(
@@ -138,19 +176,13 @@ class Sale(models.Model):
         default='Cash'
     )
     
-    # Receipt numbers (ONE per sale, not per item)
+    # ETR Receipt Number (same sequence as sale_id)
     etr_receipt_number = models.CharField(
         max_length=100,
         blank=True,
         null=True,
         unique=True,
-        help_text="ETR receipt number in format Rcpt_No:0001"
-    )
-    etr_receipt_counter = models.PositiveIntegerField(
-        blank=True,
-        null=True,
-        db_index=True,
-        help_text="Sequential counter for ETR receipts (1, 2, 3...)"
+        help_text="ETR receipt number in format: 00001, 00002, etc. (same number as sale_id)"
     )
     fiscal_receipt_number = models.CharField(
         max_length=100,
@@ -199,6 +231,22 @@ class Sale(models.Model):
         help_text="Original subtotal before points discount"
     )
     
+    # Customer for loyalty points
+    customer = models.ForeignKey(
+        'Customer',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='sales',
+        help_text="Customer who made this purchase (for loyalty points)"
+    )
+    points_earned = models.DecimalField(
+        max_digits=10,
+        decimal_places=1,
+        default=Decimal('0.0'),
+        help_text="Points earned from this sale (1% of total)"
+    )
+    
     # Reversal tracking
     is_reversed = models.BooleanField(default=False)
     reversed_at = models.DateTimeField(blank=True, null=True)
@@ -230,7 +278,8 @@ class Sale(models.Model):
             models.Index(fields=['-sale_date']),
             models.Index(fields=['seller', '-sale_date']),
             models.Index(fields=['etr_receipt_number']),
-            models.Index(fields=['etr_receipt_counter']),
+            models.Index(fields=['sequence_number']),
+            models.Index(fields=['sale_id']),
         ]
 
     def __str__(self) -> str:
@@ -238,23 +287,19 @@ class Sale(models.Model):
         return f"Sale #{self.sale_id} - {item_count} item(s) - KSH {self.total_amount}"
 
     def save(self, *args, **kwargs):
-        if not self.sale_id:
-            # Find the highest numeric sale_id
-            max_sale = Sale.objects.all().order_by('-sale_id').first()
-            if max_sale:
-                # Extract numeric part
-                match = re.search(r'\d+', max_sale.sale_id)
-                if match:
-                    next_number = int(match.group()) + 1
-                else:
-                    next_number = 500
-            else:
-                next_number = 500
+        is_new = not self.sale_id or self._state.adding
+        
+        if is_new:
+            # Generate new sequence number
+            self.sequence_number = generate_next_counter()
+            self.sale_id = f"SALE-{self.sequence_number:05d}"
+            self.etr_receipt_number = f"{self.sequence_number:05d}"
             
-            if next_number < 500:
-                next_number = 500
-            
-            self.sale_id = f"SALE-{next_number:04d}"
+            logger.info(
+                f"[SALE CREATED] Sale ID: {self.sale_id} | "
+                f"ETR Receipt: {self.etr_receipt_number} | "
+                f"Sequence: {self.sequence_number:05d}"
+            )
         
         super().save(*args, **kwargs)
 
@@ -271,7 +316,9 @@ class Sale(models.Model):
         self.save(update_fields=['total_quantity', 'subtotal', 'total_amount'])
 
     def assign_etr_receipt_number(self, fiscal_receipt_number: str = None):
-        """Assign sequential ETR receipt number"""
+        """
+        Assign ETR receipt number (already set during save, but here for compatibility)
+        """
         if self.etr_receipt_number:
             logger.warning(
                 f"Sale {self.sale_id} already has ETR receipt number: "
@@ -279,32 +326,26 @@ class Sale(models.Model):
             )
             return
         
-        with transaction.atomic():
-            max_counter = Sale.objects.select_for_update().aggregate(
-                max_counter=Max('etr_receipt_counter')
-            )['max_counter']
-            
-            next_counter = (max_counter or 0) + 1
-            
-            self.etr_receipt_counter = next_counter
-            self.etr_receipt_number = f"{next_counter:04d}"
-            if fiscal_receipt_number:
-                self.fiscal_receipt_number = fiscal_receipt_number
-            self.etr_processed_at = timezone.now()
-            self.etr_status = 'processed'
-            
-            self.save(update_fields=[
-                'etr_receipt_counter',
-                'etr_receipt_number',
-                'fiscal_receipt_number',
-                'etr_processed_at',
-                'etr_status'
-            ])
-            
-            logger.info(
-                f"[ETR ASSIGNED] Sale: {self.sale_id} | Receipt: {self.etr_receipt_number} | "
-                f"Counter: {next_counter} | Items: {self.items.count()}"
-            )
+        # ETR receipt number is already set during save
+        # This method is kept for compatibility with external systems
+        
+        if fiscal_receipt_number:
+            self.fiscal_receipt_number = fiscal_receipt_number
+        
+        self.etr_processed_at = timezone.now()
+        self.etr_status = 'processed'
+        
+        self.save(update_fields=[
+            'fiscal_receipt_number',
+            'etr_processed_at',
+            'etr_status'
+        ])
+        
+        logger.info(
+            f"[ETR ASSIGNED] Sale: {self.sale_id} | "
+            f"Receipt: {self.etr_receipt_number} | "
+            f"Items: {self.items.count()}"
+        )
 
     # ============================================
     # REVERSE SALE METHOD
@@ -623,11 +664,6 @@ class SaleItem(models.Model):
         return 0.0
 
 
-
-
-
-
-
 # ============================================
 # PAYMENT RECORD MODEL - FOR SPLIT PAYMENTS
 # ============================================
@@ -695,10 +731,6 @@ class PaymentRecord(models.Model):
     @property
     def display_amount(self):
         return f"KSH {self.amount:,.2f}"
-
-
-
-
 
 
 # ==================================
@@ -928,13 +960,6 @@ class FiscalReceipt(models.Model):
         return f"Receipt {self.receipt_number} for Sale #{self.sale.sale_id}"
 
 
-
-
-
-
-# ====================================
-# CUSTOMER MODEL - SIMPLE LOYALTY PROGRAM
-# ====================================
 # ====================================
 # CUSTOMER MODEL - SIMPLE LOYALTY PROGRAM
 # 1% of sale value = points earned

@@ -672,6 +672,19 @@ def reports_list(request):
     # Store original queryset for stats (before pagination)
     all_reports = reports
     
+
+    # Calculate current month's expenses
+    today = timezone.now().date()
+    first_day_of_month = today.replace(day=1)
+    
+    monthly_expenses = DailyShopReport.objects.filter(
+        report_date__gte=first_day_of_month,
+        report_date__lte=today
+    ).aggregate(
+        total=Sum('total_expenses')
+    )['total'] or Decimal('0.00')
+    
+
     # Filter by shop (only if superuser or if user has access to shop)
     shop_id = request.GET.get('shop')
     if shop_id:
@@ -735,6 +748,7 @@ def reports_list(request):
         'finalized_count': finalized_count,
         'draft_count': draft_count,
         'total_sales_value': total_sales_value,
+        'monthly_expenses': monthly_expenses,
     }
     return render(request, 'shops/reports_list.html', context)
 

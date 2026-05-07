@@ -5,54 +5,78 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h2><i class="fas fa-shopping-cart me-2"></i>Sales History</h2>
-    <a href="{% url 'sales:sale_create' %}" class="btn btn-success">
-        <i class="fas fa-plus me-2"></i>New Sale
-    </a>
+    <div>
+        <a href="{% url 'sales:sale_create' %}" class="btn btn-success me-2">
+            <i class="fas fa-plus me-2"></i>New Sale
+        </a>
+        <a href="{% url 'sales:sale_list' %}" class="btn btn-primary">
+            <i class="fas fa-list me-2"></i>All Sales
+        </a>
+        <a href="#" class="btn btn-warning">
+            <i class="fas fa-credit-card me-2"></i>Credit Sales
+        </a>
+        <a href="#" class="btn btn-info">
+            <i class="fas fa-chart-bar me-2"></i>Reports
+        </a>
+    </div>
 </div>
 
-<!-- Filters -->
+<!-- Filters - Compact 2 Rows -->
 <div class="card mb-4">
-    <div class="card-body">
-        <form method="get" class="row g-3">
-            <div class="col-md-3">
-                <label class="form-label">Date From</label>
-                <input type="date" name="date_from" class="form-control" value="{{ request.GET.date_from }}">
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">Date To</label>
-                <input type="date" name="date_to" class="form-control" value="{{ request.GET.date_to }}">
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">Payment Method</label>
-                <select name="payment_method" class="form-select">
-                    <option value="">All</option>
+    <div class="card-body py-2">
+        <form method="get">
+            <!-- Row 1: Filters -->
+            <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+                <input type="date" name="date_from" class="form-control form-control-sm" 
+                       value="{{ request.GET.date_from }}" style="width: auto;" placeholder="Date From">
+                
+                <input type="date" name="date_to" class="form-control form-control-sm" 
+                       value="{{ request.GET.date_to }}" style="width: auto;" placeholder="Date To">
+                
+                <select name="payment_method" class="form-select form-select-sm" style="width: auto; min-width: 120px;">
+                    <option value="">Payment Method</option>
                     <option value="Cash" {% if request.GET.payment_method == 'Cash' %}selected{% endif %}>Cash</option>
                     <option value="M-Pesa" {% if request.GET.payment_method == 'M-Pesa' %}selected{% endif %}>M-Pesa</option>
                     <option value="Card" {% if request.GET.payment_method == 'Card' %}selected{% endif %}>Card</option>
                     <option value="Points" {% if request.GET.payment_method == 'Points' %}selected{% endif %}>Points</option>
                     <option value="Credit" {% if request.GET.payment_method == 'Credit' %}selected{% endif %}>Credit</option>
                 </select>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">Sale Type</label>
-                <select name="sale_type" class="form-select">
-                    <option value="">All Types</option>
+                
+                <select name="sale_type" class="form-select form-select-sm" style="width: auto; min-width: 120px;">
+                    <option value="">Sale Type</option>
                     <option value="cash" {% if request.GET.sale_type == 'cash' %}selected{% endif %}>Cash Sales</option>
                     <option value="credit" {% if request.GET.sale_type == 'credit' %}selected{% endif %}>Credit Sales</option>
                 </select>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">Search</label>
-                <input type="text" name="search" class="form-control" value="{{ request.GET.search }}" placeholder="Sale ID or Customer...">
-            </div>
-            <div class="col-12 d-flex justify-content-end">
-                <button type="submit" class="btn btn-success me-2">
-                    <i class="fas fa-filter"></i> Filter
+                
+                <select name="status" class="form-select form-select-sm" style="width: auto; min-width: 120px;">
+                    <option value="">Status</option>
+                    <option value="completed" {% if request.GET.status == 'completed' %}selected{% endif %}>Completed</option>
+                    <option value="reversed" {% if request.GET.status == 'reversed' %}selected{% endif %}>Reversed</option>
+                    <option value="pending" {% if request.GET.status == 'pending' %}selected{% endif %}>Pending</option>
+                </select>
+                
+                <input type="text" name="search" class="form-control form-control-sm" 
+                       value="{{ request.GET.search }}" placeholder="Sale ID or Customer..." style="width: 180px;">
+                
+                <button type="submit" class="btn btn-primary btn-sm">
+                    <i class="fas fa-search"></i> Filter
                 </button>
-                <a href="{% url 'sales:sale_list' %}" class="btn btn-secondary">
-                    <i class="fas fa-times"></i> Clear
+                
+                <a href="{% url 'sales:sale_list' %}" class="btn btn-secondary btn-sm">
+                    <i class="fas fa-undo"></i> Clear
                 </a>
+            </div>
+            
+            <!-- Row 2: Quick Date Shortcuts -->
+            <div class="d-flex gap-2 align-items-center">
+                <span class="badge bg-info text-white">Quick Date:</span>
+                <a href="?date_from={{ today }}" class="btn btn-link btn-sm p-0">Today</a>
+                <span class="text-muted">|</span>
+                <a href="?date_from={{ week_ago }}" class="btn btn-link btn-sm p-0">Last 7 Days</a>
+                <span class="text-muted">|</span>
+                <a href="?date_from={{ month_ago }}" class="btn btn-link btn-sm p-0">Last 30 Days</a>
+                <span class="text-muted">|</span>
+                <a href="?date_from={{ year_ago }}" class="btn btn-link btn-sm p-0">This Year</a>
             </div>
         </form>
     </div>
@@ -62,78 +86,130 @@
 <div class="card">
     <div class="card-body">
         <div class="table-responsive">
-            <table class="table table-hover">
+            <table class="table table-bordered table-hover">
                 <thead>
                     <tr>
-                        <th>Sale ID</th>
-                        <th>Date & Time</th>
-                        <th>Customer</th>
-                        <th>Items</th>
-                        <th>Total</th>
-                        <th>Payment Method</th>
-                        <th>Sale Type</th>
-                        <th>Status</th>
-                        <th>Actions</th>
+                        <th width="10%" class="bg-primary text-white text-center" style="border: 2px solid #0d47a1;">
+                            Sale ID
+                        </th>
+                        <th width="12%" class="bg-info text-white" style="border: 2px solid #0097a7;">
+                            Date & Time
+                        </th>
+                        <th width="15%" class="bg-success text-white" style="border: 2px solid #1b5e20;">
+                            Customer
+                        </th>
+                        <th width="5%" class="bg-warning text-dark text-center" style="border: 2px solid #e65100;">
+                            Items
+                        </th>
+                        <th width="10%" class="bg-success text-white text-end" style="border: 2px solid #1b5e20;">
+                            Total (KSH)
+                        </th>
+                        <th width="10%" class="bg-teal text-white" style="border: 2px solid #00695c;">
+                            Payment Method
+                        </th>
+                        <th width="8%" class="bg-purple text-white" style="border: 2px solid #4a2c8a;">
+                            Sale Type
+                        </th>
+                        <th width="8%" class="bg-danger text-white" style="border: 2px solid #b71c1c;">
+                            Status
+                        </th>
+                        <th width="12%" class="bg-navy text-white text-center" style="border: 2px solid #0a192f;">
+                            Actions
+                        </th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for sale in sales %}
-                    <tr>
-                        <td><span class="badge bg-success">{{ sale.sale_id }}</span></td>
-                        <td>{{ sale.sale_date|date:"Y-m-d H:i" }}</td>
-                        <td>{{ sale.buyer_name|default:"Walk-in Customer" }}</td>
-                        <td>{{ sale.items.count }}</td>
-                        <td class="fw-bold">KSH {{ sale.total_amount|floatformat:0 }}</td>
-                        <td>
+                    <tr class="{% if sale.is_reversed %}table-danger{% endif %}">
+                        <td class="text-center align-middle">
+                            <span class="badge {% if sale.is_reversed %}bg-danger{% else %}bg-primary{% endif %}">
+                                {{ sale.sale_id }}
+                            </span>
+                        </td>
+                        <td class="align-middle">
+                            <i class="fas fa-calendar-alt text-muted me-1"></i>
+                            {{ sale.sale_date|date:"Y-m-d" }}<br>
+                            <small class="text-muted">
+                                <i class="fas fa-clock"></i> {{ sale.sale_date|date:"H:i" }}
+                            </small>
+                        </td>
+                        <td class="align-middle">
+                            {% if sale.buyer_name %}
+                                <strong>{{ sale.buyer_name }}</strong><br>
+                                <small class="text-muted">
+                                    <i class="fas fa-phone"></i> {{ sale.buyer_phone|default:"-" }}
+                                </small>
+                            {% else %}
+                                <span class="badge bg-secondary">Walk-in Customer</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center align-middle">
+                            <span class="badge bg-info">{{ sale.items.count }}</span>
+                        </td>
+                        <td class="text-end align-middle fw-bold text-success">
+                            KSH {{ sale.total_amount|floatformat:0 }}
+                        </td>
+                        <td class="align-middle">
                             {% if sale.is_credit %}
-                                <span class="badge bg-warning text-dark">
+                                <span class="badge bg-warning text-dark w-100">
                                     <i class="fas fa-credit-card me-1"></i> Credit
                                 </span>
                             {% else %}
                                 {% if sale.payment_method == 'Cash' %}
-                                    <span class="badge bg-success">{{ sale.payment_method }}</span>
+                                    <span class="badge bg-success w-100">💵 Cash</span>
                                 {% elif sale.payment_method == 'M-Pesa' %}
-                                    <span class="badge bg-info">{{ sale.payment_method }}</span>
+                                    <span class="badge bg-info w-100">📱 M-Pesa</span>
                                 {% elif sale.payment_method == 'Card' %}
-                                    <span class="badge bg-primary">{{ sale.payment_method }}</span>
+                                    <span class="badge bg-primary w-100">💳 Card</span>
                                 {% elif sale.payment_method == 'Points' %}
-                                    <span class="badge bg-warning text-dark">{{ sale.payment_method }}</span>
+                                    <span class="badge bg-warning text-dark w-100">⭐ Points</span>
                                 {% else %}
-                                    <span class="badge bg-secondary">{{ sale.payment_method }}</span>
+                                    <span class="badge bg-secondary w-100">{{ sale.payment_method }}</span>
                                 {% endif %}
                             {% endif %}
                         </td>
-                        <td>
+                        <td class="text-center align-middle">
                             {% if sale.is_credit %}
-                                <span class="badge bg-warning text-dark">Credit Sale</span>
+                                <span class="badge bg-warning text-dark">
+                                    <i class="fas fa-hand-holding-usd me-1"></i> Credit
+                                </span>
                             {% else %}
-                                <span class="badge bg-success">Cash Sale</span>
+                                <span class="badge bg-success">
+                                    <i class="fas fa-money-bill-wave me-1"></i> Cash
+                                </span>
                             {% endif %}
                         </td>
-                        <td>
+                        <td class="text-center align-middle">
                             {% if sale.is_reversed %}
-                                <span class="badge bg-danger">Reversed</span>
+                                <span class="badge bg-danger w-100">
+                                    <i class="fas fa-undo me-1"></i> Reversed
+                                </span>
                             {% elif sale.is_credit %}
-                                <span class="badge bg-secondary">Pending</span>
+                                <span class="badge bg-secondary w-100">
+                                    <i class="fas fa-clock me-1"></i> Pending
+                                </span>
                             {% else %}
-                                <span class="badge bg-success">Completed</span>
+                                <span class="badge bg-success w-100">
+                                    <i class="fas fa-check-circle me-1"></i> Completed
+                                </span>
                             {% endif %}
                         </td>
-                        <td>
-                            <div class="btn-group" role="group">
-                                <a href="{% url 'sales:sale_detail' sale.sale_id %}" class="btn btn-sm btn-info" title="View">
+                        <td class="text-center align-middle">
+                            <div class="btn-group btn-group-sm" role="group">
+                                <a href="{% url 'sales:sale_detail' sale.sale_id %}" class="btn btn-outline-info" title="View Details">
                                     <i class="fas fa-eye"></i>
                                 </a>
-                                <a href="{% url 'sales:sale_receipt' sale.sale_id %}" class="btn btn-sm btn-warning" title="Receipt">
-                                    <i class="fas fa-receipt"></i>
+                                <a href="{% url 'sales:sale_receipt' sale.sale_id %}" class="btn btn-outline-warning" title="Print Receipt">
+                                    <i class="fas fa-print"></i>
                                 </a>
                                 {% if sale.is_credit and sale.credit_sale_id %}
-                                <a href="{% url 'credit:transaction_detail' sale.credit_sale_id %}" class="btn btn-sm btn-primary" title="View in Credit App">
+                                <a href="{% url 'credit:transaction_detail' sale.credit_sale_id %}" class="btn btn-outline-primary" title="View in Credit App">
                                     <i class="fas fa-external-link-alt"></i>
                                 </a>
                                 {% endif %}
                                 {% if not sale.is_reversed and not sale.is_credit %}
-                                <a href="{% url 'sales:sale_reverse' sale.sale_id %}" class="btn btn-sm btn-danger" title="Reverse">
+                                <a href="{% url 'sales:sale_reverse' sale.sale_id %}" class="btn btn-outline-danger" title="Reverse Sale" 
+                                   onclick="return confirm('Are you sure you want to reverse this sale?')">
                                     <i class="fas fa-undo"></i>
                                 </a>
                                 {% endif %}
@@ -142,10 +218,10 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="9" class="text-center py-4">
-                            <i class="fas fa-shopping-cart fa-3x text-muted mb-3"></i>
-                            <p class="text-muted">No sales found</p>
-                            <a href="{% url 'sales:sale_create' %}" class="btn btn-success btn-sm">
+                        <td colspan="9" class="text-center py-5">
+                            <i class="fas fa-shopping-cart fa-4x text-muted mb-3"></i>
+                            <p class="text-muted mb-3">No sales found</p>
+                            <a href="{% url 'sales:sale_create' %}" class="btn btn-success">
                                 <i class="fas fa-plus"></i> Create your first sale
                             </a>
                         </td>
@@ -159,13 +235,17 @@
 
 <!-- Pagination -->
 {% if sales.has_other_pages %}
-<nav aria-label="Page navigation" class="mt-4">
+<nav class="mt-4">
     <ul class="pagination justify-content-center">
         {% if sales.has_previous %}
         <li class="page-item">
             <a class="page-link" href="?page={{ sales.previous_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
-                Previous
+                <i class="fas fa-chevron-left"></i> Previous
             </a>
+        </li>
+        {% else %}
+        <li class="page-item disabled">
+            <span class="page-link"><i class="fas fa-chevron-left"></i> Previous</span>
         </li>
         {% endif %}
         
@@ -184,25 +264,69 @@
         {% if sales.has_next %}
         <li class="page-item">
             <a class="page-link" href="?page={{ sales.next_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
-                Next
+                Next <i class="fas fa-chevron-right"></i>
             </a>
+        </li>
+        {% else %}
+        <li class="page-item disabled">
+            <span class="page-link">Next <i class="fas fa-chevron-right"></i></span>
         </li>
         {% endif %}
     </ul>
 </nav>
 {% endif %}
+
+<style>
+    .bg-purple {
+        background-color: #6f42c1 !important;
+    }
+    .bg-teal {
+        background-color: #20c997 !important;
+    }
+    .bg-navy {
+        background-color: #001f3f !important;
+    }
+    .table-bordered {
+        border: 2px solid #dee2e6 !important;
+    }
+    .table-bordered thead th,
+    .table-bordered thead td {
+        border-bottom-width: 2px;
+    }
+    .table-bordered tbody tr td {
+        border-right: 1px solid #dee2e6;
+    }
+    .table-bordered tbody tr td:last-child {
+        border-right: none;
+    }
+    .table-hover tbody tr:hover {
+        background-color: rgba(0, 0, 0, 0.05);
+    }
+    .table-danger {
+        background-color: #f8d7da !important;
+    }
+    .btn-group-sm .btn {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.75rem;
+    }
+    .badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+    }
+    .table th, .table td {
+        vertical-align: middle;
+    }
+</style>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-(function() {
-    'use strict';
-    
+document.addEventListener('DOMContentLoaded', function() {
     // Initialize tooltips
-    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[title]'))
     var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
         return new bootstrap.Tooltip(tooltipTriggerEl)
     });
-})();
+});
 </script>
 {% endblock %}

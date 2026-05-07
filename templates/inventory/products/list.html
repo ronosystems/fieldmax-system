@@ -1,5 +1,4 @@
 {% extends 'inventory/staff_base.html' %}
-
 {% load static %}
 
 {% block title %}Products{% endblock %}
@@ -20,227 +19,330 @@
         </a>
 
         <a href="{% url 'inventory:product_bulk_edit' %}" class="btn btn-success">
-            <i class="fas fa-copy me-2"></i>Bulk Edit Products
+            <i class="fas fa-edit me-2"></i>Bulk Edit Products
         </a>
 
         <a href="{% url 'inventory:return_product' %}" class="btn btn-warning">
             <i class="fas fa-undo-alt me-2"></i>Return Product
         </a>
 
-        <!-- Transfer Button -->
         <button type="button" class="btn btn-warning me-2" onclick="goToTransferPage()">
             <i class="fas fa-exchange-alt me-2"></i>Transfer Products
         </button>
 
-        <!-- Record Losses button  -->
         <button type="button" class="btn btn-danger" onclick="goToRecordLossesPage()">
-            <i class="fas fa-skull-crosswalk me-2"></i>Record Losses
+            <i class="fas fa-skull-crossbones me-2"></i>Record Losses
         </button>
 
-        <!-- stolen products list button -->
-        <a href="{% url 'inventory:stolen_products_list' %}" class="btn btn-outline-danger">
-            <i class="fas fa-skull-crosswalk me-2"></i>Stolen/Lost Management
+        <a href="{% url 'inventory:stolen_products_list' %}" class="btn btn-danger position-relative">
+            <i class="alert-link"></i>Stolen Items Page
+             <span class="badge bg-light text-danger ms-1" id="stolenCount">0</span>
         </a>
+
     </div>
 </div>
 
-<!-- NEW: Stolen Products Alert Banner -->
-<div id="stolenAlert" class="alert alert-danger alert-dismissible fade show mb-4" style="display: none;">
-    <i class="fas fa-exclamation-triangle me-2"></i>
-    <strong>Security Alert:</strong> 
-    <span id="stolenCount"></span> product(s) have been reported stolen/lost.
-    <a href="{% url 'inventory:stolen_products_list' %}" class="alert-link">View details</a>
-    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-</div>
 
-<!-- Filters -->
+<!-- Filters - Compact 2 Rows -->
 <div class="card mb-4">
-    <div class="card-body">
-        <form method="get" class="row g-3">
-            <div class="col-md-3">
-                <label class="form-label">Category</label>
-                <select name="category" class="form-select">
-                    <option value="">All Categories</option>
+    <div class="card-body py-2">
+        <form method="get">
+            <!-- Row 1: Filters -->
+            <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+                <select name="category" class="form-select form-select-sm" style="width: auto; min-width: 130px;">
+                    <option value="">Category</option>
                     {% for cat in categories %}
                     <option value="{{ cat.id }}" {% if request.GET.category == cat.id|stringformat:"s" %}selected{% endif %}>
                         {{ cat.name }}
                     </option>
                     {% endfor %}
                 </select>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">Status</label>
-                <select name="status" class="form-select">
-                    <option value="">All Status</option>
+                
+                <select name="status" class="form-select form-select-sm" style="width: auto; min-width: 120px;">
+                    <option value="">Status</option>
                     <option value="available" {% if request.GET.status == 'available' %}selected{% endif %}>Available</option>
                     <option value="sold" {% if request.GET.status == 'sold' %}selected{% endif %}>Sold</option>
                     <option value="lowstock" {% if request.GET.status == 'lowstock' %}selected{% endif %}>Low Stock</option>
                     <option value="outofstock" {% if request.GET.status == 'outofstock' %}selected{% endif %}>Out of Stock</option>
                     <option value="stolen" {% if request.GET.status == 'stolen' %}selected{% endif %}>Stolen/Lost</option>
                 </select>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">Loss Type</label>
-                <select name="loss_type" class="form-select">
-                    <option value="">All Types</option>
+                
+                <select name="loss_type" class="form-select form-select-sm" style="width: auto; min-width: 120px;">
+                    <option value="">Loss Type</option>
                     <option value="stolen" {% if request.GET.loss_type == 'stolen' %}selected{% endif %}>Stolen</option>
                     <option value="lost" {% if request.GET.loss_type == 'lost' %}selected{% endif %}>Lost</option>
-                    <option value="damaged_total" {% if request.GET.loss_type == 'damaged_total' %}selected{% endif %}>Damaged (Write-off)</option>
+                    <option value="damaged_total" {% if request.GET.loss_type == 'damaged_total' %}selected{% endif %}>Damaged</option>
                 </select>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">Brand</label>
-                <input type="text" name="brand" class="form-control" value="{{ request.GET.brand }}" placeholder="Enter brand">
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">Search</label>
-                <input type="text" name="search" class="form-control" value="{{ request.GET.search }}" placeholder="Search products...">
-            </div>
-            
-            <!-- Single Product Search Button Row -->
-            <div class="col-12">
-                <hr class="my-2">
-                <div class="d-flex align-items-center">
-                    <div class="flex-grow-1 me-2">
-                        <label class="form-label">Quick Single Product Search</label>
-                        <input type="text" id="quickSearch" class="form-control" placeholder="Enter product code, SKU or barcode...">
-                    </div>
-                    <div class="mt-4">
-                        <button type="button" class="btn btn-outline-info" id="searchSingleBtn">
-                            <i class="fas fa-search me-2"></i>Search Single Product
-                        </button>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="col-12 d-flex justify-content-end">
-                <button type="submit" class="btn btn-primary me-2">
-                    <i class="fas fa-filter"></i> Filter
+                
+
+                <!-- NEW: Owner Filter -->
+                <select name="owner" class="form-select form-select-sm" style="width: auto; min-width: 120px;">
+                    <option value="">All Owners</option>
+                    <option value="none" {% if request.GET.owner == 'none' %}selected{% endif %}>MAIN STORE</option>
+                    {% for user in users %}
+                    <option value="{{ user.id }}" {% if request.GET.owner == user.id|stringformat:"s" %}selected{% endif %}>
+                        {{ user.get_full_name|default:user.username }}
+                    </option>
+                    {% endfor %}
+                    <option value="me" {% if request.GET.owner == 'me' %}selected{% endif %}>Me ({{ request.user.username }})</option>
+                </select>
+
+                <input type="text" name="brand" class="form-control form-control-sm" 
+                       value="{{ request.GET.brand }}" placeholder="Brand" style="width: 100px;">
+                
+                <input type="text" name="search" class="form-control form-control-sm" 
+                       value="{{ request.GET.search }}" placeholder="Search..." style="width: 150px;">
+                
+                <button type="submit" class="btn btn-primary btn-sm">
+                    <i class="fas fa-search"></i> Filter
                 </button>
-                <a href="{% url 'inventory:product_list' %}" class="btn btn-secondary">
-                    <i class="fas fa-times"></i> Clear
+                
+                <a href="{% url 'inventory:product_list' %}" class="btn btn-secondary btn-sm">
+                    <i class="fas fa-undo"></i> Clear
                 </a>
+            </div>
+            
+            <!-- Row 2: Quick Search -->
+            <div class="d-flex gap-2 align-items-center">
+                <span class="badge bg-info text-white">Quick Find:</span>
+                <input type="text" id="quickSearch" class="form-control form-control-sm flex-grow-1" 
+                       placeholder="Enter product code, SKU, serial number, or IMEI...">
+                <button type="button" class="btn btn-warning btn-sm" id="searchSingleBtn">
+                    <i class="fas fa-bolt me-1"></i>Search
+                </button>
             </div>
         </form>
     </div>
 </div>
 
+
 <!-- Products Table -->
 <div class="card">
     <div class="card-body">
         <div class="table-responsive">
-            <table class="table table-hover">
+            <table class="table table-bordered table-hover">
                 <thead>
                     <tr>
-                        <th>
-                            <input type="checkbox" id="selectAllProducts" class="form-check-input">
+                        <!-- A - CHECKBOX - Purple -->
+                        <th width="30" class="bg-purple text-white text-center" style="border: 2px solid #4a2c8a;">
+                            <input type="checkbox" id="selectAllProducts" class="form-check-input bg-white">
                         </th>
-                        <th>Code</th>
-                        <th>Product</th>
-                        <th>Model</th>
-                        <th>Category</th>
-                        <th>Cost (KSH)</th>
-                        <th>Sell (KSH)</th>
-                        <th>Best (KSH)</th>
-                        <th>SKU</th>
-                        <th>Barcode</th>
-                        <th>Stock</th>
-                        <th>Status</th>
-                        <th>Owner</th>
-                        <th>Actions</th>
+                        
+                        <!-- B - PRODUCT NAME & PRODUCT CODE - Blue -->
+                        <th width="20%" class="bg-primary text-white" style="border: 2px solid #0d47a1;">
+                            Product Name<br><small class="text-white-50">Product Code</small>
+                        </th>
+                        
+                        <!-- C - PRODUCT BRAND & PRODUCT MODEL - Cyan -->
+                        <th width="12%" class="bg-info text-white" style="border: 2px solid #0097a7;">
+                            Brand<br><small class="text-white-50">Model</small>
+                        </th>
+                        
+                        <!-- D - CATEGORY - Teal -->
+                        <th width="10%" class="bg-teal text-white" style="border: 2px solid #00695c;">
+                            Category
+                        </th>
+                        
+                        <!-- E - COST KSH - Orange -->
+                        <th width="8%" class="bg-warning text-dark text-end" style="border: 2px solid #e65100;">
+                            Cost (KSH)
+                        </th>
+                        
+                        <!-- F - SELL KSH - Green -->
+                        <th width="8%" class="bg-success text-white text-end" style="border: 2px solid #1b5e20;">
+                            Sell (KSH)
+                        </th>
+                        
+                        <!-- G - BEST KSH - Gold -->
+                        <th width="8%" class="bg-gold text-dark text-end" style="border: 2px solid #b8860b;">
+                            Best (KSH)
+                        </th>
+                        
+                        <!-- H - SERIAL NUMBER / IMEI NUMBER - Indigo -->
+                        <th width="12%" class="bg-indigo text-white" style="border: 2px solid #311b92;">
+                            Serial/IMEI<br><small class="text-white-50">Identifier</small>
+                        </th>
+                        
+                        <!-- I - BARCODE - Secondary -->
+                        <th width="8%" class="bg-secondary text-white" style="border: 2px solid #424242;">
+                            Barcode
+                        </th>
+                        
+                        <!-- J - STOCK - Dark -->
+                        <th width="5%" class="bg-dark text-white text-center" style="border: 2px solid #000000;">
+                            Stock
+                        </th>
+                        
+                        <!-- K - STATUS - Red -->
+                        <th width="8%" class="bg-danger text-white" style="border: 2px solid #b71c1c;">
+                            Status
+                        </th>
+                        
+                        <!-- L - OWNER - Pink -->
+                        <th width="8%" class="bg-pink text-white" style="border: 2px solid #880e4f;">
+                            Owner
+                        </th>
+                        
+                        <!-- M - ACTIONS - Navy -->
+                        <th width="10%" class="bg-navy text-white text-center" style="border: 2px solid #0a192f;">
+                            Actions
+                        </th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for product in products %}
-                    <tr class="{% if product.is_stolen_or_lost %}table-danger{% endif %}">
-                        <td>
+                    <tr class="{% if product.is_stolen_or_lost %}table-danger{% endif %}" style="border-bottom: 1px solid #dee2e6;">
+                        <!-- A - CHECKBOX -->
+                        <td class="text-center align-middle" style="border-right: 1px solid #dee2e6;">
                             <input type="checkbox" class="product-checkbox form-check-input" 
                                    data-id="{{ product.id }}"
                                    data-sku="{{ product.sku_value }}"
-                                   data-name="{{ product.display_name }}"
+                                   data-name="{{ product.name }}"
                                    data-owner="{{ product.owner.id }}"
                                    {% if not product.sku_value or product.status != 'available' or product.is_stolen_or_lost %}disabled{% endif %}
-                                   
-                                   {# Disable if not owner AND not authorized #}
                                    {% if product.owner != request.user and not can_transfer_any %}disabled{% endif %}>
                         </td>
-                        <td>
-                            <span class="badge {% if product.is_stolen_or_lost %}bg-danger{% else %}bg-secondary{% endif %}">
-                                {{ product.product_code }}
-                            </span>
+                        
+                        <!-- B - PRODUCT NAME & PRODUCT CODE -->
+                        <td style="border-right: 1px solid #dee2e6;">
+                            <div class="fw-bold">
+                                <a href="{% url 'inventory:product_detail' product.id %}" class="text-decoration-none">
+                                    {{ product.name|default:"-" }}
+                                    {% if product.is_stolen_or_lost %}
+                                        <i class="fas fa-skull-crossbones text-danger ms-1" title="Stolen/Lost"></i>
+                                    {% endif %}
+                                </a>
+                            </div>
+                            <div class="mt-1">
+                                <code class="small text-muted">{{ product.product_code|default:"-" }}</code>
+                            </div>
                         </td>
-                        <td>
-                            <a href="{% url 'inventory:product_detail' product.id %}" class="text-decoration-none fw-bold">
-                                {{ product.name }}
-                                {% if product.is_stolen_or_lost %}
-                                    <i class="fas fa-skull-crosswalk text-danger ms-1" title="Stolen/Lost"></i>
-                                {% endif %}
-                            </a>
+                        
+                        <!-- C - PRODUCT BRAND & PRODUCT MODEL -->
+                        <td style="border-right: 1px solid #dee2e6;">
+                            <div>
+                                <span class="badge bg-secondary">{{ product.brand|default:"-" }}</span>
+                            </div>
+                            <div class="mt-1">
+                                <span class="badge bg-info">{{ product.model|default:"-" }}</span>
+                            </div>
                         </td>
-                        <td><span class="badge bg-secondary">{{ product.model }}</span></td>
-                        <td>
+                        
+                        <!-- D - CATEGORY -->
+                        <td style="border-right: 1px solid #dee2e6;">
                             {% if product.category.is_single_item %}
                                 <span class="badge bg-info">📱 {{ product.category.name }}</span>
                             {% else %}
                                 <span class="badge bg-secondary">📦 {{ product.category.name }}</span>
                             {% endif %}
                         </td>
-                        <td>{% if product.buying_price %}KSH {{ product.buying_price|floatformat:0 }}{% else %}-{% endif %}</td>
-                        <td class="fw-bold text-success">KSH {{ product.selling_price|floatformat:0 }}</td>
-                        <td>{% if product.best_price %}KSH {{ product.best_price|floatformat:0 }}{% else %}-{% endif %}</td>
-                        <td>
-                            {% if product.sku_value %}
-                                <span class="small">{{ product.sku_value|truncatechars:12 }}</span>
+                        
+                        <!-- E - COST KSH -->
+                        <td class="text-end align-middle" style="border-right: 1px solid #dee2e6;">
+                            {% if product.buying_price %}
+                                KSH {{ product.buying_price|floatformat:0 }}
                             {% else %}
                                 -
                             {% endif %}
                         </td>
-                        <td>
+                        
+                        <!-- F - SELL KSH -->
+                        <td class="text-end align-middle fw-bold text-success" style="border-right: 1px solid #dee2e6;">
+                            {% if product.selling_price %}
+                                KSH {{ product.selling_price|floatformat:0 }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        
+                        <!-- G - BEST KSH -->
+                        <td class="text-end align-middle" style="border-right: 1px solid #dee2e6;">
+                            {% if product.best_price %}
+                                KSH {{ product.best_price|floatformat:0 }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        
+                        <!-- H - SERIAL NUMBER / IMEI NUMBER -->
+                        <td style="border-right: 1px solid #dee2e6;">
+                            {% if product.imei_number %}
+                                <span class="badge bg-primary" title="IMEI Number">
+                                    <i class="fas fa-qrcode"></i> {{ product.imei_number }}
+                                </span>
+                            {% elif product.serial_number %}
+                                <span class="badge bg-secondary" title="Serial Number">
+                                    <i class="fas fa-hashtag"></i> {{ product.serial_number|truncatechars:15 }}
+                                </span>
+                            {% elif product.sku_value %}
+                                <span class="badge bg-secondary" title="Legacy SKU">
+                                    SKU: {{ product.sku_value|truncatechars:12 }}
+                                </span>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        
+                        <!-- I - BARCODE -->
+                        <td style="border-right: 1px solid #dee2e6;">
                             {% if product.barcode %}
-                                <span class="small">{{ product.barcode|truncatechars:12 }}</span>
+                                <code class="small">{{ product.barcode|truncatechars:10 }}</code>
                             {% else %}
                                 -
                             {% endif %}
                         </td>
-                        <!-- Stock Column -->
-                        <td>
+                        
+                        <!-- J - STOCK -->
+                        <td class="text-center align-middle" style="border-right: 1px solid #dee2e6;">
                             {% if product.category.is_single_item %}
                                 {% if product.quantity > 0 and product.status == 'available' %}
                                     <span class="badge bg-success">✓ In Stock</span>
                                 {% elif product.is_stolen_or_lost %}
-                                    <span class="badge bg-danger">💀 STOLEN/LOST</span>
+                                    <span class="badge bg-danger">💀 Stolen</span>
                                 {% else %}
-                                    <span class="badge bg-danger">SOLD</span>
+                                    <span class="badge bg-secondary">SOLD</span>
                                 {% endif %}
                             {% else %}
                                 <span class="fw-bold">{{ product.quantity }}</span>
-                                {% if product.quantity <= product.reorder_level %}
+                                {% if product.quantity <= product.reorder_level and product.quantity > 0 %}
                                     <span class="badge bg-warning text-dark ms-1">Reorder</span>
+                                {% elif product.quantity == 0 %}
+                                    <span class="badge bg-danger ms-1">Out</span>
                                 {% endif %}
                             {% endif %}
                         </td>
-                        <!-- Status Column -->
-                        <td>
+                        
+                        <!-- K - STATUS -->
+                        <td style="border-right: 1px solid #dee2e6;">
                             {% if product.is_stolen_or_lost %}
-                                <span class="badge bg-danger">
-                                    <i class="fas fa-skull-crosswalk"></i> 
+                                <span class="badge bg-danger w-100">
+                                    <i class="fas fa-skull-crossbones"></i> 
                                     {{ product.get_loss_type_display|default:"Stolen/Lost" }}
                                 </span>
                             {% elif product.status == 'available' %}
-                                <span class="badge-available">✓ Available</span>
+                                <span class="badge bg-success w-100">✓ Available</span>
                             {% elif product.status == 'sold' %}
-                                <span class="badge bg-secondary">Sold Out</span>
+                                <span class="badge bg-secondary w-100">Sold Out</span>
                             {% elif product.status == 'lowstock' %}
-                                <span class="badge-lowstock">⚠️ Low Stock</span>
+                                <span class="badge bg-warning text-dark w-100">⚠️ Low Stock</span>
                             {% elif product.status == 'outofstock' %}
-                                <span class="badge bg-danger">❌ Out of Stock</span>
+                                <span class="badge bg-danger w-100">❌ Out of Stock</span>
+                            {% elif product.status == 'reserved' %}
+                                <span class="badge bg-info w-100">⏳ Reserved</span>
+                            {% elif product.status == 'damaged' %}
+                                <span class="badge bg-dark w-100">⚠️ Damaged</span>
+                            {% elif product.status == 'writeoff' %}
+                                <span class="badge bg-secondary w-100">📝 Written Off</span>
+                            {% elif product.status == 'recalled' %}
+                                <span class="badge bg-danger w-100">🔙 Recalled</span>
                             {% else %}
-                                <span class="badge bg-secondary">{{ product.get_status_display }}</span>
+                                <span class="badge bg-secondary w-100">{{ product.get_status_display }}</span>
                             {% endif %}
                         </td>
-                        <!-- Owner Column -->
-                        <td>
-                            <span class="badge {% if product.owner == request.user %}bg-success{% else %}bg-info{% endif %}">
+                        
+                        <!-- L - OWNER -->
+                        <td class="text-center align-middle" style="border-right: 1px solid #dee2e6;">
+                            <span class="badge {% if product.owner == request.user %}bg-success{% else %}bg-info{% endif %} w-100">
                                 {% if product.owner %}
                                     {{ product.owner.username }}
                                 {% else %}
@@ -248,25 +350,27 @@
                                 {% endif %}
                             </span>
                         </td>
-                        <td>
-                            <div class="btn-group" role="group">
-                                <a href="{% url 'inventory:product_detail' product.id %}" class="btn btn-sm btn-info" title="View">
+                        
+                        <!-- M - ACTIONS -->
+                        <td class="text-center align-middle">
+                            <div class="btn-group btn-group-sm" role="group">
+                                <a href="{% url 'inventory:product_detail' product.id %}" class="btn btn-outline-info" title="View">
                                     <i class="fas fa-eye"></i>
                                 </a>
-                                <a href="{% url 'inventory:product_edit' product.id %}" class="btn btn-sm btn-warning" title="Edit">
+                                <a href="{% url 'inventory:product_edit' product.id %}" class="btn btn-outline-warning" title="Edit">
                                     <i class="fas fa-edit"></i>
                                 </a>
                                 
-                                <!-- NEW: Report Issue Dropdown for each product -->
-                                <div class="btn-group" role="group">
-                                    <button type="button" class="btn btn-sm btn-danger dropdown-toggle" 
+                                <!-- Report Issue Dropdown -->
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <button type="button" class="btn btn-outline-danger dropdown-toggle" 
                                             data-bs-toggle="dropdown" title="Report Issue">
                                         <i class="fas fa-exclamation-triangle"></i>
                                     </button>
                                     <ul class="dropdown-menu dropdown-menu-end">
                                         <li>
                                             <a class="dropdown-item text-danger" href="{% url 'inventory:report_stolen' product.id %}">
-                                                <i class="fas fa-skull-crosswalk"></i> Report Stolen
+                                                <i class="fas fa-skull-crossbones"></i> Report Stolen
                                             </a>
                                         </li>
                                         <li>
@@ -298,7 +402,7 @@
                                     </ul>
                                 </div>
                                 
-                                <a href="{% url 'inventory:product_delete' product.id %}" class="btn btn-sm btn-danger" title="Delete" 
+                                <a href="{% url 'inventory:product_delete' product.id %}" class="btn btn-outline-danger" title="Delete" 
                                    onclick="return confirm('Are you sure you want to delete this product?')">
                                     <i class="fas fa-trash"></i>
                                 </a>
@@ -307,7 +411,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="14" class="text-center py-4">
+                        <td colspan="13" class="text-center py-4">
                             <i class="fas fa-box-open fa-3x text-muted mb-3"></i>
                             <p class="text-muted">No products found</p>
                             <a href="{% url 'inventory:product_add' %}" class="btn btn-primary btn-sm">
@@ -319,6 +423,7 @@
                 </tbody>
             </table>
         </div>
+
         
         <!-- Selected Products Bar -->
         <div id="selectedProductsBar" class="selected-bar mt-3" style="display: none;">
@@ -342,7 +447,8 @@
             </div>
         </div>
     </div>
-</div>
+</div>     
+
 
 <!-- Pagination -->
 {% if products.has_other_pages %}
@@ -380,53 +486,11 @@
 {% endif %}
 
 <style>
-    /* Your existing styles */
-    .required:after {
-        content: " *";
-        color: #dc3545;
-    }
-    .selected-user-card {
-        background: #e8f5e9;
-        border-left: 4px solid #28a745;
-        border-radius: 8px;
-        padding: 12px 15px;
-        margin-top: 10px;
-        animation: slideDown 0.3s ease;
-    }
-    .product-badge {
-        display: inline-block;
-        background: #e9ecef;
-        padding: 5px 10px;
-        margin: 2px;
-        border-radius: 20px;
-        font-size: 12px;
-        border: 1px solid #dee2e6;
-        animation: fadeIn 0.3s ease;
-    }
-    .product-badge .remove-product {
-        margin-left: 5px;
-        color: #dc3545;
-        cursor: pointer;
-        font-weight: bold;
-    }
-    .product-badge .remove-product:hover {
-        color: #bd2130;
-    }
     .selected-bar {
         position: sticky;
         bottom: 20px;
         z-index: 100;
         animation: slideUp 0.3s ease;
-    }
-    @keyframes slideDown {
-        from {
-            opacity: 0;
-            transform: translateY(-10px);
-        }
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
     }
     @keyframes slideUp {
         from {
@@ -438,66 +502,154 @@
             transform: translateY(0);
         }
     }
-    @keyframes fadeIn {
-        from {
-            opacity: 0;
-            transform: scale(0.9);
-        }
-        to {
-            opacity: 1;
-            transform: scale(1);
-        }
-    }
-    /* Style for disabled checkboxes */
     .product-checkbox:disabled {
         opacity: 0.3;
         cursor: not-allowed;
     }
-    
-    /* NEW: Stolen row highlight */
     .table-danger {
         background-color: #f8d7da !important;
     }
-    
-    /* Dropdown menu styling */
     .dropdown-menu {
         min-width: 200px;
     }
-    
     .dropdown-item i {
         width: 20px;
         margin-right: 8px;
     }
+    .badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+    }
+    .table th, .table td {
+        vertical-align: middle;
+    }
+
+/* Custom Header Colors */
+.bg-purple {
+    background-color: #6f42c1 !important;
+}
+.bg-teal {
+    background-color: #20c997 !important;
+}
+.bg-gold {
+    background-color: #ffc107 !important;
+}
+.bg-indigo {
+    background-color: #6610f2 !important;
+}
+.bg-pink {
+    background-color: #d63384 !important;
+}
+.bg-navy {
+    background-color: #001f3f !important;
+}
+.bg-dark-blue {
+    background-color: #1a2a3a !important;
+}
+
+/* Responsive Filters */
+@media (max-width: 768px) {
+    .d-flex.flex-wrap {
+        flex-direction: column;
+        align-items: stretch !important;
+    }
+    
+    .d-flex.flex-wrap select,
+    .d-flex.flex-wrap input,
+    .d-flex.flex-wrap button,
+    .d-flex.flex-wrap a {
+        width: 100% !important;
+        margin-bottom: 5px;
+    }
+    
+    .vr {
+        display: none;
+    }
+}
+
+/* Compact form styles */
+.form-select-sm, .form-control-sm {
+    font-size: 0.8rem;
+    padding: 0.35rem 0.5rem;
+}
+
+/* Header text styling */
+.table thead th {
+    font-weight: 600;
+    font-size: 0.85rem;
+    padding: 12px 8px;
+    vertical-align: middle;
+}
+.table thead th small {
+    font-weight: 400;
+    font-size: 0.7rem;
+}
+
+/* Table border styles */
+.table-bordered {
+    border: 2px solid #dee2e6 !important;
+}
+
+.table-bordered thead th,
+.table-bordered thead td {
+    border-bottom-width: 2px;
+}
+
+.table-bordered tbody tr td {
+    border-right: 1px solid #dee2e6;
+}
+
+.table-bordered tbody tr td:last-child {
+    border-right: none;
+}
+
+/* Row hover effect with border */
+.table-hover tbody tr:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+/* Alternate row striping (optional) */
+.table-striped tbody tr:nth-of-type(odd) {
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+/* Highlight active filter */
+select[name="owner"] option[value="me"]:checked {
+    background-color: #28a745;
+    color: white;
+}
+
 </style>
 {% endblock %}
 
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Get user permission from context
     const canTransferAny = {{ can_transfer_any|yesno:"true,false" }};
     
-    console.log('Can Transfer Any:', canTransferAny);
-    
     // ============================================
-    // CHECK FOR STOLEN PRODUCTS AND SHOW ALERT
+    // CHECK FOR STOLEN PRODUCTS AND UPDATE BADGE
     // ============================================
     function checkStolenProducts() {
-        // Count products with stolen/lost status from the table
         const stolenRows = document.querySelectorAll('tbody tr.table-danger');
         const stolenCount = stolenRows.length;
         
-        if (stolenCount > 0) {
-            const alertDiv = document.getElementById('stolenAlert');
-            const stolenCountSpan = document.getElementById('stolenCount');
-            if (alertDiv && stolenCountSpan) {
-                stolenCountSpan.textContent = stolenCount;
-                alertDiv.style.display = 'block';
+        // Update the badge in the button
+        const stolenCountBadge = document.getElementById('stolenCount');
+        if (stolenCountBadge) {
+            stolenCountBadge.textContent = stolenCount;
+            
+            // Optional: Change badge color based on count
+            if (stolenCount > 0) {
+                stolenCountBadge.classList.remove('bg-light', 'text-danger');
+                stolenCountBadge.classList.add('bg-danger', 'text-white');
+            } else {
+                stolenCountBadge.classList.remove('bg-danger', 'text-white');
+                stolenCountBadge.classList.add('bg-light', 'text-danger');
             }
         }
     }
     
-    // Call the function
     checkStolenProducts();
     
     // ============================================
@@ -509,7 +661,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function searchSingleProduct() {
         const searchTerm = quickSearch.value.trim();
         if (!searchTerm) {
-            alert('Please enter a product code, SKU or barcode to search.');
+            alert('Please enter a product code, SKU, serial number, or IMEI to search.');
             return;
         }
         window.location.href = `{% url 'inventory:product_list' %}?search=${encodeURIComponent(searchTerm)}`;
@@ -538,13 +690,11 @@ document.addEventListener('DOMContentLoaded', function() {
     
     let selectedProducts = [];
     
-    // Load selected products from sessionStorage
     function loadSelectedProducts() {
         const saved = sessionStorage.getItem('selectedProducts');
         if (saved) {
             try {
                 selectedProducts = JSON.parse(saved);
-                // Verify products still exist and are still selectable
                 selectedProducts = selectedProducts.filter(savedProduct => {
                     const checkbox = Array.from(productCheckboxes).find(
                         cb => cb.dataset.id === savedProduct.id && !cb.disabled
@@ -558,12 +708,10 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // Save selected products
     function saveSelectedProducts() {
         sessionStorage.setItem('selectedProducts', JSON.stringify(selectedProducts));
     }
     
-    // Update display
     function updateSelectedProducts() {
         productCheckboxes.forEach(cb => {
             if (!cb.disabled) {
@@ -578,7 +726,6 @@ document.addEventListener('DOMContentLoaded', function() {
         saveSelectedProducts();
     }
     
-    // Add product
     function addProduct(product) {
         if (!selectedProducts.some(p => p.id === product.id)) {
             selectedProducts.push(product);
@@ -586,13 +733,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // Remove product
-    window.removeProduct = function(index) {
-        selectedProducts.splice(index, 1);
-        updateSelectedProducts();
-    };
-    
-    // Clear all
     window.clearSelections = function() {
         selectedProducts = [];
         updateSelectedProducts();
@@ -600,7 +740,6 @@ document.addEventListener('DOMContentLoaded', function() {
         sessionStorage.removeItem('selectedProducts');
     };
     
-    // Handle checkbox changes
     productCheckboxes.forEach(checkbox => {
         checkbox.addEventListener('change', function() {
             if (this.disabled) return;
@@ -623,7 +762,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // Handle select all
     if (selectAllCheckbox) {
         selectAllCheckbox.addEventListener('change', function() {
             if (this.checked) {
@@ -667,7 +805,10 @@ document.addEventListener('DOMContentLoaded', function() {
     };
     
     loadSelectedProducts();
-    // Add this function to your product list template's extra_js block
+    
+    // ============================================
+    // GO TO RECORD LOSSES PAGE
+    // ============================================
     window.goToRecordLossesPage = function() {
         if (selectedProducts.length === 0) {
             alert('Please select at least one product to record as loss.');

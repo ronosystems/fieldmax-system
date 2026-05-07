@@ -6,7 +6,15 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h2><i class="fas {{ account_icon }} me-2"></i>{{ account_type }}</h2>
+    <div>
+        <h2 class="mb-0"><i class="fas {{ account_icon }} me-2"></i>{{ account_type }}</h2>
+        <nav aria-label="breadcrumb" class="mt-2">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'finance:dashboard' %}">Dashboard</a></li>
+                <li class="breadcrumb-item active">{{ account_type }}</li>
+            </ol>
+        </nav>
+    </div>
     <div>
         <a href="{% url 'finance:add_account_transaction' %}{% if 'cash' in request.path %}?account=cash{% elif 'bank' in request.path %}?account=bank{% else %}?account=credit{% endif %}" class="btn btn-primary me-2">
             <i class="fas fa-plus-circle me-2"></i>Add Transaction
@@ -23,14 +31,16 @@
         <div class="card bg-gradient-{{ account_color }} text-white">
             <div class="card-body text-center py-4">
                 <h5 class="text-white-50 mb-2">Current Balance</h5>
-                <h2 class="mb-0">KES {{ account.balance|floatformat:2|intcomma }}</h2>
+                <h2 class="mb-0">KES {{ account.balance|floatformat:0|intcomma }}</h2>
                 {% if account.credit_limit %}
-                <small class="text-white-50">Credit Limit: KES {{ account.credit_limit|floatformat:2|intcomma }}</small>
-                <br>
-                <small class="text-white-50">Available: KES {{ account.available_credit|floatformat:2|intcomma }}</small>
+                <div class="mt-2">
+                    <small class="text-white-50">Credit Limit: KES {{ account.credit_limit|floatformat:0|intcomma }}</small>
+                    <br>
+                    <small class="text-white-50">Available: KES {{ account.available_credit|floatformat:0|intcomma }}</small>
+                </div>
                 {% endif %}
                 <div class="mt-3">
-                    <small>Last updated: {{ account.last_updated|date:"Y-m-d H:i" }}</small>
+                    <small><i class="fas fa-clock me-1"></i> Last updated: {{ account.last_updated|date:"Y-m-d H:i" }}</small>
                 </div>
             </div>
         </div>
@@ -40,34 +50,60 @@
 <!-- Transaction Summary Cards -->
 <div class="row mb-4">
     <div class="col-md-4">
-        <div class="stat-card" style="border-left: 5px solid #10b981;">
-            <div class="stat-value">KES {{ total_income|floatformat:2|intcomma }}</div>
-            <div class="stat-label">Total Income</div>
-            <i class="fas fa-arrow-up stat-icon" style="color: #10b981;"></i>
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-white-50 mb-2">Total Income</h6>
+                        <h2 class="mb-0">KES {{ total_income|floatformat:0|intcomma }}</h2>
+                    </div>
+                    <div class="bg-white bg-opacity-25 rounded-circle p-3">
+                        <i class="fas fa-arrow-up fa-2x text-white"></i>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
     <div class="col-md-4">
-        <div class="stat-card" style="border-left: 5px solid #ef4444;">
-            <div class="stat-value">KES {{ total_expenses|floatformat:2|intcomma }}</div>
-            <div class="stat-label">Total Expenses</div>
-            <i class="fas fa-arrow-down stat-icon" style="color: #ef4444;"></i>
+        <div class="card bg-danger text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-white-50 mb-2">Total Expenses</h6>
+                        <h2 class="mb-0">KES {{ total_expenses|floatformat:0|intcomma }}</h2>
+                    </div>
+                    <div class="bg-white bg-opacity-25 rounded-circle p-3">
+                        <i class="fas fa-arrow-down fa-2x text-white"></i>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
     <div class="col-md-4">
-        <div class="stat-card" style="border-left: 5px solid #f59e0b;">
-            <div class="stat-value">KES {{ net_balance|floatformat:2|intcomma }}</div>
-            <div class="stat-label">Net Balance</div>
-            <i class="fas fa-chart-line stat-icon" style="color: #f59e0b;"></i>
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-white-50 mb-2">Net Balance</h6>
+                        <h2 class="mb-0 {% if net_balance >= 0 %}text-white{% else %}text-danger{% endif %}">
+                            KES {{ net_balance|floatformat:0|intcomma }}
+                        </h2>
+                    </div>
+                    <div class="bg-white bg-opacity-25 rounded-circle p-3">
+                        <i class="fas fa-chart-line fa-2x text-white"></i>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
 
-<!-- Recent Transactions -->
+<!-- Transactions Table -->
 <div class="card">
     <div class="card-header bg-white">
         <div class="d-flex justify-content-between align-items-center">
             <h6 class="mb-0">
-                <i class="fas fa-history me-2"></i>Recent Transactions
+                <i class="fas fa-history me-2"></i>Transaction History
             </h6>
             <div class="text-muted small">
                 Showing last 50 transactions
@@ -76,75 +112,119 @@
     </div>
     <div class="card-body p-0">
         <div class="table-responsive">
-            <table class="table table-hover mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th>Date</th>
-                        <th>Source</th>
-                        <th>Type</th>
-                        <th>Description</th>
-                        <th>Amount</th>
-                        <th>Reference</th>
-                        <th>Created By</th>
-                     </thead>
+            <table class="table table-bordered table-hover mb-0">
+                <thead>
+                    <tr class="table-light">
+                        <th width="12%" class="bg-info text-white text-center" style="border: 2px solid #0097a7;">
+                            Date
+                        </th>
+                        <th width="10%" class="bg-primary text-white text-center" style="border: 2px solid #0d47a1;">
+                            Source
+                        </th>
+                        <th width="8%" class="bg-success text-white text-center" style="border: 2px solid #1b5e20;">
+                            Type
+                        </th>
+                        <th width="30%" class="bg-secondary text-white" style="border: 2px solid #424242;">
+                            Description
+                        </th>
+                        <th width="12%" class="bg-warning text-dark text-end" style="border: 2px solid #e65100;">
+                            Amount (KSH)
+                        </th>
+                        <th width="10%" class="bg-teal text-white text-center" style="border: 2px solid #00695c;">
+                            Reference
+                        </th>
+                        <th width="10%" class="bg-navy text-white" style="border: 2px solid #0a192f;">
+                            Created By
+                        </th>
+                    </tr>
+                </thead>
                 <tbody>
                     {% for transaction in transactions %}
-                     <tr>
-                        <td class="text-nowrap">{{ transaction.date|date:"Y-m-d H:i" }}</td>
-                        <td>
+                    <tr>
+                        <td class="text-center align-middle">
+                            <i class="fas fa-calendar-alt text-muted me-1"></i>
+                            {{ transaction.date|date:"Y-m-d" }}<br>
+                            <small class="text-muted">{{ transaction.date|date:"H:i" }}</small>
+                        </td>
+                        <td class="text-center align-middle">
                             {% if transaction.source == 'manual' %}
-                                <span class="badge bg-secondary">Manual</span>
+                                <span class="badge bg-secondary">
+                                    <i class="fas fa-user-edit me-1"></i> Manual
+                                </span>
                             {% elif transaction.source == 'credit' %}
-                                <span class="badge bg-info">Credit Payment</span>
+                                <span class="badge bg-info">
+                                    <i class="fas fa-credit-card me-1"></i> Credit Payment
+                                </span>
                             {% elif transaction.source == 'credit_sale' %}
-                                <span class="badge bg-primary">Credit Sale</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if transaction.type == 'income' %}
-                                <span class="badge bg-success">Income</span>
-                            {% elif transaction.type == 'expense' %}
-                                <span class="badge bg-danger">Expense</span>
+                                <span class="badge bg-primary">
+                                    <i class="fas fa-building me-1"></i> Credit Sale
+                                </span>
                             {% else %}
-                                <span class="badge bg-secondary">Adjustment</span>
+                                <span class="badge bg-secondary">{{ transaction.source|title }}</span>
                             {% endif %}
                         </td>
-                        <td>
-                            <div class="fw-bold">{{ transaction.description }}</div>
+                        <td class="text-center align-middle">
+                            {% if transaction.type == 'income' %}
+                                <span class="badge bg-success w-100">
+                                    <i class="fas fa-arrow-up me-1"></i> Income
+                                </span>
+                            {% elif transaction.type == 'expense' %}
+                                <span class="badge bg-danger w-100">
+                                    <i class="fas fa-arrow-down me-1"></i> Expense
+                                </span>
+                            {% else %}
+                                <span class="badge bg-secondary w-100">Adjustment</span>
+                            {% endif %}
+                        </td>
+                        <td class="align-middle">
+                            <div class="fw-bold">{{ transaction.description|truncatechars:60 }}</div>
                             {% if transaction.commission %}
-                            <small class="text-muted">Commission: KES {{ transaction.commission|floatformat:2 }}</small>
+                            <small class="text-muted">
+                                <i class="fas fa-hand-holding-usd me-1"></i> Commission: KES {{ transaction.commission|floatformat:0|intcomma }}
+                            </small>
                             {% endif %}
                             {% if transaction.company %}
-                            <small class="text-muted d-block">Company: {{ transaction.company }}</small>
+                            <small class="text-muted d-block">
+                                <i class="fas fa-building me-1"></i> Company: {{ transaction.company }}
+                            </small>
                             {% endif %}
+                          </div>
                         </td>
-                        <td class="{% if transaction.type == 'income' %}text-success{% else %}text-danger{% endif %} fw-bold">
-                            {% if transaction.type == 'income' %}+{% else %}-{% endif %} KES {{ transaction.amount|floatformat:2|intcomma }}
+                        <td class="text-end align-middle fw-bold 
+                            {% if transaction.type == 'income' %}text-success{% else %}text-danger{% endif %}">
+                            {% if transaction.type == 'income' %}+{% else %}-{% endif %} KES {{ transaction.amount|floatformat:0|intcomma }}
                         </td>
-                        <td><code>{{ transaction.reference|default:"—" }}</code></td>
-                        <td>
-                            {% if transaction.created_by %}
-                                {{ transaction.created_by.get_full_name|default:transaction.created_by.username }}
-                            {% else %}
-                                System
-                            {% endif %}
+                        <td class="text-center align-middle">
+                            <code>{{ transaction.reference|default:"—" }}</code>
+                        </td>
+                        <td class="align-middle">
+                            <small>
+                                <i class="fas fa-user me-1"></i>
+                                {% if transaction.created_by %}
+                                    {{ transaction.created_by.get_full_name|default:transaction.created_by.username }}
+                                {% else %}
+                                    System
+                                {% endif %}
+                            </small>
                         </td>
                     </tr>
                     {% empty %}
                     <tr>
                         <td colspan="7" class="text-center py-5">
-                            <i class="fas fa-receipt fa-3x text-muted mb-3"></i>
-                            <h6>No transactions found</h6>
-                            <p class="text-muted">Click "Add Transaction" to record transactions.</p>
+                            <i class="fas fa-receipt fa-4x text-muted mb-3"></i>
+                            <p class="text-muted mb-3">No transactions found</p>
+                            <a href="{% url 'finance:add_account_transaction' %}{% if 'cash' in request.path %}?account=cash{% elif 'bank' in request.path %}?account=bank{% else %}?account=credit{% endif %}" class="btn btn-primary">
+                                <i class="fas fa-plus-circle me-2"></i>Add Transaction
+                            </a>
                         </td>
                     </tr>
                     {% endfor %}
                 </tbody>
                 <tfoot class="table-light">
                     <tr class="fw-bold">
-                        <td colspan="4">TOTAL</td>
-                        <td class="{% if net_balance >= 0 %}text-success{% else %}text-danger{% endif %}">
-                            KES {{ net_balance|floatformat:2|intcomma }}
+                        <td colspan="4" class="text-end">TOTAL:</td>
+                        <td class="text-end {% if net_balance >= 0 %}text-success{% else %}text-danger{% endif %}">
+                            KES {{ net_balance|floatformat:0|intcomma }}
                         </td>
                         <td colspan="2"></td>
                     </tr>
@@ -164,50 +244,70 @@
     .bg-gradient-warning {
         background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
     }
-    
-    .stat-card {
-        background: white;
-        border-radius: 12px;
-        padding: 20px;
-        position: relative;
-        overflow: hidden;
-        transition: transform 0.2s;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    .bg-teal {
+        background-color: #20c997 !important;
+    }
+    .bg-navy {
+        background-color: #001f3f !important;
+    }
+    .text-white-50 {
+        color: rgba(255, 255, 255, 0.8);
     }
     
-    .stat-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+    .table-bordered {
+        border: 2px solid #dee2e6 !important;
     }
-    
-    .stat-value {
-        font-size: 28px;
-        font-weight: bold;
-        margin-bottom: 5px;
+    .table-bordered thead th,
+    .table-bordered thead td {
+        border-bottom-width: 2px;
     }
-    
-    .stat-label {
-        color: #6c757d;
-        font-size: 14px;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
+    .table-bordered tbody tr td {
+        border-right: 1px solid #dee2e6;
     }
-    
-    .stat-icon {
-        position: absolute;
-        right: 20px;
-        bottom: 20px;
-        font-size: 48px;
-        opacity: 0.2;
+    .table-bordered tbody tr td:last-child {
+        border-right: none;
     }
-    
-    .table td, .table th {
+    .table-hover tbody tr:hover {
+        background-color: rgba(0, 0, 0, 0.05);
+    }
+    .badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+    }
+    .table th, .table td {
         vertical-align: middle;
     }
     
-    .badge {
-        font-size: 0.75rem;
-        padding: 0.35rem 0.65rem;
+    @media (max-width: 768px) {
+        .table-responsive {
+            font-size: 0.85rem;
+        }
+        .table td, .table th {
+            padding: 0.5rem;
+        }
+        .badge {
+            font-size: 0.7rem;
+            padding: 0.25rem 0.5rem;
+        }
+    }
+    
+    [data-theme="dark"] .card-header {
+        background: var(--sidebar-solid);
+        border-bottom-color: #495057;
+    }
+    
+    [data-theme="dark"] .table th {
+        background: var(--sidebar-solid);
+        color: #adb5bd;
+        border-bottom-color: #495057;
+    }
+    
+    [data-theme="dark"] .table td {
+        color: #e9ecef;
+    }
+    
+    [data-theme="dark"] .transaction-row:hover {
+        background-color: rgba(255, 255, 255, 0.05) !important;
     }
 </style>
 {% endblock %}

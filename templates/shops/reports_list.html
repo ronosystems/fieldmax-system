@@ -3,370 +3,444 @@
 
 {% block title %}All Shop Reports{% endblock %}
 
-{% block extra_css %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="mb-0"><i class="fas fa-file-alt me-2"></i>Shop Reports</h2>
+        <nav aria-label="breadcrumb" class="mt-2">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'shops:dashboard' %}">Dashboard</a></li>
+                <li class="breadcrumb-item active">All Reports</li>
+            </ol>
+        </nav>
+    </div>
+    <div>
+        <a href="{% url 'shops:create_report' %}" class="btn btn-primary me-2">
+            <i class="fas fa-plus-circle me-2"></i>New Report
+        </a>
+        <button type="button" class="btn btn-success" id="exportCsvBtn">
+            <i class="fas fa-file-excel me-2"></i>Export CSV
+        </button>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-white-50 mb-2">Total Reports</h6>
+                        <h2 class="mb-0">{{ reports.paginator.count|default:0|intcomma }}</h2>
+                    </div>
+                    <div class="bg-white bg-opacity-25 rounded-circle p-3">
+                        <i class="fas fa-chart-line fa-2x text-white"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-white-50 mb-2">Approved Reports</h6>
+                        <h2 class="mb-0">{{ finalized_count|default:0|intcomma }}</h2>
+                    </div>
+                    <div class="bg-white bg-opacity-25 rounded-circle p-3">
+                        <i class="fas fa-check-circle fa-2x text-white"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-dark">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-dark-50 mb-2">Pending Reports</h6>
+                        <h2 class="mb-0">{{ draft_count|default:0|intcomma }}</h2>
+                    </div>
+                    <div class="bg-white bg-opacity-25 rounded-circle p-3">
+                        <i class="fas fa-clock fa-2x text-dark"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-white-50 mb-2">This Month's Expenses</h6>
+                        <h2 class="mb-0">KES {{ monthly_expenses|floatformat:0|intcomma }}</h2>
+                    </div>
+                    <div class="bg-white bg-opacity-25 rounded-circle p-3">
+                        <i class="fas fa-chart-line fa-2x text-white"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filters - Compact 2 Rows -->
+<div class="card mb-4">
+    <div class="card-body py-2">
+        <form method="get" id="filterForm">
+            <!-- Row 1: Filters -->
+            <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+                {% if request.user.is_superuser %}
+                <select name="shop" class="form-select form-select-sm" style="width: auto; min-width: 150px;">
+                    <option value="">All Shops</option>
+                    {% for shop in shops %}
+                    <option value="{{ shop.id }}" {% if selected_shop|stringformat:"s" == shop.id|stringformat:"s" %}selected{% endif %}>
+                        {{ shop.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+                {% endif %}
+                
+                <input type="date" name="from_date" class="form-control form-control-sm" 
+                       value="{{ from_date }}" style="width: auto;" placeholder="From Date">
+                
+                <input type="date" name="to_date" class="form-control form-control-sm" 
+                       value="{{ to_date }}" style="width: auto;" placeholder="To Date">
+                
+                <select name="finalized" class="form-select form-select-sm" style="width: auto; min-width: 120px;">
+                    <option value="">All Status</option>
+                    <option value="true" {% if finalized_filter == 'true' %}selected{% endif %}>Approved</option>
+                    <option value="false" {% if finalized_filter == 'false' %}selected{% endif %}>Pending</option>
+                </select>
+                
+                <button type="submit" class="btn btn-primary btn-sm">
+                    <i class="fas fa-search"></i> Filter
+                </button>
+                
+                <a href="{% url 'shops:reports_list' %}" class="btn btn-secondary btn-sm">
+                    <i class="fas fa-undo"></i> Clear
+                </a>
+            </div>
+            
+            <!-- Row 2: Quick Date Shortcuts -->
+            <div class="d-flex gap-2 align-items-center">
+                <span class="badge bg-info text-white">Quick Date:</span>
+                <a href="?date=today" class="btn btn-link btn-sm p-0">Today</a>
+                <span class="text-muted">|</span>
+                <a href="?date=week" class="btn btn-link btn-sm p-0">This Week</a>
+                <span class="text-muted">|</span>
+                <a href="?date=month" class="btn btn-link btn-sm p-0">This Month</a>
+                <span class="text-muted">|</span>
+                <a href="?date=year" class="btn btn-link btn-sm p-0">This Year</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Reports Table -->
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover" id="reportsTable">
+                <thead>
+                    <tr class="table-light">
+                        <th width="8%" class="bg-primary text-white text-center" style="border: 2px solid #0d47a1;">
+                            Report Date
+                        </th>
+                        <th width="10%" class="bg-info text-white" style="border: 2px solid #0097a7;">
+                            Shop Branch
+                        </th>
+                        <th width="10%" class="bg-teal text-white" style="border: 2px solid #00695c;">
+                            Reported By
+                        </th>
+                        <th width="8%" class="bg-success text-white text-end" style="border: 2px solid #1b5e20;">
+                            Total Sales
+                        </th>
+                        <th width="8%" class="bg-secondary text-white text-end" style="border: 2px solid #424242;">
+                            M-Pesa
+                        </th>
+                        <th width="8%" class="bg-secondary text-white text-end" style="border: 2px solid #424242;">
+                            Airtel
+                        </th>
+                        <th width="8%" class="bg-warning text-dark text-end" style="border: 2px solid #e65100;">
+                            Cash
+                        </th>
+                        <th width="8%" class="bg-primary text-white text-end" style="border: 2px solid #0d47a1;">
+                            Bank
+                        </th>
+                        <th width="8%" class="bg-danger text-white text-end" style="border: 2px solid #b71c1c;">
+                            Expenses
+                        </th>
+                        <th width="8%" class="bg-success text-white text-end" style="border: 2px solid #1b5e20;">
+                            Closing Balance
+                        </th>
+                        <th width="8%" class="bg-info text-white text-center" style="border: 2px solid #0097a7;">
+                            Status
+                        </th>
+                        <th width="8%" class="bg-navy text-white text-center" style="border: 2px solid #0a192f;">
+                            Actions
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for report in reports %}
+                    <tr class="{% if report.submitted_by.is_superuser %}superuser-report{% endif %}">
+                        <td class="text-center align-middle" data-order="{{ report.report_date|date:'Y-m-d' }}">
+                            <strong>{{ report.report_date|date:"M d, Y" }}</strong>
+                            <br>
+                            <small class="text-muted">{{ report.report_date|date:"D" }}</small>
+                        </td>
+                        <td class="align-middle">
+                            <strong>{{ report.shop.name }}</strong>
+                            <br>
+                            <small class="text-muted">{{ report.shop.code }}</small>
+                        </td>
+                        <td class="align-middle">
+                            {{ report.submitted_by.get_full_name|default:report.submitted_by.username }}
+                            {% if report.submitted_by.is_superuser %}
+                                <span class="badge bg-success ms-1">
+                                    <i class="fas fa-crown me-1"></i>Admin
+                                </span>
+                            {% endif %}
+                            <br>
+                            <small class="text-muted">
+                                <i class="fas fa-clock"></i> {{ report.submission_time|date:"H:i" }}
+                            </small>
+                        </td>
+                        <td class="text-end align-middle fw-bold text-success">
+                            KES {{ report.shop_sales|floatformat:0|intcomma }}
+                        </td>
+                        <td class="text-end align-middle">
+                            KES {{ report.closing_mpesa_float|floatformat:0|intcomma }}
+                        </td>
+                        <td class="text-end align-middle">
+                            KES {{ report.closing_airtel_float|floatformat:0|intcomma }}
+                        </td>
+                        <td class="text-end align-middle">
+                            KES {{ report.closing_mpesa_cash|floatformat:0|intcomma }}
+                        </td>
+                        <td class="text-end align-middle">
+                            {% with bank_total=report.bank_closings.all|dictsortreversed:"closing_balance"|first %}
+                                KES {{ bank_total.closing_balance|default:0|floatformat:0|intcomma }}
+                            {% endwith %}
+                        </td>
+                        <td class="text-end align-middle text-danger">
+                            KES {{ report.total_expenses|floatformat:0|intcomma }}
+                        </td>
+                        <td class="text-end align-middle fw-bold text-primary">
+                            KES {{ report.total_closing_balance|floatformat:0|intcomma }}
+                        </td>
+                        <td class="text-center align-middle">
+                            {% if report.is_finalized %}
+                                <span class="badge bg-success w-100">
+                                    <i class="fas fa-check-circle me-1"></i> APPROVED
+                                </span>
+                            {% else %}
+                                <span class="badge bg-warning text-dark w-100">
+                                    <i class="fas fa-edit me-1"></i> PENDING
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center align-middle">
+                            <div class="btn-group btn-group-sm" role="group">
+                                <a href="{% url 'shops:report_detail' report.id %}" class="btn btn-outline-info" title="View Report">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                {% if not report.is_finalized %}
+                                <a href="{% url 'shops:edit_report' report.id %}" class="btn btn-outline-warning" title="Edit">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                {% endif %}
+                                <a href="{% url 'shops:report_detail' report.id %}?print=1" class="btn btn-outline-secondary" title="Print" target="_blank">
+                                    <i class="fas fa-print"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="12" class="text-center py-5">
+                            <i class="fas fa-file-alt fa-4x text-muted mb-3"></i>
+                            <p class="text-muted mb-3">No reports found</p>
+                            {% if selected_shop or from_date or to_date or finalized_filter %}
+                                <p class="text-muted">Try adjusting your filters</p>
+                                <a href="{% url 'shops:reports_list' %}" class="btn btn-secondary">Clear Filters</a>
+                            {% else %}
+                                <a href="{% url 'shops:create_report' %}" class="btn btn-primary">
+                                    <i class="fas fa-plus-circle me-2"></i>Create First Report
+                                </a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination -->
+        {% if reports.has_other_pages %}
+        <nav class="mt-4">
+            <ul class="pagination justify-content-center">
+                {% if reports.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page=1{% if selected_shop %}&shop={{ selected_shop }}{% endif %}{% if from_date %}&from_date={{ from_date }}{% endif %}{% if to_date %}&to_date={{ to_date }}{% endif %}{% if finalized_filter %}&finalized={{ finalized_filter }}{% endif %}">
+                        <i class="fas fa-chevron-double-left"></i>
+                    </a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ reports.previous_page_number }}{% if selected_shop %}&shop={{ selected_shop }}{% endif %}{% if from_date %}&from_date={{ from_date }}{% endif %}{% if to_date %}&to_date={{ to_date }}{% endif %}{% if finalized_filter %}&finalized={{ finalized_filter }}{% endif %}">
+                        <i class="fas fa-chevron-left"></i> Previous
+                    </a>
+                </li>
+                {% else %}
+                <li class="page-item disabled">
+                    <span class="page-link"><i class="fas fa-chevron-left"></i> Previous</span>
+                </li>
+                {% endif %}
+                
+                {% for num in reports.paginator.page_range %}
+                    {% if reports.number == num %}
+                    <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                    {% elif num > reports.number|add:'-3' and num < reports.number|add:'3' %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ num }}{% if selected_shop %}&shop={{ selected_shop }}{% endif %}{% if from_date %}&from_date={{ from_date }}{% endif %}{% if to_date %}&to_date={{ to_date }}{% endif %}{% if finalized_filter %}&finalized={{ finalized_filter }}{% endif %}">
+                            {{ num }}
+                        </a>
+                    </li>
+                    {% endif %}
+                {% endfor %}
+                
+                {% if reports.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ reports.next_page_number }}{% if selected_shop %}&shop={{ selected_shop }}{% endif %}{% if from_date %}&from_date={{ from_date }}{% endif %}{% if to_date %}&to_date={{ to_date }}{% endif %}{% if finalized_filter %}&finalized={{ finalized_filter }}{% endif %}">
+                        Next <i class="fas fa-chevron-right"></i>
+                    </a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ reports.paginator.num_pages }}{% if selected_shop %}&shop={{ selected_shop }}{% endif %}{% if from_date %}&from_date={{ from_date }}{% endif %}{% if to_date %}&to_date={{ to_date }}{% endif %}{% if finalized_filter %}&finalized={{ finalized_filter }}{% endif %}">
+                        <i class="fas fa-chevron-double-right"></i>
+                    </a>
+                </li>
+                {% else %}
+                <li class="page-item disabled">
+                    <span class="page-link">Next <i class="fas fa-chevron-right"></i></span>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+    </div>
+</div>
+
 <style>
-    .filter-card {
-        background: var(--card-bg);
-        border: 1px solid var(--border-color);
-        border-radius: 10px;
-        padding: 15px;
-        margin-bottom: 20px;
+    .bg-teal {
+        background-color: #20c997 !important;
     }
-    
-    .report-status {
-        padding: 4px 10px;
-        border-radius: 20px;
-        font-size: 0.8rem;
-        font-weight: 500;
-        display: inline-block;
+    .bg-navy {
+        background-color: #001f3f !important;
     }
-    
-    .status-finalized {
-        background: #10b981;
-        color: white;
+    .text-white-50 {
+        color: rgba(255, 255, 255, 0.8);
     }
-    
-    .status-draft {
-        background: #f59e0b;
-        color: white;
+    .table-bordered {
+        border: 2px solid #dee2e6 !important;
     }
-    
-    .export-btn {
-        transition: all 0.3s ease;
+    .table-bordered thead th,
+    .table-bordered thead td {
+        border-bottom-width: 2px;
     }
-    
-    .export-btn:hover {
-        transform: translateY(-2px);
+    .table-bordered tbody tr td {
+        border-right: 1px solid #dee2e6;
     }
-    
-    .summary-stats {
-        background: linear-gradient(135deg, var(--primary-color) 0%, #047857 100%);
-        color: white;
-        border-radius: 10px;
-        padding: 15px;
-        margin-bottom: 20px;
+    .table-bordered tbody tr td:last-child {
+        border-right: none;
     }
-    
-    .summary-stats h3 {
-        font-size: 1.5rem;
-        margin-bottom: 5px;
+    .table-hover tbody tr:hover {
+        background-color: rgba(0, 0, 0, 0.05);
     }
-    
-    .summary-stats p {
-        margin-bottom: 0;
-        opacity: 0.9;
-    }
-    
-    .transaction-count {
-        color: #10b981;
-        font-weight: bold;
-    }
-    
-    /* Superuser submitted report styling */
     .superuser-report {
         background-color: rgba(16, 185, 129, 0.08) !important;
         border-left: 3px solid #10b981;
     }
-    
     .superuser-report:hover {
         background-color: rgba(16, 185, 129, 0.15) !important;
     }
-    
-    .superuser-badge {
-        background: #10b981;
-        color: white;
-        font-size: 0.7rem;
-        padding: 2px 8px;
-        border-radius: 20px;
-        margin-left: 6px;
-        display: inline-block;
-        font-weight: 500;
+    .badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+    }
+    .table th, .table td {
+        vertical-align: middle;
     }
     
-    .superuser-badge i {
-        font-size: 0.65rem;
+    @media print {
+        .btn, .card-header, .filter-section, .pagination, .breadcrumb {
+            display: none !important;
+        }
+        .card {
+            border: none !important;
+            box-shadow: none !important;
+        }
     }
 </style>
-{% endblock %}
-
-{% block content %}
-<div class="container-fluid">
-    <div class="row mb-4">
-        <div class="col-md-6">
-            <h2>
-                <i class="fas fa-file-alt me-2"></i>All Shop Reports
-            </h2>
-            <p class="text-muted">View, filter, and manage all daily shop reports</p>
-        </div>
-        <div class="col-md-6 text-end">
-            <a href="{% url 'shops:create_report' %}" class="btn btn-primary">
-                <i class="fas fa-plus-circle me-2"></i>New Report
-            </a>
-            <button type="button" class="btn btn-success ms-2" id="exportCsvBtn">
-                <i class="fas fa-download me-2"></i>Export CSV
-            </button>
-        </div>
-    </div>
-
-    <!-- Summary Statistics -->
-    <div class="row">
-        <div class="col-md-3">
-            <div class="summary-stats text-center">
-                <i class="fas fa-chart-line fa-2x mb-2"></i>
-                <h3>{{ reports.paginator.count|intcomma }}</h3>
-                <p>Total Reports</p>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="summary-stats text-center">
-                <i class="fas fa-check-circle fa-2x mb-2"></i>
-                <h3>{{ finalized_count|default:0|intcomma }}</h3>
-                <p>Approved Reports</p>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="summary-stats text-center">
-                <i class="fas fa-clock fa-2x mb-2"></i>
-                <h3>{{ draft_count|default:0|intcomma }}</h3>
-                <p>Pending Reports</p>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="summary-stats text-center">
-                <i class="fas fa-exchange-alt fa-2x mb-2"></i>
-                <h3 class="transaction-count">{{ total_sales_value|floatformat:0|intcomma }}</h3>
-                <p>Total Transactions</p>
-            </div>
-        </div>
-    </div>
-
-    <!-- Filter Section -->
-    <div class="filter-card">
-        <h6 class="mb-3">
-            <i class="fas fa-filter me-2"></i>Filter Reports
-        </h6>
-        <form method="get" class="row g-3" id="filterForm">
-            {% if request.user.is_superuser %}
-            <div class="col-md-3">
-                <label for="shop" class="form-label">Shop Branch</label>
-                <select name="shop" id="shop" class="form-select">
-                    <option value="">All Shops</option>
-                    {% for shop in shops %}
-                        <option value="{{ shop.id }}" {% if selected_shop|stringformat:"s" == shop.id|stringformat:"s" %}selected{% endif %}>
-                            {{ shop.name }}
-                        </option>
-                    {% endfor %}
-                </select>
-            </div>
-            {% endif %}
-            
-            <div class="col-md-2">
-                <label for="from_date" class="form-label">From Date</label>
-                <input type="date" name="from_date" id="from_date" class="form-control" value="{{ from_date }}">
-            </div>
-            
-            <div class="col-md-2">
-                <label for="to_date" class="form-label">To Date</label>
-                <input type="date" name="to_date" id="to_date" class="form-control" value="{{ to_date }}">
-            </div>
-            
-            <div class="col-md-2">
-                <label for="finalized" class="form-label">Status</label>
-                <select name="finalized" id="finalized" class="form-select">
-                    <option value="">All</option>
-                    <option value="true" {% if finalized_filter == 'true' %}selected{% endif %}>Finalized</option>
-                    <option value="false" {% if finalized_filter == 'false' %}selected{% endif %}>Draft</option>
-                </select>
-            </div>
-            
-            <div class="col-md-3">
-                <label class="form-label">&nbsp;</label>
-                <div>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-search me-2"></i>Apply Filters
-                    </button>
-                    <a href="{% url 'shops:reports_list' %}" class="btn btn-secondary">
-                        <i class="fas fa-undo me-2"></i>Reset
-                    </a>
-                </div>
-            </div>
-        </form>
-    </div>
-
-    <!-- Reports Table -->
-    <div class="card">
-        <div class="card-header">
-            <h5 class="mb-0">Reports List</h5>
-        </div>
-        <div class="card-body">
-            {% if reports %}
-            <div class="table-responsive">
-                <table class="table table-hover" id="reportsTable">
-                    <thead>
-                        <tr>
-                            <th>Report Date</th>
-                            <th>Shop Branch</th>
-                            <th>Reported By</th>
-                            <th>Total Sales</th>
-                            <th>Total MPesa</th>
-                            <th>Total Airtel</th>
-                            <th>Total Cash</th>
-                            <th>Total Bank</th>
-                            <th>Total Expenses</th>
-                            <th>Total Closing</th>
-                            <th>Report Status</th>
-                            <th>Actions</th>
-                        </thead>
-                        <tbody>
-                            {% for report in reports %}
-                            <tr class="{% if report.submitted_by.is_superuser %}superuser-report{% endif %}">
-                                <td data-order="{{ report.report_date|date:'Y-m-d' }}">
-                                    <strong>{{ report.report_date|date:"M d, Y" }}</strong>
-                                 </td>
-                                 <td>
-                                    <strong>{{ report.shop.name }}</strong><br>
-                                    <small class="text-muted">{{ report.shop.code }}</small>
-                                 </td>
-                                 <td>
-                                    {{ report.submitted_by.get_full_name|default:report.submitted_by.username }}
-                                    {% if report.submitted_by.is_superuser %}
-                                        <span class="superuser-badge">
-                                            <i class="fas fa-crown me-1"></i>Admin
-                                        </span>
-                                    {% endif %}
-                                    <br>
-                                    <small class="text-muted">{{ report.submission_time|date:"H:i" }}</small>
-                                 </td>
-                                <td class="text-end">
-                                    <span class="fw-bold transaction-count">{{ report.shop_sales|floatformat:0|intcomma }}</span>
-                                 </td>
-                                <td class="text-end">KES {{ report.closing_mpesa_float|floatformat:2|intcomma }}</td>
-                                <td class="text-end">KES {{ report.closing_airtel_float|floatformat:2|intcomma }}</td>
-                                <td class="text-end">KES {{ report.closing_mpesa_cash|floatformat:2|intcomma }}</td>
-                                <td class="text-end">
-                                    {% with bank_total=report.bank_closings.all|dictsortreversed:"closing_balance"|first %}
-                                        KES {{ bank_total.closing_balance|default:0|floatformat:2|intcomma }}
-                                    {% endwith %}
-                                 </td>
-                                <td class="text-end">KES {{ report.total_expenses|floatformat:2|intcomma }}</td>
-                                <td class="text-end">
-                                    <span class="fw-bold">KES {{ report.total_closing_balance|floatformat:2|intcomma }}</span>
-                                 </td>
-                                <td>
-                                    {% if report.is_finalized %}
-                                        <span class="status-finalized">
-                                            <i class="fas fa-check-circle me-1"></i>APPROVED
-                                        </span>
-                                    {% else %}
-                                        <span class="status-draft">
-                                            <i class="fas fa-edit me-1"></i>PENDING
-                                        </span>
-                                    {% endif %}
-                                 </td>
-                                <td>
-                                    <div class="btn-group" role="group">
-                                        <a href="{% url 'shops:report_detail' report.id %}" class="btn btn-sm btn-outline-primary" title="View">
-                                            <i class="fas fa-eye"></i>
-                                        </a>
-                                    </div>
-                                 </td>
-                              </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                
-                <!-- Pagination -->
-                {% if reports.has_other_pages %}
-                <nav aria-label="Page navigation" class="mt-4">
-                    <ul class="pagination justify-content-center">
-                        {% if reports.has_previous %}
-                            <li class="page-item">
-                                <a class="page-link" href="?page=1{% if selected_shop %}&shop={{ selected_shop }}{% endif %}{% if from_date %}&from_date={{ from_date }}{% endif %}{% if to_date %}&to_date={{ to_date }}{% endif %}{% if finalized_filter %}&finalized={{ finalized_filter }}{% endif %}">
-                                    <i class="fas fa-angle-double-left"></i>
-                                </a>
-                            </li>
-                            <li class="page-item">
-                                <a class="page-link" href="?page={{ reports.previous_page_number }}{% if selected_shop %}&shop={{ selected_shop }}{% endif %}{% if from_date %}&from_date={{ from_date }}{% endif %}{% if to_date %}&to_date={{ to_date }}{% endif %}{% if finalized_filter %}&finalized={{ finalized_filter }}{% endif %}">
-                                    <i class="fas fa-angle-left"></i>
-                                </a>
-                            </li>
-                        {% endif %}
-                        
-                        {% for num in reports.paginator.page_range %}
-                            {% if reports.number == num %}
-                                <li class="page-item active"><span class="page-link">{{ num }}</span></li>
-                            {% elif num > reports.number|add:'-3' and num < reports.number|add:'3' %}
-                                <li class="page-item">
-                                    <a class="page-link" href="?page={{ num }}{% if selected_shop %}&shop={{ selected_shop }}{% endif %}{% if from_date %}&from_date={{ from_date }}{% endif %}{% if to_date %}&to_date={{ to_date }}{% endif %}{% if finalized_filter %}&finalized={{ finalized_filter }}{% endif %}">
-                                        {{ num }}
-                                    </a>
-                                </li>
-                            {% endif %}
-                        {% endfor %}
-                        
-                        {% if reports.has_next %}
-                            <li class="page-item">
-                                <a class="page-link" href="?page={{ reports.next_page_number }}{% if selected_shop %}&shop={{ selected_shop }}{% endif %}{% if from_date %}&from_date={{ from_date }}{% endif %}{% if to_date %}&to_date={{ to_date }}{% endif %}{% if finalized_filter %}&finalized={{ finalized_filter }}{% endif %}">
-                                    <i class="fas fa-angle-right"></i>
-                                </a>
-                            </li>
-                            <li class="page-item">
-                                <a class="page-link" href="?page={{ reports.paginator.num_pages }}{% if selected_shop %}&shop={{ selected_shop }}{% endif %}{% if from_date %}&from_date={{ from_date }}{% endif %}{% if to_date %}&to_date={{ to_date }}{% endif %}{% if finalized_filter %}&finalized={{ finalized_filter }}{% endif %}">
-                                    <i class="fas fa-angle-double-right"></i>
-                                </a>
-                            </li>
-                        {% endif %}
-                    </ul>
-                </nav>
-                {% endif %}
-                
-            {% else %}
-            <div class="text-center py-5">
-                <i class="fas fa-file-alt fa-3x text-muted mb-3"></i>
-                <p class="text-muted">No reports found.</p>
-                {% if selected_shop or from_date or to_date or finalized_filter %}
-                    <p class="text-muted">Try adjusting your filters or</p>
-                    <a href="{% url 'shops:reports_list' %}" class="btn btn-secondary">Clear Filters</a>
-                {% else %}
-                    <a href="{% url 'shops:create_report' %}" class="btn btn-primary">
-                        <i class="fas fa-plus-circle me-2"></i>Create First Report
-                    </a>
-                {% endif %}
-            </div>
-            {% endif %}
-        </div>
-    </div>
-</div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
 $(document).ready(function() {
-    // Initialize DataTable
-    $('#reportsTable').DataTable({
-        "pageLength": 25,
-        "language": {
-            "search": "Search Reports:",
-            "lengthMenu": "Show _MENU_ reports",
-            "info": "Showing _START_ to _END_ of _TOTAL_ reports",
-            "infoEmpty": "Showing 0 to 0 of 0 reports",
-            "infoFiltered": "(filtered from _MAX_ total reports)",
-            "emptyTable": "No reports found",
-            "zeroRecords": "No matching reports found"
-        },
-        "order": [[0, "desc"]],
-        "columnDefs": [
-            { "orderable": true, "targets": [0] },
-            { "orderable": false, "targets": [10] }
-        ]
-    });
-    
     // Export CSV functionality
     $('#exportCsvBtn').click(function() {
         var params = new URLSearchParams(window.location.search);
         var exportUrl = "{% url 'shops:export_csv' %}?" + params.toString();
         window.location.href = exportUrl;
+    });
+    
+    // Quick date filters
+    $('a[href*="date="]').click(function(e) {
+        e.preventDefault();
+        var dateParam = $(this).attr('href').split('=')[1];
+        var currentUrl = new URL(window.location.href);
+        
+        // Clear existing date filters
+        currentUrl.searchParams.delete('from_date');
+        currentUrl.searchParams.delete('to_date');
+        
+        var today = new Date();
+        var fromDate, toDate;
+        
+        switch(dateParam) {
+            case 'today':
+                fromDate = today.toISOString().split('T')[0];
+                toDate = today.toISOString().split('T')[0];
+                break;
+            case 'week':
+                var weekAgo = new Date(today);
+                weekAgo.setDate(today.getDate() - 7);
+                fromDate = weekAgo.toISOString().split('T')[0];
+                toDate = today.toISOString().split('T')[0];
+                break;
+            case 'month':
+                var monthAgo = new Date(today);
+                monthAgo.setMonth(today.getMonth() - 1);
+                fromDate = monthAgo.toISOString().split('T')[0];
+                toDate = today.toISOString().split('T')[0];
+                break;
+            case 'year':
+                var yearAgo = new Date(today);
+                yearAgo.setFullYear(today.getFullYear() - 1);
+                fromDate = yearAgo.toISOString().split('T')[0];
+                toDate = today.toISOString().split('T')[0];
+                break;
+        }
+        
+        if (fromDate) currentUrl.searchParams.set('from_date', fromDate);
+        if (toDate) currentUrl.searchParams.set('to_date', toDate);
+        
+        window.location.href = currentUrl.toString();
     });
 });
 </script>

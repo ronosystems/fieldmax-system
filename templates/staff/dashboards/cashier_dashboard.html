@@ -2711,9 +2711,10 @@ function selectSplitBank(element, bankName) {
 
 
 // Finalize split payment sale
+// Modified finalizeSplitSale function
 async function finalizeSplitSale() {
     if (!isSplitPaymentEnabled) {
-        return finalizeSale();
+        return finalizeSale(); // Use single payment mode
     }
     
     if (!cart.length) {
@@ -2729,7 +2730,13 @@ async function finalizeSplitSale() {
     
     const btn = document.getElementById('finalizeSaleBtn');
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span> Processing split payment sale...';
+    btn.innerHTML = '<span class="spinner"></span> Processing...';
+    
+    // ============================================
+    // CHECK IF ONLY ONE PAYMENT METHOD IS USED
+    // ============================================
+    const isSingleMethod = splitPayments.length === 1;
+    const singleMethod = isSingleMethod ? splitPayments[0].method : null;
     
     // Get the customer ID for points redemption
     let pointsCustomerIdForRedemption = null;
@@ -2760,39 +2767,93 @@ async function finalizeSplitSale() {
         name: item.name
     }));
     
-    const payload = {
-        payment_method: 'Split',
-        is_credit: false,
-        amount_paid: totalPaid,
-        cart_total: total,
-        split_payments: splitPaymentsData,
-        cart_items: cartItems,
-        buyer_phone: document.getElementById('customerPhone').value.trim(),
-        buyer_name: document.getElementById('customerName')?.textContent || 'Walk-in Customer',
-        verified_customer_id: customerId || null,
-        points_redeemed: pointsRedeemedTotal,
-        points_redeemed_customer_id: pointsCustomerIdForRedemption,
-        points_to_award: customerId ? Math.floor(total / 100) : 0,
-        skip_cart_clear: false
-    };
+    // ============================================
+    // BUILD PAYLOAD - If single method, use the method directly
+    // ============================================
+    let payload;
     
-    console.log('Split payment payload:', payload);
+    if (isSingleMethod && singleMethod !== 'Split') {
+        // Single payment method - use the standard payment API
+        console.log(`Using single payment method: ${singleMethod}`);
+        
+        let cashAmount = 0, mpesaAmount = 0, bankAmount = 0, pointsAmount = 0;
+        
+        switch(singleMethod) {
+            case 'Cash':
+                cashAmount = splitPayments[0].amount;
+                break;
+            case 'M-Pesa':
+                mpesaAmount = splitPayments[0].amount;
+                break;
+            case 'Card':
+                bankAmount = splitPayments[0].amount;
+                break;
+            case 'Points':
+                pointsAmount = splitPayments[0].amount;
+                break;
+        }
+        
+        payload = {
+            payment_method: singleMethod,
+            is_credit: false,
+            amount_paid: totalPaid,
+            cash_amount: cashAmount,
+            mpesa_amount: mpesaAmount,
+            bank_amount: bankAmount,
+            buyer_phone: document.getElementById('customerPhone').value.trim(),
+            buyer_name: document.getElementById('customerName')?.textContent || 'Walk-in Customer',
+            verified_customer_id: customerId || pointsCustomerIdForRedemption,
+            points_redeemed: pointsRedeemedTotal,
+            points_to_award: customerId ? Math.floor(total / 100) : 0,
+            cart_total: total,
+            skip_cart_clear: false
+        };
+        
+        // Use the regular sale API for single method
+        apiUrl = URLS.sale_create_api;
+        
+    } else {
+        // Multiple payment methods - use split payment API
+        console.log('Using split payment API with multiple methods');
+        
+        payload = {
+            payment_method: 'Split',
+            is_credit: false,
+            amount_paid: totalPaid,
+            cart_total: total,
+            split_payments: splitPaymentsData,
+            cart_items: cartItems,
+            buyer_phone: document.getElementById('customerPhone').value.trim(),
+            buyer_name: document.getElementById('customerName')?.textContent || 'Walk-in Customer',
+            verified_customer_id: customerId || null,
+            points_redeemed: pointsRedeemedTotal,
+            points_redeemed_customer_id: pointsCustomerIdForRedemption,
+            points_to_award: customerId ? Math.floor(total / 100) : 0,
+            skip_cart_clear: false
+        };
+        
+        apiUrl = '/sales/api/sale/split-payment/';
+    }
+    
+    console.log('Finalize payload:', payload);
     
     try {
-        const data = await safeFetch('/sales/api/sale/split-payment/', {
+        const data = await safeFetch(apiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
             body: JSON.stringify(payload)
         });
         
         if (data.success) {
-            showStatus('✅ Split payment sale completed successfully!', 'success');
+            showStatus('✅ Sale completed successfully!', 'success');
             
-            let breakdownMsg = 'Payment breakdown: ';
-            data.payment_breakdown.forEach(p => {
-                breakdownMsg += `${p.method}: KSH ${p.amount.toLocaleString()} | `;
-            });
-            showToast(breakdownMsg, 'success');
+            if (!isSingleMethod && data.payment_breakdown) {
+                let breakdownMsg = 'Payment breakdown: ';
+                data.payment_breakdown.forEach(p => {
+                    breakdownMsg += `${p.method}: KSH ${p.amount.toLocaleString()} | `;
+                });
+                showToast(breakdownMsg, 'success');
+            }
             
             if (data.points_earned > 0) {
                 showToast(`🎉 ${data.points_earned} loyalty points earned!`, 'success');
@@ -2800,7 +2861,6 @@ async function finalizeSplitSale() {
             
             if (data.points_redeemed > 0) {
                 showToast(`⭐ ${data.points_redeemed} points redeemed (KSH ${data.points_redeemed.toLocaleString()} saved)!`, 'success');
-                // Update the customer points display if available
                 if (data.new_points_balance !== undefined) {
                     showToast(`💰 Remaining points balance: ${data.new_points_balance}`, 'info');
                 }
@@ -2820,11 +2880,11 @@ async function finalizeSplitSale() {
             throw new Error(data.error || 'Sale failed');
         }
     } catch(e) {
-        console.error('Split sale error:', e);
+        console.error('Sale error:', e);
         showStatus(`❌ ${escapeHtml(e.message)}`, 'error');
         showToast(e.message, 'error');
         btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-check-double"></i> Complete Split Payment Sale';
+        btn.innerHTML = '<i class="fas fa-check-double"></i> Complete Sale';
     }
 }
 

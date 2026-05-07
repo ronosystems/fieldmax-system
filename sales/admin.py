@@ -11,20 +11,33 @@ from .models import (
 )
 
 # ============================================
-# SALE COUNTER ADMIN
+# SALE COUNTER ADMIN (UPDATED FOR NEW MODEL)
 # ============================================
 @admin.register(SaleCounter)
 class SaleCounterAdmin(admin.ModelAdmin):
-    list_display = ['year', 'counter']
-    list_display_links = ['year']
-    search_fields = ['year']
-    readonly_fields = ['year', 'counter']
+    """
+    Admin for SaleCounter - shows current counter value
+    Sale ID format: SALE-00001, ETR format: 00001
+    """
+    list_display = ['id', 'counter_display', 'last_used']
+    list_display_links = ['id']
+    readonly_fields = ['counter', 'last_used']
+    
+    def counter_display(self, obj):
+        return f"{obj.counter:05d}"
+    counter_display.short_description = "Current Counter"
     
     def has_add_permission(self, request):
+        """Prevent manual addition of counter entries"""
         return False
     
     def has_delete_permission(self, request, obj=None):
+        """Prevent deletion of counter entries"""
         return False
+    
+    def has_change_permission(self, request, obj=None):
+        """Allow viewing but not editing"""
+        return request.user.is_superuser if obj else True
 
 
 # ============================================
@@ -48,17 +61,17 @@ class SaleItemInline(admin.TabularInline):
 # ============================================
 @admin.register(Sale)
 class SaleAdmin(admin.ModelAdmin):
-    list_display = ['sale_id', 'sale_date', 'seller', 'buyer_name', 'buyer_phone', 
+    list_display = ['sale_id', 'sequence_number_display', 'sale_date', 'seller', 'buyer_name', 'buyer_phone', 
                     'total_amount', 'payment_method', 'is_credit', 'is_reversed', 
                     'etr_receipt_number']
     list_filter = ['payment_method', 'is_credit', 'is_reversed', 'etr_status', 'sale_date']
-    search_fields = ['sale_id', 'buyer_name', 'buyer_phone', 'etr_receipt_number']
-    readonly_fields = ['sale_id', 'created_at_display', 'reversal_info', 'points_summary']
+    search_fields = ['sale_id', 'sequence_number', 'buyer_name', 'buyer_phone', 'etr_receipt_number']
+    readonly_fields = ['sale_id', 'sequence_number_display', 'created_at_display', 'reversal_info', 'points_summary']
     inlines = [SaleItemInline]
     
     fieldsets = (
         ('Sale Information', {
-            'fields': ('sale_id', 'sale_date', 'seller')
+            'fields': ('sale_id', 'sequence_number_display', 'sale_date', 'seller')
         }),
         ('Customer Details', {
             'fields': ('buyer_name', 'buyer_phone', 'buyer_id_number', 'nok_name', 'nok_phone')
@@ -84,6 +97,13 @@ class SaleAdmin(admin.ModelAdmin):
             'classes': ('collapse',),
         }),
     )
+    
+    def sequence_number_display(self, obj):
+        if obj.sequence_number:
+            return f"{obj.sequence_number:05d}"
+        return "-"
+    sequence_number_display.short_description = "Sequence #"
+    sequence_number_display.admin_order_field = 'sequence_number'
     
     def created_at_display(self, obj):
         return obj.sale_date
@@ -189,7 +209,7 @@ class FiscalReceiptAdmin(admin.ModelAdmin):
 
 
 # ============================================
-# CUSTOMER MANAGEMENT ADMIN (UPDATED - NO TIERS)
+# CUSTOMER MANAGEMENT ADMIN
 # ============================================
 @admin.register(Customer)
 class CustomerAdmin(admin.ModelAdmin):
@@ -419,7 +439,7 @@ class LoyaltyTransactionAdmin(admin.ModelAdmin):
 
 
 # ============================================
-# LOYALTY SETTINGS ADMIN (UPDATED)
+# LOYALTY SETTINGS ADMIN
 # ============================================
 @admin.register(LoyaltySettings)
 class LoyaltySettingsAdmin(admin.ModelAdmin):

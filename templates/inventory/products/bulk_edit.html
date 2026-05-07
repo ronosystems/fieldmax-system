@@ -49,6 +49,9 @@
         </div>
     </div>
 
+    <!-- Hidden input for model search tracking -->
+    <input type="hidden" id="modelSearchHidden">
+
     <!-- Loading Indicator -->
     <div id="loadingIndicator" class="text-center py-5" style="display: none;">
         <div class="spinner-border text-primary" role="status">
@@ -349,7 +352,7 @@ $(document).ready(function() {
         const nameSpan = $(`#name-display-${productId}`);
         const cell = nameSpan.closest('.product-name-cell');
         
-        const input = $(`<input type="text" class="name-input" value="${escapeHtml(currentName)}">`);
+        const input = $(`<input type="text" class="name-input" value="${escapeHtml(currentName)}" maxlength="255">`);
         nameSpan.hide();
         cell.append(input);
         input.focus();
@@ -407,6 +410,12 @@ $(document).ready(function() {
     function savePrice(productId, newPrice) {
         const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
         const priceInput = $(`#price-input-${productId}`);
+        
+        // Validate price range
+        if (parseFloat(newPrice) > 10000000) {
+            Swal.fire('Warning', 'Price seems unusually high (>10M). Please confirm.', 'warning');
+            return;
+        }
         
         $.ajax({
             url: "{% url 'inventory:product_bulk_update_single' %}",

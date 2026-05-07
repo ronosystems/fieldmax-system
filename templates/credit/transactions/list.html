@@ -1,58 +1,140 @@
 {% extends 'credit/staff_base.html' %}
 {% load static %}
+{% load humanize %}
 
 {% block title %}Credit Transactions{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h2><i class="fas fa-exchange-alt me-2"></i>Credit Transactions</h2>
-    <a href="{% url 'credit:transaction_create' %}" class="btn btn-warning">
-        <i class="fas fa-plus me-2"></i>New Transaction
-    </a>
+    <div>
+        <h2 class="mb-0"><i class="fas fa-exchange-alt me-2"></i>Credit Transactions</h2>
+        <nav aria-label="breadcrumb" class="mt-2">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'credit:dashboard' %}">Dashboard</a></li>
+                <li class="breadcrumb-item active">Credit Transactions</li>
+            </ol>
+        </nav>
+    </div>
+    <div>
+        <a href="{% url 'credit:transaction_create' %}" class="btn btn-warning">
+            <i class="fas fa-plus me-2"></i>New Transaction
+        </a>
+    </div>
 </div>
 
-<!-- Filters -->
+<!-- Summary Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-white-50 mb-2">Total Transactions</h6>
+                        <h2 class="mb-0">{{ total_count|default:0|intcomma }}</h2>
+                    </div>
+                    <div class="bg-white bg-opacity-25 rounded-circle p-3">
+                        <i class="fas fa-chart-line fa-2x text-white"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-dark">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-dark-50 mb-2">Pending</h6>
+                        <h2 class="mb-0">{{ pending_count|default:0|intcomma }}</h2>
+                    </div>
+                    <div class="bg-white bg-opacity-25 rounded-circle p-3">
+                        <i class="fas fa-clock fa-2x text-dark"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-white-50 mb-2">Total Owed</h6>
+                        <h2 class="mb-0">KES {{ total_owed|floatformat:0|intcomma }}</h2>
+                    </div>
+                    <div class="bg-white bg-opacity-25 rounded-circle p-3">
+                        <i class="fas fa-money-bill-wave fa-2x text-white"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-white-50 mb-2">Overdue (>90 days)</h6>
+                        <h2 class="mb-0">{{ overdue_count|default:0|intcomma }}</h2>
+                    </div>
+                    <div class="bg-white bg-opacity-25 rounded-circle p-3">
+                        <i class="fas fa-exclamation-triangle fa-2x text-white"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filters - Compact 2 Rows -->
 <div class="card mb-4">
-    <div class="card-body">
-        <form method="get" class="row g-3">
-            <div class="col-md-2">
-                <label class="form-label">Status</label>
-                <select name="status" class="form-select">
-                    <option value="">All</option>
+    <div class="card-body py-2">
+        <form method="get">
+            <!-- Row 1: Filters -->
+            <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+                <select name="status" class="form-select form-select-sm" style="width: auto; min-width: 120px;">
+                    <option value="">All Status</option>
                     <option value="pending" {% if request.GET.status == 'pending' %}selected{% endif %}>Pending</option>
                     <option value="paid" {% if request.GET.status == 'paid' %}selected{% endif %}>Paid</option>
                     <option value="cancelled" {% if request.GET.status == 'cancelled' %}selected{% endif %}>Cancelled</option>
                     <option value="reversed" {% if request.GET.status == 'reversed' %}selected{% endif %}>Reversed</option>
                 </select>
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">Company</label>
-                <select name="company" class="form-select">
+                
+                <select name="company" class="form-select form-select-sm" style="width: auto; min-width: 150px;">
                     <option value="">All Companies</option>
                     {% for company in companies %}
                     <option value="{{ company.id }}" {% if request.GET.company == company.id|stringformat:"s" %}selected{% endif %}>{{ company.name }}</option>
                     {% endfor %}
                 </select>
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">Date From</label>
-                <input type="date" name="date_from" class="form-control" value="{{ request.GET.date_from }}">
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">Date To</label>
-                <input type="date" name="date_to" class="form-control" value="{{ request.GET.date_to }}">
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">Search</label>
-                <input type="text" name="search" class="form-control" value="{{ request.GET.search }}" placeholder="ID, Customer...">
-            </div>
-            <div class="col-md-2 d-flex align-items-end">
-                <button type="submit" class="btn btn-warning me-2">
-                    <i class="fas fa-filter"></i> Filter
+                
+                <input type="date" name="date_from" class="form-control form-control-sm" 
+                       value="{{ request.GET.date_from }}" style="width: auto;" placeholder="From Date">
+                
+                <input type="date" name="date_to" class="form-control form-control-sm" 
+                       value="{{ request.GET.date_to }}" style="width: auto;" placeholder="To Date">
+                
+                <input type="text" name="search" class="form-control form-control-sm" 
+                       value="{{ request.GET.search }}" placeholder="ID, Customer..." style="width: 180px;">
+                
+                <button type="submit" class="btn btn-primary btn-sm">
+                    <i class="fas fa-search"></i> Filter
                 </button>
-                <a href="{% url 'credit:transaction_list' %}" class="btn btn-secondary">
-                    <i class="fas fa-times"></i> Clear
+                
+                <a href="{% url 'credit:transaction_list' %}" class="btn btn-secondary btn-sm">
+                    <i class="fas fa-undo"></i> Clear
                 </a>
+            </div>
+            
+            <!-- Row 2: Quick Date Shortcuts -->
+            <div class="d-flex gap-2 align-items-center">
+                <span class="badge bg-info text-white">Quick Date:</span>
+                <a href="?date=today" class="btn btn-link btn-sm p-0">Today</a>
+                <span class="text-muted">|</span>
+                <a href="?date=week" class="btn btn-link btn-sm p-0">This Week</a>
+                <span class="text-muted">|</span>
+                <a href="?date=month" class="btn btn-link btn-sm p-0">This Month</a>
+                <span class="text-muted">|</span>
+                <a href="?date=quarter" class="btn btn-link btn-sm p-0">This Quarter</a>
             </div>
         </form>
     </div>
@@ -62,41 +144,74 @@
 <div class="card">
     <div class="card-body">
         <div class="table-responsive">
-            <table class="table table-hover" id="transactionsTable">
+            <table class="table table-bordered table-hover" id="transactionsTable">
                 <thead>
-                    <tr>
-                        <th>Transaction ID</th>
-                        <th>Customer</th>
-                        <th>Company</th>
-                        <th>Product</th>
-                        <th>Amount</th>
-                        <th>Date Given</th>
-                        <th>Days</th>
-                        <th>Status</th>
-                        <th>Actions</th>
+                    <tr class="table-light">
+                        <th width="8%" class="bg-primary text-white text-center" style="border: 2px solid #0d47a1;">
+                            Transaction ID
+                        </th>
+                        <th width="12%" class="bg-info text-white" style="border: 2px solid #0097a7;">
+                            Customer
+                        </th>
+                        <th width="10%" class="bg-teal text-white" style="border: 2px solid #00695c;">
+                            Company
+                        </th>
+                        <th width="8%" class="bg-secondary text-white" style="border: 2px solid #424242;">
+                            Product
+                        </th>
+                        <th width="10%" class="bg-success text-white text-end" style="border: 2px solid #1b5e20;">
+                            Amount (KSH)
+                        </th>
+                        <th width="8%" class="bg-info text-white text-center" style="border: 2px solid #0097a7;">
+                            Date Given
+                        </th>
+                        <th width="6%" class="bg-warning text-dark text-center" style="border: 2px solid #e65100;">
+                            Days
+                        </th>
+                        <th width="8%" class="bg-danger text-white text-center" style="border: 2px solid #b71c1c;">
+                            Status
+                        </th>
+                        <th width="15%" class="bg-navy text-white text-center" style="border: 2px solid #0a192f;">
+                            Actions
+                        </th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for transaction in transactions %}
                     <tr>
-                        <td><span class="badge bg-warning text-dark">{{ transaction.transaction_id }}</span></td>
-                        <td>
-                            <a href="{% url 'credit:customer_detail' transaction.customer.id %}" class="text-decoration-none">
+                        <td class="text-center align-middle">
+                            <span class="badge bg-warning text-dark">
+                                {{ transaction.transaction_id }}
+                            </span>
+                        </td>
+                        <td class="align-middle">
+                            <a href="{% url 'credit:customer_detail' transaction.customer.id %}" class="text-decoration-none fw-bold">
                                 {{ transaction.customer.full_name }}
                             </a>
+                            <br>
+                            <small class="text-muted">
+                                <i class="fas fa-phone"></i> {{ transaction.customer.phone_number }}
+                            </small>
                         </td>
-                        <td>{{ transaction.credit_company.name }}</td>
-                        <td>
+                        <td class="align-middle">
+                            <span class="badge bg-secondary">{{ transaction.credit_company.name }}</span>
+                        </td>
+                        <td class="align-middle">
                             <a href="{% url 'inventory:product_detail' transaction.product.id %}" class="text-decoration-none">
-                                {{ transaction.product.product_code }}
+                                <code>{{ transaction.product.product_code }}</code>
                             </a>
                         </td>
-                        <td class="fw-bold">KSH {{ transaction.ceiling_price|floatformat:0 }}</td>
-                        <td>{{ transaction.transaction_date|date:"Y-m-d" }}</td>
-                        <td>
+                        <td class="text-end align-middle fw-bold text-success">
+                            KSH {{ transaction.ceiling_price|floatformat:0|intcomma }}
+                        </td>
+                        <td class="text-center align-middle">
+                            <i class="fas fa-calendar-alt text-muted me-1"></i>
+                            {{ transaction.transaction_date|date:"Y-m-d" }}
+                        </td>
+                        <td class="text-center align-middle">
                             {% with days=transaction.days_since_given %}
                                 {% if days > 90 %}
-                                    <span class="badge bg-danger">{{ days }} days</span>
+                                    <span class="badge bg-danger">⚠️ {{ days }} days</span>
                                 {% elif days > 60 %}
                                     <span class="badge bg-warning text-dark">{{ days }} days</span>
                                 {% elif days > 30 %}
@@ -106,41 +221,49 @@
                                 {% endif %}
                             {% endwith %}
                         </td>
-                        <td>
+                        <td class="text-center align-middle">
                             {% if transaction.payment_status == 'pending' %}
-                                <span class="badge bg-danger">Pending</span>
+                                <span class="badge bg-danger w-100">
+                                    <i class="fas fa-clock"></i> Pending
+                                </span>
                             {% elif transaction.payment_status == 'paid' %}
-                                <span class="badge bg-success">Paid</span>
+                                <span class="badge bg-success w-100">
+                                    <i class="fas fa-check-circle"></i> Paid
+                                </span>
                             {% elif transaction.payment_status == 'cancelled' %}
-                                <span class="badge bg-secondary">Cancelled</span>
+                                <span class="badge bg-secondary w-100">
+                                    <i class="fas fa-times-circle"></i> Cancelled
+                                </span>
                             {% elif transaction.payment_status == 'reversed' %}
-                                <span class="badge bg-info">Reversed</span>
+                                <span class="badge bg-info w-100">
+                                    <i class="fas fa-undo"></i> Reversed
+                                </span>
                             {% endif %}
                         </td>
-                        <td>
-                            <div class="btn-group" role="group">
-                                <a href="{% url 'credit:transaction_detail' transaction.id %}" class="btn btn-sm btn-info" title="View">
+                        <td class="text-center align-middle">
+                            <div class="btn-group btn-group-sm" role="group">
+                                <a href="{% url 'credit:transaction_detail' transaction.id %}" class="btn btn-outline-info" title="View Details">
                                     <i class="fas fa-eye"></i>
                                 </a>
-                                <a href="{% url 'credit:transaction_receipt' transaction.id %}" class="btn btn-sm btn-secondary" title="Receipt">
-                                    <i class="fas fa-receipt"></i>
+                                <a href="{% url 'credit:transaction_receipt' transaction.id %}" class="btn btn-outline-secondary" title="Print Receipt" target="_blank">
+                                    <i class="fas fa-print"></i>
                                 </a>
                                 
                                 {% if transaction.payment_status == 'pending' %}
-                                    <a href="{% url 'credit:transaction_pay' transaction.id %}" class="btn btn-sm btn-success" title="Mark Paid">
+                                    <a href="{% url 'credit:transaction_pay' transaction.id %}" class="btn btn-outline-success" title="Mark as Paid">
                                         <i class="fas fa-check"></i>
                                     </a>
-                                    <a href="{% url 'credit:transaction_cancel' transaction.id %}" class="btn btn-sm btn-danger" title="Cancel">
+                                    <a href="{% url 'credit:transaction_cancel' transaction.id %}" class="btn btn-outline-danger" title="Cancel Transaction">
                                         <i class="fas fa-times"></i>
                                     </a>
-                                    <a href="{% url 'credit:transaction_reverse' transaction.id %}" class="btn btn-sm btn-warning" title="Reverse (Restore to Stock)" 
+                                    <a href="{% url 'credit:transaction_reverse' transaction.id %}" class="btn btn-outline-warning" title="Reverse (Restore to Stock)" 
                                        onclick="return confirm('Are you sure you want to reverse this transaction? The product will be available again.')">
                                         <i class="fas fa-undo"></i>
                                     </a>
                                     
                                 {% elif transaction.payment_status == 'cancelled' %}
-                                    <a href="{% url 'credit:transaction_reverse' transaction.id %}" class="btn btn-sm btn-warning" title="Reverse (Restore to Stock)" 
-                                       onclick="return confirm('Are you sure you want to reverse this cancelled transaction? The product will be available again.')">
+                                    <a href="{% url 'credit:transaction_reverse' transaction.id %}" class="btn btn-outline-warning" title="Restore to Stock" 
+                                       onclick="return confirm('Are you sure you want to restore this cancelled transaction? The product will be available again.')">
                                         <i class="fas fa-undo"></i> Restore
                                     </a>
                                     
@@ -152,11 +275,11 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="9" class="text-center py-4">
-                            <i class="fas fa-exchange-alt fa-3x text-muted mb-3"></i>
-                            <p class="text-muted">No transactions found</p>
-                            <a href="{% url 'credit:transaction_create' %}" class="btn btn-warning btn-sm">
-                                <i class="fas fa-plus"></i> Create your first transaction
+                        <td colspan="9" class="text-center py-5">
+                            <i class="fas fa-exchange-alt fa-4x text-muted mb-3"></i>
+                            <p class="text-muted mb-3">No credit transactions found</p>
+                            <a href="{% url 'credit:transaction_create' %}" class="btn btn-warning">
+                                <i class="fas fa-plus me-2"></i>Create First Transaction
                             </a>
                         </td>
                     </tr>
@@ -164,6 +287,161 @@
                 </tbody>
             </table>
         </div>
+        
+        <!-- Pagination -->
+        {% if transactions.has_other_pages %}
+        <nav class="mt-4">
+            <ul class="pagination justify-content-center">
+                {% if transactions.has_previous %}
+                <li class="page-item">
+                    <a class="page-link" href="?page=1{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                        <i class="fas fa-chevron-double-left"></i>
+                    </a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ transactions.previous_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                        <i class="fas fa-chevron-left"></i> Previous
+                    </a>
+                </li>
+                {% else %}
+                <li class="page-item disabled">
+                    <span class="page-link"><i class="fas fa-chevron-left"></i> Previous</span>
+                </li>
+                {% endif %}
+                
+                {% for num in transactions.paginator.page_range %}
+                    {% if transactions.number == num %}
+                    <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                    {% elif num > transactions.number|add:'-3' and num < transactions.number|add:'3' %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ num }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                            {{ num }}
+                        </a>
+                    </li>
+                    {% endif %}
+                {% endfor %}
+                
+                {% if transactions.has_next %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ transactions.next_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                        Next <i class="fas fa-chevron-right"></i>
+                    </a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ transactions.paginator.num_pages }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                        <i class="fas fa-chevron-double-right"></i>
+                    </a>
+                </li>
+                {% else %}
+                <li class="page-item disabled">
+                    <span class="page-link">Next <i class="fas fa-chevron-right"></i></span>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
     </div>
 </div>
+
+<style>
+    .bg-teal {
+        background-color: #20c997 !important;
+    }
+    .bg-navy {
+        background-color: #001f3f !important;
+    }
+    .text-white-50 {
+        color: rgba(255, 255, 255, 0.8);
+    }
+    .table-bordered {
+        border: 2px solid #dee2e6 !important;
+    }
+    .table-bordered thead th,
+    .table-bordered thead td {
+        border-bottom-width: 2px;
+    }
+    .table-bordered tbody tr td {
+        border-right: 1px solid #dee2e6;
+    }
+    .table-bordered tbody tr td:last-child {
+        border-right: none;
+    }
+    .table-hover tbody tr:hover {
+        background-color: rgba(0, 0, 0, 0.05);
+    }
+    .badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+    }
+    .table th, .table td {
+        vertical-align: middle;
+    }
+    
+    @media print {
+        .btn, .card-header, .filter-section, .pagination, .breadcrumb {
+            display: none !important;
+        }
+        .card {
+            border: none !important;
+            box-shadow: none !important;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Quick date filters
+    $('a[href*="date="]').click(function(e) {
+        e.preventDefault();
+        var dateParam = $(this).attr('href').split('=')[1];
+        var currentUrl = new URL(window.location.href);
+        
+        // Clear existing date filters
+        currentUrl.searchParams.delete('date_from');
+        currentUrl.searchParams.delete('date_to');
+        
+        var today = new Date();
+        var fromDate, toDate;
+        
+        switch(dateParam) {
+            case 'today':
+                fromDate = today.toISOString().split('T')[0];
+                toDate = today.toISOString().split('T')[0];
+                break;
+            case 'week':
+                var weekAgo = new Date(today);
+                weekAgo.setDate(today.getDate() - 7);
+                fromDate = weekAgo.toISOString().split('T')[0];
+                toDate = today.toISOString().split('T')[0];
+                break;
+            case 'month':
+                var monthAgo = new Date(today);
+                monthAgo.setMonth(today.getMonth() - 1);
+                fromDate = monthAgo.toISOString().split('T')[0];
+                toDate = today.toISOString().split('T')[0];
+                break;
+            case 'quarter':
+                var quarterAgo = new Date(today);
+                quarterAgo.setMonth(today.getMonth() - 3);
+                fromDate = quarterAgo.toISOString().split('T')[0];
+                toDate = today.toISOString().split('T')[0];
+                break;
+        }
+        
+        if (fromDate) currentUrl.searchParams.set('date_from', fromDate);
+        if (toDate) currentUrl.searchParams.set('date_to', toDate);
+        // Preserve other filters
+        var status = new URLSearchParams(window.location.search).get('status');
+        var company = new URLSearchParams(window.location.search).get('company');
+        var search = new URLSearchParams(window.location.search).get('search');
+        if (status) currentUrl.searchParams.set('status', status);
+        if (company) currentUrl.searchParams.set('company', company);
+        if (search) currentUrl.searchParams.set('search', search);
+        
+        window.location.href = currentUrl.toString();
+    });
+});
+</script>
 {% endblock %}

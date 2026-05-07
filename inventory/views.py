@@ -543,18 +543,6 @@ def category_analysis(request):
     
 
 
-
-@login_required
-def export_statistics(request):
-    """Export statistics as CSV/Excel"""
-    # You can implement this function to export data
-    # For now, just redirect back
-    from django.contrib import messages
-    messages.info(request, 'Export feature coming soon!')
-    return redirect('inventory:statistics')
-
-
-
 @login_required
 def dashboard(request):
     """Dashboard view with statistics and charts"""
@@ -645,6 +633,19 @@ def product_list(request):
     status = request.GET.get('status')
     if status:
         products = products.filter(status=status)
+
+    # Filter by owner
+    owner = request.GET.get('owner')
+    if owner:
+        if owner == 'none':
+            products = products.filter(owner__isnull=True)
+        elif owner == 'me':
+            products = products.filter(owner=request.user)
+        else:
+            try:
+                products = products.filter(owner_id=int(owner))
+            except ValueError:
+                pass
     
     brand = request.GET.get('brand')
     if brand:
@@ -667,12 +668,16 @@ def product_list(request):
     page_obj = paginator.get_page(page_number)
     
     categories = Category.objects.filter(is_active=True)
-    
     # ============================================
     # GET USER GROUPS (ROLES)
     # ============================================
     user_groups = list(request.user.groups.values_list('name', flat=True))
+
     
+    # In your product_list view, add:
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    users = User.objects.filter(is_active=True).order_by('first_name', 'username')
     # Define which groups can transfer any products (as a list)
     authorized_roles = [
         'administrator',
@@ -694,7 +699,8 @@ def product_list(request):
         'user_groups': user_groups,
         'is_superuser': request.user.is_superuser,
         'can_transfer_any': can_transfer_any,
-        'authorized_roles': authorized_roles,  # Pass the list directly
+        'authorized_roles': authorized_roles, 
+        'users': users,
     }
     
     return render(request, 'inventory/products/list.html', context)
@@ -769,8 +775,8 @@ def product_add(request):
             
             sku_value = request.POST.get('sku_value', '')
             barcode = request.POST.get('barcode', '')
-            
-            # Additional
+            serial_number = request.POST.get('serial_number', '')
+            imei_number = request.POST.get('imei_number', '')
             condition = request.POST.get('condition', 'new')
             supplier_id = request.POST.get('supplier')
             specifications = request.POST.get('specifications', '{}')
@@ -797,7 +803,9 @@ def product_add(request):
                 buying_price=buying_price,
                 selling_price=selling_price,
                 best_price=best_price,
-                sku_value=sku_value if sku_value else None,
+                sku_value=sku_value if sku_value else None, 
+                serial_number=serial_number if serial_number else None,
+                imei_number=imei_number if imei_number else None,  
                 barcode=barcode if barcode else None,
                 quantity=quantity,
                 reorder_level=reorder_level,  # Now properly set
@@ -857,13 +865,20 @@ def product_add(request):
             logger.error(f"Error creating product: {str(e)}")
             messages.error(request, f'Error creating product: {str(e)}')
             return redirect('inventory:product_add')
-    
+
+    # GET request - show form with product data
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+
+
     # GET request - show form
     categories = Category.objects.filter(is_active=True)
     suppliers = Supplier.objects.filter(is_active=True)
+    users = User.objects.filter(is_active=True).order_by('first_name', 'username')
     context = {
         'categories': categories,
         'suppliers': suppliers,
+        'users': users,
     }
     return render(request, 'inventory/products/add.html', context)
 
@@ -956,7 +971,7 @@ def product_bulk_add(request):
                     selling_price=selling_price,
                     best_price=best_price,
                     sku_value=sku,
-                    quantity=1,  # Single items always have quantity 1
+                    quantity=1,  
                     condition=condition,
                     warranty_months=warranty_months,
                     specifications=specifications,
@@ -965,7 +980,7 @@ def product_bulk_add(request):
                     status='available'
                 )
                 created_count += 1
-                created_products.append(product)  # ✅ FIX: Add product to the list
+                created_products.append(product)  
             
 
 
@@ -1030,13 +1045,20 @@ def product_bulk_add(request):
             messages.error(request, f'Error creating products: {str(e)}')
             return redirect('inventory:product_bulk_add')
     
+    # GET request - show form with product data
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+
+
     # GET request - show form
     categories = Category.objects.filter(is_active=True, item_type='single')
     suppliers = Supplier.objects.filter(is_active=True)
+    users = User.objects.filter(is_active=True).order_by('first_name', 'username')
     
     context = {
         'categories': categories,
         'suppliers': suppliers,
+        'users': users,
     }
     return render(request, 'inventory/products/bulk_add.html', context)
 
@@ -1194,12 +1216,18 @@ def product_edit(request, pk):
             return redirect('inventory:product_edit', pk=product.pk)
     
     # GET request - show form with product data
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+
+    # GET request - show form with product data
     categories = Category.objects.filter(is_active=True)
     suppliers = Supplier.objects.filter(is_active=True)
+    users = User.objects.filter(is_active=True).order_by('first_name', 'username')
     context = {
         'product': product,
         'categories': categories,
         'suppliers': suppliers,
+        'users': users,
     }
     return render(request, 'inventory/products/edit.html', context)
 
@@ -3327,8 +3355,13 @@ def return_verify(request, pk):
         return redirect('inventory:return_detail', pk=return_request.id)
     
     # GET request - show verification form
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    users = User.objects.filter(is_active=True).order_by('first_name', 'username')
+    
     context = {
         'return': return_request,
+        'users': users,  
     }
     return render(request, 'inventory/returns/verify.html', context)
 

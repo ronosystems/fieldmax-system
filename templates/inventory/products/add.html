@@ -30,6 +30,7 @@
                     <div class="mb-3">
                         <label class="form-label">Product Name <span class="text-danger">*</span></label>
                         <input type="text" name="name" class="form-control" required>
+                        <small class="text-muted">Optional - will be auto-generated from brand/model</small>
                     </div>
                     
                     <div class="mb-3">
@@ -37,7 +38,7 @@
                         <select name="category" class="form-select" required>
                             <option value="">Select Category</option>
                             {% for cat in categories %}
-                            <option value="{{ cat.id }}" data-item-type="{{ cat.item_type }}">
+                            <option value="{{ cat.id }}" data-item-type="{{ cat.item_type }}" data-sku-type="{{ cat.sku_type }}">
                                 {{ cat.name }} ({{ cat.get_item_type_display }})
                             </option>
                             {% endfor %}
@@ -46,12 +47,14 @@
                     
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">Brand</label>
+                            <label class="form-label">Brand <span class="text-danger" id="brandRequired">*</span></label>
                             <input type="text" name="brand" class="form-control">
+                            <small class="text-muted">Required for single items</small>
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label class="form-label">Model</label>
+                            <label class="form-label">Model <span class="text-danger" id="modelRequired">*</span></label>
                             <input type="text" name="model" class="form-control">
+                            <small class="text-muted">Required for single items</small>
                         </div>
                     </div>
                     
@@ -76,9 +79,9 @@
                     </div>
                     
                     <div class="mb-3">
-                        <label class="form-label">Best Price (KSH)</label>
+                        <label class="form-label">Best/Retail Price (KSH)</label>
                         <input type="number" name="best_price" class="form-control" step="0.01">
-                        <small class="text-muted">Wholesale/discounted price</small>
+                        <small class="text-muted">Wholesale/discounted price (optional)</small>
                     </div>
                 </div>
             </div>
@@ -88,27 +91,43 @@
                 <div class="col-md-6">
                     <h6 class="mb-3">Inventory Details</h6>
                     
-                    <div class="mb-3" id="skuField">
-                        <label class="form-label">SKU (IMEI/Serial) <span class="text-danger" id="skuRequired">*</span></label>
+                    <!-- Serial Number Field (for single items) -->
+                    <div class="mb-3" id="serialNumberField" style="display: none;">
+                        <label class="form-label">Serial Number</label>
+                        <input type="text" name="serial_number" class="form-control" placeholder="Enter unique serial number">
+                        <small class="text-muted">Unique identifier for this specific item</small>
+                    </div>
+                    
+                    <!-- IMEI Number Field (for phones) -->
+                    <div class="mb-3" id="imeiNumberField" style="display: none;">
+                        <label class="form-label">IMEI Number</label>
+                        <input type="text" name="imei_number" class="form-control" placeholder="15-digit IMEI number" maxlength="15" pattern="[0-9]{15}">
+                        <small class="text-muted">15-digit IMEI number for phones</small>
+                    </div>
+                    
+                    <!-- Legacy SKU Field (deprecated - hidden by default) -->
+                    <div class="mb-3" id="skuField" style="display: none;">
+                        <label class="form-label">Legacy SKU Value</label>
                         <input type="text" name="sku_value" class="form-control">
-                        <small class="text-muted">Required for single items</small>
+                        <small class="text-muted">Legacy field - use Serial Number or IMEI instead</small>
                     </div>
                     
                     <div class="mb-3">
                         <label class="form-label">Barcode</label>
                         <input type="text" name="barcode" class="form-control">
+                        <small class="text-muted">Leave blank for auto-generation</small>
                     </div>
                     
                     <div class="mb-3" id="quantityField">
                         <label class="form-label">Quantity</label>
                         <input type="number" name="quantity" class="form-control" value="1" min="0">
-                        <small class="text-muted">For bulk items only</small>
+                        <small class="text-muted">For bulk items only (single items auto-set to 1)</small>
                     </div>
                     
                     <div class="mb-3" id="reorderField">
                         <label class="form-label">Reorder Level</label>
                         <input type="number" name="reorder_level" class="form-control" value="5" min="0">
-                        <small class="text-muted">Alert when stock falls below this level</small>
+                        <small class="text-muted">Alert when stock falls below this level (bulk items only)</small>
                     </div>
                 </div>
                 
@@ -124,6 +143,7 @@
                             <option value="used">Used - Excellent</option>
                             <option value="used_good">Used - Good</option>
                             <option value="used_fair">Used - Fair</option>
+                            <option value="damaged">Damaged - Not Sellable</option>
                         </select>
                     </div>
                     
@@ -143,6 +163,17 @@
                     </div>
                     
                     <div class="mb-3">
+                        <label class="form-label">Product Owner</label>
+                        <select name="owner" class="form-select">
+                            <option value="">Select Owner</option>
+                            {% for user in users %}
+                            <option value="{{ user.id }}">{{ user.get_full_name|default:user.username }}</option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted">Staff member responsible for this product</small>
+                    </div>
+                    
+                    <div class="mb-3">
                         <label class="form-label">Product Image</label>
                         <input type="file" name="image" class="form-control" accept="image/*">
                     </div>
@@ -153,7 +184,8 @@
                 <div class="col-12">
                     <h6 class="mb-3">Specifications (JSON format)</h6>
                     <div class="mb-3">
-                        <textarea name="specifications" class="form-control" rows="3" placeholder='{"ram": "8GB", "storage": "256GB", "color": "Black"}'></textarea>
+                        <textarea name="specifications" class="form-control" rows="3" placeholder='{"ram": "8GB", "storage": "256GB", "color": "Black", "processor": "Snapdragon 8 Gen 2"}'></textarea>
+                        <small class="text-muted">Store RAM, storage, color, processor, screen size, etc. as JSON</small>
                     </div>
                 </div>
             </div>
@@ -169,37 +201,146 @@
         </form>
     </div>
 </div>
-{% endblock %}  <!-- This was missing! -->
+{% endblock %}
 
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const categorySelect = document.querySelector('select[name="category"]');
+    const serialNumberField = document.getElementById('serialNumberField');
+    const imeiNumberField = document.getElementById('imeiNumberField');
     const skuField = document.getElementById('skuField');
     const quantityField = document.getElementById('quantityField');
     const reorderField = document.getElementById('reorderField');
-    const skuRequired = document.getElementById('skuRequired');
+    const brandRequired = document.getElementById('brandRequired');
+    const modelRequired = document.getElementById('modelRequired');
     const quantityInput = document.querySelector('input[name="quantity"]');
+    const brandInput = document.querySelector('input[name="brand"]');
+    const modelInput = document.querySelector('input[name="model"]');
+    const serialInput = document.querySelector('input[name="serial_number"]');
+    const imeiInput = document.querySelector('input[name="imei_number"]');
     
     function updateFields() {
         const selectedOption = categorySelect.options[categorySelect.selectedIndex];
         if (selectedOption && selectedOption.value) {
             const itemType = selectedOption.dataset.itemType;
+            const skuType = selectedOption.dataset.skuType;
             
             if (itemType === 'single') {
-                // Single item
-                skuRequired.style.display = 'inline';
-                skuField.style.display = 'block';
+                // Single item - show identifier fields
                 quantityField.style.display = 'none';
                 reorderField.style.display = 'none';
                 quantityInput.value = 1;
+                
+                // Show brand/model as required
+                brandRequired.style.display = 'inline';
+                modelRequired.style.display = 'inline';
+                brandInput.required = true;
+                modelInput.required = true;
+                
+                // Show appropriate identifier based on sku_type
+                if (skuType === 'imei') {
+                    serialNumberField.style.display = 'none';
+                    imeiNumberField.style.display = 'block';
+                    skuField.style.display = 'none';
+                    
+                    serialInput.required = false;
+                    imeiInput.required = true;
+                } else if (skuType === 'serial') {
+                    serialNumberField.style.display = 'block';
+                    imeiNumberField.style.display = 'none';
+                    skuField.style.display = 'none';
+                    
+                    serialInput.required = true;
+                    imeiInput.required = false;
+                } else {
+                    // Fallback to SKU field
+                    serialNumberField.style.display = 'none';
+                    imeiNumberField.style.display = 'none';
+                    skuField.style.display = 'block';
+                }
             } else {
                 // Bulk item
-                skuRequired.style.display = 'none';
-                skuField.style.display = 'block';
                 quantityField.style.display = 'block';
                 reorderField.style.display = 'block';
+                
+                // Hide identifier fields
+                serialNumberField.style.display = 'none';
+                imeiNumberField.style.display = 'none';
+                skuField.style.display = 'none';
+                
+                // Make brand/model optional
+                brandRequired.style.display = 'none';
+                modelRequired.style.display = 'none';
+                brandInput.required = false;
+                modelInput.required = false;
+                
+                // Not required for bulk items
+                serialInput.required = false;
+                imeiInput.required = false;
             }
+        } else {
+            // No category selected - show appropriate defaults
+            quantityField.style.display = 'block';
+            reorderField.style.display = 'block';
+            serialNumberField.style.display = 'none';
+            imeiNumberField.style.display = 'none';
+            skuField.style.display = 'none';
+            brandRequired.style.display = 'none';
+            modelRequired.style.display = 'none';
+        }
+    }
+    
+    // IMEI validation (15 digits only)
+    if (imeiInput) {
+        imeiInput.addEventListener('input', function() {
+            this.value = this.value.replace(/[^0-9]/g, '').slice(0, 15);
+        });
+    }
+    
+    // Serial number length warning
+    if (serialInput) {
+        serialInput.addEventListener('input', function() {
+            if (this.value.length > 0 && this.value.length < 5) {
+                this.classList.add('is-warning');
+            } else {
+                this.classList.remove('is-warning');
+            }
+        });
+    }
+    
+    // Validate buying price vs selling price
+    const buyingPriceInput = document.querySelector('input[name="buying_price"]');
+    const sellingPriceInput = document.querySelector('input[name="selling_price"]');
+    const bestPriceInput = document.querySelector('input[name="best_price"]');
+    
+    function validatePrices() {
+        const buying = parseFloat(buyingPriceInput.value) || 0;
+        const selling = parseFloat(sellingPriceInput.value) || 0;
+        const best = parseFloat(bestPriceInput?.value) || 0;
+        
+        if (selling > 0 && buying > selling) {
+            sellingPriceInput.setCustomValidity('Selling price cannot be less than buying price');
+            sellingPriceInput.classList.add('is-invalid');
+        } else {
+            sellingPriceInput.setCustomValidity('');
+            sellingPriceInput.classList.remove('is-invalid');
+        }
+        
+        if (best > 0 && best > selling) {
+            bestPriceInput.setCustomValidity('Best price cannot exceed selling price');
+            bestPriceInput.classList.add('is-invalid');
+        } else {
+            bestPriceInput.setCustomValidity('');
+            bestPriceInput.classList.remove('is-invalid');
+        }
+    }
+    
+    if (buyingPriceInput && sellingPriceInput) {
+        buyingPriceInput.addEventListener('input', validatePrices);
+        sellingPriceInput.addEventListener('input', validatePrices);
+        if (bestPriceInput) {
+            bestPriceInput.addEventListener('input', validatePrices);
         }
     }
     
@@ -209,4 +350,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
-{% endblock %}  <!-- This was also missing! -->
+
+<style>
+.is-warning {
+    border-color: #ffc107;
+    background-color: #fff3cd;
+}
+</style>
+{% endblock %}

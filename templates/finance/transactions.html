@@ -6,7 +6,15 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h2><i class="fas fa-exchange-alt me-2"></i>Financial Transactions</h2>
+    <div>
+        <h2 class="mb-0"><i class="fas fa-exchange-alt me-2"></i>Financial Transactions</h2>
+        <nav aria-label="breadcrumb" class="mt-2">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'finance:dashboard' %}">Dashboard</a></li>
+                <li class="breadcrumb-item active">Transactions</li>
+            </ol>
+        </nav>
+    </div>
     <div>
         <a href="{% url 'finance:salary_list' %}" class="btn btn-outline-primary me-2">
             <i class="fas fa-money-bill-wave me-2"></i>Salaries
@@ -23,45 +31,76 @@
 <!-- Summary Cards -->
 <div class="row mb-4">
     <div class="col-md-3">
-        <div class="stat-card" style="border-left: 5px solid #10b981;">
-            <div class="stat-value">KES {{ total_income|floatformat:2|intcomma }}</div>
-            <div class="stat-label">Total Income</div>
-            <i class="fas fa-arrow-up stat-icon" style="color: #10b981;"></i>
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-white-50 mb-2">Total Income</h6>
+                        <h2 class="mb-0">KES {{ total_income|floatformat:0|intcomma }}</h2>
+                    </div>
+                    <div class="bg-white bg-opacity-25 rounded-circle p-3">
+                        <i class="fas fa-arrow-up fa-2x text-white"></i>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
     <div class="col-md-3">
-        <div class="stat-card" style="border-left: 5px solid #ef4444;">
-            <div class="stat-value">KES {{ total_expenses|floatformat:2|intcomma }}</div>
-            <div class="stat-label">Total Expenses</div>
-            <i class="fas fa-arrow-down stat-icon" style="color: #ef4444;"></i>
+        <div class="card bg-danger text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-white-50 mb-2">Total Expenses</h6>
+                        <h2 class="mb-0">KES {{ total_expenses|floatformat:0|intcomma }}</h2>
+                    </div>
+                    <div class="bg-white bg-opacity-25 rounded-circle p-3">
+                        <i class="fas fa-arrow-down fa-2x text-white"></i>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
     <div class="col-md-3">
-        <div class="stat-card" style="border-left: 5px solid #f59e0b;">
-            <div class="stat-value">KES {{ net_balance|floatformat:2|intcomma }}</div>
-            <div class="stat-label">Net Balance</div>
-            <i class="fas fa-chart-line stat-icon" style="color: #f59e0b;"></i>
+        <div class="card bg-warning text-dark">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-dark-50 mb-2">Net Balance</h6>
+                        <h2 class="mb-0 {% if net_balance >= 0 %}text-success{% else %}text-danger{% endif %}">
+                            KES {{ net_balance|floatformat:0|intcomma }}
+                        </h2>
+                    </div>
+                    <div class="bg-white bg-opacity-25 rounded-circle p-3">
+                        <i class="fas fa-chart-line fa-2x text-dark"></i>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
     <div class="col-md-3">
-        <div class="stat-card" style="border-left: 5px solid #8b5cf6;">
-            <div class="stat-value">KES {{ total_profit|floatformat:2|intcomma }}</div>
-            <div class="stat-label">Total Profit (Sales)</div>
-            <i class="fas fa-chart-pie stat-icon" style="color: #8b5cf6;"></i>
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-white-50 mb-2">Total Profit (Sales)</h6>
+                        <h2 class="mb-0">KES {{ total_profit|floatformat:0|intcomma }}</h2>
+                    </div>
+                    <div class="bg-white bg-opacity-25 rounded-circle p-3">
+                        <i class="fas fa-chart-pie fa-2x text-white"></i>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
 
-<!-- Filter Section -->
+<!-- Filters - Compact 2 Rows -->
 <div class="card mb-4">
-    <div class="card-header bg-primary text-white">
-        <h6 class="mb-0"><i class="fas fa-filter me-2"></i>Filter Transactions</h6>
-    </div>
-    <div class="card-body">
-        <form method="GET" class="row g-3">
-            <div class="col-md-3">
-                <label for="type" class="form-label">Transaction Type</label>
-                <select name="type" id="type" class="form-select">
+    <div class="card-body py-2">
+        <form method="GET">
+            <!-- Row 1: Filters -->
+            <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+                <select name="type" class="form-select form-select-sm" style="width: auto; min-width: 140px;">
                     <option value="">All Types</option>
                     {% for type_value, type_name in transaction_types %}
                     <option value="{{ type_value }}" {% if request.GET.type == type_value %}selected{% endif %}>
@@ -69,10 +108,8 @@
                     </option>
                     {% endfor %}
                 </select>
-            </div>
-            <div class="col-md-3">
-                <label for="account" class="form-label">Account Source</label>
-                <select name="account" id="account" class="form-select">
+                
+                <select name="account" class="form-select form-select-sm" style="width: auto; min-width: 140px;">
                     <option value="">All Accounts</option>
                     {% for acc_value, acc_name in account_types %}
                     <option value="{{ acc_value }}" {% if request.GET.account == acc_value %}selected{% endif %}>
@@ -80,22 +117,34 @@
                     </option>
                     {% endfor %}
                 </select>
-            </div>
-            <div class="col-md-3">
-                <label for="date_from" class="form-label">Date From</label>
-                <input type="date" name="date_from" id="date_from" class="form-control" value="{{ request.GET.date_from|default:'' }}">
-            </div>
-            <div class="col-md-3">
-                <label for="date_to" class="form-label">Date To</label>
-                <input type="date" name="date_to" id="date_to" class="form-control" value="{{ request.GET.date_to|default:'' }}">
-            </div>
-            <div class="col-md-12">
-                <button type="submit" class="btn btn-primary">
-                    <i class="fas fa-search me-2"></i>Apply Filters
+                
+                <input type="date" name="date_from" class="form-control form-control-sm" 
+                       value="{{ request.GET.date_from|default:'' }}" style="width: auto;" placeholder="From Date">
+                
+                <input type="date" name="date_to" class="form-control form-control-sm" 
+                       value="{{ request.GET.date_to|default:'' }}" style="width: auto;" placeholder="To Date">
+                
+                <button type="submit" class="btn btn-primary btn-sm">
+                    <i class="fas fa-search"></i> Filter
                 </button>
-                <a href="{% url 'finance:financial_transactions' %}" class="btn btn-secondary">
-                    <i class="fas fa-undo me-2"></i>Clear Filters
+                
+                <a href="{% url 'finance:financial_transactions' %}" class="btn btn-secondary btn-sm">
+                    <i class="fas fa-undo"></i> Clear
                 </a>
+            </div>
+            
+            <!-- Row 2: Quick Date Shortcuts -->
+            <div class="d-flex gap-2 align-items-center">
+                <span class="badge bg-info text-white">Quick Date:</span>
+                <a href="?date=today" class="btn btn-link btn-sm p-0">Today</a>
+                <span class="text-muted">|</span>
+                <a href="?date=week" class="btn btn-link btn-sm p-0">This Week</a>
+                <span class="text-muted">|</span>
+                <a href="?date=month" class="btn btn-link btn-sm p-0">This Month</a>
+                <span class="text-muted">|</span>
+                <a href="?date=quarter" class="btn btn-link btn-sm p-0">This Quarter</a>
+                <span class="text-muted">|</span>
+                <a href="?date=year" class="btn btn-link btn-sm p-0">This Year</a>
             </div>
         </form>
     </div>
@@ -103,34 +152,42 @@
 
 <!-- Transactions Table -->
 <div class="card">
-    <div class="card-header bg-white">
-        <div class="d-flex justify-content-between align-items-center">
-            <h6 class="mb-0">
-                <i class="fas fa-table me-2"></i>All Transactions
-            </h6>
-            <div class="text-muted small">
-                Showing {{ transactions.start_index }} to {{ transactions.end_index }} of {{ transactions.paginator.count }} entries
-            </div>
-        </div>
-    </div>
     <div class="card-body p-0">
         <div class="table-responsive">
-            <table class="table table-hover mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th>Date</th>
-                        <th>Account</th>
-                        <th>Type</th>
-                        <th>Description</th>
-                        <th>Amount</th>
-                        <th>Reference</th>
-                        <th>Created By</th>
-                     </thead>
+            <table class="table table-bordered table-hover mb-0">
+                <thead>
+                    <tr class="table-light">
+                        <th width="8%" class="bg-info text-white text-center" style="border: 2px solid #0097a7;">
+                            Date
+                        </th>
+                        <th width="12%" class="bg-teal text-white" style="border: 2px solid #00695c;">
+                            Account
+                        </th>
+                        <th width="8%" class="bg-primary text-white text-center" style="border: 2px solid #0d47a1;">
+                            Type
+                        </th>
+                        <th width="25%" class="bg-secondary text-white" style="border: 2px solid #424242;">
+                            Description
+                        </th>
+                        <th width="12%" class="bg-success text-white text-end" style="border: 2px solid #1b5e20;">
+                            Amount (KSH)
+                        </th>
+                        <th width="10%" class="bg-warning text-dark text-center" style="border: 2px solid #e65100;">
+                            Reference
+                        </th>
+                        <th width="10%" class="bg-navy text-white" style="border: 2px solid #0a192f;">
+                            Created By
+                        </th>
+                    </tr>
+                </thead>
                 <tbody>
                     {% for transaction in transactions %}
                     <tr onclick="redirectToDetail('{{ transaction.id }}', '{{ transaction.transaction_type }}')" style="cursor: pointer;" class="transaction-row">
-                        <td class="text-nowrap">{{ transaction.transaction_date|date:"Y-m-d" }}</td>
-                        <td>
+                        <td class="text-center align-middle">
+                            <i class="fas fa-calendar-alt text-muted me-1"></i>
+                            {{ transaction.transaction_date|date:"Y-m-d" }}
+                        </td>
+                        <td class="align-middle">
                             {% if transaction.source == 'salary' %}
                                 <span class="badge bg-primary">
                                     <i class="fas fa-money-bill-wave me-1"></i> Salary
@@ -163,54 +220,65 @@
                                 <span class="badge bg-secondary">{{ transaction.source|title }}</span>
                             {% endif %}
                          </td>
-                        <td>
+                        <td class="text-center align-middle">
                             {% if transaction.transaction_type == 'income' %}
-                                <span class="badge bg-success">Income</span>
+                                <span class="badge bg-success w-100">
+                                    <i class="fas fa-arrow-up me-1"></i> Income
+                                </span>
                             {% elif transaction.transaction_type == 'expense' %}
-                                <span class="badge bg-danger">Expense</span>
+                                <span class="badge bg-danger w-100">
+                                    <i class="fas fa-arrow-down me-1"></i> Expense
+                                </span>
                             {% else %}
-                                <span class="badge bg-secondary">{{ transaction.transaction_type|title }}</span>
+                                <span class="badge bg-secondary w-100">{{ transaction.transaction_type|title }}</span>
                             {% endif %}
                          </td>
-                        <td>
+                        <td class="align-middle">
                             <div class="fw-bold">{{ transaction.description|truncatechars:60 }}</div>
                             {% if transaction.notes %}
-                            <small class="text-muted">{{ transaction.notes|truncatechars:40 }}</small>
+                            <small class="text-muted">
+                                <i class="fas fa-sticky-note me-1"></i> {{ transaction.notes|truncatechars:40 }}
+                            </small>
                             {% endif %}
                          </td>
-                        <td class="fw-bold {% if transaction.transaction_type == 'income' %}text-success{% else %}text-danger{% endif %}">
+                        <td class="text-end align-middle fw-bold 
+                            {% if transaction.transaction_type == 'income' %}text-success{% else %}text-danger{% endif %}">
                             {% if transaction.transaction_type == 'income' %}
-                                + KES {{ transaction.amount|floatformat:2|intcomma }}
+                                + KES {{ transaction.amount|floatformat:0|intcomma }}
                             {% else %}
-                                - KES {{ transaction.amount|floatformat:2|intcomma }}
+                                - KES {{ transaction.amount|floatformat:0|intcomma }}
                             {% endif %}
                          </td>
-                        <td><code>{{ transaction.reference|default:"—" }}</code></td>
-                        <td>
-                            <small>{{ transaction.created_by.get_full_name|default:transaction.created_by.username|default:"System" }}</small>
+                        <td class="text-center align-middle">
+                            <code>{{ transaction.reference|default:"—" }}</code>
+                         </td>
+                        <td class="align-middle">
+                            <small>
+                                <i class="fas fa-user me-1"></i>
+                                {{ transaction.created_by.get_full_name|default:transaction.created_by.username|default:"System" }}
+                            </small>
                          </td>
                      </tr>
                     {% empty %}
                     <tr>
                         <td colspan="7" class="text-center py-5">
-                            <i class="fas fa-receipt fa-3x text-muted mb-3"></i>
-                            <h6>No transactions found</h6>
-                            <p class="text-muted">No financial transactions have been recorded yet.</p>
-                            <a href="{% url 'finance:add_account_transaction' %}" class="btn btn-primary btn-sm">
-                                <i class="fas fa-plus-circle me-1"></i>Add Transaction
+                            <i class="fas fa-receipt fa-4x text-muted mb-3"></i>
+                            <p class="text-muted mb-3">No transactions found</p>
+                            <a href="{% url 'finance:add_account_transaction' %}" class="btn btn-primary">
+                                <i class="fas fa-plus-circle me-2"></i>Add Transaction
                             </a>
-                        </td>
-                    </tr>
+                         </td>
+                     </tr>
                     {% endfor %}
                 </tbody>
                 <tfoot class="table-light">
                     <tr class="fw-bold">
-                        <td colspan="4">TOTAL</td>
-                        <td class="{% if net_balance >= 0 %}text-success{% else %}text-danger{% endif %}">
-                            KES {{ net_balance|floatformat:2|intcomma }}
-                        </td>
+                        <td colspan="4" class="text-end">TOTAL:</td>
+                        <td class="text-end {% if net_balance >= 0 %}text-success{% else %}text-danger{% endif %}">
+                            KES {{ net_balance|floatformat:0|intcomma }}
+                         </td>
                         <td colspan="2"></td>
-                    </tr>
+                     </tr>
                 </tfoot>
             </table>
         </div>
@@ -224,13 +292,17 @@
                 {% if transactions.has_previous %}
                 <li class="page-item">
                     <a class="page-link" href="?page=1{% if request.GET.type %}&type={{ request.GET.type }}{% endif %}{% if request.GET.account %}&account={{ request.GET.account }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}">
-                        <i class="fas fa-angle-double-left"></i>
+                        <i class="fas fa-chevron-double-left"></i>
                     </a>
                 </li>
                 <li class="page-item">
                     <a class="page-link" href="?page={{ transactions.previous_page_number }}{% if request.GET.type %}&type={{ request.GET.type }}{% endif %}{% if request.GET.account %}&account={{ request.GET.account }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}">
-                        <i class="fas fa-angle-left"></i>
+                        <i class="fas fa-chevron-left"></i> Previous
                     </a>
+                </li>
+                {% else %}
+                <li class="page-item disabled">
+                    <span class="page-link"><i class="fas fa-chevron-left"></i> Previous</span>
                 </li>
                 {% endif %}
 
@@ -249,13 +321,17 @@
                 {% if transactions.has_next %}
                 <li class="page-item">
                     <a class="page-link" href="?page={{ transactions.next_page_number }}{% if request.GET.type %}&type={{ request.GET.type }}{% endif %}{% if request.GET.account %}&account={{ request.GET.account }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}">
-                        <i class="fas fa-angle-right"></i>
+                        Next <i class="fas fa-chevron-right"></i>
                     </a>
                 </li>
                 <li class="page-item">
                     <a class="page-link" href="?page={{ transactions.paginator.num_pages }}{% if request.GET.type %}&type={{ request.GET.type }}{% endif %}{% if request.GET.account %}&account={{ request.GET.account }}{% endif %}{% if request.GET.date_from %}&date_from={{ request.GET.date_from }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to }}{% endif %}">
-                        <i class="fas fa-angle-double-right"></i>
+                        <i class="fas fa-chevron-double-right"></i>
                     </a>
+                </li>
+                {% else %}
+                <li class="page-item disabled">
+                    <span class="page-link">Next <i class="fas fa-chevron-right"></i></span>
                 </li>
                 {% endif %}
             </ul>
@@ -265,56 +341,50 @@
 </div>
 
 <style>
-    .stat-card {
-        background: white;
-        border-radius: 12px;
-        padding: 20px;
-        position: relative;
-        overflow: hidden;
-        transition: transform 0.2s;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    .bg-teal {
+        background-color: #20c997 !important;
     }
-    
-    .stat-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+    .bg-navy {
+        background-color: #001f3f !important;
     }
-    
-    .stat-value {
-        font-size: 28px;
-        font-weight: bold;
-        margin-bottom: 5px;
+    .text-white-50 {
+        color: rgba(255, 255, 255, 0.8);
     }
-    
-    .stat-label {
-        color: #6c757d;
-        font-size: 14px;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
+    .table-bordered {
+        border: 2px solid #dee2e6 !important;
     }
-    
-    .stat-icon {
-        position: absolute;
-        right: 20px;
-        bottom: 20px;
-        font-size: 48px;
-        opacity: 0.2;
+    .table-bordered thead th,
+    .table-bordered thead td {
+        border-bottom-width: 2px;
     }
-    
-    .table td, .table th {
+    .table-bordered tbody tr td {
+        border-right: 1px solid #dee2e6;
+    }
+    .table-bordered tbody tr td:last-child {
+        border-right: none;
+    }
+    .table-hover tbody tr:hover {
+        background-color: rgba(0, 0, 0, 0.05);
+    }
+    .badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+    }
+    .table th, .table td {
         vertical-align: middle;
     }
     
-    .badge {
-        padding: 0.35rem 0.65rem;
-        font-weight: 500;
-    }
-    
-    code {
-        background: #f1f5f9;
-        padding: 2px 6px;
-        border-radius: 4px;
-        font-size: 0.8rem;
+    @media (max-width: 768px) {
+        .table-responsive {
+            font-size: 0.85rem;
+        }
+        .table td, .table th {
+            padding: 0.5rem;
+        }
+        .badge {
+            font-size: 0.7rem;
+            padding: 0.25rem 0.5rem;
+        }
     }
     
     .transaction-row {
@@ -329,45 +399,8 @@
         background-color: rgba(255, 255, 255, 0.05) !important;
     }
     
-    [data-theme="dark"] .stat-card {
+    [data-theme="dark"] .card-footer {
         background: var(--sidebar-solid);
-        color: white;
-    }
-    
-    [data-theme="dark"] .stat-value {
-        color: white;
-    }
-    
-    [data-theme="dark"] .stat-label {
-        color: #adb5bd;
-    }
-    
-    [data-theme="dark"] code {
-        background: var(--sidebar-dark);
-        color: #e9ecef;
-    }
-    
-    @media (max-width: 768px) {
-        .table-responsive {
-            font-size: 0.85rem;
-        }
-        
-        .table td, .table th {
-            padding: 0.5rem;
-        }
-        
-        .stat-value {
-            font-size: 20px;
-        }
-        
-        .stat-icon {
-            font-size: 32px;
-        }
-        
-        .badge {
-            font-size: 0.7rem;
-            padding: 0.25rem 0.5rem;
-        }
     }
 </style>
 
@@ -389,7 +422,65 @@ document.getElementById('date_to')?.addEventListener('change', function() {
     this.form.submit();
 });
 
-// Redirect to appropriate detail page based on transaction type and source
+// Quick date filters
+document.querySelectorAll('a[href*="date="]').forEach(function(link) {
+    link.addEventListener('click', function(e) {
+        e.preventDefault();
+        var dateParam = this.href.split('date=')[1];
+        var currentUrl = new URL(window.location.href);
+        
+        // Clear existing date filters
+        currentUrl.searchParams.delete('date_from');
+        currentUrl.searchParams.delete('date_to');
+        
+        var today = new Date();
+        var fromDate, toDate;
+        
+        switch(dateParam) {
+            case 'today':
+                fromDate = today.toISOString().split('T')[0];
+                toDate = today.toISOString().split('T')[0];
+                break;
+            case 'week':
+                var weekAgo = new Date(today);
+                weekAgo.setDate(today.getDate() - 7);
+                fromDate = weekAgo.toISOString().split('T')[0];
+                toDate = today.toISOString().split('T')[0];
+                break;
+            case 'month':
+                var monthAgo = new Date(today);
+                monthAgo.setMonth(today.getMonth() - 1);
+                fromDate = monthAgo.toISOString().split('T')[0];
+                toDate = today.toISOString().split('T')[0];
+                break;
+            case 'quarter':
+                var quarterAgo = new Date(today);
+                quarterAgo.setMonth(today.getMonth() - 3);
+                fromDate = quarterAgo.toISOString().split('T')[0];
+                toDate = today.toISOString().split('T')[0];
+                break;
+            case 'year':
+                var yearAgo = new Date(today);
+                yearAgo.setFullYear(today.getFullYear() - 1);
+                fromDate = yearAgo.toISOString().split('T')[0];
+                toDate = today.toISOString().split('T')[0];
+                break;
+        }
+        
+        if (fromDate) currentUrl.searchParams.set('date_from', fromDate);
+        if (toDate) currentUrl.searchParams.set('date_to', toDate);
+        
+        // Preserve other filters
+        var type = new URLSearchParams(window.location.search).get('type');
+        var account = new URLSearchParams(window.location.search).get('account');
+        if (type) currentUrl.searchParams.set('type', type);
+        if (account) currentUrl.searchParams.set('account', account);
+        
+        window.location.href = currentUrl.toString();
+    });
+});
+
+// Redirect to appropriate detail page
 function redirectToDetail(transactionId, transactionType) {
     if (!transactionId) return;
     

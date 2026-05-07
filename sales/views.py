@@ -15,7 +15,7 @@ import africastalking
 from datetime import timedelta, datetime, date
 from finance.kopokopo_service import stk_push_request, clean_phone_number
 from finance.models import MpesaTransaction
-from sales.models import Sale, SaleItem, PaymentRecord, generate_custom_sale_id, Customer, LoyaltySettings, LoyaltyTransaction
+from sales.models import Sale, SaleItem, PaymentRecord, generate_sale_id, Customer, LoyaltySettings, LoyaltyTransaction
 from inventory.models import Product, StockEntry
 from django.core.paginator import Paginator
 from django.contrib.auth.models import User
@@ -3725,8 +3725,8 @@ def create_split_payment_sale(request):
         # Start database transaction
         with transaction.atomic():
             # Generate sale ID using your existing system
-            from .models import generate_custom_sale_id
-            sale_id = generate_custom_sale_id()
+            from .models import Sale, PaymentRecord
+            sale_id = generate_sale_id ()
             
             # ============================================
             # FIRST: Get customer info for points redemption
@@ -3773,7 +3773,7 @@ def create_split_payment_sale(request):
             
             # Create sale record with CORRECT customer name
             sale = Sale.objects.create(
-                sale_id=sale_id,
+                sale_id=generate_sale_id(),
                 seller=request.user if request.user.is_authenticated else None,
                 buyer_name=buyer_name,  # NOW USING CUSTOMER NAME
                 buyer_phone=buyer_phone,  # NOW USING CUSTOMER PHONE
