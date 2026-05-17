@@ -1,3 +1,5 @@
+
+
 {% load static %}
 <!DOCTYPE html>
 <html lang="en">
@@ -49,7 +51,6 @@
         .left-sidebar .card h3 {   font-size: 20px;    margin-bottom: 10px;    font-weight: 800;    letter-spacing: 1px; }
         .left-sidebar .card ul {    list-style: none;    padding: 0;    margin: 0;}
         .left-sidebar .card ul li {    font-family: 'Courier New', monospace;    font-size: 20px;    font-weight: bold;    letter-spacing: 2px;    padding: 5px 0;}
-
 
         .nav-item { display: flex; align-items: center; padding: 10px 15px; color: #ccc; text-decoration: none; gap: 12px; cursor: pointer; }
         .nav-item:hover { background: #2a2a4a; color: white; }
@@ -119,8 +120,7 @@
         .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.2); border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
 
-
-        .toast-message { position: fixed; bottom: 300px; left: 50%; transform: translateX(-50%); background: #333; color: rgb(0, 0, 0); padding: 75px 150px; border-radius: 8px; z-index: 2000; opacity: 0; transition: opacity 0.3s;   font-size: 30px; box-shadow: #000000; }
+        .toast-message { position: fixed; bottom: 150px; left: 45%; transform: translateX(-50%); background: #333; color: rgb(0, 0, 0); padding: 50px 80px; border-radius: 8px; z-index: 2000; opacity: 0; transition: opacity 0.5s;   font-size: 30px; box-shadow: #000000; }
         .toast-message.show { opacity: 1; }
 
         @media (max-width: 1024px) { .left-sidebar { width: 5%; min-width: 65px; } .left-sidebar .nav-label, .left-sidebar .sidebar-section-title, .left-sidebar .user-name { display: none; } .right-sidebar { width: 30%; min-width: 260px; } }
@@ -142,7 +142,6 @@
         .dot.active {        background-color: #00d4aa;    }
         .slide-caption {        text-align: center;        font-size: 10px;        color: #888;        margin-top: 8px;    }
 
-
         .page {    display: none; }
         .page.active {    display: block;}
 
@@ -155,6 +154,26 @@
         .price-card.unlocked {   border-color: #28a745 !important;    box-shadow: 0 0 20px rgba(40, 167, 69, 0.3);}
         @keyframes pulse {    0%, 100% { transform: scale(1); opacity: 1; }    50% { transform: scale(1.1); opacity: 0.8; }}
 
+        .modal-dialog-centered {    display: flex;    align-items: center;    min-height: calc(100% - 1rem);}
+        #pricePreview {    animation: fadeIn 0.3s ease-in; }
+        @keyframes fadeIn {    from { opacity: 0; transform: translateY(-10px); }    to { opacity: 1; transform: translateY(0); }}
+        .custom-badge {    animation: pulse 1s ease-in-out;}
+        @keyframes pulse {    0%, 100% { opacity: 1; }    50% { opacity: 0.6; }}
+        .spinner {    display: inline-block;    width: 16px;    height: 16px;    border: 2px solid rgba(255,255,255,0.3);    border-top-color: white;    border-radius: 50%;    animation: spin 0.8s linear infinite; }
+        @keyframes spin {   to { transform: rotate(360deg); } }
+
+        /* Autocomplete dropdown styles */
+        .autocomplete-container {    position: relative;    width: 100%;}
+        .autocomplete-dropdown {    position: absolute;    top: 100%;    left: 0;    right: 0;    background: white;    border: 1px solid #ddd;    border-radius: 8px;    max-height: 200px;    overflow-y: auto;    z-index: 1000;    box-shadow: 0 4px 12px rgba(0,0,0,0.15);    display: none;}
+        .autocomplete-dropdown.show {    display: block;}
+        .autocomplete-item {    padding: 10px 15px;    cursor: pointer;    border-bottom: 1px solid #eee;    transition: background 0.2s;}
+        .autocomplete-item:hover {   background: #f0f0f0;}
+        .autocomplete-item.selected {   background: #007bff;    color: white;}
+        .autocomplete-item .main-identifier {    font-family: monospace;    font-size: 13px;    font-weight: 600;}
+        .autocomplete-item .product-info {    font-size: 11px;    color: #666;    margin-top: 2px;}
+        .autocomplete-item.selected .product-info {   color: rgba(255,255,255,0.8);}
+        .highlight {   background-color: #ffeb3b;   font-weight: bold;}
+        .autocomplete-item.selected .highlight {    background-color: #ffc107;    color: #000;}
     </style>
 </head>
 <body>
@@ -230,7 +249,10 @@
                 <i class="fas fa-arrow-left"></i> Back to POS
             </button>
 
-            <input type="text" id="priceCheckSearchInput" class="search-input" placeholder="Scan barcode or enter product code..." autofocus>
+            <div class="autocomplete-container">
+                <input type="text" id="priceCheckSearchInput" class="search-input" placeholder="Scan barcode or enter product code..." autofocus>
+                <div class="autocomplete-dropdown" id="autocompleteDropdown"></div>
+            </div>
             <button class="add-btn" onclick="searchProductForPriceCheck()" style="background: linear-gradient(135deg, #ff6b35, #ff8c42);">
                 <i class="fas fa-search"></i> Check Price
             </button>
@@ -633,7 +655,63 @@
 <div id="toastMsg" class="toast-message"></div>
 
 
+<!-- IMEI/Serial Number & Custom Price Modal - WITH AUTOCOMPLETE -->
+<div class="modal fade" id="imeiSerialModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalProductTitle">
+                    <i class="fas fa-microchip me-2"></i>
+                    <span id="modalSkuCode">FSL000</span>
+                </h5>
+                <button type="button" class="btn btn-secondary" onclick="hideModal('imeiSerialModal')">CANCEL</button>
+            </div>
+            <div class="modal-body">
+                <!-- Custom Price Field -->
+                <div class="mb-3">
+                    <label class="form-label fw-bold">CUSTOM PRICE</label>
+                    <div class="input-group">
+                        <span class="input-group-text">KSH</span>
+                        <input type="number" id="customPriceModal" class="form-control" step="0.01" min="0">
+                    </div>
+                </div>
+                
+                <!-- IMEI Input Area with Autocomplete -->
+                <div id="imeiInputArea">
+                    <label class="form-label fw-bold">IMEI NUMBER</label>
+                    <div class="autocomplete-container">
+                        <input type="text" id="imeiNumber" class="form-control form-control-lg" maxlength="15" autocomplete="off">
+                        <div id="imeiAutocomplete" class="autocomplete-dropdown"></div>
+                    </div>
+                    <div id="imeiError" class="text-danger mt-1" style="font-size: 12px; display: none;"></div>
+                </div>
+                
+                <!-- Serial Input Area with Autocomplete -->
+                <div id="serialInputArea" style="display: none;">
+                    <label class="form-label fw-bold">SERIAL NUMBER</label>
+                    <div class="autocomplete-container">
+                        <input type="text" id="serialNumber" class="form-control form-control-lg" autocomplete="off">
+                        <div id="serialAutocomplete" class="autocomplete-dropdown"></div>
+                    </div>
+                    <div id="serialError" class="text-danger mt-1" style="font-size: 12px; display: none;"></div>
+                </div>
+                
+                <div id="identifierError" class="alert alert-danger mt-3" style="display: none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="hideModal('imeiSerialModal')">CANCEL</button>
+                <button type="button" class="btn btn-primary" id="confirmAddToCartBtn" onclick="confirmAddToCart()">
+                    <i class="fas fa-cart-plus me-2"></i>ADD TO CART
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 
+
+
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
 // ============================================
@@ -653,12 +731,12 @@ const CSRF = getCookie('csrftoken');
 
 const URLS = {
     get_cart:         '{% url "sales:get_cart" %}',
-    add_to_cart:      '{% url "sales:add_to_cart" %}',
+    add_to_cart:      '/sales/api/add-to-cart/', 
     update_cart:      '{% url "sales:update_cart" %}',
     remove_from_cart: '{% url "sales:remove_from_cart" %}',
     clear_cart:       '{% url "sales:clear_cart" %}',
     sale_create:      '{% url "sales:sale_create" %}',
-    sale_create_api: '/sales/api/sale/create/',
+    sale_create_api:  '/sales/api/sale/create/',
     customer_search:  '{% url "sales:customer_search" %}',
     send_otp:         '{% url "sales:send_otp" %}',
     verify_otp:       '{% url "sales:verify_otp" %}',
@@ -738,7 +816,15 @@ let splitPendingPoints = 0;
 let isBestPriceUnlocked = false;
 let currentBestPriceValue = 0;
 let bestPriceLockTimer = null;
+let pendingProductData = null;
+let imeiSerialModal = null;
 
+
+// IMEI/Serial Modal State
+let currentImeiSuggestions = [];
+let currentSerialSuggestions = [];
+let selectedImeiIndex = -1;
+let selectedSerialIndex = -1;
 
 // ============================================
 // CLOCK
@@ -787,9 +873,6 @@ function openHelp()         { showToast('Contact support@fieldmax.com', 'info');
 function refreshDashboard() { location.reload(); }
 function goToMpesaReports() {    window.location.href = "{% url 'shops:dashboard' %}"; }
 function moveToNext(input, idx) {    if (input.value.length === 1 && idx < 3) {        document.getElementById('otp' + (idx + 1)).focus();    } }
-
-
-
 
 // ============================================
 // PAGE SWITCHING FUNCTIONS
@@ -846,14 +929,6 @@ function showPage(page) {
         resetPriceCheckDisplay();
     }
 }
-
-
-
-
-
-
-
-
 
 
 
@@ -1001,7 +1076,6 @@ function resetBestPriceLock() {
     }
 }
 
-
 // Show Price Check Page
 function showPriceCheckPage() {
     // Hide all pages
@@ -1050,7 +1124,7 @@ function resetPriceCheckDisplay() {
     resetBestPriceLock();
 }
 
-// Search product for price check - using your existing API
+// Search product for price check - USING CORRECT API ENDPOINTS
 async function searchProductForPriceCheck() {
     const code = document.getElementById('priceCheckSearchInput').value.trim();
     
@@ -1069,48 +1143,40 @@ async function searchProductForPriceCheck() {
     showStatus('<i class="fas fa-spinner fa-pulse"></i> Fetching product pricing...', 'info');
     
     try {
-        // Use your existing product lookup API
-        const response = await fetch(`/staff/api/product-lookup/?q=${encodeURIComponent(code)}`, {
+        // Use the inventory endpoint
+        const response = await fetch(`/inventory/api/search-products/?q=${encodeURIComponent(code)}`, {
             headers: {
                 'X-Requested-With': 'XMLHttpRequest',
                 'X-CSRFToken': CSRF
             }
         });
         
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Error response:', errorText);
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
         const data = await response.json();
         
-        if (data.success && data.products && data.products.length > 0) {
-            // Use the first product
-            const product = data.products[0];
-            
-            // Extract prices from product object
-            const sellingPrice = parseFloat(product.selling_price) || 0;
-            
-            // Best price logic
-            let bestPrice = parseFloat(product.best_price) || 0;
-            if (bestPrice === 0 && parseFloat(product.buying_price) > 0) {
-                const buyingPrice = parseFloat(product.buying_price) || 0;
-                if (buyingPrice > 0 && sellingPrice > buyingPrice) {
-                    const profitMargin = sellingPrice - buyingPrice;
-                    bestPrice = buyingPrice + (profitMargin * 0.5);
-                } else {
-                    bestPrice = sellingPrice * 0.9;
-                }
-            } else if (bestPrice === 0) {
-                bestPrice = sellingPrice * 0.85;
-            }
+        // Handle error response
+        if (data.error) {
+            throw new Error(data.error);
+        }
+        
+        if (data && data.length > 0) {
+            const product = data[0];
+            const sellingPrice = parseFloat(product.price) || 0;
+            let bestPrice = parseFloat(product.best_price) || (sellingPrice * 0.9);
             
             // Store current best price for audit
             currentBestPriceValue = bestPrice;
             
-
             // Reset lock when searching new product
             resetBestPriceLock();
-
-
-            const productName = product.display_name || product.name || `Product ${code}`;
-            const skuValue = product.sku_value || product.barcode || 'N/A';
-            const productCode = product.product_code || code;
+            
+            const productName = product.name || `Product ${code}`;
+            const skuValue = product.sku || code;
             
             // Update displays
             const sellingPriceEl = document.getElementById('sellingPriceDisplay');
@@ -1123,7 +1189,6 @@ async function searchProductForPriceCheck() {
             }
             if (bestPriceEl) {
                 bestPriceEl.innerHTML = `KSH ${bestPrice.toLocaleString('en-KE', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-                // Keep blurred until unlocked
                 if (!isBestPriceUnlocked) {
                     bestPriceEl.style.filter = 'blur(5px)';
                 }
@@ -1152,20 +1217,20 @@ async function searchProductForPriceCheck() {
             const detailsDiv = document.getElementById('priceCheckDetails');
             const detailsInfo = document.getElementById('productDetailsInfo');
             if (detailsDiv && detailsInfo) {
-                const stockStatus = product.quantity > 0 ? 
-                    `<span class="text-success"><i class="fas fa-check-circle"></i> ${product.quantity} in stock</span>` : 
+                const stockStatus = (product.stock || 0) > 0 ? 
+                    `<span class="text-success"><i class="fas fa-check-circle"></i> ${product.stock} in stock</span>` : 
                     '<span class="text-danger"><i class="fas fa-times-circle"></i> Out of stock</span>';
                 
                 detailsInfo.innerHTML = `
                     <div class="row">
                         <div class="col-md-6">
-                            <strong>Product Code:</strong> ${escapeHtml(productCode)}<br>
+                            <strong>Product Code:</strong> ${escapeHtml(product.code || code)}<br>
                             <strong>SKU / Barcode:</strong> ${escapeHtml(skuValue)}<br>
-                            <strong>Category:</strong> ${escapeHtml(product.category_name || product.category || 'N/A')}
+                            <strong>Category:</strong> ${escapeHtml(product.category || 'N/A')}
                         </div>
                         <div class="col-md-6">
                             <strong>Stock:</strong> ${stockStatus}<br>
-                            <strong>Margin:</strong> ${sellingPrice > 0 && bestPrice > 0 ? Math.round(((sellingPrice - bestPrice)/sellingPrice)*100) + '%' : 'N/A'}<br>
+                            <strong>Item Type:</strong> ${product.is_single ? 'Single Item (IMEI/Serial)' : 'Bulk Item'}<br>
                             ${product.brand ? `<strong>Brand:</strong> ${escapeHtml(product.brand)}` : ''}
                         </div>
                     </div>
@@ -1194,17 +1259,10 @@ async function searchProductForPriceCheck() {
         }
     }
 }
+
 // ================================================
 // ✅✅✅✅ END PRICE CHECK FUNCTIONALITY ✅✅✅
 // =================================================
-
-
-
-
-
-
-
-
 
 
 
@@ -1350,12 +1408,6 @@ function initSlideshow() {
 
 
 
-
-
-
-
-
-
 // ============================================
 // ✅✅✅✅ START CUSTOMER LOOKUP ✅✅✅✅
 // ============================================
@@ -1477,14 +1529,6 @@ async function lookupCustomer(phone) {
 // ============================================
 
 
-
-
-
-
-
-
-
-
 // ============================================
 // CASH CHANGE CALCULATOR
 // ============================================
@@ -1503,18 +1547,6 @@ function calculateCashChange() {
 }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 // ============================================
 // ✅✅✅✅ START REGISTRATION FORM 
 // ============================================
@@ -1528,8 +1560,6 @@ function registerCustomer() {
         window.location.href = '/sales/customer/register/';
     }
 }
-
-
 
 //SUBMIT CUSTOMER REGISTRATION FORM
 async function submitCustomerRegistration(event) {
@@ -1732,44 +1762,50 @@ if (registerForm) {
 
 
 
-
-
-
-
-
-
-
-
-
 // ============================================
 //  ✅✅✅✅  START  CART LOAD  SYSTEM ✅✅
 // ============================================
 
-// ADD TO CART
+// NEW: ADD TO CART WITH MODAL SUPPORT
 async function addToCart() {
     const code = document.getElementById('productSearchInput').value.trim();
     if (!code) { showToast('Enter a product code or barcode', 'error'); return; }
 
     const customPriceRaw = document.getElementById('customPrice').value.trim();
-    const hasCustom      = customPriceRaw !== '' && !isNaN(parseFloat(customPriceRaw));
+    const hasCustom = customPriceRaw !== '' && !isNaN(parseFloat(customPriceRaw));
 
     try {
         const data = await safeFetch(URLS.add_to_cart, {
-            method:  'POST',
+            method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-            body:    JSON.stringify({
-                product_code:     code,
-                quantity:         1,
-                custom_price:     hasCustom ? parseFloat(customPriceRaw) : null,
+            body: JSON.stringify({
+                product_code: code,
+                quantity: 1,
+                custom_price: hasCustom ? parseFloat(customPriceRaw) : null,
                 allow_price_edit: hasCustom
             })
         });
 
         if (data.success) {
+            // Check if product is single item and requires identifier
+            if (data.is_single && data.requires_identifier) {
+                // Store product data and show modal for IMEI/Serial input
+                pendingProductData = {
+                    ...data.product_data,
+                    custom_price: hasCustom ? parseFloat(customPriceRaw) : null,
+                    allow_price_edit: hasCustom
+                };
+                
+                // Show modal with appropriate identifier field
+                showImeiSerialModal(pendingProductData);
+                return;
+            }
+            
+            // Normal flow for bulk items or single items with identifier already provided
             cart = data.cart || [];
             renderCart();
             document.getElementById('productSearchInput').value = '';
-            document.getElementById('customPrice').value        = '';
+            document.getElementById('customPrice').value = '';
             document.getElementById('productSearchInput').focus();
             showToast(data.message || 'Added to cart', 'success');
         } else {
@@ -1779,6 +1815,680 @@ async function addToCart() {
         showToast('Add to cart failed: ' + e.message, 'error');
     }
 }
+
+// ============================================
+// NEW: TOGGLE BETWEEN IMEI AND SERIAL INPUT
+// ============================================
+
+function toggleIdentifierInput() {
+    const selected = document.getElementById('identifierTypeSelect').value;
+    const imeiArea = document.getElementById('imeiInputArea');
+    const serialArea = document.getElementById('serialInputArea');
+    
+    if (selected === 'imei') {
+        imeiArea.style.display = 'block';
+        serialArea.style.display = 'none';
+        document.getElementById('serialNumber').value = '';
+    } else if (selected === 'serial') {
+        imeiArea.style.display = 'none';
+        serialArea.style.display = 'block';
+        document.getElementById('imeiNumber').value = '';
+    } else {
+        imeiArea.style.display = 'none';
+        serialArea.style.display = 'none';
+        document.getElementById('imeiNumber').value = '';
+        document.getElementById('serialNumber').value = '';
+    }
+}
+
+// ============================================
+// SIMPLIFIED MODAL FUNCTIONS
+// ============================================
+
+function showImeiSerialModal(productData) {
+    console.log('🟢 Showing modal for product:', productData);
+    
+    // Make sure the modal is visible first
+    const modalElement = document.getElementById('imeiSerialModal');
+    if (modalElement) {
+        // Remove aria-hidden when showing
+        modalElement.removeAttribute('aria-hidden');
+        modalElement.style.display = 'block';
+        modalElement.classList.add('show');
+        document.body.classList.add('modal-open');
+        
+        // Create backdrop if needed
+        let backdrop = document.querySelector('.modal-backdrop');
+        if (!backdrop) {
+            backdrop = document.createElement('div');
+            backdrop.className = 'modal-backdrop fade show';
+            document.body.appendChild(backdrop);
+        }
+    }
+    
+    // Then reset fields
+    document.getElementById('imeiNumber').value = '';
+    document.getElementById('serialNumber').value = '';
+    document.getElementById('customPriceModal').value = '';
+    document.getElementById('imeiError').style.display = 'none';
+    document.getElementById('serialError').style.display = 'none';
+    document.getElementById('identifierError').style.display = 'none';
+    
+    // Set SKU code in modal title
+    const skuCode = productData.sku_code || productData.product_code || 'SKU';
+    const modalTitle = document.getElementById('modalSkuCode');
+    if (modalTitle) {
+        modalTitle.textContent = skuCode;
+    }
+    
+    // Store product data
+    pendingProductData = productData;
+    
+    // Determine identifier type
+    const identifierType = productData.identifier_type || 'imei';
+    const imeiArea = document.getElementById('imeiInputArea');
+    const serialArea = document.getElementById('serialInputArea');
+    
+    if (identifierType === 'imei' || identifierType === 'imei_number') {
+        if (imeiArea) imeiArea.style.display = 'block';
+        if (serialArea) serialArea.style.display = 'none';
+        setTimeout(() => {
+            const imeiInput = document.getElementById('imeiNumber');
+            if (imeiInput) imeiInput.focus();
+        }, 100);
+    } else if (identifierType === 'serial' || identifierType === 'serial_number') {
+        if (imeiArea) imeiArea.style.display = 'none';
+        if (serialArea) serialArea.style.display = 'block';
+        setTimeout(() => {
+            const serialInput = document.getElementById('serialNumber');
+            if (serialInput) serialInput.focus();
+        }, 100);
+    } else {
+        if (imeiArea) imeiArea.style.display = 'none';
+        if (serialArea) serialArea.style.display = 'none';
+    }
+}
+
+// Confirm add to cart with validation
+async function confirmAddToCart() {
+    let identifierValue = '';
+    let isValid = true;
+    let identifierType = null;
+    
+    // Clear errors
+    const imeiError = document.getElementById('imeiError');
+    const serialError = document.getElementById('serialError');
+    const identifierError = document.getElementById('identifierError');
+    
+    if (imeiError) imeiError.style.display = 'none';
+    if (serialError) serialError.style.display = 'none';
+    if (identifierError) identifierError.style.display = 'none';
+    
+    // Check which input is visible to determine identifier type
+    const imeiArea = document.getElementById('imeiInputArea');
+    const serialArea = document.getElementById('serialInputArea');
+    const imeiInput = document.getElementById('imeiNumber');
+    const serialInput = document.getElementById('serialNumber');
+    
+    const isImeiVisible = imeiArea && imeiArea.style.display !== 'none';
+    const isSerialVisible = serialArea && serialArea.style.display !== 'none';
+    
+    if (isImeiVisible) {
+        identifierType = 'imei';
+        if (imeiInput) {
+            identifierValue = imeiInput.value.trim();
+            if (!identifierValue) {
+                if (imeiError) {
+                    imeiError.textContent = 'IMEI required';
+                    imeiError.style.display = 'block';
+                }
+                isValid = false;
+            } else if (identifierValue.length !== 15 || !/^\d+$/.test(identifierValue)) {
+                if (imeiError) {
+                    imeiError.textContent = 'IMEI must be 15 digits';
+                    imeiError.style.display = 'block';
+                }
+                isValid = false;
+            }
+        }
+    } else if (isSerialVisible) {
+        identifierType = 'serial';
+        if (serialInput) {
+            identifierValue = serialInput.value.trim();
+            if (!identifierValue) {
+                if (serialError) {
+                    serialError.textContent = 'Serial required';
+                    serialError.style.display = 'block';
+                }
+                isValid = false;
+            }
+        }
+    } else {
+        identifierType = null;
+        identifierValue = null;
+    }
+    
+    if (!isValid) return;
+    
+    // Get custom price
+    const customPriceInput = document.getElementById('customPriceModal');
+    const customPrice = customPriceInput ? (parseFloat(customPriceInput.value) || null) : null;
+    
+    // REMOVE THIS LINE - DON'T CLOSE MODAL YET
+    // hideModal('imeiSerialModal');
+    
+    // Show loading
+    const confirmBtn = document.getElementById('confirmAddToCartBtn');
+    const originalText = confirmBtn ? confirmBtn.innerHTML : 'Add to Cart';
+    if (confirmBtn) {
+        confirmBtn.disabled = true;
+        confirmBtn.innerHTML = '<span class="spinner"></span>';
+    }
+    
+    try {
+        const data = await safeFetch(URLS.add_to_cart, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+            body: JSON.stringify({
+                product_code: pendingProductData.product_code || pendingProductData.sku_code,
+                quantity: 1,
+                identifier: identifierValue,
+                identifier_type: identifierType,
+                custom_price: customPrice,
+                allow_price_edit: customPrice !== null
+            })
+        });
+        
+        if (data.success) {
+            cart = data.cart || [];
+            renderCart();
+            const productSearch = document.getElementById('productSearchInput');
+            const customPriceField = document.getElementById('customPrice');
+            if (productSearch) productSearch.value = '';
+            if (customPriceField) customPriceField.value = '';
+            if (productSearch) productSearch.focus();
+            showToast('Added to cart', 'success');
+            
+            // ✅ CLOSE MODAL ONLY ON SUCCESS
+            hideModal('imeiSerialModal');
+        } else {
+            showToast(data.error || 'Failed to add', 'error');
+        }
+    } catch(e) {
+        showToast('Failed: ' + e.message, 'error');
+    } finally {
+        if (confirmBtn) {
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = originalText;
+        }
+        pendingProductData = null;
+    }
+}
+
+// Setup Enter key for modal inputs
+function setupModalEnterKey() {
+    const modalInputs = ['imeiNumber', 'serialNumber', 'customPriceModal'];
+    modalInputs.forEach(inputId => {
+        const input = document.getElementById(inputId);
+        if (input) {
+            input.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    confirmAddToCart();
+                }
+            });
+        }
+    });
+}
+
+// Setup validation with AUTOCOMPLETE
+function setupIdentifierValidation() {
+    const imeiInput = document.getElementById('imeiNumber');
+    if (imeiInput) {
+        imeiInput.addEventListener('input', function() {
+            this.value = this.value.replace(/[^0-9]/g, '').slice(0, 15);
+            const imeiError = document.getElementById('imeiError');
+            if (imeiError) imeiError.style.display = 'none';
+            
+            // Fetch autocomplete suggestions
+            if (this.value.length >= 2) {
+                fetchImeiSuggestions(this.value);
+            } else {
+                hideImeiAutocomplete();
+            }
+        });
+        imeiInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') confirmAddToCart();
+        });
+        imeiInput.addEventListener('keydown', handleImeiKeydown);
+        imeiInput.addEventListener('blur', function() {
+            setTimeout(() => hideImeiAutocomplete(), 200);
+        });
+    }
+    
+    const serialInput = document.getElementById('serialNumber');
+    if (serialInput) {
+        serialInput.addEventListener('input', function() {
+            const serialError = document.getElementById('serialError');
+            if (serialError) serialError.style.display = 'none';
+            
+            // Fetch autocomplete suggestions
+            if (this.value.length >= 2) {
+                fetchSerialSuggestions(this.value);
+            } else {
+                hideSerialAutocomplete();
+            }
+        });
+        serialInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') confirmAddToCart();
+        });
+        serialInput.addEventListener('keydown', handleSerialKeydown);
+        serialInput.addEventListener('blur', function() {
+            setTimeout(() => hideSerialAutocomplete(), 200);
+        });
+    }
+    
+    const customPriceInput = document.getElementById('customPriceModal');
+    if (customPriceInput) {
+        customPriceInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') confirmAddToCart();
+        });
+    }
+}
+
+// Initialize modal when page loads
+function initImeiSerialModal() {
+    const modalElement = document.getElementById('imeiSerialModal');
+    if (modalElement && typeof bootstrap !== 'undefined') {
+        imeiSerialModal = new bootstrap.Modal(modalElement);
+    } else {
+        // Fallback - use native modal handling
+        console.log('Bootstrap not loaded, using native modal');
+    }
+}
+
+// Universal modal show function
+function showModal(modalId) {
+    const modalElement = document.getElementById(modalId);
+    if (!modalElement) return;
+    
+    // Try Bootstrap first
+    if (typeof bootstrap !== 'undefined') {
+        let modal = bootstrap.Modal.getInstance(modalElement);
+        if (!modal) {
+            modal = new bootstrap.Modal(modalElement);
+        }
+        modal.show();
+    } else {
+        // Fallback - show manually
+        modalElement.style.display = 'block';
+        modalElement.classList.add('show');
+        document.body.classList.add('modal-open');
+        
+        // Create backdrop
+        let backdrop = document.querySelector('.modal-backdrop');
+        if (!backdrop) {
+            backdrop = document.createElement('div');
+            backdrop.className = 'modal-backdrop fade show';
+            document.body.appendChild(backdrop);
+        }
+    }
+}
+
+function hideModal(modalId) {
+    const modalElement = document.getElementById(modalId);
+    if (modalElement) {
+        // Force hide
+        modalElement.classList.remove('show');
+        modalElement.style.display = 'none';
+        modalElement.setAttribute('aria-hidden', 'true');
+        
+        // Remove backdrop
+        const backdrop = document.querySelector('.modal-backdrop');
+        if (backdrop) backdrop.remove();
+        
+        // Remove body class
+        document.body.classList.remove('modal-open');
+        
+        // Also remove any inline display style
+        modalElement.removeAttribute('style');
+    }
+}
+
+
+// ============================================
+// AUTOCOMPLETE FUNCTIONS FOR IMEI/SERIAL
+// ============================================
+async function fetchImeiSuggestions(query) {
+    if (!query || query.length < 2) {
+        currentImeiSuggestions = [];
+        hideImeiAutocomplete();
+        return;
+    }
+    
+    // Get current cart item identifiers to exclude
+    const cartIdentifiers = cart
+        .filter(item => item.is_single && item.identifier)
+        .map(item => item.identifier);
+    
+    const cartUnitIds = cart
+        .filter(item => item.is_single && item.unit_id)
+        .map(item => item.unit_id);
+    
+    // ✅ Get the current product SKU from pendingProductData
+    const productSku = pendingProductData ? (pendingProductData.sku_code || pendingProductData.product_code) : '';
+    
+    try {
+        // ✅ Add product_sku parameter to the URL
+        let url = `/sales/api/imei-suggestions/?q=${encodeURIComponent(query)}`;
+        if (productSku) {
+            url += `&product_sku=${encodeURIComponent(productSku)}`;
+        }
+        
+        const response = await fetch(url, {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRFToken': CSRF
+            }
+        });
+        const data = await response.json();
+        
+        if (data.success && data.suggestions) {
+            currentImeiSuggestions = data.suggestions.filter(suggestion => {
+                if (cartIdentifiers.includes(suggestion.imei_number)) {
+                    return false;
+                }
+                if (cartUnitIds.includes(suggestion.unit_id)) {
+                    return false;
+                }
+                if (suggestion.status && suggestion.status !== 'available') {
+                    return false;
+                }
+                if (suggestion.sold_date) {
+                    return false;
+                }
+                // ✅ Also verify the SKU matches (double-check)
+                if (productSku && suggestion.sku_code !== productSku) {
+                    return false;
+                }
+                return true;
+            });
+            
+            console.log(`IMEI suggestions for product ${productSku}: ${currentImeiSuggestions.length} available`);
+            renderImeiAutocomplete(query);
+        } else {
+            currentImeiSuggestions = [];
+            hideImeiAutocomplete();
+        }
+    } catch(e) {
+        console.error('Fetch IMEI suggestions error:', e);
+        currentImeiSuggestions = [];
+        hideImeiAutocomplete();
+    }
+}
+
+async function fetchSerialSuggestions(query) {
+    if (!query || query.length < 2) {
+        currentSerialSuggestions = [];
+        hideSerialAutocomplete();
+        return;
+    }
+    
+    const cartIdentifiers = cart
+        .filter(item => item.is_single && item.identifier)
+        .map(item => item.identifier);
+    
+    // ✅ Get the current product SKU from pendingProductData
+    const productSku = pendingProductData ? (pendingProductData.sku_code || pendingProductData.product_code) : '';
+    
+    try {
+        // ✅ Add product_sku parameter to the URL
+        let url = `/sales/api/serial-suggestions/?q=${encodeURIComponent(query)}`;
+        if (productSku) {
+            url += `&product_sku=${encodeURIComponent(productSku)}`;
+        }
+        
+        const response = await fetch(url, {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRFToken': CSRF
+            }
+        });
+        const data = await response.json();
+        
+        if (data.success && data.suggestions) {
+            currentSerialSuggestions = data.suggestions.filter(suggestion => {
+                if (cartIdentifiers.includes(suggestion.serial_number)) {
+                    return false;
+                }
+                if (suggestion.status && suggestion.status !== 'available') {
+                    return false;
+                }
+                // ✅ Verify the SKU matches
+                if (productSku && suggestion.sku_code !== productSku) {
+                    return false;
+                }
+                return true;
+            });
+            renderSerialAutocomplete(query);
+        } else {
+            currentSerialSuggestions = [];
+            hideSerialAutocomplete();
+        }
+    } catch(e) {
+        console.error('Fetch Serial suggestions error:', e);
+        currentSerialSuggestions = [];
+        hideSerialAutocomplete();
+    }
+}
+
+function renderImeiAutocomplete(query) {
+    const container = document.getElementById('imeiAutocomplete');
+    if (!container) return;
+    
+    if (!currentImeiSuggestions.length) {
+        container.classList.remove('show');
+        return;
+    }
+    
+    const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    
+    container.innerHTML = currentImeiSuggestions.map((suggestion, index) => {
+        const highlightedImei = suggestion.imei_number.replace(regex, '<span class="highlight">$1</span>');
+        return `
+            <div class="autocomplete-item" data-value="${suggestion.imei_number}" data-product="${suggestion.product_name}">
+                <div class="main-identifier">📱 ${highlightedImei}</div>
+                <div class="product-info">${escapeHtml(suggestion.product_name)} (${suggestion.sku_code})</div>
+            </div>
+        `;
+    }).join('');
+    
+    container.classList.add('show');
+    
+    // SIMPLE CLICK HANDLER - attach to container using event delegation
+    container.onclick = function(e) {
+        const item = e.target.closest('.autocomplete-item');
+        if (!item) return;
+        
+        const value = item.getAttribute('data-value');
+        console.log('🖱️ CLICKED IMEI:', value);
+        
+        if (value) {
+            const imeiInput = document.getElementById('imeiNumber');
+            if (imeiInput) {
+                imeiInput.value = value;
+                console.log('✅ Set IMEI input to:', imeiInput.value);
+                
+                // Clear error if any
+                const imeiError = document.getElementById('imeiError');
+                if (imeiError) imeiError.style.display = 'none';
+            }
+            hideImeiAutocomplete();
+            showToast(`Selected IMEI: ${value}`, 'success');
+            
+            // OPTIONAL: Automatically add to cart after selection (uncomment if desired)
+           setTimeout(() => confirmAddToCart(), 100);
+        }
+    };
+}
+
+function renderSerialAutocomplete(query) {
+    const container = document.getElementById('serialAutocomplete');
+    if (!container) return;
+    
+    if (!currentSerialSuggestions.length) {
+        container.classList.remove('show');
+        return;
+    }
+    
+    const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    
+    container.innerHTML = currentSerialSuggestions.map((suggestion, index) => {
+        const highlightedSerial = suggestion.serial_number.replace(regex, '<span class="highlight">$1</span>');
+        return `
+            <div class="autocomplete-item" data-value="${suggestion.serial_number}" data-product="${suggestion.product_name}">
+                <div class="main-identifier">🔢 ${highlightedSerial}</div>
+                <div class="product-info">${escapeHtml(suggestion.product_name)} (${suggestion.sku_code})</div>
+            </div>
+        `;
+    }).join('');
+    
+    container.classList.add('show');
+    
+    // SIMPLE CLICK HANDLER
+    container.onclick = function(e) {
+        const item = e.target.closest('.autocomplete-item');
+        if (!item) return;
+        
+        const value = item.getAttribute('data-value');
+        console.log('🖱️ CLICKED SERIAL:', value);
+        
+        if (value) {
+            const serialInput = document.getElementById('serialNumber');
+            if (serialInput) {
+                serialInput.value = value;
+                console.log('✅ Set Serial input to:', serialInput.value);
+                
+                const serialError = document.getElementById('serialError');
+                if (serialError) serialError.style.display = 'none';
+            }
+            hideSerialAutocomplete();
+            showToast(`Selected Serial: ${value}`, 'success');
+        }
+    };
+}
+
+// Hide IMEI autocomplete
+function hideImeiAutocomplete() {
+    const container = document.getElementById('imeiAutocomplete');
+    if (container) {
+        container.classList.remove('show');
+    }
+    selectedImeiIndex = -1;
+}
+
+// Hide Serial autocomplete
+function hideSerialAutocomplete() {
+    const container = document.getElementById('serialAutocomplete');
+    if (container) {
+        container.classList.remove('show');
+    }
+    selectedSerialIndex = -1;
+}
+
+// Handle keyboard navigation for IMEI
+function handleImeiKeydown(e) {
+    if (!currentImeiSuggestions.length) return;
+    
+    const items = document.querySelectorAll('#imeiAutocomplete .autocomplete-item');
+    
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        selectedImeiIndex = Math.min(selectedImeiIndex + 1, items.length - 1);
+        updateImeiSelection(items);
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        selectedImeiIndex = Math.max(selectedImeiIndex - 1, -1);
+        updateImeiSelection(items);
+    } else if (e.key === 'Enter') {
+        if (selectedImeiIndex >= 0 && items[selectedImeiIndex]) {
+            e.preventDefault();
+            const value = items[selectedImeiIndex].dataset.value;
+            const imeiInput = document.getElementById('imeiNumber');
+            if (imeiInput) {
+                imeiInput.value = value;
+                const imeiError = document.getElementById('imeiError');
+                if (imeiError) imeiError.style.display = 'none';
+            }
+            hideImeiAutocomplete();
+            showToast(`Selected IMEI: ${value}`, 'success');
+            // Optionally auto-add to cart after selection
+            // confirmAddToCart();
+        }
+    } else if (e.key === 'Escape') {
+        hideImeiAutocomplete();
+    }
+}
+
+// Handle keyboard navigation for Serial
+function handleSerialKeydown(e) {
+    if (!currentSerialSuggestions.length) return;
+    
+    const items = document.querySelectorAll('#serialAutocomplete .autocomplete-item');
+    
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        selectedSerialIndex = Math.min(selectedSerialIndex + 1, items.length - 1);
+        updateSerialSelection(items);
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        selectedSerialIndex = Math.max(selectedSerialIndex - 1, -1);
+        updateSerialSelection(items);
+    } else if (e.key === 'Enter') {
+        if (selectedSerialIndex >= 0 && items[selectedSerialIndex]) {
+            e.preventDefault();
+            const value = items[selectedSerialIndex].dataset.value;
+            const serialInput = document.getElementById('serialNumber');
+            if (serialInput) {
+                serialInput.value = value;
+                const serialError = document.getElementById('serialError');
+                if (serialError) serialError.style.display = 'none';
+            }
+            hideSerialAutocomplete();
+            showToast(`Selected Serial: ${value}`, 'success');
+            // Optionally auto-add to cart after selection
+            // confirmAddToCart();
+        }
+    } else if (e.key === 'Escape') {
+        hideSerialAutocomplete();
+    }
+}
+
+// Update IMEI selection highlight
+function updateImeiSelection(items) {
+    items.forEach((item, idx) => {
+        if (idx === selectedImeiIndex) {
+            item.classList.add('selected');
+            item.scrollIntoView({ block: 'nearest' });
+        } else {
+            item.classList.remove('selected');
+        }
+    });
+}
+
+// Update Serial selection highlight
+function updateSerialSelection(items) {
+    items.forEach((item, idx) => {
+        if (idx === selectedSerialIndex) {
+            item.classList.add('selected');
+            item.scrollIntoView({ block: 'nearest' });
+        } else {
+            item.classList.remove('selected');
+        }
+    });
+}
+
+
 
 // ============================================
 // UPDATE QTY  — must send price so backend can
@@ -1805,28 +2515,29 @@ async function updateQty(productCode, price, qty) {
     }
 }
 
-// ============================================
-// REMOVE — must send price so backend can
-// identify the correct cart row
-// ============================================
-async function removeItem(productCode, price) {
+// identify the correct cart row using unique_id
+async function removeItem(uniqueId) {
+    console.log('🗑️ Removing item with unique_id:', uniqueId);
+    
     try {
         const data = await safeFetch(URLS.remove_from_cart, {
-            method:  'POST',
+            method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
-            body:    JSON.stringify({ product_code: productCode, price: price })
+            body: JSON.stringify({ unique_id: uniqueId })
         });
+        
         if (data.success) {
             cart = data.cart || [];
             renderCart();
+            showToast('Item removed from cart', 'success');
         } else {
             showToast(data.error || 'Remove failed', 'error');
         }
     } catch(e) {
+        console.error('Remove error:', e);
         showToast('Remove failed: ' + e.message, 'error');
     }
 }
-
 
 // CLEAR CART
 async function clearCart() {
@@ -1866,16 +2577,13 @@ async function loadCart() {
     }
 }
 
-
-
-// RENDER CART
+// Updated renderCart function
 function renderCart() {
     const tbody = document.getElementById('cartTableBody');
     if (!cart.length) {
         tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:#999;">Cart is empty — scan or enter a product code</td></tr>';
         calculateTotals();
         
-        // ✅ RESET SPLIT PAYMENTS WHEN CART IS EMPTY
         if (isSplitPaymentEnabled) {
             splitPayments = [];
             renderSplitPaymentsList();
@@ -1884,26 +2592,25 @@ function renderCart() {
         }
         return;
     }
+    
     tbody.innerHTML = cart.map(item => `
         <tr>
             <td>
                 <strong>${escapeHtml(item.name)}</strong>
-                ${item.sku_value ? `<br><small style="color:#888;">SKU: ${escapeHtml(item.sku_value)}</small>` : ''}
-                <br><small style="color:#aaa;">${escapeHtml(item.product_code)}</small>
+                ${item.is_single && item.identifier ? `<br><small class="text-primary">${item.identifier_type?.toUpperCase()}: ${escapeHtml(item.identifier)}</small>` : ''}
+                <br><small class="text-muted">${escapeHtml(item.product_code || item.sku_code)}</small>
             </td>
             <td>KSH ${(item.price || 0).toLocaleString()}</td>
             <td>
                 ${item.is_single
-                    ? '<span style="color:#888;">×1</span>'
+                    ? '<span class="badge bg-info">×1</span>'
                     : `<input type="number" class="quantity-input" value="${item.quantity}" min="1"
-                         onchange="updateQty('${escapeHtml(item.product_code)}', ${item.price}, this.value)">`
+                         onchange="updateQty('${escapeHtml(item.sku_code)}', ${item.price}, this.value)">`
                 }
             </td>
             <td>KSH ${((item.price || 0) * item.quantity).toLocaleString()}</td>
             <td>
-                <button class="remove-btn"
-                        onclick="removeItem('${escapeHtml(item.product_code)}', ${item.price})"
-                        title="Remove">
+                <button class="remove-btn" onclick="removeItem('${escapeHtml(item.unique_id)}')" title="Remove">
                     <i class="fas fa-times"></i>
                 </button>
             </td>
@@ -1911,7 +2618,6 @@ function renderCart() {
     `).join('');
     calculateTotals();
 }
-
 
 //CALCULATE TOTALS
 function calculateTotals() {
@@ -1929,8 +2635,6 @@ function calculateTotals() {
     resetFinalizeButton();
 }
 
-
-
 //RESET FINALIZE BUTTON
 function resetFinalizeButton() {
     const btn = document.getElementById('finalizeSaleBtn');
@@ -1938,7 +2642,6 @@ function resetFinalizeButton() {
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-check-double"></i> Complete Sale';
 }
-
 
 //CHECK IF CAN FINALIZE SALE
 function checkCanFinalize() {
@@ -1973,17 +2676,6 @@ function checkCanFinalize() {
 
 
 
-
-
-
-
-
-
-
-
-
-
-
 // ============================================
 //  ✅✅✅✅ START SPLIT PAYMENT SYSTEM ✅✅
 // ============================================
@@ -2009,7 +2701,7 @@ function toggleSplitPayment() {
         // Initialize split payments
         splitPayments = [];
         renderSplitPaymentsList();
-        showToast('Split payment mode enabled. Add payment methods below.', 'info');
+        showToast('Start adding products to cart', 'info');
     } else {
         // Switch to single payment mode
         if (splitPayments.length > 0 && !confirm('Switch to single payment? This will clear split payments.')) {
@@ -2023,7 +2715,7 @@ function toggleSplitPayment() {
         if (singleFinalizeBtn) singleFinalizeBtn.style.display = 'block';
         if (singlePaymentMethods) singlePaymentMethods.style.display = 'block';
         hideAllSplitInputs();
-        showToast('Split payment mode disabled - using single payment', 'info');
+        showToast('Start adding products to cart', 'info');
     }
     
     updateSplitPaymentSummary();
@@ -2289,8 +2981,6 @@ async function sendSplitMpesaPayment() {
     }
 }
 
-
-
 // Poll M-Pesa payment status
 function pollSplitMpesaPayment(checkoutId, amount) {
     let attempts = 0;
@@ -2373,9 +3063,6 @@ function pollSplitMpesaPayment(checkoutId, amount) {
         }
     }, 3000); // Check every 3 seconds
 }
-
-
-
 
 // Render split payments list
 function renderSplitPaymentsList() {
@@ -2471,8 +3158,6 @@ function updateSplitPaymentSummary() {
     }
 }
 
-
-
 // Check if ready to finalize
 function checkSplitFinalizeReady() {
     const btn = document.getElementById('finalizeSaleBtn');
@@ -2498,9 +3183,6 @@ function checkSplitFinalizeReady() {
         }
     }
 }
-
-
-
 
 // Load customer for points split payment
 async function loadSplitPointsCustomer(phone) {
@@ -2609,7 +3291,6 @@ async function sendSplitPointsOtp() {
     }
 }
 
-
 // Verify OTP for points redemption - ensure customer ID is stored
 async function verifySplitPointsOtp() {
     const otp = ['splitOtp0', 'splitOtp1', 'splitOtp2', 'splitOtp3']
@@ -2707,8 +3388,6 @@ function selectSplitBank(element, bankName) {
     document.querySelectorAll('.bank-option').forEach(b => b.classList.remove('selected'));
     element.classList.add('selected');
 }
-
-
 
 // Finalize split payment sale
 // Modified finalizeSplitSale function
@@ -2888,8 +3567,6 @@ async function finalizeSplitSale() {
     }
 }
 
-
-
 // Reset for new sale without page reload
 async function resetForNewSale() {
     // Clear cart from backend
@@ -3026,38 +3703,6 @@ async function resetForNewSale() {
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // ============================================
 // PAYMENT METHOD SELECTION
 // ============================================
@@ -3105,33 +3750,12 @@ function selectPayment(element, method) {
     document.getElementById('changeAmount').textContent = 'KSH 0.00';
 }
 
-
-
-
 function selectBank(element, bankName) {
     document.querySelectorAll('.bank-option').forEach(b => b.classList.remove('selected'));
     element.classList.add('selected');
     selectedBankName = bankName;
     checkCanFinalize();
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 // ============================================
@@ -3237,11 +3861,6 @@ async function finalizeSale() {
     }
 }
 
-
-
-
-
-
 // ============================================
 // M-PESA FLOW
 // Step 1: sale_create (stock deducted)
@@ -3316,9 +3935,6 @@ async function sendMpesaSTK() {
     }
 }
 
-
-
-
 // Helper function to reset M-Pesa button after timeout
 function resetMpesaButtonAfterDelay(seconds) {
     const btn = document.getElementById('sendStkBtn');
@@ -3334,9 +3950,6 @@ function resetMpesaButtonAfterDelay(seconds) {
         }
     }, 1000);
 }
-
-
-
 
 // Store cart data temporarily for M-Pesa payment
 async function storeMpesaCartData(phone, checkoutId) {
@@ -3358,9 +3971,6 @@ async function storeMpesaCartData(phone, checkoutId) {
         })
     });
 }
-
-
-
 
 // Poll for payment confirmation, then create sale
 function startMpesaPolling() {
@@ -3408,8 +4018,6 @@ function startMpesaPolling() {
     }, 3000);
 }
 
-
-
 // Create sale ONLY after successful payment
 async function createSaleAfterPayment(confirmedAmount) {
     showStatus('<i class="fas fa-spinner fa-pulse"></i> Creating sale record...', 'info');
@@ -3453,8 +4061,6 @@ async function createSaleAfterPayment(confirmedAmount) {
     }
 }
 
-
-
 // After M-Pesa confirms payment, update the sale record with the confirmed amount and award points
 async function confirmMpesaPayment(confirmedAmount) {
     const pointsToAward = customerId ? Math.floor(confirmedAmount / 100) : 0;
@@ -3486,8 +4092,6 @@ async function confirmMpesaPayment(confirmedAmount) {
     }
 }
 
-
-
 // Reset M-Pesa polling state and UI elements
 function resetMpesaPollingUI() {
     if (mpesaInterval) clearInterval(mpesaInterval);
@@ -3499,8 +4103,6 @@ function resetMpesaPollingUI() {
     document.getElementById('mpesaFailedMsg').style.display    = 'none';
 }
 
-
-
 // Reset entire M-Pesa flow state (called when switching payment method or after completion)
 function resetMpesaUI() {
     resetMpesaPollingUI();
@@ -3509,7 +4111,6 @@ function resetMpesaUI() {
     document.getElementById('sendStkBtn').disabled  = false;
     document.getElementById('sendStkBtn').innerHTML = '<i class="fas fa-paper-plane"></i> Send STK Push';
 }
-
 
 async function clearMpesaCartData() {
     if (currentCheckoutId) {
@@ -3523,9 +4124,6 @@ async function clearMpesaCartData() {
         }
     }
 }
-
-
-
 
 
 // ============================================
@@ -3549,8 +4147,6 @@ function moveToNextPoints(input, idx) {
         }
     }
 }
-
-
 
 //ON CUSTOMER PHONE INPUT IN POINTS REDEMPTION SECTION
 function onPointsCustomerPhoneInput(phone) {
@@ -3577,8 +4173,6 @@ function onPointsCustomerPhoneInput(phone) {
     if (phone.replace(/\D/g, '').length < 9) return;
     pointsPhoneTimer = setTimeout(() => lookupPointsCustomer(phone), 500);
 }
-
-
 
 //LOOKUP CUSTOMER FOR POINTS REDEMPTION
 async function lookupPointsCustomer(phone) {
@@ -3614,8 +4208,6 @@ async function lookupPointsCustomer(phone) {
     }
 }
 
-
-
 //UPDATE CART TOTAL DISPLAY IN POINTS REDEMPTION SECTION
 function updatePointsCartTotal() {
     const totalEl = document.getElementById('pointsCartTotal');
@@ -3626,7 +4218,6 @@ function updatePointsCartTotal() {
         });
     }
 }
-
 
 // SEND OTP FOR POINTS REDEMPTION - ONLY CALLED WHEN REDEEMING POINTS
 async function sendPointsOtp() {
@@ -3845,8 +4436,6 @@ async function processPointsSale() {
     }
 }
 
-
-
 // UPDATE DISCOUNT PREVIEW BASED ON POINTS INPUT
 function updateDiscountPreview() {
     const points = parseInt(document.getElementById('pointsToRedeem').value) || 0;
@@ -3881,9 +4470,6 @@ function updateDiscountPreview() {
         }
     }
 }
-
-
-
 
 
 // ============================================
@@ -3960,6 +4546,21 @@ document.addEventListener('DOMContentLoaded', function () {
     
     // Initialize slideshow
     initSlideshow();
+
+    // Initialize IMEI/Serial modal
+    initImeiSerialModal();
+    setupIdentifierValidation();
+    setupModalEnterKey(); 
+    
+    // Close modal when clicking backdrop (fallback)
+    const modalElement = document.getElementById('imeiSerialModal');
+    if (modalElement) {
+        modalElement.addEventListener('click', function(e) {
+            if (e.target === modalElement) {
+                hideModal('imeiSerialModal');
+            }
+        });
+    }
 });
 
 // ============================================

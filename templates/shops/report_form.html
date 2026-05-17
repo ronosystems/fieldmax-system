@@ -1,24 +1,34 @@
-{% extends 'shops/base.html' %}
+<!-- templates/shops/report_form.html -->
+{% extends "shops/base.html" %}
+{% load static %}
 {% load humanize %}
 
 {% block title %}{{ title }} - Shop Reports{% endblock %}
 
 {% block extra_css %}
 <style>
-    .formset-row {
-        background: var(--card-bg);
-        border: #000000;
+    /* Base styles */
+    .form-section {
+        background: #48738b;
         border-radius: 10px;
-        padding: 15px;
-        margin-bottom: 15px;
-        position: relative;
-        transition: all 0.3s ease;
+        padding: 20px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.979);
     }
-    
-    .formset-row:hover {
-        box-shadow: 0 2px 8px rgb(0, 0, 0);
+    .form-section h5 {
+        color: #020e1a;
+        border-bottom: 2px solid #00080e;
+        padding-bottom: 10px;
+        margin-bottom: 20px;
+        font-size: 1.1rem;
     }
-    
+    .summary-card {
+        background: linear-gradient(135deg, #12555e 0%, #1a626b 100%);
+        border-radius: 15px;
+        padding: 20px;
+        color: rgb(251, 251, 252);
+        margin-bottom: 20px;
+    }
     .delete-row {
         background: #ef4444;
         color: white;
@@ -26,724 +36,817 @@
         border-radius: 5px;
         padding: 5px 10px;
         cursor: pointer;
-        transition: all 0.3s ease;
+        width: 100%;
     }
-    
     .delete-row:hover {
         background: #dc2626;
-        transform: scale(1.05);
     }
-    
-    .summary-card {
-        background: linear-gradient(135deg, #059669 0%, #047857 100%);
-        color: white;
-        border-radius: 15px;
-        padding: 20px;
-        margin-bottom: 20px;
-    }
-    
-    .summary-card h4 {
-        margin-bottom: 5px;
-        font-size: 1.8rem;
-    }
-    
-    .summary-card p {
-        margin-bottom: 0;
-        opacity: 0.9;
-    }
-    
-    .errorlist {
-        color: #ef4444;
-        list-style: none;
-        padding: 0;
-        margin: 5px 0 0 0;
-        font-size: 0.85rem;
-    }
-    
     .btn-add {
-        background: var(--primary-color);
+        background: #10b981;
         color: white;
-        border: #000000;
-        padding: 5px 15px;
+        border: none;
+        padding: 8px 16px;
         border-radius: 5px;
         cursor: pointer;
-        transition: all 0.3s ease;
+        font-size: 0.9rem;
+        white-space: nowrap;
+        border-color: #00080e;
+        box-shadow: #00080e 2px 2px 0px, #00080e 4px 4px 0px;
     }
-    
     .btn-add:hover {
-        background: #047857;
-        transform: translateY(-2px);
+        background: hsl(231, 98%, 50%);
     }
-    
-    .section-header {
-        background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
-        padding: 10px 15px;
+    .btn-add i {
+        margin-right: 5px;
+    }
+    .balance-group {
+        background: white;
         border-radius: 8px;
-        margin-bottom: 15px;
+        padding: 15px;
+        margin-top: 10px;
+        border: 1px solid #e2e8f0;
+    }
+    .shop-selector-card {
+        background: linear-gradient(135deg, #667eea 0%, #05daf7 100%);
+        border-radius: 15px;
+        padding: 20px;
+        text-align: center;
+        color: white;
+        margin-bottom: 20px;
+    }
+    .shop-selector-card select {
+        max-width: 100%;
+        margin: 0 auto;
+    }
+    .shop-badge {
+        display: inline-block;
+        padding: 5px 12px;
+        background: #037cf5;
+        border-radius: 20px;
+        font-size: 0.85rem;
+    }
+    .readonly-shop-field {
+        background-color: #e8f5e9;
+        font-weight: 600;
     }
     
-    .section-header h5 {
-        margin: 0;
-        color: #374151;
-    }
-    
-    .shop-info {
-        background: #e8f5e9;
-        padding: 10px 15px;
-        border-radius: 8px;
-        margin-bottom: 15px;
-    }
-    
-    .bank-select option:disabled {
-        color: #000000;
+    /* Disabled option styling */
+    select option:disabled {
+        color: #999;
         background-color: #f5f5f5;
     }
     
-    .input-group-text {
-        background: #059669;
+    /* Cash Card Specific */
+    .cash-section {
+        background: linear-gradient(135deg, #555453 0%, #353434 100%);
+        border-radius: 12px;
+        padding: 20px;
         color: white;
-        font-weight: bold;
+    }
+    .cash-section .form-label {
+        color: white;
+    }
+    .cash-input {
+        background: rgb(245, 244, 244);
+        border: 1px solid rgb(88, 82, 82);
+        color: rgb(0, 3, 19);
+        font-size: 1.2rem;
+        font-weight: 600;
+    }
+    .cash-input::placeholder {
+        color: rgba(255,255,255,0.6);
+    }
+    .cash-input:focus {
+        background: rgba(255,255,255,0.3);
+        border-color: white;
+        color: rgb(0, 14, 95);
     }
     
-    .readonly-field {
-        background-color: #e8f5e9;
-        font-weight: bold;
-        font-size: 1.1rem;
+    /* Mobile Responsive Styles */
+    @media (max-width: 768px) {
+        .container-fluid {
+            padding: 10px !important;
+        }
+        .card {
+            margin: 0;
+            border-radius: 10px;
+        }
+        .card-header {
+            padding: 12px 15px;
+        }
+        .card-header h4 {
+            font-size: 1.2rem;
+        }
+        .card-body {
+            padding: 15px;
+        }
+        .form-section {
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        .form-section h5 {
+            font-size: 1rem;
+            margin-bottom: 15px;
+        }
+        .form-label {
+            font-size: 0.85rem;
+            margin-bottom: 5px;
+        }
+        .form-control {
+            font-size: 0.9rem;
+            padding: 8px 10px;
+        }
+        .btn-add {
+            padding: 6px 12px;
+            font-size: 0.8rem;
+        }
+        .btn-lg {
+            padding: 8px 16px;
+            font-size: 0.9rem;
+        }
+        .balance-group {
+            padding: 12px;
+        }
+        .summary-card {
+            padding: 15px;
+        }
+        .summary-card h3 {
+            font-size: 1.3rem;
+        }
+        .summary-card h2 {
+            font-size: 1.5rem;
+        }
+        .d-flex.gap-2 {
+            gap: 8px !important;
+            flex-direction: column;
+        }
+        .d-flex.gap-2 .btn {
+            width: 100%;
+            margin-bottom: 5px;
+        }
+        .delete-row {
+            width: 100%;
+            padding: 8px;
+            margin-top: 5px;
+        }
+        .text-end {
+            text-align: center !important;
+        }
+        button, .btn, .delete-row, .btn-add {
+            min-height: 44px;
+        }
+    }
+    
+    @media (max-width: 480px) {
+        .form-section {
+            padding: 12px;
+        }
+        .balance-group {
+            padding: 10px;
+        }
+        .form-control {
+            font-size: 0.85rem;
+        }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-
-    <form method="post" id="reportForm">
-        {% csrf_token %}
-        
-        <!-- FIRST ROW: Shop Selection and Daily Transactions -->
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="mb-0"><i class="fas fa-store me-2"></i>REPORT</h5>
-            </div>
-            <div class="card-body">
-                <div class="row mb-3">
-                    <div class="col-md-6 mb-2">
-                        <label class="form-label fw-bold">Shop Branch *</label>
-                        {% if user_can_select_shop %}
-                            {{ form.shop }}
-                            <small class="text-muted d-block">Select shop branch</small>
-                        {% else %}
-                            <input type="text" class="form-control readonly-field" value="{{ assigned_shop.name }} - {{ assigned_shop.location }}" readonly disabled>
-                            <input type="hidden" name="shop" id="hidden_shop_id" value="{{ assigned_shop.id }}">
-                            <small class="text-muted d-block">Your Shop Branch</small>
-                        {% endif %}
-                        {% if form.shop.errors %}
-                            <div class="text-danger small">{{ form.shop.errors }}</div>
-                        {% endif %}
+<div class="container-fluid py-4">
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h4 class="mb-0">
+                <i class="fas fa-file-alt"></i> {{ title }}
+            </h4>
+        </div>
+        <div class="card-body">
+            
+            <!-- SHOP SELECTOR FOR SUPERUSERS (when no shop selected) -->
+            {% if user_can_select_shop and not assigned_shop %}
+            <div class="shop-selector-card">
+                <h3><i class="fas fa-store"></i> Select Shop Branch</h3>
+                <p class="mb-3">Please select a shop branch to create a daily report for.</p>
+                <div class="row justify-content-center">
+                    <div class="col-12 col-md-8">
+                        <select id="shop_selector" class="form-control form-control-lg">
+                            <option value="">-- Select Shop Branch --</option>
+                            {% for shop in all_shops %}
+                            <option value="{{ shop.id }}">{{ shop.name }} - {{ shop.location }}</option>
+                            {% endfor %}
+                        </select>
                     </div>
-                    <div class="col-md-6 mb-2">
-                        <label class="form-label fw-bold">Select Report Date *</label>
-                        {{ form.report_date }}
-                        <small class="text-muted d-block">Select Report Date</small>
-                        {% if form.report_date.errors %}
-                            <div class="text-danger small">{{ form.report_date.errors }}</div>
-                        {% endif %}
+                    <div class="col-12 col-md-2 mt-2 mt-md-0">
+                        <button type="button" class="btn btn-light btn-lg w-100" onclick="selectShop()">
+                            <i class="fas fa-arrow-right"></i> Continue
+                        </button>
                     </div>
                 </div>
+            </div>
+            
+            <script>
+            function selectShop() {
+                const shopId = document.getElementById('shop_selector').value;
+                if (shopId) {
+                    window.location.href = "{% url 'shops:create_report' %}?shop=" + shopId;
+                } else {
+                    alert('Please select a shop branch');
+                }
+            }
+            </script>
+            {% endif %}
+            
+            <!-- SHOP SELECTED BANNER -->
+            {% if user_can_select_shop and assigned_shop %}
+            <div class="alert alert-success mb-4">
+                <div class="d-flex flex-column flex-md-row justify-content-between align-items-center gap-2">
+                    <div class="text-center text-md-left">
+                        <i class="fas fa-check-circle fa-lg"></i> 
+                        <strong>Creating report for:</strong> 
+                        <span class="shop-badge">{{ assigned_shop.name }}</span>
+                        <span class="text-muted">({{ assigned_shop.location }})</span>
+                    </div>
+                    <a href="{% url 'shops:create_report' %}" class="btn btn-sm btn-outline-secondary">
+                        <i class="fas fa-undo"></i> Change Shop
+                    </a>
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- NO SHOP ASSIGNED WARNING -->
+            {% if not user_can_select_shop and not assigned_shop %}
+            <div class="alert alert-warning mb-4">
+                <i class="fas fa-exclamation-triangle"></i> 
+                <strong>No shop branch assigned!</strong> Please contact administrator to assign a shop to your account.
+            </div>
+            {% endif %}
+            
+            <!-- MAIN FORM -->
+            {% if assigned_shop %}
+            <form method="POST" id="reportForm">
+                {% csrf_token %}
                 
-                <div class="row">
-                    <div class="col-md-6 mb-2">
-                        <label class="form-label fw-bold">
-                            <i class="fas fa-chart-line me-1"></i> Previous Closing Balance
-                        </label>
-                        <div class="input-group">
-                            <span class="input-group-text">KES</span>
-                            <input type="text" id="previousClosingInput" class="form-control readonly-field" readonly 
-                                   value="{% if previous_net_balance %}KES {{ previous_net_balance|floatformat:2|intcomma }}{% else %}KES 0.00{% endif %}">
+                <!-- Report Information Section -->
+                <div class="form-section">
+                    <h5><i class="fas fa-info-circle"></i> Report Information</h5>
+                    <div class="row">
+                        <div class="col-12 col-md-6 mb-3">
+                            <label class="form-label fw-bold">Shop Branch *</label>
+                            {% if user_can_select_shop %}
+                                <input type="hidden" name="shop" value="{{ assigned_shop.id }}">
+                                <input type="text" class="form-control readonly-shop-field" value="{{ assigned_shop.name }} - {{ assigned_shop.location }}" readonly disabled>
+                                <small class="text-muted d-block text-success">
+                                    <i class="fas fa-check-circle"></i> Shop locked. Click "Change Shop" above to select different shop.
+                                </small>
+                            {% else %}
+                                <input type="text" class="form-control readonly-shop-field" value="{{ assigned_shop.name }} - {{ assigned_shop.location }}" readonly disabled>
+                                <input type="hidden" name="shop" value="{{ assigned_shop.id }}">
+                                <small class="text-muted d-block">Your assigned shop branch</small>
+                            {% endif %}
                         </div>
-                        <small class="text-muted d-block">Yesterday's Shop Closing Balance</small>
-                        <input type="hidden" id="previous_closing_balance" value="{{ previous_net_balance|default:0 }}">
+                        <div class="col-12 col-md-6 mb-3">
+                            <label class="form-label fw-bold">Report Date *</label>
+                            {{ form.report_date }}
+                            <input type="hidden" id="previous_closing_balance" value="{{ previous_net_balance|default:0 }}">
+                            <small class="text-muted d-block">Select the date for this report</small>
+                        </div>
                     </div>
-                    <div class="col-md-6 mb-2">
-                        <label class="form-label fw-bold">
-                            <i class="fas fa-exchange-alt me-1"></i> M-Pesa Transactions *
-                        </label>
-                        {{ form.shop_sales }}
-                        <small class="text-muted d-block">Transactions Done Today</small>
-                        {% if form.shop_sales.errors %}
-                            <div class="text-danger small">{{ form.shop_sales.errors }}</div>
-                        {% endif %}
+                    <div class="row">
+                        <div class="col-12 col-md-6 mb-3">
+                            <label class="form-label fw-bold">Previous Closing Balance</label>
+                            <div class="input-group">
+                                <span class="input-group-text">KES</span>
+                                <input type="text" id="previousClosingDisplay" class="form-control bg-light" readonly 
+                                       value="{% if previous_net_balance %}KES {{ previous_net_balance|floatformat:2|intcomma }}{% else %}KES 0.00{% endif %}">
+                            </div>
+                            <small class="text-muted">Yesterday's Shop Closing Balance (auto-loaded)</small>
+                        </div>
+                        <div class="col-12 col-md-6 mb-3">
+                            <label class="form-label fw-bold">Total M-Pesa Transactions *</label>
+                            {{ form.total_mpesa_transactions }}
+                            <small class="text-muted">Number of M-Pesa transactions done today</small>
+                        </div>
                     </div>
                 </div>
-            </div>
-        </div>
 
-        <!-- M-Pesa Closing Balances -->
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="mb-0"><i class="fas fa-mobile-alt me-2"></i>MPESA CLOSING BALANCES</h5>
-            </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Closing M-Pesa Float (KES)</label>
-                        {{ form.closing_mpesa_float }}
-                        <small class="text-muted">M-Pesa float balance at closing</small>
+                <!-- Cash Balance Section -->
+                <div class="form-section">
+                    <h5><i class="fas fa-money-bill-wave"></i> Cash Balance</h5>
+                    <div class="cash-section">
+                        <div class="row">
+                            <div class="col-12">
+                                <label class="form-label fw-bold">
+                                    <i class="fas fa-coins me-1"></i> Physical Cash Balance (KES)
+                                </label>
+                                <input type="number" 
+                                       name="total_cash" 
+                                       id="total_cash_input" 
+                                       class="form-control cash-input" 
+                                       step="0.01" 
+                                       value="{{ total_cash|default:0 }}"
+                                       placeholder="Enter total cash balance"
+                                       oninput="calculateTotals()">
+                                <small class="text-white-50 d-block mt-2">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Physical cash from M-Pesa cash-out operations
+                                </small>
+                            </div>
+                        </div>
                     </div>
-
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Closing Airtel Float (KES)</label>
-                        {{ form.closing_airtel_float }}
-                        <small class="text-muted">Airtel float balance at closing</small>
-                    </div>
-
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Closing M-Pesa Cash (KES)</label>
-                        {{ form.closing_mpesa_cash }}
-                        <small class="text-muted">M-Pesa cash balance at closing</small>
-                    </div> 
                 </div>
-            </div>
-        </div>
 
-        <!-- Bank Accounts Section -->
-        <div class="card mb-4">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0"><i class="fas fa-university me-2"></i>BANK CLOSING BALANCES</h5>
-                <button type="button" class="btn btn-sm btn-primary" id="addBankBtn">
-                    <i class="fas fa-plus me-1"></i> Add Bank Account
-                </button>
-            </div>
-            <div class="card-body">
-                <div id="bank-rows">
-                    {% if bank_closings %}
+                <!-- M-Pesa Accounts Section -->
+                <div class="form-section">
+                    <div class="d-flex flex-column flex-sm-row justify-content-between align-items-center mb-3 gap-2">
+                        <h5 class="mb-0"><i class="fas fa-mobile-alt"></i> M-Pesa Accounts for {{ assigned_shop.name }}</h5>
+                        <button type="button" class="btn-add" id="addMpesaBtn">
+                            <i class="fas fa-plus"></i> Add M-Pesa Account
+                        </button>
+                    </div>
+                    <div id="mpesa-rows">
+                        {% for report in mpesa_account_reports %}
+                        <div class="balance-group mpesa-row" data-index="{{ forloop.counter0 }}">
+                            <div class="row">
+                                <div class="col-12 col-md-8 mb-2">
+                                    <label class="form-label">Select M-Pesa Account</label>
+                                    <select name="mpesa_account_{{ forloop.counter0 }}" class="form-control mpesa-select">
+                                        <option value="">-- Select M-Pesa Account --</option>
+                                        {% for account in available_mpesa_accounts %}
+                                        <option value="{{ account.id }}" {% if report.mpesa_account.id == account.id %}selected{% endif %}>
+                                            {{ account.account_name }} - {{ account.account_number }} ({{ account.get_account_type_display }})
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-8 col-md-3 mb-2">
+                                    <label class="form-label">Closing Balance (KES)</label>
+                                    <input type="number" name="closing_balance_{{ forloop.counter0 }}" class="form-control mpesa-balance" step="0.01" value="{{ report.closing_balance|default:0 }}" placeholder="0.00">
+                                </div>
+                                <div class="col-4 col-md-1 mb-2">
+                                    <label class="form-label d-none d-md-block">&nbsp;</label>
+                                    <button type="button" class="delete-row" onclick="removeRow(this, 'mpesa')">
+                                        <i class="fas fa-trash"></i> Remove
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        {% empty %}
+                        <div id="no-mpesa-message" class="text-muted text-center py-3">
+                            <i class="fas fa-info-circle"></i> No M-Pesa accounts added. Click "Add M-Pesa Account" to add.
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% if not available_mpesa_accounts %}
+                    <div class="alert alert-warning mt-2">
+                        <i class="fas fa-exclamation-triangle"></i> No M-Pesa accounts found for this shop. 
+                        <a href="{% url 'shops:add_mpesa_account' %}">Click here to add M-Pesa accounts</a> first.
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Bank Accounts Section -->
+                <div class="form-section">
+                    <div class="d-flex flex-column flex-sm-row justify-content-between align-items-center mb-3 gap-2">
+                        <h5 class="mb-0"><i class="fas fa-university"></i> Bank Accounts for {{ assigned_shop.name }}</h5>
+                        <button type="button" class="btn-add" id="addBankBtn">
+                            <i class="fas fa-plus"></i> Add Bank Account
+                        </button>
+                    </div>
+                    <div id="bank-rows">
                         {% for closing in bank_closings %}
-                        <div class="row mb-2 bank-row" data-bank-id="{{ closing.bank_account.id }}" data-balance="{{ closing.closing_balance }}">
-                            <div class="col-md-5">
-                                <select name="bank_account_{{ forloop.counter0 }}" class="form-control bank-select">
-                                    <option value="">-- Select Bank Account --</option>
-                                </select>
-                            </div>
-                            <div class="col-md-5">
-                                <input type="number" name="bank_closing_balance_{{ forloop.counter0 }}" class="form-control bank-balance" placeholder="Closing Balance" step="0.01" value="{{ closing.closing_balance }}">
-                            </div>
-                            <div class="col-md-2">
-                                <button type="button" class="btn btn-danger btn-sm delete-row" onclick="removeBankRow(this)">
-                                    <i class="fas fa-trash me-1"></i>Remove
-                                </button>
+                        <div class="balance-group bank-row" data-index="{{ forloop.counter0 }}">
+                            <div class="row">
+                                <div class="col-12 col-md-8 mb-2">
+                                    <label class="form-label">Select Bank Account</label>
+                                    <select name="bank_account_{{ forloop.counter0 }}" class="form-control bank-select">
+                                        <option value="">-- Select Bank Account --</option>
+                                        {% for bank in available_banks %}
+                                        <option value="{{ bank.id }}" {% if closing.bank_account.id == bank.id %}selected{% endif %}>
+                                            {{ bank.bank_name }} - {{ bank.account_name }} ({{ bank.account_number }})
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-8 col-md-3 mb-2">
+                                    <label class="form-label">Closing Balance (KES)</label>
+                                    <input type="number" name="bank_closing_balance_{{ forloop.counter0 }}" class="form-control bank-balance" step="0.01" value="{{ closing.closing_balance }}" placeholder="0.00">
+                                </div>
+                                <div class="col-4 col-md-1 mb-2">
+                                    <label class="form-label d-none d-md-block">&nbsp;</label>
+                                    <button type="button" class="delete-row" onclick="removeRow(this, 'bank')">
+                                        <i class="fas fa-trash"></i> Remove
+                                    </button>
+                                </div>
                             </div>
                         </div>
+                        {% empty %}
+                        <div id="no-bank-message" class="text-muted text-center py-3">
+                            <i class="fas fa-info-circle"></i> No Bank accounts added. Click "Add Bank Account" to add.
+                        </div>
                         {% endfor %}
+                    </div>
+                    {% if not available_banks %}
+                    <div class="alert alert-warning mt-2">
+                        <i class="fas fa-exclamation-triangle"></i> No Bank accounts found for this shop. 
+                        <a href="{% url 'shops:add_bank_account' %}">Click here to add Bank accounts</a> first.
+                    </div>
                     {% endif %}
                 </div>
-            </div>
-        </div>
 
-        <!-- Expenses Section -->
-        <div class="card mb-4">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0"><i class="fas fa-receipt me-2"></i>EXPENSES</h5>
-                <button type="button" class="btn btn-sm btn-primary" id="addExpenseBtn">
-                    <i class="fas fa-plus me-1"></i> Add Expense
-                </button>
-            </div>
-            <div class="card-body">
-                <div id="expense-rows">
-                    {% if expenses %}
+                <!-- Expenses Section -->
+                <div class="form-section">
+                    <div class="d-flex flex-column flex-sm-row justify-content-between align-items-center mb-3 gap-2">
+                        <h5 class="mb-0"><i class="fas fa-receipt"></i> Expenses</h5>
+                        <button type="button" class="btn-add" id="addExpenseBtn">
+                            <i class="fas fa-plus"></i> Add Expense
+                        </button>
+                    </div>
+                    <div id="expense-rows">
                         {% for expense in expenses %}
-                        <div class="row mb-2 expense-row" data-expense-id="{{ expense.id }}">
-                            <div class="col-md-5">
-                                <input type="text" name="expense_description_{{ forloop.counter0 }}" class="form-control" placeholder="Description of expense" value="{{ expense.description }}">
-                            </div>
-                            <div class="col-md-5">
-                                <input type="number" name="expense_amount_{{ forloop.counter0 }}" class="form-control expense-amount" placeholder="Amount" step="0.01" value="{{ expense.amount }}">
-                            </div>
-                            <div class="col-md-2">
-                                <button type="button" class="btn btn-danger btn-sm delete-row" onclick="removeExpenseRow(this)">
-                                    <i class="fas fa-trash me-1"></i>Remove
-                                </button>
+                        <div class="balance-group expense-row" data-index="{{ forloop.counter0 }}">
+                            <div class="row">
+                                <div class="col-12 col-md-4 mb-2">
+                                    <label class="form-label">Expense Type</label>
+                                    <input type="text" name="expense_type_{{ forloop.counter0 }}" class="form-control" placeholder="e.g., Rent, Electricity" value="{{ expense.expense_category }}">
+                                </div>
+                                <div class="col-12 col-md-4 mb-2">
+                                    <label class="form-label">Description</label>
+                                    <input type="text" name="expense_description_{{ forloop.counter0 }}" class="form-control" placeholder="Description" value="{{ expense.description }}">
+                                </div>
+                                <div class="col-8 col-md-3 mb-2">
+                                    <label class="form-label">Amount (KES)</label>
+                                    <input type="number" name="expense_amount_{{ forloop.counter0 }}" class="form-control expense-amount" step="0.01" value="{{ expense.amount }}" placeholder="0.00">
+                                </div>
+                                <div class="col-4 col-md-1 mb-2">
+                                    <label class="form-label d-none d-md-block">&nbsp;</label>
+                                    <button type="button" class="delete-row" onclick="removeRow(this, 'expense')">
+                                        <i class="fas fa-trash"></i> Remove
+                                    </button>
+                                </div>
                             </div>
                         </div>
+                        {% empty %}
+                        <div id="no-expense-message" class="text-muted text-center py-3">
+                            <i class="fas fa-info-circle"></i> No expenses added. Click "Add Expense" to add.
+                        </div>
                         {% endfor %}
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-
-        <!-- Notes -->
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="mb-0"><i class="fas fa-sticky-note me-2"></i>NOTES</h5>
-            </div>
-            <div class="card-body">
-                {{ form.notes }}
-                <small class="text-muted">Additional information about the report</small>
-            </div>
-        </div>
-
-        <!-- SUMMARY SECTION - WITH NET DEFICIT CALCULATION -->
-        <div class="summary-card">
-            <div class="row">
-                <div class="col-md-4 text-center">
-                    <p><i class="fas fa-chart-line me-2"></i>PREVIOUS CLOSING (NET POSITION)</p>
-                    <h4 id="previousClosingDisplay">
-                        {% if previous_net_balance %}
-                            KES {{ previous_net_balance|floatformat:2|intcomma }}
-                        {% else %}
-                            KES 0.00
-                        {% endif %}
-                    </h4>
-                    <small>Yesterday's Shop Closing Balance</small>
-                </div>
-                <div class="col-md-4 text-center">
-                    <p><i class="fas fa-chart-line me-2"></i>NET POSITION (TODAY CLOSING)</p>
-                    <h4 id="netPositionDisplay" style="color: #10b981;">KES 0.00</h4>
-                    <small>= Today's Total (M-PESA + Banks)</small>
-                </div>             
-                <div class="col-md-4 text-center">
-                    <p><i class="fas fa-receipt me-2"></i>TODAY ALL EXPENSES</p>
-                    <h4 id="totalExpensesDisplay">KES 0.00</h4>
-                    <small>Total Expenses Today</small>
-                </div>
-            </div>
-            <div class="row mt-4">
-                <div class="col-md-12 text-center">
-                    <div class="bg-dark p-3 rounded" style="background: rgba(0,0,0,0.2) !important;">
-                        <p><i class="fas fa-exclamation-triangle me-2"></i><strong>NET DEFICIT / SURPLUS</strong></p>
-                        <h2 id="netDeficitDisplay" style="font-size: 2.5rem; font-weight: bold;">KES 0.00</h2>
-                        <small>= Previous Closing (Net Position) - Today's Net Position</small>
                     </div>
                 </div>
-            </div>
-        </div>
 
-        <!-- Submit -->
-        <div class="text-end mb-4">
-            <a href="{% url 'shops:dashboard' %}" class="btn btn-secondary btn-lg me-2">
-                <i class="fas fa-times me-2"></i>Cancel
-            </a>
-            <button type="submit" class="btn btn-primary btn-lg">
-                <i class="fas fa-save me-2"></i>Save Report
-            </button>
+                <!-- Notes -->
+                <div class="form-section">
+                    <h5><i class="fas fa-sticky-note"></i> Notes</h5>
+                    {{ form.notes }}
+                    <small class="text-muted">Any additional notes about this report</small>
+                </div>
+
+                <!-- Summary Section - ONLY Today's Closing and Net Deficit -->
+                <div class="summary-card">
+                    <div class="row">
+                        <div class="col-12 col-md-6 text-center mb-3 mb-md-0">
+                            <p><i class="fas fa-chart-line"></i> TODAY'S CLOSING</p>
+                            <h3 id="todayClosingDisplay" style="color: #10b981; font-size: 2rem;">KES 0.00</h3>
+                            <small>= M-Pesa + Cash + Bank</small>
+                        </div>
+                        <div class="col-12 col-md-6 text-center">
+                            <div class="bg-dark p-3 rounded">
+                                <p><strong>NET DEFICIT / SURPLUS</strong></p>
+                                <h2 id="netDeficitDisplay" style="font-size: 2rem;">KES 0.00</h2>
+                                <small>= Previous Closing - Today's Closing</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Form Actions -->
+                <div class="d-flex flex-column flex-sm-row justify-content-end gap-2 mt-4">
+                    <a href="{% url 'shops:reports_list' %}" class="btn btn-secondary btn-lg">
+                        <i class="fas fa-times"></i> Cancel
+                    </a>
+                    <button type="submit" class="btn btn-primary btn-lg">
+                        <i class="fas fa-save"></i> Save Report
+                    </button>
+                </div>
+            </form>
+            {% endif %}
         </div>
-    </form>
+    </div>
 </div>
 
 <script>
+// Global variables
+let mpesaCount = {{ mpesa_account_reports|length|default:0 }};
 let bankCount = {{ bank_closings|length|default:0 }};
 let expenseCount = {{ expenses|length|default:0 }};
-let banksData = {};
-let selectedBankIds = new Set();
 let previousClosing = parseFloat(document.getElementById('previous_closing_balance')?.value) || 0;
-
-// Function to get selected shop ID (works for both select and hidden input)
-function getSelectedShopId() {
-    const shopSelect = document.getElementById('id_shop');
-    if (shopSelect && shopSelect.value) {
-        return shopSelect.value;
-    }
-    const hiddenShop = document.getElementById('hidden_shop_id');
-    if (hiddenShop && hiddenShop.value) {
-        const value = hiddenShop.value;
-        if (!isNaN(parseInt(value))) {
-            return parseInt(value);
-        }
-        return value.split(' ')[0];
-    }
-    return null;
-}
 
 // Update previous closing display
 function updatePreviousClosingDisplay(value) {
-    const displayInput = document.getElementById('previousClosingInput');
-    const displayH4 = document.getElementById('previousClosingDisplay');
-    if (displayInput) {
-        displayInput.value = 'KES ' + value.toLocaleString('en-KE', {minimumFractionDigits: 2});
-    }
-    if (displayH4) {
-        displayH4.innerText = 'KES ' + value.toLocaleString('en-KE', {minimumFractionDigits: 2});
-    }
-    document.getElementById('previous_closing_balance').value = value;
-    previousClosing = value;
-    calculateTotals(); // Recalculate when previous closing changes
+    const prevInput = document.getElementById('previousClosingDisplay');
+    if (prevInput) prevInput.value = 'KES ' + value.toLocaleString('en-KE', {minimumFractionDigits: 2});
 }
 
 // Fetch previous closing balance
 function fetchPreviousClosingBalance(shopId, reportDate) {
-    console.log('Fetching previous closing for shop:', shopId, 'date:', reportDate);
     if (shopId && reportDate) {
         fetch(`/shops/api/previous-closing/?shop_id=${shopId}&report_date=${reportDate}`)
             .then(response => response.json())
             .then(data => {
-                console.log('Response:', data);
                 if (data.success) {
                     previousClosing = data.closing_balance;
                     updatePreviousClosingDisplay(previousClosing);
-                } else {
-                    console.error('Error in response:', data.error);
-                    previousClosing = 0;
-                    updatePreviousClosingDisplay(0);
+                    calculateTotals();
                 }
             })
-            .catch(error => {
-                console.error('Error fetching previous closing:', error);
-                previousClosing = 0;
-                updatePreviousClosingDisplay(0);
-            });
+            .catch(error => console.error('Error:', error));
     }
 }
 
-// Function to update selected bank IDs from current form
-function updateSelectedBankIds() {
-    selectedBankIds.clear();
+// Update available options in M-Pesa selects (prevent duplicates)
+function updateAvailableOptions() {
+    const existingAccounts = new Set();
+    
+    document.querySelectorAll('.mpesa-select').forEach(select => {
+        if (select.value && select.value !== '') {
+            existingAccounts.add(select.value);
+        }
+    });
+    
+    document.querySelectorAll('.mpesa-select').forEach(select => {
+        const currentValue = select.value;
+        select.querySelectorAll('option').forEach(option => {
+            if (option.value && option.value !== '' && option.value !== currentValue && existingAccounts.has(option.value)) {
+                option.disabled = true;
+                option.style.color = '#999';
+                option.style.backgroundColor = '#f5f5f5';
+            } else {
+                option.disabled = false;
+                option.style.color = '';
+                option.style.backgroundColor = '';
+            }
+        });
+    });
+}
+
+// Update bank options to prevent duplicates
+function updateBankOptions() {
+    const existingBanks = new Set();
+    
     document.querySelectorAll('.bank-select').forEach(select => {
         if (select.value && select.value !== '') {
-            selectedBankIds.add(select.value);
+            existingBanks.add(select.value);
         }
     });
-}
-
-// Function to get available banks (exclude already selected ones)
-function getAvailableBanks(shopId, currentSelectElement = null) {
-    if (!shopId || !banksData[shopId]) return [];
-    const currentValue = currentSelectElement ? currentSelectElement.value : null;
-    return banksData[shopId].filter(bank => {
-        const bankId = bank.id.toString();
-        return !selectedBankIds.has(bankId) || bankId === currentValue;
-    });
-}
-
-// Function to update all bank selects with available options
-function updateAllBankSelects() {
-    const shopId = getSelectedShopId();
-    if (!shopId || !banksData[shopId]) return;
-    updateSelectedBankIds();
+    
     document.querySelectorAll('.bank-select').forEach(select => {
         const currentValue = select.value;
-        const availableBanks = getAvailableBanks(shopId, select);
-        const currentSelected = select.value;
-        select.innerHTML = '<option value="">-- Select Bank Account --</option>';
-        availableBanks.forEach(bank => {
-            const option = document.createElement('option');
-            option.value = bank.id;
-            option.textContent = `${bank.name} - ${bank.account_name} (${bank.account_number})`;
-            if (currentSelected === bank.id.toString()) {
-                option.selected = true;
+        select.querySelectorAll('option').forEach(option => {
+            if (option.value && option.value !== '' && option.value !== currentValue && existingBanks.has(option.value)) {
+                option.disabled = true;
+                option.style.color = '#999';
+                option.style.backgroundColor = '#f5f5f5';
+            } else {
+                option.disabled = false;
+                option.style.color = '';
+                option.style.backgroundColor = '';
             }
-            select.appendChild(option);
         });
-        if (currentSelected && !availableBanks.find(b => b.id.toString() === currentSelected)) {
-            const bank = banksData[shopId].find(b => b.id.toString() === currentSelected);
-            if (bank) {
-                const option = document.createElement('option');
-                option.value = bank.id;
-                option.textContent = `${bank.name} - ${bank.account_name} (${bank.account_number})`;
-                option.selected = true;
-                select.appendChild(option);
-            }
-        }
     });
 }
 
-// Load banks for a specific shop
-function loadBanksForShop(shopId) {
-    if (shopId) {
-        fetch(`/shops/api/shop/${shopId}/banks/`)
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    banksData[shopId] = data.banks;
-                    updateAllBankSelects();
-                }
-            })
-            .catch(error => console.error('Error loading banks:', error));
-    }
+// Initialize existing selections for edit mode
+function initializeExistingSelections() {
+    updateAvailableOptions();
+    updateBankOptions();
 }
 
-// For superusers - listen to shop select change
-const shopSelect = document.getElementById('id_shop');
-if (shopSelect) {
-    shopSelect.addEventListener('change', function() {
-        const shopId = this.value;
-        const reportDate = document.getElementById('id_report_date')?.value;
-        if (shopId) {
-            loadBanksForShop(shopId);
-            if (reportDate) {
-                fetchPreviousClosingBalance(shopId, reportDate);
-            }
+// Add M-Pesa Account Row
+const addMpesaBtn = document.getElementById('addMpesaBtn');
+if (addMpesaBtn) {
+    addMpesaBtn.addEventListener('click', function() {
+        const container = document.getElementById('mpesa-rows');
+        const noMsg = document.getElementById('no-mpesa-message');
+        const rowId = mpesaCount++;
+        
+        const selectedAccounts = new Set();
+        document.querySelectorAll('.mpesa-select').forEach(select => {
+            if (select.value) selectedAccounts.add(select.value);
+        });
+        
+        let options = '<option value="">-- Select M-Pesa Account --</option>';
+        {% for account in available_mpesa_accounts %}
+        if (!selectedAccounts.has('{{ account.id }}')) {
+            options += `<option value="{{ account.id }}">{{ account.account_name }} - {{ account.account_number }} ({{ account.get_account_type_display }})</option>`;
         }
-    });
-}
-
-// For non-superusers - load banks on page load AND fetch previous closing
-const hiddenShopId = getSelectedShopId();
-if (hiddenShopId && !shopSelect) {
-    setTimeout(() => {
-        loadBanksForShop(hiddenShopId);
-        const initialDate = document.getElementById('id_report_date')?.value;
-        if (initialDate) {
-            fetchPreviousClosingBalance(hiddenShopId, initialDate);
-        }
-    }, 100);
-}
-
-// Listen to date changes
-const reportDateInput = document.getElementById('id_report_date');
-if (reportDateInput) {
-    reportDateInput.addEventListener('change', function() {
-        const shopId = getSelectedShopId();
-        if (shopId && this.value) {
-            console.log('Date changed, fetching previous closing for shop:', shopId, 'date:', this.value);
-            fetchPreviousClosingBalance(shopId, this.value);
-        }
-    });
-}
-
-// Handle bank selection change
-function handleBankSelectionChange(selectElement) {
-    updateAllBankSelects();
-    calculateTotals();
-}
-
-// Add bank row
-document.getElementById('addBankBtn')?.addEventListener('click', function() {
-    const shopId = getSelectedShopId();
-    const container = document.getElementById('bank-rows');
-    if (!shopId) {
-        alert('Please select a shop first');
-        return;
-    }
-    if (!banksData[shopId]) {
-        alert('Loading bank accounts. Please wait...');
-        return;
-    }
-    updateSelectedBankIds();
-    const availableBanks = banksData[shopId].filter(bank => !selectedBankIds.has(bank.id.toString()));
-    if (availableBanks.length === 0) {
-        alert('All bank accounts have been added. No more banks available for this report.');
-        return;
-    }
-    const rowId = bankCount++;
-    let bankOptions = '<option value="">-- Select Bank Account --</option>';
-    availableBanks.forEach(bank => {
-        bankOptions += `<option value="${bank.id}">${bank.name} - ${bank.account_name} (${bank.account_number})</option>`;
-    });
-    const html = `
-        <div class="row mb-2 bank-row" id="bank-row-${rowId}">
-            <div class="col-md-5">
-                <select name="bank_account_${rowId}" class="form-control bank-select" onchange="handleBankSelectionChange(this)">
-                    ${bankOptions}
-                </select>
+        {% endfor %}
+        
+        const html = `
+            <div class="balance-group mpesa-row" data-index="${rowId}">
+                <div class="row">
+                    <div class="col-12 col-md-8 mb-2">
+                        <label class="form-label">Select M-Pesa Account</label>
+                        <select name="mpesa_account_${rowId}" class="form-control mpesa-select" onchange="updateAvailableOptions()">
+                            ${options}
+                        </select>
+                    </div>
+                    <div class="col-8 col-md-3 mb-2">
+                        <label class="form-label">Closing Balance (KES)</label>
+                        <input type="number" name="closing_balance_${rowId}" class="form-control mpesa-balance" step="0.01" value="0" oninput="calculateTotals()">
+                    </div>
+                    <div class="col-4 col-md-1 mb-2">
+                        <label class="form-label d-none d-md-block">&nbsp;</label>
+                        <button type="button" class="delete-row" onclick="removeRow(this, 'mpesa')">
+                            <i class="fas fa-trash"></i> Remove
+                        </button>
+                    </div>
+                </div>
             </div>
-            <div class="col-md-5">
-                <input type="number" name="bank_closing_balance_${rowId}" class="form-control bank-balance" placeholder="Closing Balance" step="0.01" oninput="calculateTotals()">
-            </div>
-            <div class="col-md-2">
-                <button type="button" class="btn btn-danger btn-sm delete-row" onclick="removeBankRow(this)">
-                    <i class="fas fa-trash me-1"></i>Remove
-                </button>
-            </div>
-        </div>
-    `;
-    container.insertAdjacentHTML('beforeend', html);
-    updateAllBankSelects();
-});
+        `;
+        container.insertAdjacentHTML('beforeend', html);
+        if (noMsg) noMsg.style.display = 'none';
+        updateAvailableOptions();
+    });
+}
 
-// Remove bank row
-function removeBankRow(button) {
-    const row = button.closest('.bank-row');
-    const select = row.querySelector('.bank-select');
-    if (select && select.value) {
-        selectedBankIds.delete(select.value);
-    }
+// Add Bank Account Row
+const addBankBtn = document.getElementById('addBankBtn');
+if (addBankBtn) {
+    addBankBtn.addEventListener('click', function() {
+        const container = document.getElementById('bank-rows');
+        const noMsg = document.getElementById('no-bank-message');
+        const rowId = bankCount++;
+        
+        const selectedBanks = new Set();
+        document.querySelectorAll('.bank-select').forEach(select => {
+            if (select.value) selectedBanks.add(select.value);
+        });
+        
+        let options = '<option value="">-- Select Bank Account --</option>';
+        {% for bank in available_banks %}
+        if (!selectedBanks.has('{{ bank.id }}')) {
+            options += `<option value="{{ bank.id }}">{{ bank.bank_name }} - {{ bank.account_name }} ({{ bank.account_number }})</option>`;
+        }
+        {% endfor %}
+        
+        const html = `
+            <div class="balance-group bank-row" data-index="${rowId}">
+                <div class="row">
+                    <div class="col-12 col-md-8 mb-2">
+                        <label class="form-label">Select Bank Account</label>
+                        <select name="bank_account_${rowId}" class="form-control bank-select" onchange="updateBankOptions()">
+                            ${options}
+                        </select>
+                    </div>
+                    <div class="col-8 col-md-3 mb-2">
+                        <label class="form-label">Closing Balance (KES)</label>
+                        <input type="number" name="bank_closing_balance_${rowId}" class="form-control bank-balance" step="0.01" value="0" oninput="calculateTotals()">
+                    </div>
+                    <div class="col-4 col-md-1 mb-2">
+                        <label class="form-label d-none d-md-block">&nbsp;</label>
+                        <button type="button" class="delete-row" onclick="removeRow(this, 'bank')">
+                            <i class="fas fa-trash"></i> Remove
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        container.insertAdjacentHTML('beforeend', html);
+        if (noMsg) noMsg.style.display = 'none';
+        updateBankOptions();
+    });
+}
+
+// Add Expense Row
+const addExpenseBtn = document.getElementById('addExpenseBtn');
+if (addExpenseBtn) {
+    addExpenseBtn.addEventListener('click', function() {
+        const container = document.getElementById('expense-rows');
+        const noMsg = document.getElementById('no-expense-message');
+        const rowId = expenseCount++;
+        
+        const html = `
+            <div class="balance-group expense-row" data-index="${rowId}">
+                <div class="row">
+                    <div class="col-12 col-md-4 mb-2">
+                        <label class="form-label">Expense Type</label>
+                        <input type="text" name="expense_type_${rowId}" class="form-control" placeholder="e.g., Rent, Electricity">
+                    </div>
+                    <div class="col-12 col-md-4 mb-2">
+                        <label class="form-label">Description</label>
+                        <input type="text" name="expense_description_${rowId}" class="form-control" placeholder="Description">
+                    </div>
+                    <div class="col-8 col-md-3 mb-2">
+                        <label class="form-label">Amount (KES)</label>
+                        <input type="number" name="expense_amount_${rowId}" class="form-control expense-amount" step="0.01" value="0" oninput="calculateTotals()">
+                    </div>
+                    <div class="col-4 col-md-1 mb-2">
+                        <label class="form-label d-none d-md-block">&nbsp;</label>
+                        <button type="button" class="delete-row" onclick="removeRow(this, 'expense')">
+                            <i class="fas fa-trash"></i> Remove
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        container.insertAdjacentHTML('beforeend', html);
+        if (noMsg) noMsg.style.display = 'none';
+    });
+}
+
+// Remove row function
+function removeRow(button, type) {
+    const row = button.closest(`.${type}-row`);
     row.remove();
-    updateAllBankSelects();
     calculateTotals();
+    if (type === 'mpesa') {
+        updateAvailableOptions();
+    }
+    if (type === 'bank') {
+        updateBankOptions();
+    }
+    
+    const container = document.getElementById(`${type}-rows`);
+    if (container && container.children.length === 0) {
+        const msgDiv = document.getElementById(`no-${type}-message`);
+        if (msgDiv) msgDiv.style.display = 'block';
+    }
 }
 
-// Add expense row
-document.getElementById('addExpenseBtn')?.addEventListener('click', function() {
-    const container = document.getElementById('expense-rows');
-    const rowId = expenseCount++;
-    const html = `
-        <div class="row mb-2 expense-row" id="expense-row-${rowId}">
-            <div class="col-md-5">
-                <input type="text" name="expense_description_${rowId}" class="form-control" placeholder="Description of expense">
-            </div>
-            <div class="col-md-5">
-                <input type="number" name="expense_amount_${rowId}" class="form-control expense-amount" placeholder="Amount" step="0.01" oninput="calculateTotals()">
-            </div>
-            <div class="col-md-2">
-                <button type="button" class="btn btn-danger btn-sm delete-row" onclick="removeExpenseRow(this)">
-                    <i class="fas fa-trash me-1"></i>Remove
-                </button>
-            </div>
-        </div>
-    `;
-    container.insertAdjacentHTML('beforeend', html);
-});
-
-// Remove expense row
-function removeExpenseRow(button) {
-    button.closest('.expense-row').remove();
-    calculateTotals();
-}
-
-// ============================================
-// CALCULATIONS WITH NET DEFICIT
-// Net Position = Today's Total (M-PESA Float + M-PESA Cash + All Banks)
-// Net Deficit = Previous Closing - Today's Net Position
-// ============================================
-
+// Calculate totals - Only Today's Closing and Net Deficit
 function calculateTotals() {
-    // Get M-PESA values
-    let mpesaFloat = parseFloat(document.getElementById('id_closing_mpesa_float')?.value) || 0;
-    let mpesaCash = parseFloat(document.getElementById('id_closing_mpesa_cash')?.value) || 0;
-    let airtelFloat = parseFloat(document.getElementById('id_closing_airtel_float')?.value) || 0;  // Make sure this is included
+    let mpesaTotal = 0;
+    document.querySelectorAll('.mpesa-balance').forEach(input => {
+        mpesaTotal += parseFloat(input.value) || 0;
+    });
     
-    // Calculate TOTAL Mobile Money (M-Pesa Float + M-Pesa Cash + Airtel Float)
-    let totalMobileMoney = mpesaFloat + mpesaCash + airtelFloat;
+    let cashTotal = parseFloat(document.getElementById('total_cash_input')?.value) || 0;
     
-    // Get Bank totals
     let bankTotal = 0;
     document.querySelectorAll('.bank-balance').forEach(input => {
-        let value = parseFloat(input.value) || 0;
-        bankTotal += value;
+        bankTotal += parseFloat(input.value) || 0;
     });
     
-    // TODAY'S NET POSITION = Mobile Money Total + Bank Total
-    let todayNetPosition = totalMobileMoney + bankTotal;
+    let todayClosing = mpesaTotal + cashTotal + bankTotal;
+    let netDeficit = previousClosing - todayClosing;
     
-    // Get Expenses
-    let totalExpenses = 0;
-    document.querySelectorAll('.expense-amount').forEach(input => {
-        let value = parseFloat(input.value) || 0;
-        totalExpenses += value;
-    });
+    // Update displays
+    document.getElementById('todayClosingDisplay').innerHTML = 'KES ' + todayClosing.toLocaleString('en-KE', {minimumFractionDigits: 2});
     
-    // Get Previous Closing from hidden field
-    let previousClosingValue = parseFloat(document.getElementById('previous_closing_balance')?.value) || 0;
-    
-    // Calculate NET DEFICIT = Previous Closing - Today's Net Position
-    let netDeficit = previousClosingValue - todayNetPosition;
-    let absoluteDeficit = Math.abs(netDeficit);
-    
-    // UPDATE DISPLAYS
-    // Total Expenses Display
-    let totalExpensesElement = document.getElementById('totalExpensesDisplay');
-    if (totalExpensesElement) {
-        totalExpensesElement.innerText = 'KES ' + totalExpenses.toLocaleString('en-KE', {minimumFractionDigits: 2});
-    }
-    
-    // Today's Net Position Display
-    let netPositionElement = document.getElementById('netPositionDisplay');
-    if (netPositionElement) {
-        netPositionElement.innerText = 'KES ' + todayNetPosition.toLocaleString('en-KE', {minimumFractionDigits: 2});
-    }
-    
-    // NET DEFICIT / SURPLUS Display
-    let deficitDisplay = document.getElementById('netDeficitDisplay');
+    const deficitDisplay = document.getElementById('netDeficitDisplay');
     if (deficitDisplay) {
-        let deficitTitle = deficitDisplay.closest('.bg-dark')?.querySelector('p strong');
-        let deficitSmall = deficitDisplay.closest('.bg-dark')?.querySelector('small');
-        
         if (netDeficit > 0) {
-            // Deficit - Lost money compared to yesterday
-            deficitDisplay.innerHTML = 'KES ' + absoluteDeficit.toLocaleString('en-KE', {minimumFractionDigits: 2});
+            deficitDisplay.innerHTML = 'KES ' + netDeficit.toLocaleString('en-KE', {minimumFractionDigits: 2});
             deficitDisplay.style.color = '#ef4444';
-            if (deficitTitle) deficitTitle.innerHTML = 'NET DEFICIT';
-            if (deficitSmall) deficitSmall.innerHTML = '= Previous Closing - Today\'s Net Position (Loss of KES ' + absoluteDeficit.toLocaleString() + ')';
         } else if (netDeficit < 0) {
-            // Surplus - Gained money compared to yesterday
-            deficitDisplay.innerHTML = 'KES ' + absoluteDeficit.toLocaleString('en-KE', {minimumFractionDigits: 2});
+            deficitDisplay.innerHTML = 'KES ' + Math.abs(netDeficit).toLocaleString('en-KE', {minimumFractionDigits: 2});
             deficitDisplay.style.color = '#10b981';
-            if (deficitTitle) deficitTitle.innerHTML = 'NET SURPLUS';
-            if (deficitSmall) deficitSmall.innerHTML = '= Today\'s Net Position - Previous Closing (Gain of KES ' + absoluteDeficit.toLocaleString() + ')';
         } else {
-            // Equal - No change
             deficitDisplay.innerHTML = 'KES 0.00';
             deficitDisplay.style.color = '#f59e0b';
-            if (deficitTitle) deficitTitle.innerHTML = 'NET CHANGE';
-            if (deficitSmall) deficitSmall.innerHTML = '= No change from yesterday';
+        }
+    }
+}
+
+// Event listeners
+document.addEventListener('DOMContentLoaded', function() {
+    updatePreviousClosingDisplay(previousClosing);
+    calculateTotals();
+    initializeExistingSelections();
+    
+    let shopId = null;
+    const shopHidden = document.querySelector('input[name="shop"]');
+    if (shopHidden) shopId = shopHidden.value;
+    
+    const reportDate = document.getElementById('id_report_date');
+    
+    if (shopId && reportDate) {
+        reportDate.addEventListener('change', function() {
+            fetchPreviousClosingBalance(shopId, this.value);
+        });
+        
+        if (reportDate.value) {
+            fetchPreviousClosingBalance(shopId, reportDate.value);
         }
     }
     
-    // Debug log to verify values
-    console.log({
-        'M-Pesa Float': mpesaFloat,
-        'M-Pesa Cash': mpesaCash,
-        'Airtel Float': airtelFloat,
-        'Total Mobile Money': totalMobileMoney,
-        'Bank Total': bankTotal,
-        'Today Net Position': todayNetPosition,
-        'Previous Closing': previousClosingValue,
-        'Net Deficit': netDeficit
-    });
-}
-
-// Make sure event listeners are set up correctly
-document.addEventListener('DOMContentLoaded', function() {
-    // Add input listeners for all three fields
-    const mpesaFloatInput = document.getElementById('id_closing_mpesa_float');
-    const mpesaCashInput = document.getElementById('id_closing_mpesa_cash');
-    const airtelFloatInput = document.getElementById('id_closing_airtel_float');
-    
-    if (mpesaFloatInput) mpesaFloatInput.addEventListener('input', calculateTotals);
-    if (mpesaCashInput) mpesaCashInput.addEventListener('input', calculateTotals);
-    if (airtelFloatInput) airtelFloatInput.addEventListener('input', calculateTotals);
-    
-    // Also listen for bank balance and expense changes
     document.addEventListener('input', function(e) {
-        if (e.target.classList && (e.target.classList.contains('bank-balance') || e.target.classList.contains('expense-amount'))) {
+        if (e.target.classList && (
+            e.target.classList.contains('mpesa-balance') ||
+            e.target.classList.contains('bank-balance') ||
+            e.target.classList.contains('expense-amount') ||
+            e.target.id === 'total_cash_input'
+        )) {
             calculateTotals();
         }
     });
     
-    // Initial calculation
-    calculateTotals();
-});
-
-// Initialize existing banks
-function initializeExistingBanks() {
-    document.querySelectorAll('.bank-row').forEach(row => {
-        const select = row.querySelector('.bank-select');
-        const bankId = row.getAttribute('data-bank-id');
-        const balance = row.getAttribute('data-balance');
-        if (bankId && select) {
-            select.setAttribute('data-bank-id', bankId);
-            selectedBankIds.add(bankId);
-            const balanceInput = row.querySelector('.bank-balance');
-            if (balanceInput && balance) {
-                balanceInput.value = balance;
-            }
+    document.addEventListener('change', function(e) {
+        if (e.target.classList && e.target.classList.contains('mpesa-select')) {
+            updateAvailableOptions();
+        }
+        if (e.target.classList && e.target.classList.contains('bank-select')) {
+            updateBankOptions();
         }
     });
-}
-
-// Initialize existing expense rows
-function initializeExistingExpenses() {
-    expenseCount = document.querySelectorAll('.expense-row').length;
-    bankCount = document.querySelectorAll('.bank-row').length;
-}
-
-// Event listeners
-document.getElementById('id_closing_mpesa_float')?.addEventListener('input', calculateTotals);
-document.getElementById('id_closing_mpesa_cash')?.addEventListener('input', calculateTotals);
-document.getElementById('id_shop_sales')?.addEventListener('input', calculateTotals);
-document.addEventListener('input', function(e) {
-    if (e.target.classList.contains('bank-balance') || e.target.classList.contains('expense-amount')) {
-        calculateTotals();
-    }
 });
-
-// Initialize on page load
-initializeExistingBanks();
-initializeExistingExpenses();
-calculateTotals();
-
-// Load banks on page load if shop is already selected
-const initialShopId = getSelectedShopId();
-if (initialShopId) {
-    loadBanksForShop(initialShopId);
-}
 </script>
 {% endblock %}

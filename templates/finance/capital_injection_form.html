@@ -1,0 +1,140 @@
+{% extends 'finance/base.html' %}
+{% load humanize %}
+
+{% block title %}Add Capital Injection{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0">
+            <i class="fas fa-money-bill-wave text-success me-2"></i> Add Capital Injection
+        </h1>
+        <a href="{% url 'finance:capital_injection_list' %}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Back to List
+        </a>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8 mx-auto">
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-plus-circle me-2"></i> New Capital Injection
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        {% csrf_token %}
+                        
+                        <!-- Source Type -->
+                        <div class="mb-3">
+                            <label for="source_type" class="form-label">Source Type *</label>
+                            <select name="source_type" id="source_type" class="form-select" required>
+                                <option value="">Select source type</option>
+                                <option value="investor">Investor</option>
+                                <option value="loan">Bank Loan</option>
+                                <option value="personal">Personal Savings</option>
+                                <option value="grant">Grant</option>
+                                <option value="partner">Business Partner</option>
+                                <option value="other">Other Source</option>
+                            </select>
+                        </div>
+
+                        <!-- Source Name -->
+                        <div class="mb-3">
+                            <label for="source_name" class="form-label">Source Name *</label>
+                            <input type="text" name="source_name" id="source_name" class="form-control" 
+                                   placeholder="e.g., John Investor, KCB Bank, Personal Savings" required>
+                            <small class="text-muted">Name of the investor, bank, or source</small>
+                        </div>
+
+                        <!-- Amount -->
+                        <div class="mb-3">
+                            <label for="amount" class="form-label">Amount (KES) *</label>
+                            <input type="number" name="amount" id="amount" class="form-control" 
+                                   step="0.01" min="0" required>
+                        </div>
+
+                        <!-- Payment Method -->
+                        <div class="mb-3">
+                            <label for="payment_method" class="form-label">Payment Method *</label>
+                            <select name="payment_method" id="payment_method" class="form-select" required>
+                                <option value="bank">Bank Transfer</option>
+                                <option value="cash">Cash</option>
+                                <option value="mpesa">M-Pesa</option>
+                                <option value="cheque">Cheque</option>
+                            </select>
+                        </div>
+
+                        <!-- Target Account -->
+                        <div class="mb-3">
+                            <label for="target_account" class="form-label">Target Account *</label>
+                            <select name="target_account" id="target_account" class="form-select" required>
+                                <option value="bank">Bank Account</option>
+                                <option value="cash">Cash Account</option>
+                                <option value="mpesa">M-Pesa Account</option>
+                            </select>
+                        </div>
+
+                        <!-- Is Loan? -->
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" name="is_loan" id="is_loan" class="form-check-input">
+                            <label for="is_loan" class="form-check-label">This is a loan (needs repayment)</label>
+                        </div>
+
+                        <!-- Loan Details (hidden by default) -->
+                        <div id="loanDetails" style="display: none;">
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle"></i> Loan Details
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="interest_rate" class="form-label">Interest Rate (%) per annum</label>
+                                <input type="number" name="interest_rate" id="interest_rate" class="form-control" 
+                                       step="0.01" min="0" value="0">
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="repayment_term" class="form-label">Repayment Term (months)</label>
+                                <input type="number" name="repayment_term" id="repayment_term" class="form-control" 
+                                       min="0" value="0">
+                                <small class="text-muted">Number of months to repay the loan</small>
+                            </div>
+                        </div>
+
+                        <!-- Notes -->
+                        <div class="mb-3">
+                            <label for="notes" class="form-label">Notes (Optional)</label>
+                            <textarea name="notes" id="notes" class="form-control" rows="3" 
+                                      placeholder="Any additional information about this capital injection..."></textarea>
+                        </div>
+
+                        <hr>
+
+                        <div class="d-flex justify-content-end gap-2">
+                            <a href="{% url 'finance:capital_injection_list' %}" class="btn btn-secondary">
+                                <i class="fas fa-times"></i> Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Process Injection
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Show/hide loan details based on checkbox
+    const isLoanCheckbox = document.getElementById('is_loan');
+    const loanDetails = document.getElementById('loanDetails');
+    
+    isLoanCheckbox.addEventListener('change', function() {
+        if (this.checked) {
+            loanDetails.style.display = 'block';
+        } else {
+            loanDetails.style.display = 'none';
+        }
+    });
+</script>
+{% endblock %}

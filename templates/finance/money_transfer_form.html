@@ -1,0 +1,106 @@
+{% extends 'finance/base.html' %}
+{% load static %}
+
+{% block title %}Money Transfer{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8 mx-auto">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0"><i class="fas fa-exchange-alt me-2"></i>Money Transfer</h4>
+                </div>
+                <div class="card-body">
+                    <!-- Current Balances -->
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="alert alert-info">
+                                <strong>💰 Cash Balance:</strong> KES {{ cash_balance|floatformat:2 }}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="alert alert-info">
+                                <strong>🏦 Bank Balance:</strong> KES {{ bank_balance|floatformat:2 }}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold">From Account</label>
+                                <select name="from_account" class="form-select" required>
+                                    <option value="">Select Source</option>
+                                    <option value="cash">💵 Cash Account</option>
+                                    <option value="bank">🏦 Bank Account</option>
+                                    <option value="mpesa">📱 M-Pesa Account</option>
+                                </select>
+                            </div>
+                            
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold">To Account</label>
+                                <select name="to_account" class="form-select" required>
+                                    <option value="">Select Destination</option>
+                                    <option value="cash">💵 Cash Account</option>
+                                    <option value="bank">🏦 Bank Account</option>
+                                    <option value="mpesa">📱 M-Pesa Account</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Amount (KES)</label>
+                            <input type="number" name="amount" class="form-control" step="0.01" min="0.01" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Description</label>
+                            <input type="text" name="description" class="form-control" placeholder="e.g., Cash deposit to bank, Withdrawal for operations" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Notes (Optional)</label>
+                            <textarea name="notes" class="form-control" rows="3" placeholder="Additional notes..."></textarea>
+                        </div>
+                        
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Note:</strong> This transfer will be completed immediately. Ensure you have sufficient balance.
+                        </div>
+                        
+                        <div class="d-flex justify-content-between">
+                            <a href="{% url 'finance:money_transfer_list' %}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-exchange-alt"></i> Complete Transfer
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const fromSelect = document.querySelector('select[name="from_account"]');
+    const toSelect = document.querySelector('select[name="to_account"]');
+    
+    function updateValidation() {
+        if (fromSelect.value && toSelect.value && fromSelect.value === toSelect.value) {
+            toSelect.setCustomValidity('Source and destination accounts cannot be the same');
+        } else {
+            toSelect.setCustomValidity('');
+        }
+    }
+    
+    fromSelect.addEventListener('change', updateValidation);
+    toSelect.addEventListener('change', updateValidation);
+});
+</script>
+{% endblock %}

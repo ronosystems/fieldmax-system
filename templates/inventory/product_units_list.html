@@ -1,0 +1,595 @@
+{% extends 'inventory/staff_base.html' %}
+{% load static %}
+
+{% block title %}Product Units{% endblock %}
+
+{% block content %}
+<style>
+    /* Custom Header Colors */
+    .bg-purple { background-color: #6f42c1 !important; }
+    .bg-teal { background-color: #20c997 !important; }
+    .bg-gold { background-color: #ffc107 !important; }
+    .bg-indigo { background-color: #6610f2 !important; }
+    .bg-pink { background-color: #d63384 !important; }
+    .bg-navy { background-color: #001f3f !important; }
+    .bg-orange { background-color: #fd7e14 !important; }
+    .bg-cyan { background-color: #0dcaf0 !important; }
+    .bg-slate { background-color: #64748b !important; }
+    
+    .identifier-badge {
+        font-family: monospace;
+        font-size: 12px;
+        font-weight: 600;
+        background: #eef2ff;
+        color: #4f46e5;
+        padding: 4px 10px;
+        border-radius: 6px;
+        display: inline-block;
+    }
+    
+    .status-badge {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 4px 10px;
+        border-radius: 20px;
+        display: inline-block;
+        text-align: center;
+    }
+    .status-available { background: #d1e7dd; color: #0f5132; }
+    .status-sold { background: #f8d7da; color: #842029; }
+    .status-reserved { background: #cfe2ff; color: #084298; }
+    .status-damaged { background: #e9ecef; color: #495057; }
+    .status-stolen { background: #f5c2c2; color: #8b0000; }
+    .status-lost { background: #ffe5b4; color: #856404; }
+    .status-returned { background: #d1e7dd; color: #0f5132; }
+    .status-writeoff { background: #6c757d; color: white; }
+    
+    .condition-badge {
+        font-size: 10px;
+        font-weight: 500;
+        padding: 2px 6px;
+        border-radius: 4px;
+    }
+    .condition-new { background: #d1e7dd; color: #0f5132; }
+    .condition-refurbished { background: #cfe2ff; color: #084298; }
+    .condition-used { background: #fff3cd; color: #856404; }
+    .condition-damaged { background: #f8d7da; color: #842029; }
+    
+    .product-cell {
+        max-width: 250px;
+    }
+    
+    .table thead th {
+        font-weight: 600;
+        font-size: 0.85rem;
+        padding: 12px 8px;
+        vertical-align: middle;
+        border-bottom-width: 2px;
+    }
+    .table thead th small {
+        font-weight: 400;
+        font-size: 0.7rem;
+    }
+    
+    .table-bordered {
+        border: 2px solid #dee2e6 !important;
+    }
+    .table-bordered thead th,
+    .table-bordered thead td {
+        border-bottom-width: 2px;
+    }
+    
+    .filter-card {
+        border: none;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+    
+    .table-card {
+        border: none;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        overflow: hidden;
+    }
+    
+    .stats-card {
+        background: linear-gradient(135deg, #00eeff 0%, #00eeff 100%);
+        border-radius: 12px;
+        padding: 15px 20px;
+        color: rgb(0, 0, 0);
+        margin-bottom: 20px;
+    }
+    
+    .stat-item {
+        text-align: center;
+        border-right: 1px solid rgb(0, 0, 0);
+    }
+    .stat-item:last-child { border-right: none; }
+    .stat-number { font-size: 24px; font-weight: 700; }
+    .stat-label { font-size: 11px; opacity: 0.9; text-transform: uppercase; letter-spacing: 0.5px; }
+    
+    @media (max-width: 768px) {
+        .d-flex.flex-wrap {
+            flex-direction: column;
+            align-items: stretch !important;
+        }
+        .d-flex.flex-wrap select,
+        .d-flex.flex-wrap input,
+        .d-flex.flex-wrap button,
+        .d-flex.flex-wrap a {
+            width: 100% !important;
+            margin-bottom: 5px;
+        }
+        .stats-card .row > div { margin-bottom: 10px; border-right: none; }
+    }
+</style>
+
+<!-- Action Buttons -->
+<div class="d-flex flex-wrap gap-2 mb-4">
+    <a href="{% url 'inventory:product_list' %}" class="btn btn-primary">
+        <i class="fas fa-boxes me-2"></i>Back to Products
+    </a>
+    <a href="{% url 'inventory:stolen_units_list' %}" class="btn btn-danger">
+        <i class="fas fa-skull-crossbones me-2"></i>Stolen/Lost Units
+    </a>
+    <button type="button" class="btn btn-info" onclick="window.print()">
+        <i class="fas fa-print me-2"></i>Print Report
+    </button>
+
+    <a href="#" class="btn btn-primary">
+        <span class="badge bg-secondary">Total Units: {{ units.paginator.count }}</span>
+    </a>
+
+</div>
+
+<!-- Statistics Cards -->
+<div class="stats-card mb-4">
+    <div class="row text-center">
+        <div class="col-md-3 col-6 stat-item">
+            <div class="stat-number">{{ total_available|default:0 }}</div>
+            <div class="stat-label">Available</div>
+        </div>
+        <div class="col-md-3 col-6 stat-item">
+            <div class="stat-number">{{ total_sold|default:0 }}</div>
+            <div class="stat-label">Sold</div>
+        </div>
+        <div class="col-md-3 col-6 stat-item">
+            <div class="stat-number">{{ total_damaged|default:0 }}</div>
+            <div class="stat-label">Damaged</div>
+        </div>
+        <div class="col-md-3 col-6 stat-item">
+            <div class="stat-number">{{ total_stolen_lost|default:0 }}</div>
+            <div class="stat-label">Stolen/Lost</div>
+        </div>
+    </div>
+</div>
+
+<!-- Filters Card -->
+<div class="card filter-card mb-4">
+    <div class="card-body py-3">
+        <form method="get">
+            <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+                <select name="status" class="form-select form-select-sm" style="width: auto; min-width: 130px;">
+                    <option value="">All Status</option>
+                    <option value="available" {% if request.GET.status == 'available' %}selected{% endif %}>Available</option>
+                    <option value="sold" {% if request.GET.status == 'sold' %}selected{% endif %}>Sold</option>
+                    <option value="reserved" {% if request.GET.status == 'reserved' %}selected{% endif %}>Reserved</option>
+                    <option value="damaged" {% if request.GET.status == 'damaged' %}selected{% endif %}>Damaged</option>
+                    <option value="stolen" {% if request.GET.status == 'stolen' %}selected{% endif %}>Stolen</option>
+                    <option value="lost" {% if request.GET.status == 'lost' %}selected{% endif %}>Lost</option>
+                    <option value="returned" {% if request.GET.status == 'returned' %}selected{% endif %}>Returned</option>
+                </select>
+                
+                <select name="condition" class="form-select form-select-sm" style="width: auto; min-width: 130px;">
+                    <option value="">All Conditions</option>
+                    <option value="new" {% if request.GET.condition == 'new' %}selected{% endif %}>Brand New</option>
+                    <option value="refurbished" {% if request.GET.condition == 'refurbished' %}selected{% endif %}>Refurbished</option>
+                    <option value="used_excellent" {% if request.GET.condition == 'used_excellent' %}selected{% endif %}>Used - Excellent</option>
+                    <option value="used_good" {% if request.GET.condition == 'used_good' %}selected{% endif %}>Used - Good</option>
+                    <option value="used_fair" {% if request.GET.condition == 'used_fair' %}selected{% endif %}>Used - Fair</option>
+                    <option value="damaged" {% if request.GET.condition == 'damaged' %}selected{% endif %}>Damaged</option>
+                </select>
+                
+                <select name="product" class="form-select form-select-sm" style="width: auto; min-width: 150px;">
+                    <option value="">All Products</option>
+                    {% for prod in products %}
+                    <option value="{{ prod.id }}" {% if request.GET.product == prod.id|stringformat:"s" %}selected{% endif %}>
+                        {{ prod.sku_code }} - {{ prod.name|truncatechars:30 }}
+                    </option>
+                    {% endfor %}
+                </select>
+                
+                <input type="text" name="search" class="form-control form-control-sm" 
+                       value="{{ request.GET.search }}" placeholder="IMEI, Serial, SKU..." style="width: 180px;">
+                
+                <button type="submit" class="btn btn-primary btn-sm">
+                    <i class="fas fa-search"></i> Filter
+                </button>
+                
+                <a href="{% url 'inventory:product_units_list' %}" class="btn btn-secondary btn-sm">
+                    <i class="fas fa-undo"></i> Clear
+                </a>
+            </div>
+            
+            <div class="d-flex gap-2 align-items-center">
+                <span class="badge bg-info text-white">Quick Find:</span>
+                <input type="text" id="quickSearch" class="form-control form-control-sm flex-grow-1" 
+                       placeholder="Enter IMEI number, Serial number, or SKU code...">
+                <button type="button" class="btn btn-warning btn-sm" id="searchQuickBtn">
+                    <i class="fas fa-bolt me-1"></i>Search
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Units Table -->
+<div class="card table-card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover mb-0">
+                <thead>
+                    <tr class="bg-light">
+                        <th width="5%" class="bg-purple text-white text-center">#</th>
+                        <th width="15%" class="bg-primary text-white">
+                            Identifier<br><small class="text-white-50">IMEI / Serial Number</small>
+                        </th>
+                        <th width="15%" class="bg-info text-white">
+                            Product<br><small class="text-white-50">SKU & Name</small>
+                        </th>
+                        <th width="8%" class="bg-teal text-white text-center">
+                            Status<br><small class="text-white-50">Current Status</small>
+                        </th>
+                        <th width="8%" class="bg-gold text-dark text-center">
+                            Condition<br><small class="text-dark-50">Item Condition</small>
+                        </th>
+                        <th width="10%" class="bg-cyan text-dark text-end">
+                            Prices<br><small class="text-dark-50">Buying / Selling</small>
+                        </th>
+                        <th width="8%" class="bg-success text-white text-center">
+                            Warranty<br><small class="text-white-50">Days Left</small>
+                        </th>
+                        <th width="10%" class="bg-pink text-white">
+                            Sale Info<br><small class="text-white-50">Sold Price / Date</small>
+                        </th>
+                        <th width="10%" class="bg-navy text-white">
+                            Loss Info<br><small class="text-white-50">Type / Reported</small>
+                        </th>
+                        <th width="8%" class="bg-orange text-white">
+                            Location<br><small class="text-white-50">Warehouse/Shelf</small>
+                        </th>
+                        <th width="8%" class="bg-slate text-white text-center">
+                            Actions
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for unit in units %}
+                    <tr class="{% if unit.status == 'stolen' or unit.status == 'lost' %}table-danger{% elif unit.status == 'damaged' %}table-warning{% endif %}">
+                        <td class="text-center align-middle">
+                            <span class="badge bg-secondary">#{{ forloop.counter }}</span>
+                        </td>
+                        
+                        <!-- Identifier Column -->
+                        <td class="align-middle">
+                            <div class="identifier-badge">
+                                {% if unit.imei_number %}
+                                    <i class="fas fa-microchip"></i> {{ unit.imei_number }}
+                                {% elif unit.serial_number %}
+                                    <i class="fas fa-barcode"></i> {{ unit.serial_number }}
+                                {% else %}
+                                    <i class="fas fa-box"></i> No ID
+                                {% endif %}
+                            </div>
+                            {% if unit.notes %}
+                                <br><small class="text-muted"><i class="fas fa-sticky-note"></i> {{ unit.notes|truncatechars:30 }}</small>
+                            {% endif %}
+                        </td>
+                        
+                        <!-- Product Column -->
+                        <td class="align-middle product-cell">
+                            <div class="fw-bold">
+                                <a href="{% url 'inventory:product_detail' unit.product.id %}" class="text-decoration-none">
+                                    <code>{{ unit.product.sku_code }}</code>
+                                </a>
+                            </div>
+                            <small class="text-muted">{{ unit.product.name|truncatechars:35 }}</small>
+                            <br>
+                            <small class="text-muted">{{ unit.product.brand }} {{ unit.product.model }}</small>
+                        </td>
+                        
+                        <!-- Status Column -->
+                        <td class="text-center align-middle">
+                            <span class="status-badge status-{{ unit.status }}">
+                                {% if unit.status == 'available' %}
+                                    <i class="fas fa-check-circle"></i> Available
+                                {% elif unit.status == 'sold' %}
+                                    <i class="fas fa-tag"></i> Sold
+                                {% elif unit.status == 'reserved' %}
+                                    <i class="fas fa-clock"></i> Reserved
+                                {% elif unit.status == 'damaged' %}
+                                    <i class="fas fa-hammer"></i> Damaged
+                                {% elif unit.status == 'stolen' %}
+                                    <i class="fas fa-skull-crossbones"></i> Stolen
+                                {% elif unit.status == 'lost' %}
+                                    <i class="fas fa-search-location"></i> Lost
+                                {% elif unit.status == 'returned' %}
+                                    <i class="fas fa-undo-alt"></i> Returned
+                                {% else %}
+                                    {{ unit.get_status_display }}
+                                {% endif %}
+                            </span>
+                        </td>
+                        
+                        <!-- Condition Column -->
+                        <td class="text-center align-middle">
+                            <span class="condition-badge condition-{{ unit.condition }}">
+                                {{ unit.get_condition_display }}
+                            </span>
+                        </td>
+                        
+                        <!-- Prices Column -->
+                        <td class="text-end align-middle">
+                            <div>Buy: <strong>KES {{ unit.effective_buying_price|floatformat:2 }}</strong></div>
+                            <div>Sell: <strong class="text-success">KES {{ unit.effective_selling_price|floatformat:2 }}</strong></div>
+                            {% if unit.unit_buying_price or unit.unit_selling_price %}
+                                <small class="text-warning"><i class="fas fa-tag"></i> Override</small>
+                            {% endif %}
+                        </td>
+                        
+                        <!-- Warranty Column -->
+                        <td class="text-center align-middle">
+                            {% if unit.is_in_warranty %}
+                                <span class="badge bg-success">
+                                    <i class="fas fa-shield-alt"></i> {{ unit.warranty_remaining_days }} days
+                                </span>
+                                <br>
+                                <small class="text-muted">Expires: {{ unit.warranty_end|date:"Y-m-d" }}</small>
+                            {% else %}
+                                <span class="badge bg-secondary">
+                                    <i class="fas fa-times-circle"></i> Expired
+                                </span>
+                            {% endif %}
+                        </td>
+                        
+                        <!-- Sale Info Column -->
+                        <td class="align-middle">
+                            {% if unit.status == 'sold' %}
+                                <div><strong>KES {{ unit.sold_at_price|floatformat:2 }}</strong></div>
+                                <div><small>{{ unit.sold_date|date:"Y-m-d" }}</small></div>
+                                <div><small>By: {{ unit.sold_by.username|default:"—" }}</small></div>
+                                {% if unit.profit_on_sale %}
+                                    <div class="text-success">Profit: KES {{ unit.profit_on_sale|floatformat:2 }}</div>
+                                {% endif %}
+                            {% else %}
+                                <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                        
+                        <!-- Loss Info Column -->
+                        <td class="align-middle">
+                            {% if unit.status == 'stolen' or unit.status == 'lost' %}
+                                <div><strong>Type: {{ unit.get_loss_type_display|default:unit.get_status_display }}</strong></div>
+                                <div><small>Reported: {{ unit.loss_reported_date|date:"Y-m-d" }}</small></div>
+                                <div><small>By: {{ unit.loss_reported_by.username|default:"—" }}</small></div>
+                                {% if unit.police_report_number %}
+                                    <div><small>Police: {{ unit.police_report_number }}</small></div>
+                                {% endif %}
+                                {% if unit.insurance_claim_filed %}
+                                    <span class="badge bg-info">Insurance Filed</span>
+                                {% endif %}
+                                {% if unit.recovered_date %}
+                                    <span class="badge bg-success">Recovered: {{ unit.recovered_date|date:"Y-m-d" }}</span>
+                                {% endif %}
+                            {% else %}
+                                <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                        
+                        <!-- Location Column -->
+                        <td class="align-middle">
+                            {% if unit.warehouse_location or unit.shelf_location %}
+                                <div>{{ unit.warehouse_location|default:"—" }}</div>
+                                <div><small>Shelf: {{ unit.shelf_location|default:"—" }}</small></div>
+                            {% else %}
+                                <span class="text-muted">Not assigned</span>
+                            {% endif %}
+                        </td>
+                        
+                        <!-- Actions Column -->
+                        <td class="text-center align-middle">
+                            <div class="btn-group btn-group-sm" role="group">
+                                {% if unit.status == 'available' %}
+                                    <a href="{% url 'inventory:mark_unit_damaged' unit.id %}" class="btn btn-outline-warning" title="Mark Damaged">
+                                        <i class="fas fa-hammer"></i>
+                                    </a>
+                                    <button type="button" class="btn btn-outline-danger" title="Report Stolen/Lost"
+                                            onclick="reportLoss({{ unit.id }}, '{{ unit.unique_identifier }}')">
+                                        <i class="fas fa-exclamation-triangle"></i>
+                                    </button>
+                                {% elif unit.status == 'stolen' or unit.status == 'lost' %}
+                                    {% if not unit.recovered_date %}
+                                        <a href="{% url 'inventory:recover_unit' unit.id %}" class="btn btn-outline-success" title="Recover">
+                                            <i class="fas fa-undo"></i>
+                                        </a>
+                                    {% endif %}
+                                    {% if not unit.insurance_claim_filed %}
+                                        <a href="{% url 'inventory:file_unit_insurance_claim' unit.id %}" class="btn btn-outline-info" title="File Insurance">
+                                            <i class="fas fa-file-invoice-dollar"></i>
+                                        </a>
+                                    {% endif %}
+                                {% endif %}
+                                <a href="{% url 'inventory:product_detail' unit.product.id %}" class="btn btn-outline-primary" title="View Product">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="11" class="text-center py-5">
+                            <i class="fas fa-microchip fa-4x text-muted mb-3"></i>
+                            <p class="text-muted mb-0">No product units found</p>
+                            <small class="text-muted">Try adjusting your filters or add units to products</small>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Pagination -->
+{% if units.has_other_pages %}
+<nav class="mt-4">
+    <ul class="pagination justify-content-center">
+        {% if units.has_previous %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ units.previous_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                <i class="fas fa-chevron-left"></i> Previous
+            </a>
+        </li>
+        <li class="page-item">
+            <a class="page-link" href="?page=1{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                <i class="fas fa-angle-double-left"></i> First
+            </a>
+        </li>
+        {% endif %}
+        
+        {% for num in units.paginator.page_range %}
+            {% if units.number == num %}
+            <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+            {% elif num > units.number|add:'-3' and num < units.number|add:'3' %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ num }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                    {{ num }}
+                </a>
+            </li>
+            {% endif %}
+        {% endfor %}
+        
+        {% if units.has_next %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ units.paginator.num_pages }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                Last <i class="fas fa-angle-double-right"></i>
+            </a>
+        </li>
+        <li class="page-item">
+            <a class="page-link" href="?page={{ units.next_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                Next <i class="fas fa-chevron-right"></i>
+            </a>
+        </li>
+        {% endif %}
+    </ul>
+    <div class="text-center text-muted small mt-2">
+        <i class="fas fa-info-circle me-1"></i>
+        Showing {{ units.start_index }} to {{ units.end_index }} of {{ units.paginator.count }} units
+    </div>
+</nav>
+{% endif %}
+
+<!-- Report Loss Modal -->
+<div class="modal fade" id="reportLossModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="fas fa-exclamation-triangle me-2"></i>Report Stolen/Lost Unit</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="" id="reportLossForm">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <input type="hidden" name="unit_id" id="lossUnitId">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Warning:</strong> This action cannot be undone.
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Unit Identifier</label>
+                        <div class="form-control bg-light" id="lossUnitIdentifier"></div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Loss Type</label>
+                        <select name="loss_type" class="form-select" required>
+                            <option value="stolen">Stolen</option>
+                            <option value="lost">Lost</option>
+                        </select>
+                    </div>
+                    <div class="mb-3" id="policeReportField">
+                        <label class="form-label">Police Report Number</label>
+                        <input type="text" name="police_report" class="form-control" placeholder="e.g., OB 123/2024">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Notes</label>
+                        <textarea name="notes" class="form-control" rows="3" placeholder="Additional details..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-skull-crossbones me-1"></i>Confirm Loss
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    'use strict';
+    
+    // Quick search functionality
+    const quickSearch = document.getElementById('quickSearch');
+    const searchBtn = document.getElementById('searchQuickBtn');
+    
+    function performQuickSearch() {
+        const searchTerm = quickSearch.value.trim();
+        if (!searchTerm) {
+            alert('Please enter an IMEI number, Serial number, or SKU code to search.');
+            return;
+        }
+        window.location.href = `{% url 'inventory:product_units_list' %}?search=${encodeURIComponent(searchTerm)}`;
+    }
+    
+    if (searchBtn) searchBtn.addEventListener('click', performQuickSearch);
+    if (quickSearch) quickSearch.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            performQuickSearch();
+        }
+    });
+    
+    // Report loss modal
+    window.reportLoss = function(unitId, identifier) {
+        const modalEl = document.getElementById('reportLossModal');
+        if (!modalEl) return;
+        
+        const modal = new bootstrap.Modal(modalEl);
+        const form = document.getElementById('reportLossForm');
+        const unitIdInput = document.getElementById('lossUnitId');
+        const identifierSpan = document.getElementById('lossUnitIdentifier');
+        const policeField = document.getElementById('policeReportField');
+        
+        unitIdInput.value = unitId;
+        identifierSpan.textContent = identifier;
+        
+        // Show/hide police report field based on loss type
+        const lossTypeSelect = form.querySelector('select[name="loss_type"]');
+        lossTypeSelect.addEventListener('change', function() {
+            if (this.value === 'stolen') {
+                policeField.style.display = 'block';
+            } else {
+                policeField.style.display = 'none';
+            }
+        });
+        
+        // Set form action
+        form.action = `/inventory/units/${unitId}/stolen/`;
+        
+        modal.show();
+    };
+})();
+</script>
+{% endblock %}

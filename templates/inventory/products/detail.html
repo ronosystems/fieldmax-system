@@ -1,445 +1,882 @@
 {% extends 'inventory/staff_base.html' %}
 {% load static %}
 
-{% block title %}{{ product.name|default:product.product_code }}{% endblock %}
+{% block title %}{{ product.name|default:product.sku_code }}{% endblock %}
 
 {% block content %}
-<div class="mb-4">
-    <nav aria-label="breadcrumb">
-        <ol class="breadcrumb">
-            <li class="breadcrumb-item"><a href="{% url 'inventory:dashboard' %}">Dashboard</a></li>
-            <li class="breadcrumb-item"><a href="{% url 'inventory:product_list' %}">Products</a></li>
-            <li class="breadcrumb-item active">{{ product.name|default:product.product_code }}</li>
-        </ol>
-    </nav>
-</div>
+<style>
+  :root {
+    --slate-50: #f8f9fa;
+    --slate-100: #f1f3f5;
+    --slate-200: #e9ecef;
+    --slate-300: #dee2e6;
+    --slate-400: #ced4da;
+    --slate-500: #adb5bd;
+    --slate-600: #868e96;
+    --slate-700: #495057;
+    --slate-800: #343a40;
+    --slate-900: #212529;
+    --accent: #3b5bdb;
+    --accent-light: #edf2ff;
+    --accent-border: #bac8ff;
+    --success: #2f9e44;
+    --success-light: #ebfbee;
+    --warning: #e67700;
+    --warning-light: #fff9db;
+    --danger: #c92a2a;
+    --danger-light: #fff5f5;
+    --info: #1971c2;
+    --info-light: #e7f5ff;
+    --radius-sm: 6px;
+    --radius: 10px;
+    --radius-lg: 14px;
+    --shadow-xs: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+    --shadow-sm: 0 2px 8px rgba(0,0,0,.07), 0 1px 3px rgba(0,0,0,.05);
+    --shadow: 0 4px 16px rgba(0,0,0,.08), 0 2px 6px rgba(0,0,0,.05);
+    --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  }
 
-<div class="row">
-    <!-- Product Details -->
-    <div class="col-md-8">
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="mb-0"><i class="fas fa-info-circle me-2"></i>Product Information</h5>
-            </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-6">
-                        <table class="table table-borderless">
-                            <tr>
-                                <th style="width: 40%;">Product Code:</th>
-                                <td><span class="badge bg-primary p-2">{{ product.product_code }}</span></td>
-                            </tr>
-                            <tr>
-                                <th>Name:</th>
-                                <td><strong>{{ product.name|default:"-" }}</strong></td>
-                            </tr>
-                            <tr>
-                                <th>Category:</th>
-                                <td>
-                                    {% if product.category.is_single_item %}
-                                        📱 {{ product.category.name }}
-                                    {% else %}
-                                        📦 {{ product.category.name }}
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            <tr>
-                                <th>Brand:</th>
-                                <td>{{ product.brand|default:"-" }}</td>
-                            </tr>
-                            <tr>
-                                <th>Model:</th>
-                                <td>{{ product.model|default:"-" }}</td>
-                            </tr>
-                            <tr>
-                                <th>Condition:</th>
-                                <td>
-                                    {% if product.condition == 'new' %}
-                                        <span class="text-success">● Brand New</span>
-                                    {% elif product.condition == 'refurbished' %}
-                                        <span class="text-info">● Refurbished</span>
-                                    {% elif product.condition == 'used' %}
-                                        <span class="text-warning">● Used - Excellent</span>
-                                    {% elif product.condition == 'used_good' %}
-                                        <span class="text-warning">● Used - Good</span>
-                                    {% elif product.condition == 'used_fair' %}
-                                        <span class="text-danger">● Used - Fair</span>
-                                    {% elif product.condition == 'damaged' %}
-                                        <span class="text-danger">● Damaged - Not Sellable</span>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                        </table>
-                    </div>
-                    <div class="col-md-6">
-                        <table class="table table-borderless">
-                            <tr>
-                                <th style="width: 40%;">Serial Number:</th>
-                                <td>
-                                    {% if product.serial_number %}
-                                        <code>{{ product.serial_number }}</code>
-                                    {% else %}
-                                        -
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            <tr>
-                                <th>IMEI Number:</th>
-                                <td>
-                                    {% if product.imei_number %}
-                                        <code class="text-primary">{{ product.imei_number }}</code>
-                                    {% else %}
-                                        -
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            <tr>
-                                <th>SKU (Legacy):</th>
-                                <td>{{ product.sku_value|default:"-" }}</td>
-                            </tr>
-                            <tr>
-                                <th>Barcode:</th>
-                                <td>{{ product.barcode|default:"-" }}</td>
-                            </tr>
-                            <tr>
-                                <th>Quantity:</th>
-                                <td>
-                                    <span class="fw-bold">{{ product.quantity }}</span>
-                                    {% if product.needs_reorder %}
-                                        <span class="badge bg-warning text-dark ms-2">Needs Reorder</span>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            <tr>
-                                <th>Status:</th>
-                                <td>
-                                    {% if product.is_stolen_or_lost %}
-                                        <span class="badge bg-danger">💀 {{ product.get_loss_type_display|default:"Stolen/Lost" }}</span>
-                                    {% elif product.status == 'available' %}
-                                        <span class="badge bg-success">✓ Available</span>
-                                    {% elif product.status == 'sold' %}
-                                        <span class="badge bg-secondary">✗ Sold</span>
-                                    {% elif product.status == 'reserved' %}
-                                        <span class="badge bg-info">⏳ Reserved</span>
-                                    {% elif product.status == 'damaged' %}
-                                        <span class="badge bg-dark">⚠️ Damaged</span>
-                                    {% elif product.status == 'lowstock' %}
-                                        <span class="badge bg-warning text-dark">⚠️ Low Stock</span>
-                                    {% elif product.status == 'outofstock' %}
-                                        <span class="badge bg-danger">❌ Out of Stock</span>
-                                    {% elif product.status == 'writeoff' %}
-                                        <span class="badge bg-secondary">📝 Written Off</span>
-                                    {% elif product.status == 'recalled' %}
-                                        <span class="badge bg-danger">🔙 Recalled</span>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            <tr>
-                                <th>Warranty:</th>
-                                <td>{{ product.warranty_months }} months</td>
-                            </tr>
-                            <tr>
-                                <th>In Warranty:</th>
-                                <td>
-                                    {% if product.is_in_warranty %}
-                                        <span class="text-success">✓ Yes</span>
-                                    {% else %}
-                                        <span class="text-danger">✗ No</span>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            <tr>
-                                <th>Owner:</th>
-                                <td>
-                                    <span class="badge bg-secondary">
-                                        {% if product.owner %}
-                                            {{ product.owner.get_full_name|default:product.owner.username }}
-                                        {% else %}
-                                            FIELDMAX
-                                        {% endif %}
-                                    </span>
-                                </td>
-                            </tr>
-                        </table>
-                    </div>
-                </div>
-                
-                <div class="row mt-3">
-                    <div class="col-12">
-                        <h6>Specifications:</h6>
-                        <div class="bg-light p-3 rounded">
-                            {% if product.specifications %}
-                                <div class="row">
-                                    {% for key, value in product.specifications.items %}
-                                    <div class="col-md-3 mb-2">
-                                        <strong>{{ key|title }}:</strong> {{ value }}
-                                    </div>
-                                    {% endfor %}
-                                </div>
-                            {% else %}
-                                <p class="text-muted mb-0">No specifications provided</p>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-                
-                {% if product.description %}
-                <div class="row mt-3">
-                    <div class="col-12">
-                        <h6>Description:</h6>
-                        <p>{{ product.description|linebreaks }}</p>
-                    </div>
-                </div>
-                {% endif %}
-            </div>
+  .pd-wrap { max-width: 2000px; margin: 0 auto; padding: 0 0 3rem; }
+
+  /* Breadcrumb */
+  .pd-breadcrumb { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--slate-500); margin-bottom: 1.75rem; flex-wrap: wrap; }
+  .pd-breadcrumb a { color: var(--accent); text-decoration: none; font-weight: 500; }
+  .pd-breadcrumb a:hover { text-decoration: underline; }
+  .pd-breadcrumb span { color: var(--slate-400); }
+  .pd-breadcrumb .current { color: var(--slate-700); font-weight: 500; }
+
+  /* Page Header */
+  .pd-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1.75rem; flex-wrap: wrap; }
+  .pd-header-left { display: flex; align-items: flex-start; gap: 1rem; }
+  .pd-icon-wrap { width: 52px; height: 52px; border-radius: var(--radius); background: var(--accent-light); border: 1px solid var(--accent-border); display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 22px; }
+  .pd-title { font-size: 22px; font-weight: 700; color: var(--slate-900); letter-spacing: -.3px; line-height: 1.2; margin: 0 0 4px; }
+  .pd-sku { font-family: var(--font-mono); font-size: 12px; color: var(--slate-500); background: var(--slate-100); border: 1px solid var(--slate-200); border-radius: 4px; padding: 2px 7px; display: inline-block; }
+  .pd-header-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+  /* Status badges */
+  .status-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 20px; letter-spacing: .2px; text-transform: uppercase; }
+  .status-available { background: var(--success-light); color: var(--success); border: 1px solid #b2f2bb; }
+  .status-sold-out, .status-out { background: var(--slate-100); color: var(--slate-600); border: 1px solid var(--slate-200); }
+  .status-low { background: var(--warning-light); color: var(--warning); border: 1px solid #ffec99; }
+  .status-lost { background: var(--danger-light); color: var(--danger); border: 1px solid #ffc9c9; }
+
+  /* Buttons */
+  .btn-pd { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: var(--radius-sm); font-size: 15px; font-weight: 800; cursor: pointer; text-decoration: none; border: 1px #000000; white-space: nowrap; transition: background .15s; }
+  .btn-pd-primary { background: var(--accent); color: #fff; }
+  .btn-pd-primary:hover { background: #2f4ac7; color: #fff; }
+  .btn-pd-success { background: var(--success); color: #fff; }
+  .btn-pd-success:hover { background: #267832; color: #fff; }
+  .btn-pd-outline { background: #fff; color: var(--slate-700); border-color: var(--slate-300); }
+  .btn-pd-outline:hover { background: var(--slate-50); color: var(--slate-900); }
+  .btn-pd-danger { background: #fff; color: var(--danger); border-color: #ffc9c9; }
+  .btn-pd-danger:hover { background: var(--danger-light); }
+
+  /* Layout grid */
+  .pd-grid { display: grid; grid-template-columns: 1fr 420px; gap: 1.25rem; align-items: start; }
+  @media (max-width: 960px) { .pd-grid { grid-template-columns: 1fr; } }
+
+  /* Cards */
+  .pd-card { background: #ffffff; border: 1px solid var(--slate-200); border-radius: var(--radius-lg); box-shadow: var(--shadow-xs); overflow: hidden; margin-bottom: 1.25rem; }
+  .pd-card-header { background: #019cf5; display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid var(--slate-100); }
+  .pd-card-title { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--slate-700); text-transform: uppercase; letter-spacing: .6px; }
+  .pd-card-title i { font-size: 15px; color: #006e06; }
+  .pd-card-body { padding: 20px; }
+
+  /* 4 Column Grid for Product Info Card */
+  .product-info-grid {  display: grid;    grid-template-columns: repeat(4, 1fr);    gap: 20px;  }
+  @media (max-width: 1200px) {    .product-info-grid { grid-template-columns: repeat(2, 1fr); }  }
+  @media (max-width: 768px) {    .product-info-grid { grid-template-columns: 1fr; }  }  
+  .info-section {    border-right: 1px solid var(--slate-100);    padding-right: 20px;  }
+  .info-section:last-child {  border-right: none;    padding-right: 0;  }
+  @media (max-width: 1200px) {    .info-section:nth-child(2) { border-right: none; }    .info-section { border-right: none; }  }
+  .section-title {    font-size: 15px;    font-weight: 800;    text-transform: uppercase;    letter-spacing: .6px;    color: #0401b6;    margin-bottom: 12px;    padding-bottom: 6px;    border-bottom: 1px solid var(--slate-100);  }
+
+  /* Compact info rows */
+  .compact-row {    display: flex;    justify-content: space-between;    align-items: baseline;    padding: 6px 0;    border-bottom: 1px solid var(--slate-50);    font-size: 13px; }
+  .compact-row:last-child {    border-bottom: none;  }
+  .compact-label {    color: var(--slate-500);    font-weight: 500;    font-size: 11px;    text-transform: uppercase;    letter-spacing: .3px;  }
+  .compact-value {    color: var(--slate-800);    font-weight: 600;    text-align: right;  }
+  
+  /* Stock tiles compact */
+  .stock-tiles-compact {    display: grid;grid-template-columns: repeat(2, 1fr);  gap: 8px; }
+  .stock-tile-compact {    background: var(--slate-50);    border-radius: var(--radius-sm);    padding: 8px;    text-align: center;  }
+  .stock-tile-compact .tile-label {    font-size: 9px;    font-weight: 600;    text-transform: uppercase;    color: var(--slate-500);  }
+  .stock-tile-compact .tile-num {    font-size: 18px;    font-weight: 700;    color: var(--slate-800);  margin-top: 4px;  }
+  
+  /* Price tiles compact */
+  .price-tiles-compact {  display: flex;    flex-direction: column;    gap: 8px; }   
+  .price-row-compact {    display: flex;    justify-content: space-between;    align-items: baseline;    padding: 6px 8px;    background: var(--slate-50);    border-radius: var(--radius-sm);  }
+  .price-label-compact {    font-size: 11px;    font-weight: 600;    text-transform: uppercase;    color: var(--slate-500);  }
+  .price-value-compact {    font-size: 14px;    font-weight: 700;  }
+  .price-value-compact.success { color: var(--success); }
+  .price-value-compact.danger { color: var(--danger); }
+
+  /* Specs compact */
+  .specs-compact {    display: flex;    flex-direction: column;    gap: 6px;  }
+  .spec-row-compact {    display: flex;    justify-content: space-between;    font-size: 12px;    padding: 4px 0;    border-bottom: 1px solid var(--slate-50);  }
+  .spec-key-compact {    color: var(--slate-500);    font-weight: 500;  }
+  .spec-val-compact {    color: var(--slate-800);    font-weight: 500;  }
+  
+  /* Description compact */
+  .description-compact {    font-size: 12px;    line-height: 1.5;    color: var(--slate-600);    margin-top: 12px;    padding-top: 12px;    border-top: 1px solid var(--slate-100);  }
+
+  /* Stock movement table */
+  .movement-table { width: 100%; font-size: 13px; border-collapse: collapse; }
+  .movement-table th { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; color: var(--slate-500); padding: 8px 12px; background: var(--slate-50); border-bottom: 1px solid var(--slate-200); text-align: left; }
+  .movement-table td { padding: 10px 12px; border-bottom: 1px solid var(--slate-100); color: var(--slate-700); vertical-align: middle; }
+  .movement-table tr:last-child td { border-bottom: none; }
+  .movement-qty-pos { color: var(--success); font-weight: 700; }
+  .movement-qty-neg { color: var(--danger); font-weight: 700; }
+  .movement-empty { text-align: center; padding: 2.5rem; color: var(--slate-500); }
+
+  /* Type badges */
+  .type-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: .3px; }
+  .type-purchase { background: var(--success-light); color: var(--success); }
+  .type-sale { background: var(--danger-light); color: var(--danger); }
+  .type-return { background: var(--warning-light); color: var(--warning); }
+  .type-other { background: var(--slate-100); color: var(--slate-600); }
+
+  /* Units table */
+  .units-table { width: 100%; font-size: 13px; border-collapse: collapse; }
+  .units-table th { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--slate-500); padding: 10px 12px; background: var(--slate-50); border-bottom: 1px solid var(--slate-200); text-align: left; }
+  .units-table td { padding: 10px 12px; border-bottom: 1px solid var(--slate-100); vertical-align: middle; }
+  .units-table tr:last-child td { border-bottom: none; }
+  .units-table tr.row-stolen td { background: #fff5f5; }
+  .units-table tr.row-lost td { background: #fff9db; }
+  .unit-badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 20px; text-transform: uppercase; letter-spacing: .3px; }
+  .unit-available { background: var(--success-light); color: var(--success); }
+  .unit-sold { background: var(--slate-100); color: var(--slate-600); }
+  .unit-reserved { background: var(--info-light); color: var(--info); }
+  .unit-damaged { background: var(--slate-800); color: #fff; }
+  .unit-stolen { background: var(--danger-light); color: var(--danger); }
+  .unit-lost { background: var(--warning-light); color: var(--warning); }
+  .unit-sp-badge { background: var(--info-light); color: var(--info); font-size: 9px; font-weight: 700; padding: 1px 4px; border-radius: 3px; vertical-align: top; margin-left: 2px; }
+  .units-scroll { max-height: 450px; overflow-y: auto; }
+
+  /* Supplier */
+  .supplier-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--slate-600); padding: 5px 0; }
+  .supplier-row i { font-size: 14px; width: 18px; color: var(--slate-400); }
+  .supplier-name { font-size: 15px; font-weight: 600; color: var(--slate-800); margin-bottom: 2px; }
+  .supplier-contact { font-size: 12px; color: var(--slate-500); margin-bottom: 12px; }
+
+  /* Product image */
+  .product-img-wrap { background: var(--slate-50); border-radius: var(--radius); overflow: hidden; display: flex; align-items: center; justify-content: center; min-height: 160px; }
+  .product-img-wrap img { max-height: 200px; width: 100%; object-fit: contain; }
+  .product-img-placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 2rem; color: var(--slate-400); }
+  .product-img-placeholder i { font-size: 36px; }
+  .product-img-placeholder p { font-size: 12px; margin: 0; }
+
+  /* Loss card */
+  .loss-banner { display: flex; align-items: center; gap: 10px; background: var(--danger-light); border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 14px; border: 1px solid #ffc9c9; }
+  .loss-banner i { font-size: 18px; color: var(--danger); }
+  .loss-banner span { font-size: 13px; font-weight: 700; color: var(--danger); }
+  .loss-info-row { display: flex; justify-content: space-between; font-size: 13px; padding: 6px 0; border-bottom: 1px solid var(--slate-100); }
+  .loss-info-row:last-child { border-bottom: none; }
+  .loss-info-label { color: var(--slate-500); font-weight: 500; }
+  .loss-info-val { color: var(--slate-800); font-weight: 600; }
+
+  .units-empty { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 2rem; text-align: center; }
+  .units-empty i { font-size: 32px; color: var(--slate-300); }
+  .units-empty p { font-size: 13px; color: var(--slate-500); margin: 0; }
+  
+  .warranty-active { color: var(--success); font-weight: 600; }
+  .warranty-expired { color: var(--slate-500); }
+</style>
+
+<div class="pd-wrap">
+
+  <!-- Page Header -->
+  <div class="pd-header">
+    <div class="pd-header-left">
+      <div class="pd-icon-wrap">
+        {% if product.category.is_single_item %}📱{% else %}📦{% endif %}
+      </div>
+      <h1 class="btn-pd btn-pd-danger">{{ product.name }}</h1>
+      <h1 class="btn-pd btn-pd-danger">{{ product.sku_code }}</h1>
+      <div>
+
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:4px;">
+          {% if product.is_stolen_or_lost %}
+            <span class="status-pill status-lost"><i class="fas fa-skull-crossbones"></i> {{ product.get_loss_type_display|default:"Stolen/Lost" }}</span>
+          {% elif product.category.is_single_item %}
+            {% if product.available_quantity > 0 %}
+              <span class="status-pill status-available">✓ Available</span>
+            {% else %}
+              <span class="status-pill status-sold-out">✗ Sold Out</span>
+            {% endif %}
+          {% else %}
+            {% if product.bulk_quantity == 0 %}
+              <span class="status-pill status-out">❌ Out of Stock</span>
+            {% elif product.bulk_quantity <= product.reorder_level %}
+              <span class="status-pill status-low">⚠ Low Stock</span>
+            {% else %}
+              <span class="status-pill status-available">✓ In Stock</span>
+            {% endif %}
+          {% endif %}
         </div>
-        
-        <!-- Pricing Information -->
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="mb-0"><i class="fas fa-tags me-2"></i>Pricing Information</h5>
-            </div>
-            <div class="card-body">
-                <div class="row text-center">
-                    <div class="col-md-4">
-                        <div class="p-3 bg-light rounded">
-                            <small class="text-muted">Buying Price</small>
-                            <h3 class="mb-0">KSH {{ product.buying_price|floatformat:0 }}</h3>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="p-3 bg-light rounded">
-                            <small class="text-muted">Selling Price</small>
-                            <h3 class="mb-0 text-success">KSH {{ product.selling_price|floatformat:0 }}</h3>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="p-3 bg-light rounded">
-                            <small class="text-muted">Best/Retail Price</small>
-                            <h3 class="mb-0 text-info">KSH {{ product.best_price|floatformat:0|default:"-" }}</h3>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="row mt-4">
-                    <div class="col-md-6">
-                        <div class="p-3 bg-light rounded">
-                            <h6>Profit Margin</h6>
-                            <span class="display-6 {% if product.profit_margin > 0 %}text-success{% else %}text-danger{% endif %}">
-                                KSH {{ product.profit_margin|floatformat:0 }}
-                            </span>
-                            <span class="ms-2">({{ product.profit_percentage|floatformat:1 }}%)</span>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="p-3 bg-light rounded">
-                            <h6>Price Difference (Sell - Best)</h6>
-                            <span class="display-6">{{ product.price_difference|floatformat:0 }}</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
+      </div>
+    </div>
+    <div class="pd-header-actions">
+      <a href="{% url 'inventory:product_edit' product.id %}" class="btn-pd btn-pd-primary">
+        <i class="fas fa-edit"></i> Edit
+      </a>
+      {% if product.category.is_bulk_item %}
+        <a href="{% url 'inventory:product_restock' %}?sku={{ product.sku_code }}" class="btn-pd btn-pd-success">
+          <i class="fas fa-boxes"></i> Restock
+        </a>
+      {% else %}
+        <a href="{% url 'inventory:product_bulk_add_units_with_sku' product.sku_code %}" class="btn-pd btn-pd-success">
+          <i class="fas fa-plus-circle"></i> Add Units
+        </a>
+      {% endif %}
+      <a href="{% url 'inventory:product_list' %}" class="btn-pd btn-pd-outline">
+        <i class="fas fa-arrow-left"></i> Back
+      </a>
+      <a href="{% url 'inventory:product_delete' product.id %}" class="btn-pd btn-pd-danger" onclick="return confirm('Are you sure you want to delete this product?');">
+        <i class="fas fa-trash"></i> Delete
+      </a>
+      <a href="{% url 'inventory:product_add' %}" class="btn-pd btn-pd-primary">
+        <i class="fas fa-plus"></i> Add New
+      </a>
+    </div>
+  </div>
+
+  <!-- Two-column grid -->
+  <div class="pd-grid">
+
+    <!-- LEFT COLUMN -->
+    <div>
+
+      <!-- PRODUCT INFORMATION CARD - 4 COLUMNS -->
+      <div class="pd-card">
+        <div class="pd-card-header">
+          <div class="pd-card-title"><i class="fas fa-info-circle"></i> Product Information</div>
         </div>
-        
-        <!-- Stock Movement History -->
-        <div class="card mb-4">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0"><i class="fas fa-history me-2"></i>Stock Movement History</h5>
-                <a href="{% url 'inventory:stock_entry_add' product.id %}" class="btn btn-sm btn-success">
-                    <i class="fas fa-plus"></i> Add Entry
-                </a>
+        <div class="pd-card-body">
+          <div class="product-info-grid">
+            
+            <!-- COLUMN 1: Basic Info -->
+            <div class="info-section">
+              <div class="section-title">Basic Information</div>
+              <div class="compact-row">
+                <span class="compact-label">SKU Code</span>
+                <span class="compact-value info-mono">{{ product.sku_code }}</span>
+              </div>
+              <div class="compact-row">
+                <span class="compact-label">Name</span>
+                <span class="compact-value">{{ product.name|default:"—" }}</span>
+              </div>
+              <div class="compact-row">
+                <span class="compact-label">Category</span>
+                <span class="compact-value">{% if product.category.is_single_item %}📱 {% else %}📦 {% endif %}{{ product.category.name }}</span>
+              </div>
+              <div class="compact-row">
+                <span class="compact-label">Brand / Model</span>
+                <span class="compact-value">{{ product.brand|default:"—" }} / {{ product.model|default:"—" }}</span>
+              </div>
+              <div class="compact-row">
+                <span class="compact-label">Warranty</span>
+                <span class="compact-value">{{ product.warranty_months }} months {% if product.is_in_warranty %}<span class="warranty-active">✓ Active</span>{% else %}<span class="warranty-expired">Expired</span>{% endif %}</span>
+              </div>
+              <div class="compact-row">
+                <span class="compact-label">Created</span>
+                <span class="compact-value">{{ product.created_at|date:"Y-m-d" }}</span>
+              </div>
+              <div class="compact-row">
+                <span class="compact-label">Created By</span>
+                <span class="compact-value">{% if product.created_by %}{{ product.created_by.get_full_name|default:product.created_by.username }}{% else %}FIELDMAX{% endif %}</span>
+              </div>
             </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-hover mb-0">
-                        <thead>
-                            <tr>
-                                <th>Date</th>
-                                <th>Type</th>
-                                <th>Quantity</th>
-                                <th>Unit Price</th>
-                                <th>Total</th>
-                                <th>Reference</th>
-                                <th>By</th>
-                             </tr>
-                        </thead>
-                        <tbody>
-                            {% for entry in stock_entries %}
-                            <tr>
-                                <td>{{ entry.created_at|date:"Y-m-d H:i" }}</td>
-                                <td>
-                                    {% if entry.entry_type == 'purchase' %}
-                                        <span class="badge bg-success">Purchase</span>
-                                    {% elif entry.entry_type == 'sale' %}
-                                        <span class="badge bg-danger">Sale</span>
-                                    {% elif entry.entry_type == 'reversal' %}
-                                        <span class="badge bg-warning text-dark">Return</span>
-                                    {% elif entry.entry_type == 'return' %}
-                                        <span class="badge bg-info">Customer Return</span>
-                                    {% else %}
-                                        <span class="badge bg-secondary">Adjustment</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if entry.quantity > 0 %}
-                                        <span class="text-success fw-bold">+{{ entry.quantity }}</span>
-                                    {% else %}
-                                        <span class="text-danger fw-bold">{{ entry.quantity }}</span>
-                                    {% endif %}
-                                </td>
-                                <td>KSH {{ entry.unit_price|floatformat:0 }}</td>
-                                <td>KSH {{ entry.total_amount|floatformat:0 }}</td>
-                                <td><small>{{ entry.reference_id|default:"-" }}</small></td>
-                                <td>{{ entry.created_by.username|default:"System" }}</td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="7" class="text-center py-4">No stock movements found</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+            
+            <!-- COLUMN 2: Stock Information -->
+            <div class="info-section">
+              <div class="section-title">Stock Information</div>
+              {% if product.category.is_single_item %}
+              <div class="stock-tiles-compact">
+                <div class="stock-tile-compact">
+                  <div class="tile-label">Total</div>
+                  <div class="tile-num">{{ product.total_quantity }}</div>
                 </div>
+                <div class="stock-tile-compact" style="background: var(--success-light);">
+                  <div class="tile-label">Available</div>
+                  <div class="tile-num" style="color: var(--success);">{{ product.available_quantity }}</div>
+                </div>
+                <div class="stock-tile-compact" style="background: var(--warning-light);">
+                  <div class="tile-label">Reserved</div>
+                  <div class="tile-num" style="color: var(--warning);">{{ product.reserved_quantity }}</div>
+                </div>
+                <div class="stock-tile-compact" style="background: var(--danger-light);">
+                  <div class="tile-label">Damaged</div>
+                  <div class="tile-num" style="color: var(--danger);">{{ product.damaged_quantity }}</div>
+                </div>
+              </div>
+              {% else %}
+              <div class="stock-tiles-compact">
+                <div class="stock-tile-compact">
+                  <div class="tile-label">Current Stock</div>
+                  <div class="tile-num">{{ product.bulk_quantity }}</div>
+                </div>
+                <div class="stock-tile-compact">
+                  <div class="tile-label">Reorder Level</div>
+                  <div class="tile-num">{{ product.reorder_level|default:"—" }}</div>
+                </div>
+              </div>
+              {% endif %}
+              {% if product.description %}
+              <div class="description-compact">
+                <strong>Description:</strong><br>
+                {{ product.description|truncatechars:100 }}
+              </div>
+              {% endif %}
             </div>
-        </div>
+            
+            <!-- COLUMN 3: Pricing Information -->
+            <div class="info-section">
+              <div class="section-title">Pricing Information</div>
+              <div class="price-tiles-compact">
+                <div class="price-row-compact">
+                  <span class="price-label-compact">Buying Price</span>
+                  <span class="price-value-compact">KES {{ product.buying_price|floatformat:2 }}</span>
+                </div>
+                <div class="price-row-compact" style="background: var(--success-light);">
+                  <span class="price-label-compact" style="color: var(--success);">Selling Price</span>
+                  <span class="price-value-compact" style="color: var(--success);">KES {{ product.selling_price|floatformat:2 }}</span>
+                </div>
+                <div class="price-row-compact">
+                  <span class="price-label-compact">Best Price</span>
+                  <span class="price-value-compact">KES {{ product.best_price|floatformat:2|default:"—" }}</span>
+                </div>
+                <div class="price-row-compact">
+                  <span class="price-label-compact">Profit Margin</span>
+                  <span class="price-value-compact {% if product.profit_margin > 0 %}success{% else %}danger{% endif %}">
+                    KES {{ product.profit_margin|floatformat:2 }} ({{ product.profit_percentage|floatformat:1 }}%)
+                  </span>
+                </div>
+                <div class="price-row-compact">
+                  <span class="price-label-compact">Stock Value</span>
+                  <span class="price-value-compact">KES {{ product.stock_value|floatformat:2 }}</span>
+                </div>
+              </div>
+            </div>
+            
+<!-- COLUMN 4: Specifications & Identifier -->
+<!-- COLUMN 4: Specifications & Identifier -->
+<div class="info-section">
+  <div class="section-title">
+    <i class="fas fa-info-circle"></i> Specifications & Identifier
+  </div>
+  
+  <!-- SPECIFICATIONS SECTION -->
+  <div style="margin-bottom: 16px;">
+    <div class="compact-label" style="margin-bottom: 8px;">Specifications:</div>
+    {% if product.specifications %}
+      <div class="specs-compact">
+        {% for key, value in product.specifications.items %}
+          {% if key != 'serial_number' and key != 'batch_id' %}
+            <div class="spec-row-compact">
+              <span class="spec-key-compact">{{ key|upper }}</span>
+              <span class="spec-val-compact">{{ value }}</span>
+            </div>
+          {% endif %}
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="spec-row-compact">
+        <span class="spec-val-compact text-muted">No specifications provided</span>
+      </div>
+    {% endif %}
+  </div>
+  
+  <!-- SEPARATOR -->
+  <div style="margin: 12px 0; border-top: 1px solid var(--slate-100);"></div>
+  
+  <!-- IDENTIFIER SECTION -->
+  <div>
+    <div class="compact-label" style="margin-bottom: 8px;">
+      <i class="fas fa-tag"></i> Identifier Information:
     </div>
     
-    <!-- Sidebar -->
-    <div class="col-md-4">
-        <!-- Product Image -->
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="mb-0"><i class="fas fa-image me-2"></i>Product Image</h5>
-            </div>
-            <div class="card-body text-center">
-                {% if product.image %}
-                    <img src="{{ product.image.url }}" alt="{{ product.name|default:product.product_code }}" class="img-fluid rounded" style="max-height: 200px;">
-                {% else %}
-                    <div class="bg-light p-5 rounded">
-                        <i class="fas fa-image fa-4x text-muted"></i>
-                        <p class="text-muted mt-2">No image available</p>
-                    </div>
-                {% endif %}
-            </div>
-        </div>
-        
-        <!-- Additional Images -->
-        {% if product.images.all %}
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="mb-0"><i class="fas fa-images me-2"></i>Additional Images</h5>
-            </div>
-            <div class="card-body">
-                <div class="row g-2">
-                    {% for img in product.images.all %}
-                    <div class="col-4">
-                        <img src="{{ img.image.url }}" class="img-thumbnail" alt="Product image" style="height: 80px; object-fit: cover;">
-                        {% if img.is_primary %}
-                            <small class="d-block text-center text-primary">Primary</small>
-                        {% endif %}
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
-        </div>
-        {% endif %}
-        
-        <!-- Supplier Information -->
-        {% if product.supplier %}
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="mb-0"><i class="fas fa-truck me-2"></i>Supplier</h5>
-            </div>
-            <div class="card-body">
-                <h6>{{ product.supplier.name }}</h6>
-                <p class="mb-1"><i class="fas fa-user me-2"></i>{{ product.supplier.contact_person|default:"-" }}</p>
-                <p class="mb-1"><i class="fas fa-phone me-2"></i>{{ product.supplier.phone }}</p>
-                <p class="mb-1"><i class="fas fa-envelope me-2"></i>{{ product.supplier.email|default:"-" }}</p>
-                {% if product.supplier.address %}
-                <p class="mb-0"><i class="fas fa-map-marker-alt me-2"></i>{{ product.supplier.address }}</p>
-                {% endif %}
-            </div>
-        </div>
-        {% endif %}
-        
-        <!-- Stock Alert -->
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="mb-0"><i class="fas fa-bell me-2"></i>Stock Alert</h5>
-            </div>
-            <div class="card-body">
-                {% if product.category.is_bulk_item %}
-                    <p>Reorder Level: <strong>{{ product.reorder_level|default:"Not set" }}</strong></p>
-                    <p>Current Stock: <strong>{{ product.quantity }}</strong></p>
-                    {% if product.needs_reorder %}
-                        <div class="alert alert-warning">
-                            <i class="fas fa-exclamation-triangle"></i>
-                            Stock is below reorder level!
-                        </div>
-                    {% else %}
-                        <div class="alert alert-info">
-                            <i class="fas fa-info-circle"></i>
-                            Stock level is healthy
-                        </div>
-                    {% endif %}
-                {% else %}
-                    <p class="text-muted">Stock alerts not applicable for single items</p>
-                {% endif %}
-            </div>
-        </div>
-        
-        <!-- Theft/Loss Information (if applicable) -->
-        {% if product.is_stolen_or_lost %}
-        <div class="card mb-4 border-danger">
-            <div class="card-header bg-danger text-white">
-                <h5 class="mb-0"><i class="fas fa-skull-crossbones me-2"></i>Loss Information</h5>
-            </div>
-            <div class="card-body">
-                <p><strong>Loss Type:</strong> {{ product.get_loss_type_display }}</p>
-                <p><strong>Reported Date:</strong> {{ product.loss_reported_date|date:"Y-m-d H:i" }}</p>
-                <p><strong>Reported By:</strong> {{ product.loss_reported_by.username|default:"Unknown" }}</p>
-                {% if product.police_report_number %}
-                <p><strong>Police Report:</strong> {{ product.police_report_number }}</p>
-                <p><strong>Police Station:</strong> {{ product.police_station|default:"-" }}</p>
-                {% endif %}
-                {% if product.loss_notes %}
-                <p><strong>Notes:</strong> {{ product.loss_notes }}</p>
-                {% endif %}
-                {% if product.insurance_claim_filed %}
-                <p><strong>Insurance Claim:</strong> {{ product.insurance_claim_number|default:"Filed" }}</p>
-                <p><strong>Claim Amount:</strong> KSH {{ product.insurance_claim_amount|floatformat:0|default:"-" }}</p>
-                {% if product.insurance_payout_amount %}
-                <p><strong>Payout Amount:</strong> KSH {{ product.insurance_payout_amount|floatformat:0 }}</p>
-                {% endif %}
-                {% endif %}
-                {% if product.recovered_date %}
-                <p><strong>Recovered Date:</strong> {{ product.recovered_date|date:"Y-m-d H:i" }}</p>
-                <p><strong>Recovered By:</strong> {{ product.recovered_by.username|default:"-" }}</p>
-                {% endif %}
-            </div>
-        </div>
-        {% endif %}
-        
-        <!-- Action Buttons -->
-        <div class="d-grid gap-2">
-            <a href="{% url 'inventory:product_edit' product.id %}" class="btn btn-warning">
-                <i class="fas fa-edit me-2"></i>Edit Product
-            </a>
-            <a href="{% url 'inventory:stock_entry_add' product.id %}" class="btn btn-success">
-                <i class="fas fa-plus-circle me-2"></i>Add Stock Entry
-            </a>
-            {% if product.is_stolen_or_lost and not product.recovered_date %}
-            <a href="{% url 'inventory:recover_product' product.id %}" class="btn btn-info">
-                <i class="fas fa-undo me-2"></i>Recover Product
-            </a>
+    {% if product.category.is_single_item %}
+      <!-- ============================================ -->
+      <!-- SINGLE ITEM - Each unit has unique IMEI/Serial -->
+      <!-- ============================================ -->
+      <div style="background: var(--accent-light); padding: 12px; border-radius: 8px; margin-bottom: 10px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <span style="font-weight: 700; color: var(--accent); font-size: 12px;">
+            <i class="fas fa-microchip"></i> Identifier Type:
+          </span>
+          <span style="font-weight: 600; color: var(--accent); font-size: 12px;">
+            {% if product.category.identifier_type == 'imei' %}
+              IMEI (15-digit)
+            {% elif product.category.identifier_type == 'serial' %}
+              SERIAL NUMBER
+            {% else %}
+              UNIQUE IDENTIFIER
             {% endif %}
-            <a href="{% url 'inventory:product_list' %}" class="btn btn-secondary">
-                <i class="fas fa-arrow-left me-2"></i>Back to Products
-            </a>
-            <a href="{% url 'inventory:product_delete' product.id %}" class="btn btn-outline-danger" onclick="return confirm('Are you sure you want to delete this product?');">
-                <i class="fas fa-trash me-2"></i>Delete Product
-            </a>
+          </span>
         </div>
-    </div>
+        <div style="font-size: 11px; color: var(--accent); background: rgba(59, 91, 219, 0.1); padding: 6px; border-radius: 6px; text-align: center;">
+          <i class="fas fa-info-circle"></i> Each unit has its own unique identifier
+        </div>
+      </div>
+      
+      <!-- Count assigned units -->
+      {% with all_units=product.units.all %}
+        {% with total_units=all_units|length %}
+          {% if total_units > 0 %}
+            <div class="compact-row" style="margin-bottom: 8px;">
+              <span class="compact-label">Units with ID:</span>
+              <span class="compact-value">{{ total_units }} / {{ total_units }} assigned</span>
+            </div>
+            
+            <!-- Show sample of identifiers -->
+            <div style="margin-top: 8px;">
+              <div class="compact-label" style="margin-bottom: 6px;">Sample Identifiers:</div>
+              {% for unit in all_units|slice:":3" %}
+                <div style="font-family: monospace; font-size: 11px; background: var(--slate-50); padding: 5px 8px; margin-bottom: 4px; border-radius: 6px;">
+                  {% if unit.imei_number %}
+                    📱 IMEI: {{ unit.imei_number }}
+                  {% elif unit.serial_number %}
+                    🔢 SN: {{ unit.serial_number }}
+                  {% else %}
+                    ⚠️ No ID assigned
+                  {% endif %}
+                  <span style="float: right; font-size: 9px;" class="unit-badge 
+                    {% if unit.status == 'available' %}unit-available
+                    {% elif unit.status == 'sold' %}unit-sold
+                    {% elif unit.status == 'reserved' %}unit-reserved
+                    {% elif unit.status == 'damaged' %}unit-damaged
+                    {% elif unit.status == 'stolen' %}unit-stolen
+                    {% elif unit.status == 'lost' %}unit-lost
+                    {% endif %}">
+                    {{ unit.get_status_display }}
+                  </span>
+                </div>
+              {% endfor %}
+              {% if all_units|length > 3 %}
+                <div style="font-size: 10px; color: var(--slate-500); text-align: center; margin-top: 4px;">
+                  <a href="#units-table" style="color: var(--accent);">+ {{ all_units|length|add:"-3" }} more units</a>
+                </div>
+              {% endif %}
+            </div>
+          {% else %}
+            <div class="units-empty" style="padding: 12px; background: var(--slate-50); border-radius: 8px; text-align: center;">
+              <i class="fas fa-microchip" style="font-size: 20px; color: var(--slate-400);"></i>
+              <p style="font-size: 11px; margin: 8px 0 0;">No units added yet</p>
+              <a href="{% url 'inventory:product_bulk_add_units_with_sku' product.sku_code %}" class="btn-pd btn-pd-success" style="font-size: 10px; padding: 4px 12px; margin-top: 8px; display: inline-block;">
+                <i class="fas fa-plus"></i> Add First Unit
+              </a>
+            </div>
+          {% endif %}
+        {% endwith %}
+      {% endwith %}
+      
+    {% elif product.category.is_bulk_item %}
+      <!-- ============================================ -->
+      <!-- BULK ITEM - Single serial/batch for all units -->
+      <!-- ============================================ -->
+      <div style="background: var(--success-light); padding: 12px; border-radius: 8px; margin-bottom: 10px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <span style="font-weight: 700; color: var(--success); font-size: 12px;">
+            <i class="fas fa-boxes"></i> Identifier Type:
+          </span>
+          <span style="font-weight: 600; color: var(--success); font-size: 12px;">
+            SERIAL / BATCH NUMBER
+          </span>
+        </div>
+        
+        <!-- Serial/Batch Number Display -->
+        <div style="background: white; padding: 10px; border-radius: 6px; margin-top: 8px; text-align: center;">
+          <div style="font-size: 10px; color: var(--slate-500); text-transform: uppercase; letter-spacing: 0.5px;">Serial / Batch Number</div>
+          <div style="font-family: monospace; font-size: 14px; font-weight: 700; color: var(--success); margin-top: 4px; word-break: break-all;">
+            {% if product.bulk_serial_number %}
+              {{ product.bulk_serial_number }}
+            {% else %}
+              <span class="text-muted" style="font-size: 12px;">Not assigned</span>
+            {% endif %}
+          </div>
+        </div>
+        
+        <div style="font-size: 11px; color: var(--success); background: rgba(47, 158, 68, 0.1); padding: 6px; border-radius: 6px; text-align: center; margin-top: 8px;">
+          <i class="fas fa-info-circle"></i> Single batch/serial number applies to ALL {{ product.bulk_quantity }} units
+        </div>
+      </div>
+      
+      <!-- Bulk Quantity Display -->
+      <div class="compact-row" style="margin-top: 8px; padding: 8px; background: var(--slate-50); border-radius: 6px;">
+        <span class="compact-label">Total Quantity:</span>
+        <span class="compact-value" style="font-size: 16px; font-weight: 700; color: var(--success);">{{ product.bulk_quantity }} units</span>
+      </div>
+      
+      <div class="compact-row">
+        <span class="compact-label">Identifier Scope:</span>
+        <span class="compact-value">Single batch across all units</span>
+      </div>
+      
+    {% else %}
+      <!-- Other category types -->
+      <div class="compact-row text-muted" style="padding: 12px; text-align: center; background: var(--slate-50); border-radius: 8px;">
+        <i class="fas fa-info-circle"></i> No identifier tracking for this category
+      </div>
+    {% endif %}
+  </div>
+  
+  <!-- LAST MODIFIED -->
+  <div class="compact-row" style="margin-top: 16px; padding-top: 8px; border-top: 1px solid var(--slate-100);">
+    <span class="compact-label">Last Modified:</span>
+    <span class="compact-value">{{ product.updated_at|date:"Y-m-d H:i" }}</span>
+  </div>
 </div>
+
+
+          </div>
+        </div>
+      </div>
+
+      <!-- Stock Movement History with Pagination -->
+      <div class="pd-card">
+        <div class="pd-card-header">
+          <div class="pd-card-title"><i class="fas fa-history"></i> Stock Movement History</div>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <!-- Per Page Selector for Stock Movements -->
+            <select id="stockPerPageSelect" class="form-select" style="width: auto; font-size: 12px; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--slate-300); background: white;">
+              <option value="10" {% if stock_per_page == '10' %}selected{% endif %}>10 per page</option>
+              <option value="25" {% if stock_per_page == '25' %}selected{% endif %}>25 per page</option>
+              <option value="50" {% if stock_per_page == '50' %}selected{% endif %}>50 per page</option>
+              <option value="100" {% if stock_per_page == '100' %}selected{% endif %}>100 per page</option>
+            </select>
+          </div>
+        </div>
+        <div style="overflow-x: auto;">
+          <table class="movement-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Qty</th>
+                <th>Unit Price</th>
+                <th>Total</th>
+                <th>By</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for entry in stock_entries %}
+              <tr>
+                <td style="white-space:nowrap;">{{ entry.created_at|date:"Y-m-d H:i" }}</td>
+                <td>
+                  {% if entry.entry_type == 'purchase' %}
+                    <span class="type-badge type-purchase">Purchase</span>
+                  {% elif entry.entry_type == 'sale' %}
+                    <span class="type-badge type-sale">Sale</span>
+                  {% elif entry.entry_type == 'reversal' %}
+                    <span class="type-badge type-return">Return</span>
+                  {% else %}
+                    <span class="type-badge type-other">{{ entry.get_entry_type_display }}</span>
+                  {% endif %}
+                </td>
+                <td class="{% if entry.quantity > 0 %}movement-qty-pos{% else %}movement-qty-neg{% endif %}">
+                  {% if entry.quantity > 0 %}+{% endif %}{{ entry.quantity }}
+                </td>
+                <td>KES {{ entry.unit_price|floatformat:2 }}</td>
+                <td style="font-weight:600;">KES {{ entry.total_amount|floatformat:2 }}</td>
+                <td style="color: var(--slate-500);">{{ entry.created_by.username|default:"System" }}</td>
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="6" class="movement-empty">
+                  <i class="fas fa-inbox" style="display:block; font-size:24px; margin-bottom:8px; color: var(--slate-300);"></i>
+                  No stock movements found
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        
+        <!-- Stock Movement Pagination -->
+        {% if stock_entries.has_other_pages %}
+        <div class="pd-card-body" style="padding: 12px 20px; border-top: 1px solid var(--slate-100);">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+            <div style="font-size: 12px; color: var(--slate-600);">
+              Showing {{ stock_entries.start_index }} to {{ stock_entries.end_index }} of {{ stock_entries.paginator.count }} movements
+            </div>
+            <div style="display: flex; gap: 5px;">
+              {% if stock_entries.has_previous %}
+                <a href="?stock_page=1&stock_per_page={{ stock_per_page }}{% if per_page %}&per_page={{ per_page }}{% endif %}{% if page %}&page={{ page }}{% endif %}" class="btn-pd btn-pd-outline" style="padding: 6px 10px; font-size: 12px;">
+                  <i class="fas fa-angle-double-left"></i>
+                </a>
+                <a href="?stock_page={{ stock_entries.previous_page_number }}&stock_per_page={{ stock_per_page }}{% if per_page %}&per_page={{ per_page }}{% endif %}{% if page %}&page={{ page }}{% endif %}" class="btn-pd btn-pd-outline" style="padding: 6px 10px; font-size: 12px;">
+                  <i class="fas fa-angle-left"></i>
+                </a>
+              {% endif %}
+              
+              {% for num in stock_entries.paginator.page_range %}
+                {% if stock_entries.number == num %}
+                  <span class="btn-pd btn-pd-primary" style="padding: 6px 12px; font-size: 12px; cursor: default;">{{ num }}</span>
+                {% elif num > stock_entries.number|add:'-3' and num < stock_entries.number|add:'3' %}
+                  <a href="?stock_page={{ num }}&stock_per_page={{ stock_per_page }}{% if per_page %}&per_page={{ per_page }}{% endif %}{% if page %}&page={{ page }}{% endif %}" class="btn-pd btn-pd-outline" style="padding: 6px 12px; font-size: 12px;">
+                    {{ num }}
+                  </a>
+                {% endif %}
+              {% endfor %}
+              
+              {% if stock_entries.has_next %}
+                <a href="?stock_page={{ stock_entries.next_page_number }}&stock_per_page={{ stock_per_page }}{% if per_page %}&per_page={{ per_page }}{% endif %}{% if page %}&page={{ page }}{% endif %}" class="btn-pd btn-pd-outline" style="padding: 6px 10px; font-size: 12px;">
+                  <i class="fas fa-angle-right"></i>
+                </a>
+                <a href="?stock_page={{ stock_entries.paginator.num_pages }}&stock_per_page={{ stock_per_page }}{% if per_page %}&per_page={{ per_page }}{% endif %}{% if page %}&page={{ page }}{% endif %}" class="btn-pd btn-pd-outline" style="padding: 6px 10px; font-size: 12px;">
+                  <i class="fas fa-angle-double-right"></i>
+                </a>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+
+    </div>
+
+    <!-- RIGHT COLUMN -->
+    <div>
+      <!-- Product Image -->
+      <div class="pd-card">
+        <div class="pd-card-header">
+          <div class="pd-card-title"><i class="fas fa-image"></i> Product Image</div>
+        </div>
+        <div class="pd-card-body" style="padding: 12px;">
+          <div class="product-img-wrap">
+            {% if product.image %}
+              <img src="{{ product.image.url }}" alt="{{ product.name }}">
+            {% else %}
+              <div class="product-img-placeholder">
+                <i class="fas fa-image"></i>
+                <p>No image uploaded</p>
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      
+      <!-- Units Table (IMEI / Serial) - Only for single items -->
+      {% if product.category.is_single_item %}
+      <div class="pd-card">
+        <div class="pd-card-header">
+          <div class="pd-card-title"><i class="fas fa-microchip"></i> Units (IMEI / Serial)</div>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <!-- Per Page Selector for Units -->
+            <select id="perPageSelect" class="form-select" style="width: auto; font-size: 12px; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--slate-300); background: white;">
+              <option value="10" {% if per_page == '10' %}selected{% endif %}>10 per page</option>
+              <option value="25" {% if per_page == '25' %}selected{% endif %}>25 per page</option>
+              <option value="50" {% if per_page == '50' %}selected{% endif %}>50 per page</option>
+              <option value="100" {% if per_page == '100' %}selected{% endif %}>100 per page</option>
+            </select>
+            <a href="{% url 'inventory:product_bulk_add_units_with_sku' product.sku_code %}" class="btn-pd btn-pd-success" style="padding:5px 10px; font-size:12px;">
+              <i class="fas fa-plus"></i> Add Units
+            </a>
+          </div>
+        </div>
+        {% if product_units %}
+        <div class="units-scroll">
+          <table class="units-table">
+            <thead>
+              <tr>
+                <th>IMEI / Serial Number</th>
+                <th>Status</th>
+                <th>Purchase Date</th>
+                <th>Warranty</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for unit in product_units %}
+              <tr class="{% if unit.status == 'stolen' %}row-stolen{% elif unit.status == 'lost' %}row-lost{% endif %}">
+                <td style="font-family: monospace; font-size: 12px;">
+                  {% if unit.imei_number %}
+                    {{ unit.imei_number }}
+                  {% elif unit.serial_number %}
+                    {{ unit.serial_number }}
+                  {% else %}
+                    —
+                  {% endif %}
+                  {% if unit.unit_selling_price and unit.unit_selling_price != product.selling_price %}
+                    <span class="unit-sp-badge">SP</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if unit.status == 'available' %}
+                    <span class="unit-badge unit-available">Available</span>
+                  {% elif unit.status == 'sold' %}
+                    <span class="unit-badge unit-sold">Sold</span>
+                  {% elif unit.status == 'reserved' %}
+                    <span class="unit-badge unit-reserved">Reserved</span>
+                  {% elif unit.status == 'damaged' %}
+                    <span class="unit-badge unit-damaged">Damaged</span>
+                  {% elif unit.status == 'stolen' %}
+                    <span class="unit-badge unit-stolen">Stolen</span>
+                  {% elif unit.status == 'lost' %}
+                    <span class="unit-badge unit-lost">Lost</span>
+                  {% endif %}
+                </td>
+                <td style="font-size: 11px; color: var(--slate-600);">
+                  {{ unit.purchase_date|date:"Y-m-d"|default:"—" }}
+                </td>
+                <td style="font-size: 11px;">
+                  {% if unit.is_in_warranty %}
+                    <span class="warranty-active">✓ {{ unit.warranty_remaining_days }} days left</span>
+                  {% else %}
+                    <span class="warranty-expired">Expired</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        
+        <!-- Units Pagination -->
+        {% if product_units.has_other_pages %}
+        <div class="pd-card-body" style="padding: 12px 20px; border-top: 1px solid var(--slate-100);">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+            <div style="font-size: 12px; color: var(--slate-600);">
+              Showing {{ product_units.start_index }} to {{ product_units.end_index }} of {{ product_units.paginator.count }} units
+            </div>
+            <div style="display: flex; gap: 5px;">
+              {% if product_units.has_previous %}
+                <a href="?page=1&per_page={{ per_page }}{% if stock_per_page %}&stock_per_page={{ stock_per_page }}{% endif %}{% if stock_page %}&stock_page={{ stock_page }}{% endif %}" class="btn-pd btn-pd-outline" style="padding: 6px 10px; font-size: 12px;">
+                  <i class="fas fa-angle-double-left"></i>
+                </a>
+                <a href="?page={{ product_units.previous_page_number }}&per_page={{ per_page }}{% if stock_per_page %}&stock_per_page={{ stock_per_page }}{% endif %}{% if stock_page %}&stock_page={{ stock_page }}{% endif %}" class="btn-pd btn-pd-outline" style="padding: 6px 10px; font-size: 12px;">
+                  <i class="fas fa-angle-left"></i>
+                </a>
+              {% endif %}
+              
+              {% for num in product_units.paginator.page_range %}
+                {% if product_units.number == num %}
+                  <span class="btn-pd btn-pd-primary" style="padding: 6px 12px; font-size: 12px; cursor: default;">{{ num }}</span>
+                {% elif num > product_units.number|add:'-3' and num < product_units.number|add:'3' %}
+                  <a href="?page={{ num }}&per_page={{ per_page }}{% if stock_per_page %}&stock_per_page={{ stock_per_page }}{% endif %}{% if stock_page %}&stock_page={{ stock_page }}{% endif %}" class="btn-pd btn-pd-outline" style="padding: 6px 12px; font-size: 12px;">
+                    {{ num }}
+                  </a>
+                {% endif %}
+              {% endfor %}
+              
+              {% if product_units.has_next %}
+                <a href="?page={{ product_units.next_page_number }}&per_page={{ per_page }}{% if stock_per_page %}&stock_per_page={{ stock_per_page }}{% endif %}{% if stock_page %}&stock_page={{ stock_page }}{% endif %}" class="btn-pd btn-pd-outline" style="padding: 6px 10px; font-size: 12px;">
+                  <i class="fas fa-angle-right"></i>
+                </a>
+                <a href="?page={{ product_units.paginator.num_pages }}&per_page={{ per_page }}{% if stock_per_page %}&stock_per_page={{ stock_per_page }}{% endif %}{% if stock_page %}&stock_page={{ stock_page }}{% endif %}" class="btn-pd btn-pd-outline" style="padding: 6px 10px; font-size: 12px;">
+                  <i class="fas fa-angle-double-right"></i>
+                </a>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        {% endif %}
+        
+        {% else %}
+        <div class="units-empty">
+          <i class="fas fa-microchip"></i>
+          <p>No units added yet</p>
+          <a href="{% url 'inventory:product_bulk_add_units_with_sku' product.sku_code %}" class="btn-pd btn-pd-success" style="font-size:12px; padding:6px 12px;">
+            <i class="fas fa-plus"></i> Add First Unit
+          </a>
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
+
+
+      <!-- Supplier Information -->
+      {% if product.supplier %}
+      <div class="pd-card">
+        <div class="pd-card-header">
+          <div class="pd-card-title"><i class="fas fa-truck"></i> Supplier</div>
+        </div>
+        <div class="pd-card-body">
+          <div class="supplier-name">{{ product.supplier.name }}</div>
+          <div class="supplier-contact">{{ product.supplier.contact_person|default:"No contact person" }}</div>
+          <div class="supplier-row"><i class="fas fa-phone"></i> {{ product.supplier.phone }}</div>
+          {% if product.supplier.email %}
+          <div class="supplier-row"><i class="fas fa-envelope"></i> {{ product.supplier.email }}</div>
+          {% endif %}
+          {% if product.supplier.address %}
+          <div class="supplier-row"><i class="fas fa-map-marker-alt"></i> {{ product.supplier.address|truncatechars:50 }}</div>
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Loss Information -->
+      {% if product.is_stolen_or_lost %}
+      <div class="pd-card" style="border-color: #ffc9c9;">
+        <div class="pd-card-header" style="background: var(--danger-light); border-bottom-color: #ffc9c9;">
+          <div class="pd-card-title" style="color: var(--danger);"><i class="fas fa-skull-crossbones"></i> Loss Information</div>
+        </div>
+        <div class="pd-card-body">
+          <div class="loss-banner">
+            <i class="fas fa-exclamation-triangle"></i>
+            <span>{{ product.get_loss_type_display }}</span>
+          </div>
+          <div class="loss-info-row">
+            <span class="loss-info-label">Reported Date</span>
+            <span class="loss-info-val">{{ product.loss_reported_date|date:"Y-m-d H:i" }}</span>
+          </div>
+          <div class="loss-info-row">
+            <span class="loss-info-label">Reported By</span>
+            <span class="loss-info-val">{{ product.loss_reported_by.username|default:"Unknown" }}</span>
+          </div>
+          {% if product.police_report_number %}
+          <div class="loss-info-row">
+            <span class="loss-info-label">Police Report</span>
+            <span class="loss-info-val">{{ product.police_report_number }}</span>
+          </div>
+          {% endif %}
+          {% if product.insurance_claim_filed %}
+          <div class="loss-info-row">
+            <span class="loss-info-label">Insurance Claim</span>
+            <span class="loss-info-val">{{ product.insurance_claim_number|default:"Filed" }}</span>
+          </div>
+          {% endif %}
+          {% if product.recovered_date %}
+          <div class="loss-info-row">
+            <span class="loss-info-label">Recovered</span>
+            <span class="loss-info-val" style="color: var(--success);">{{ product.recovered_date|date:"Y-m-d" }}</span>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+</div>
+
+<!-- Combined JavaScript for both per page selectors -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Units per page selector
+    const perPageSelect = document.getElementById('perPageSelect');
+    if (perPageSelect) {
+        perPageSelect.addEventListener('change', function() {
+            const perPage = this.value;
+            const urlParams = new URLSearchParams(window.location.search);
+            urlParams.set('per_page', perPage);
+            urlParams.set('page', 1); // Reset to first page
+            window.location.search = urlParams.toString();
+        });
+    }
+    
+    // Stock movements per page selector
+    const stockPerPageSelect = document.getElementById('stockPerPageSelect');
+    if (stockPerPageSelect) {
+        stockPerPageSelect.addEventListener('change', function() {
+            const stockPerPage = this.value;
+            const urlParams = new URLSearchParams(window.location.search);
+            urlParams.set('stock_per_page', stockPerPage);
+            urlParams.set('stock_page', 1); // Reset to first page
+            window.location.search = urlParams.toString();
+        });
+    }
+});
+</script>
 {% endblock %}

@@ -1,0 +1,124 @@
+{% extends 'finance/base.html' %}
+{% load humanize %}
+
+{% block title %}Capital Injection Details{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0">
+            <i class="fas fa-money-bill-wave text-success me-2"></i> Capital Injection Details
+        </h1>
+        <div>
+            <a href="{% url 'finance:capital_injection_list' %}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Back to List
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8 mx-auto">
+            <!-- Main Details Card -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-info-circle me-2"></i> Injection Information
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>Injection ID:</strong> <code>{{ injection.injection_id }}</code></p>
+                            <p><strong>Source Type:</strong> 
+                                <span class="badge bg-info">{{ injection.get_source_type_display }}</span>
+                            </p>
+                            <p><strong>Source Name:</strong> {{ injection.source_name }}</p>
+                            <p><strong>Amount:</strong> 
+                                <span class="text-success fw-bold">KES {{ injection.amount|floatformat:2|intcomma }}</span>
+                            </p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>Payment Method:</strong> {{ injection.get_payment_method_display }}</p>
+                            <p><strong>Target Account:</strong> {{ injection.get_target_account_display }}</p>
+                            <p><strong>Transaction Date:</strong> {{ injection.transaction_date|date:"Y-m-d H:i" }}</p>
+                            <p><strong>Status:</strong> 
+                                <span class="badge bg-success">{{ injection.get_status_display }}</span>
+                            </p>
+                        </div>
+                    </div>
+                    
+                    {% if injection.is_loan %}
+                    <hr>
+                    <div class="alert alert-warning">
+                        <strong><i class="fas fa-hand-holding-usd"></i> Loan Details:</strong>
+                        <ul class="mb-0 mt-2">
+                            <li>Interest Rate: {{ injection.interest_rate }}% per annum</li>
+                            <li>Repayment Term: {{ injection.repayment_term_months }} months</li>
+                            <li>Monthly Payment: <strong>KES {{ injection.monthly_repayment|floatformat:2|intcomma }}</strong></li>
+                            <li>Remaining Balance: <strong class="text-danger">KES {{ remaining_balance|floatformat:2|intcomma }}</strong></li>
+                        </ul>
+                    </div>
+                    {% endif %}
+                    
+                    {% if injection.notes %}
+                    <hr>
+                    <p><strong>Notes:</strong></p>
+                    <p class="text-muted">{{ injection.notes }}</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Repayments Section (for loans) -->
+            {% if injection.is_loan %}
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-list me-2"></i> Repayment History</span>
+                    {% if remaining_balance > 0 %}
+                    <a href="{% url 'finance:loan_repayment_create' injection.injection_id %}" class="btn btn-sm btn-primary">
+                        <i class="fas fa-plus"></i> Record Repayment
+                    </a>
+                    {% endif %}
+                </div>
+                <div class="card-body">
+                    {% if repayments %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Amount</th>
+                                    <th>Reference</th>
+                                    <th>Notes</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for repayment in repayments %}
+                                <tr>
+                                    <td>{{ repayment.payment_date|date:"Y-m-d H:i" }}</td>
+                                    <td class="text-danger">KES {{ repayment.amount|floatformat:2|intcomma }}</td>
+                                    <td>{{ repayment.payment_reference|default:"-" }}</td>
+                                    <td>{{ repayment.notes|default:"-" }}</td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="4" class="text-center">No repayments recorded yet</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot>
+                                <tr>
+                                    <th>Total Repaid</th>
+                                    <th class="text-success">KES {{ repayments|length|default:"0"|add:0 }}</th>
+                                    <th colspan="2"></th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                    {% else %}
+                    <p class="text-center text-muted">No repayments recorded yet</p>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

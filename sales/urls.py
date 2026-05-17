@@ -28,12 +28,16 @@ urlpatterns = [
     
     # ===== PERIOD DETAILS =====
     path('period-details/', views.period_details, name='period_details'),
+    # Add to your urls.py
+    path('api/imei-suggestions/', views.imei_suggestions, name='imei_suggestions'),
+    path('api/serial-suggestions/', views.serial_suggestions, name='serial_suggestions'),
     
     # ============================================
     # API endpoints for cart management (AJAX)
     # ============================================
     path('api/get-cart/', views.get_cart, name='get_cart'),
     path('api/get-product/<str:product_code>/', views.get_product_details, name='get_product_details'),
+    path('api/get-product/<str:sku_code>/', views.get_product_details, name='get_product_details'),
     path('api/add-to-cart/', views.add_to_cart, name='add_to_cart'),
     path('api/update-cart/', views.update_cart, name='update_cart'),
     path('api/update-cart-price/', views.update_cart_price, name='update_cart_price'),

@@ -1,0 +1,157 @@
+<!-- templates/shops/mpesa_account_detail.html -->
+{% extends "shops/base.html" %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}{{ account.account_name }} - M-Pesa Account Details{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0">
+                <i class="fas fa-mobile-alt text-primary"></i> 
+                {{ account.account_name }}
+            </h1>
+            <p class="text-muted mb-0">{{ account.shop.name }} • {{ account.get_account_type_display }}</p>
+        </div>
+        <div>
+            <a href="{% url 'shops:edit_mpesa_account' account.id %}" class="btn btn-outline-primary">
+                <i class="fas fa-edit"></i> Edit
+            </a>
+            <a href="{% url 'shops:mpesa_accounts' %}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Back
+            </a>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Current Balance</h6>
+                    <h2 class="mb-0">KES {{ account.current_balance|floatformat:2|intcomma }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Total Deposits</h6>
+                    <h2 class="mb-0">{{ account.total_deposit_count }}</h2>
+                    <small>KES {{ account.total_deposit_amount|floatformat:2|intcomma }}</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-danger text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Total Withdrawals</h6>
+                    <h2 class="mb-0">{{ account.total_withdrawal_count }}</h2>
+                    <small>KES {{ account.total_withdrawal_amount|floatformat:2|intcomma }}</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Total Sales</h6>
+                    <h2 class="mb-0">{{ account.total_sale_count }}</h2>
+                    <small>KES {{ account.total_sale_amount|floatformat:2|intcomma }}</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Account Information</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-bordered">
+                        <tr>
+                            <th style="width: 40%">Till/Paybill Number:</th>
+                            <td>{{ account.account_number }}</td>
+                        </tr>
+                        <tr>
+                            <th>Store Number:</th>
+                            <td>{{ account.store_number|default:"-" }}</td>
+                        </tr>
+                        <tr>
+                            <th>Assigned User:</th>
+                            <td>
+                                {% if account.assigned_user %}
+                                    {{ account.assigned_user.get_full_name|default:account.assigned_user.username }}
+                                {% else %}
+                                    <span class="text-muted">Unassigned</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Business Hours:</th>
+                            <td>
+                                {% if account.business_hours_start and account.business_hours_end %}
+                                    {{ account.business_hours_start|time:"H:i" }} - {{ account.business_hours_end|time:"H:i" }}
+                                {% else %}
+                                    <span class="text-muted">Not set</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Status:</th>
+                            <td>
+                                <span class="badge bg-{% if account.status == 'active' %}success{% elif account.status == 'suspended' %}warning{% else %}secondary{% endif %}">
+                                    {{ account.get_status_display }}
+                                </span>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Transaction Limits</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-bordered">
+                        <tr>
+                            <th style="width: 40%">Daily Limit:</th>
+                            <td>KES {{ account.daily_limit|floatformat:2|intcomma }}</td>
+                        </tr>
+                        <tr>
+                            <th>Per Transaction Limit:</th>
+                            <td>KES {{ account.per_transaction_limit|floatformat:2|intcomma }}</td>
+                        </tr>
+                        <tr>
+                            <th>Created:</th>
+                            <td>{{ account.created_at|date:"M d, Y H:i" }}</td>
+                        </tr>
+                        <tr>
+                            <th>Last Updated:</th>
+                            <td>{{ account.updated_at|date:"M d, Y H:i" }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Notes -->
+    {% if account.notes %}
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">Notes</h5>
+        </div>
+        <div class="card-body">
+            <p>{{ account.notes|linebreaks }}</p>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

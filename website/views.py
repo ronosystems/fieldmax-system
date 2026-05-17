@@ -47,9 +47,9 @@ def categories_list_public(request):
         for category in categories:
             # Count only available products
             available_count = category.products.filter(
-                is_active=True
-            ).filter(
-                Q(status='available') | Q(status='lowstock')
+                is_active=True,
+                available_quantity__gt=0,
+                is_discontinued=False
             ).count()
             
             total_count = category.products.filter(is_active=True).count()
@@ -99,7 +99,8 @@ def api_get_categories(request):
             products = category.products.filter(is_active=True)
             
             available_count = products.filter(
-                Q(status='available') | Q(status='lowstock')
+                available_quantity__gt=0,
+                is_discontinued=False
             ).count()
             
             total_count = products.count()
@@ -174,11 +175,13 @@ def api_category_details(request, category_id):
         products = category.products.filter(is_active=True)
         
         stats = {
-            'total': products.count(),
-            'available': products.filter(status='available').count(),
-            'lowstock': products.filter(status='lowstock').count(),
-            'outofstock': products.filter(status='outofstock').count(),
-            'sold': products.filter(status='sold').count() if category.is_single_item else 0
+            'available': products.filter(available_quantity__gt=5).count(),
+            'lowstock': products.filter(
+                available_quantity__gt=0,
+                available_quantity__lte=5
+            ).count(),
+            'outofstock': products.filter(available_quantity=0).count(),
+            'sold': 0
         }
         
         # Get recent products
@@ -307,7 +310,8 @@ def search_products(request):
         context['products'] = Product.objects.filter(
             is_active=True,
             category__isnull=False,
-            status__in=['available', 'lowstock']
+            available_quantity__gt=0,
+            is_discontinued=False
         ).select_related('category', 'owner').order_by('-created_at')[:12]
         
         context['match_type'] = 'fallback'
@@ -345,6 +349,9 @@ def calculate_best_price(product):
 # ============================================
 # HOME VIEW
 # ============================================
+# ============================================
+# HOME VIEW - FIXED
+# ============================================
 def home(request):
     """
     Home page with top 12 most frequently sold products
@@ -357,19 +364,21 @@ def home(request):
         best_sellers = Product.objects.filter(
             sale_items__isnull=False,
             category__isnull=False,  # Only products with categories
-            is_active=True
+            is_active=True,
+            is_discontinued=False  # Use is_discontinued instead of status
         ).annotate(
             times_ordered=Count('sale_items__id', distinct=True)
         ).filter(
-            Q(status='available') | Q(status='lowstock')
+            Q(available_quantity__gt=0)  # Use available_quantity instead of status
         ).order_by('-times_ordered')[:12]
         
     except Exception as e:
         # Fallback: Show newest available products with categories
         best_sellers = Product.objects.filter(
-            Q(status='available') | Q(status='lowstock'),
             category__isnull=False,
-            is_active=True
+            is_active=True,
+            is_discontinued=False,
+            available_quantity__gt=0  # Use available_quantity instead of status
         ).order_by('-created_at')[:12]
     
     # If less than 12 products, fill with newest
@@ -385,7 +394,8 @@ def home(request):
             remaining_count = 12 - count
             
             newest_products = Product.objects.filter(
-                Q(status='available') | Q(status='lowstock'),
+                available_quantity__gt=0,
+                is_discontinued=False,
                 category__isnull=False,
                 is_active=True
             ).exclude(
@@ -399,18 +409,20 @@ def home(request):
             
     except Exception as e:
         best_sellers = Product.objects.filter(
-            Q(status='available') | Q(status='lowstock'),
             category__isnull=False,
-            is_active=True
+            is_active=True,
+            is_discontinued=False,
+            available_quantity__gt=0  # Use available_quantity instead of status
         ).order_by('-created_at')[:12]
     
     # Get all active categories that have products for filtering
     try:
         categories = Category.objects.filter(
             products__is_active=True,
-            products__isnull=False
+            products__isnull=False,
+            products__is_discontinued=False  # Use is_discontinued
         ).filter(
-            Q(products__status='available') | Q(products__status='lowstock')
+            products__available_quantity__gt=0  # Use available_quantity
         ).distinct().order_by('name')
         
     except Exception as e:
@@ -425,6 +437,9 @@ def home(request):
     
     return render(request, 'website/home.html', context)
 
+
+
+
 # ============================================
 # HOME STATS
 # ============================================
@@ -436,7 +451,8 @@ def home_stats(request):
     try:
         # Get total products (only available and low stock)
         total_products = Product.objects.filter(
-            Q(status='available') | Q(status='lowstock'),
+            available_quantity__gt=0,
+            is_discontinued=False,
             category__isnull=False,  # Only products with categories
             is_active=True
         ).count()
@@ -483,7 +499,8 @@ def featured_products(request):
     """
     try:
         products = Product.objects.filter(
-            Q(status='available') | Q(status='lowstock'),
+            available_quantity__gt=0,
+            is_discontinued=False,
             category__isnull=False,  # Only products with categories
             is_active=True,
             is_featured=True
@@ -610,7 +627,8 @@ def trending_stats(request):
         
         # Get trending products - only those with categories
         trending = Product.objects.filter(
-            Q(status='available') | Q(status='lowstock'),
+            available_quantity__gt=0,
+            is_discontinued=False,
             category__isnull=False,
             is_active=True
         ).order_by('-view_count')[:5]
@@ -721,7 +739,8 @@ def products_page(request):
     """
     products = Product.objects.filter(
         is_active=True,
-        status__in=['available', 'lowstock'],
+        available_quantity__gt=0,
+        is_discontinued=False,
         category__isnull=False  # Only show products with categories
     ).select_related('category').order_by('-created_at')
     
@@ -744,7 +763,8 @@ def api_featured_products(request):
     try:
         products = Product.objects.filter(
             is_active=True,
-            status__in=['available', 'lowstock'],
+            available_quantity__gt=0,
+            is_discontinued=False,
             category__isnull=False  # Only products with categories
         ).select_related('category').annotate(
             sales_count=Count('sale_items')

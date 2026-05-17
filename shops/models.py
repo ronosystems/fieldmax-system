@@ -52,40 +52,321 @@ class ShopBranch(models.Model):
         return f"{self.name} ({self.code})"
 
 
+# ==================== MPESA ACCOUNT MODEL ====================
+
+class MpesaAccount(models.Model):
+    """M-Pesa accounts for each shop (Till, Paybill, Agent, Merchant)"""
+    
+    ACCOUNT_TYPE_CHOICES = [
+        ('till', 'Till Number'),
+        ('paybill', 'Paybill Number'),
+        ('agent', 'Agent Number'),
+        ('merchant', 'Merchant Account'),
+    ]
+    
+    STATUS_CHOICES = [
+        ('active', 'Active'),
+        ('inactive', 'Inactive'),
+        ('suspended', 'Suspended'),
+    ]
+    
+    shop = models.ForeignKey(ShopBranch, on_delete=models.CASCADE, related_name='mpesa_accounts')
+    account_name = models.CharField(max_length=100, help_text="Name to identify this account")
+    account_number = models.CharField(max_length=50, unique=True, db_index=True)
+    account_type = models.CharField(max_length=20, choices=ACCOUNT_TYPE_CHOICES, default='till')
+    store_number = models.CharField(max_length=50, blank=True, null=True, verbose_name="Store Number")
+    # Simple counters
+    total_deposit_count = models.PositiveIntegerField(default=0, verbose_name="Total Deposits Count")
+    total_withdrawal_count = models.PositiveIntegerField(default=0, verbose_name="Total Withdrawals Count")
+    total_sale_count = models.PositiveIntegerField(default=0, verbose_name="Total Sales Count")
+    
+    total_deposit_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    total_withdrawal_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    total_sale_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+
+    # User assignment (optional)
+    assigned_user = models.ForeignKey(
+        User, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='assigned_mpesa_accounts',
+        verbose_name="Assigned User/Cashier"
+    )
+    
+    phone_number = models.CharField(max_length=12, blank=True, null=True, help_text="Registered M-Pesa phone number")
+    
+    # Financial Information
+    opening_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0, help_text="Initial float amount")
+    current_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0, help_text="Current available balance")
+    
+    # Limits
+    daily_limit = models.DecimalField(max_digits=12, decimal_places=2, default=500000, help_text="Daily transaction limit")
+    per_transaction_limit = models.DecimalField(max_digits=12, decimal_places=2, default=150000, help_text="Per transaction limit")
+    
+    # Status
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active', db_index=True)
+    is_active = models.BooleanField(default=True)
+    
+    # Business Hours
+    business_hours_start = models.TimeField(default="08:00", null=True, blank=True)
+    business_hours_end = models.TimeField(default="22:00", null=True, blank=True)
+    
+    # Additional Info
+    notes = models.TextField(blank=True, null=True)
+    
+    # Audit Fields
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='created_mpesa_accounts')
+    last_modified_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='modified_mpesa_accounts')
+    
+    class Meta:
+        ordering = ['shop__name', 'account_name']
+        indexes = [
+            models.Index(fields=['account_number']),
+            models.Index(fields=['shop', 'status']),
+            models.Index(fields=['account_type']),
+        ]
+        verbose_name = "M-Pesa Account"
+        verbose_name_plural = "M-Pesa Accounts"
+    
+    def __str__(self):
+        return f"{self.shop.name} - {self.account_name} ({self.get_account_type_display()}: {self.account_number})"
+
+    
+    def add_deposit(self, amount):
+        """Add a deposit transaction"""
+        self.total_deposit_count += 1
+        self.total_deposit_amount += amount
+        self.current_balance += amount
+        self.save()
+    
+    def add_withdrawal(self, amount):
+        """Add a withdrawal transaction"""
+        self.total_withdrawal_count += 1
+        self.total_withdrawal_amount += amount
+        self.current_balance -= amount
+        self.save()
+    
+    def add_sale(self, amount):
+        """Add a sale transaction"""
+        self.total_sale_count += 1
+        self.total_sale_amount += amount
+        self.current_balance -= amount
+        self.save()
+
+# ==================== MPESA OPENING/CLOSING BALANCE MODEL ====================
+
+class MpesaDailyBalance(models.Model):
+    """Daily opening and closing balances for M-Pesa accounts"""
+    
+    mpesa_account = models.ForeignKey(MpesaAccount, on_delete=models.CASCADE, related_name='daily_balances')
+    report_date = models.DateField()
+    
+    # Opening balances (from previous day's closing)
+    opening_mpesa_float = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    opening_airtel_float = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    opening_cash = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    
+    # Closing balances
+    closing_mpesa_float = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    closing_airtel_float = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    closing_cash = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    
+    # Daily transaction summary
+    total_deposits = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    total_withdrawals = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    transaction_count = models.PositiveIntegerField(default=0)
+    
+    # Variances
+    mpesa_variance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    airtel_variance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    cash_variance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    
+    is_reconciled = models.BooleanField(default=False)
+    reconciled_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    reconciled_at = models.DateTimeField(null=True, blank=True)
+    
+    notes = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ['mpesa_account', 'report_date']
+        ordering = ['-report_date']
+    
+    def __str__(self):
+        return f"{self.mpesa_account.account_name} - {self.report_date}"
+    
+    @property
+    def total_opening(self):
+        return self.opening_mpesa_float + self.opening_airtel_float + self.opening_cash
+    
+    @property
+    def total_closing(self):
+        return self.closing_mpesa_float + self.closing_airtel_float + self.closing_cash
+    
+    @property
+    def net_change(self):
+        return self.total_closing - self.total_opening
+
+
 # ==================== BANK ACCOUNT MODEL ====================
 
 class BankAccount(models.Model):
-    """Bank accounts - bank names can be added dynamically via frontend"""
+    """Bank accounts for each shop"""
     shop = models.ForeignKey(ShopBranch, on_delete=models.CASCADE, related_name='bank_accounts')
-    bank_name = models.CharField(max_length=100)  # Dynamic - added via frontend
+    bank_name = models.CharField(max_length=100)
     account_name = models.CharField(max_length=100)
     account_number = models.CharField(max_length=50)
     is_active = models.BooleanField(default=True)
     opening_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    current_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
         unique_together = ['shop', 'bank_name', 'account_number']
         ordering = ['bank_name']
     
     def __str__(self):
-        return f"{self.shop.name} - {self.bank_name}"
+        return f"{self.shop.name} - {self.bank_name} ({self.account_number})"
 
 
-# ==================== M-PESA ACCOUNT MODEL ====================
+# ==================== BANK OPENING/CLOSING BALANCE MODEL ====================
 
-class MpesaAccount(models.Model):
-    """M-Pesa accounts - account types can be added dynamically via frontend"""
-    shop = models.ForeignKey(ShopBranch, on_delete=models.CASCADE, related_name='mpesa_accounts')
-    account_name = models.CharField(max_length=100)
-    account_number = models.CharField(max_length=50, unique=True)
-    account_type = models.CharField(max_length=50)  # Dynamic - added via frontend (Till, Paybill, Agent, etc.)
-    phone_number = models.CharField(max_length=12, help_text="Registered M-Pesa phone number")
-    is_active = models.BooleanField(default=True)
-    created_date = models.DateTimeField(auto_now_add=True)
+class BankDailyBalance(models.Model):
+    """Daily opening and closing balances for bank accounts"""
+    
+    bank_account = models.ForeignKey(BankAccount, on_delete=models.CASCADE, related_name='daily_balances')
+    report_date = models.DateField()
+    
+    opening_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    closing_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    
+    total_deposits = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    total_withdrawals = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    transaction_count = models.PositiveIntegerField(default=0)
+    
+    variance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    is_reconciled = models.BooleanField(default=False)
+    reconciled_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    reconciled_at = models.DateTimeField(null=True, blank=True)
+    
+    notes = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ['bank_account', 'report_date']
+        ordering = ['-report_date']
     
     def __str__(self):
-        return f"{self.shop.name} - {self.account_name} ({self.account_number})"
+        return f"{self.bank_account.bank_name} - {self.report_date}"
+    
+    @property
+    def net_change(self):
+        return self.closing_balance - self.opening_balance
+
+
+# ==================== CASH ACCOUNT MODEL ====================
+
+class CashAccount(models.Model):
+    """Physical cash accounts for each shop"""
+    
+    shop = models.ForeignKey(ShopBranch, on_delete=models.CASCADE, related_name='cash_accounts')
+    account_name = models.CharField(max_length=100, default="Main Cash", help_text="e.g., Main Cash, Petty Cash")
+    currency = models.CharField(max_length=3, default="KES")
+    opening_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    current_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ['shop', 'account_name']
+        ordering = ['account_name']
+    
+    def __str__(self):
+        return f"{self.shop.name} - {self.account_name}"
+    
+    def update_balance(self, amount, transaction_type='credit'):
+        if transaction_type == 'credit':
+            self.current_balance += amount
+        else:
+            self.current_balance -= amount
+        self.save(update_fields=['current_balance', 'updated_at'])
+        return self.current_balance
+
+
+# ==================== CASH OPENING/CLOSING BALANCE MODEL ====================
+
+class CashDailyBalance(models.Model):
+    """Daily opening and closing balances for cash accounts"""
+    
+    cash_account = models.ForeignKey(CashAccount, on_delete=models.CASCADE, related_name='daily_balances')
+    report_date = models.DateField()
+    
+    opening_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    closing_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    
+    cash_in = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    cash_out = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    transaction_count = models.PositiveIntegerField(default=0)
+    
+    variance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    is_reconciled = models.BooleanField(default=False)
+    reconciled_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    reconciled_at = models.DateTimeField(null=True, blank=True)
+    
+    notes = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ['cash_account', 'report_date']
+        ordering = ['-report_date']
+    
+    def __str__(self):
+        return f"{self.cash_account.account_name} - {self.report_date}"
+    
+    @property
+    def net_change(self):
+        return self.closing_balance - self.opening_balance
+
+
+# ==================== SHOP EXPENSES MODEL ====================
+
+class ShopExpense(models.Model):
+    """Individual expenses for a daily report"""
+    
+    PAYMENT_METHOD_CHOICES = [
+        ('cash', 'Cash'),
+        ('mpesa', 'M-Pesa'),
+        ('bank', 'Bank Transfer'),
+        ('cheque', 'Cheque'),
+    ]
+    
+    daily_report = models.ForeignKey('DailyShopReport', on_delete=models.CASCADE, related_name='expenses')
+    expense_category = models.CharField(max_length=100, blank=True, null=True)
+    description = models.CharField(max_length=200)
+    amount = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
+    payment_method = models.CharField(max_length=50, choices=PAYMENT_METHOD_CHOICES, default='cash')
+    
+    # For tracking which account was used for payment
+    mpesa_account = models.ForeignKey(MpesaAccount, on_delete=models.SET_NULL, null=True, blank=True, related_name='expenses')
+    bank_account = models.ForeignKey(BankAccount, on_delete=models.SET_NULL, null=True, blank=True, related_name='expenses')
+    cash_account = models.ForeignKey(CashAccount, on_delete=models.SET_NULL, null=True, blank=True, related_name='expenses')
+    
+    receipt_number = models.CharField(max_length=50, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.daily_report} - {self.description}: KES {self.amount}"
+
+
+
 
 
 # ==================== DAILY SHOP REPORT MODEL ====================
@@ -98,109 +379,122 @@ class DailyShopReport(models.Model):
     submission_time = models.DateTimeField(auto_now_add=True)
     last_modified = models.DateTimeField(auto_now=True)
     
-    # Add these new fields for finalization tracking
-    finalized_by = models.ForeignKey(
-        User, 
-        on_delete=models.SET_NULL, 
-        null=True, 
-        blank=True, 
-        related_name='finalized_reports'
-    )
+    finalized_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='finalized_reports')
     finalized_at = models.DateTimeField(null=True, blank=True)
     
-    # M-Pesa closing balances
-    closing_mpesa_float = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name="Closing M-Pesa Float")
-    closing_airtel_float = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name="Closing Airtel Float")
-    closing_mpesa_cash = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name="Closing M-Pesa Cash")
+    total_mpesa_transactions = models.PositiveIntegerField(default=0)
+    total_mpesa_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     
-    # Shop transactions
-    shop_sales = models.DecimalField(
-        max_digits=12, 
-        decimal_places=2, 
-        default=0, 
-        verbose_name="Total M-Pesa Transactions" 
-    )
-    
-    # Totals (auto-calculated)
     total_closing_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)
     total_expenses = models.DecimalField(max_digits=12, decimal_places=2, default=0, editable=False)
+    cash_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name="Cash Balance")
     
-    # Additional Info
     notes = models.TextField(blank=True, null=True)
     is_finalized = models.BooleanField(default=False)
     
     class Meta:
         unique_together = ['shop', 'report_date']
         ordering = ['-report_date']
-        verbose_name_plural = "Daily Shop Reports"
     
     def __str__(self):
         return f"{self.shop.name} - {self.report_date}"
     
-    def calculate_totals(self):
-        """Calculate total closing balance from all bank accounts"""
-        try:
-            bank_closings = self.bank_closings.filter(is_active=True)
-            bank_total = sum([float(bc.closing_balance) for bc in bank_closings])
-            self.total_closing_balance = float(self.closing_mpesa_float or 0) + float(self.closing_airtel_float or 0) + float(self.closing_mpesa_cash or 0) + bank_total
-        except:
-            self.total_closing_balance = 0
-        return self.total_closing_balance
-
-    def save(self, *args, **kwargs):
-        self.calculate_totals()
-        super().save(*args, **kwargs)
-
-    def get_shop_previous_closing_balance(self):
-        """
-        Get the previous closing balance for the SHOP (not user-specific)
-        This is used for opening balance calculations
-        """
-        previous_report = DailyShopReport.objects.filter(
-            shop=self.shop,
-            report_date__lt=self.report_date
-        ).order_by('-report_date').first()
-    
-        return previous_report.total_closing_balance if previous_report else Decimal('0.00')
-
-    def get_previous_day_report(self):
-        """Get the report for the previous day for the same shop"""
-        from datetime import timedelta
-        previous_date = self.report_date - timedelta(days=1)
-        return DailyShopReport.objects.filter(
-            shop=self.shop,
-            report_date=previous_date
-        ).first()
-
-    def get_opening_balance(self):
-        """Get the opening balance (previous day's closing balance)"""
-        previous_report = self.get_previous_day_report()
-        if previous_report:
-            return previous_report.total_closing_balance
-        return Decimal('0.00')  # First day, no previous balance
-    
-    @property
-    def total_mpesa_closing(self):
-        """Get total M-PESA closing balance (float + cash)"""
-        return (self.closing_mpesa_float or 0) + (self.closing_mpesa_cash or 0)
-    
-    @property
-    def total_bank_closing(self):
-        """Get total bank closing balance"""
-        return self.bank_closings.filter(is_active=True).aggregate(
+    def update_totals(self):
+        """Update totals after the report has been saved (with a primary key)"""
+        # Calculate totals from related models
+        mpesa_total = self.mpesa_balances.aggregate(
             total=models.Sum('closing_balance')
         )['total'] or 0
+        
+        bank_total = self.bank_closings.aggregate(
+            total=models.Sum('closing_balance')
+        )['total'] or 0
+        
+        self.total_closing_balance = float(mpesa_total) + float(bank_total)
+        self.save(update_fields=['total_closing_balance'])
+        return self.total_closing_balance
+
+    @property
+    def total_mpesa_balance(self):
+        """Get total M-Pesa closing balance from all M-Pesa accounts in this report"""
+        return self.mpesa_balances.aggregate(
+            total=models.Sum('closing_mpesa_float')
+        )['total'] or 0
+
+# ==================== DAILY MPESA ACCOUNT REPORT MODEL ====================
+
+class DailyMpesaAccountReport(models.Model):
+    """Daily report for M-Pesa accounts - linked to DailyShopReport"""
+    
+    daily_report = models.ForeignKey(DailyShopReport, on_delete=models.CASCADE, related_name='mpesa_balances')
+    mpesa_account = models.ForeignKey(MpesaAccount, on_delete=models.CASCADE, related_name='daily_reports')
+    
+    # Closing balances for the day
+    closing_mpesa_float = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    closing_airtel_float = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    closing_cash = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    
+    # Daily activity
+    transaction_count = models.PositiveIntegerField(default=0)
+    total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    
+    notes = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ['daily_report', 'mpesa_account']
+        ordering = ['mpesa_account__account_name']
+    
+    def __str__(self):
+        return f"{self.mpesa_account.account_name} - {self.daily_report.report_date}"
     
     @property
-    def net_position(self):
-        """Net Position = Current Day (M-PESA Float + M-PESA Cash + All Bank Balances)"""
-        return self.total_mpesa_closing + self.total_bank_closing
+    def total_closing(self):
+        return self.closing_mpesa_float + self.closing_airtel_float + self.closing_cash
 
 
-# ==================== BANK CLOSING BALANCE MODEL ====================
+# ==================== SHOP CONFIGURATION MODEL ====================
+
+class ShopConfiguration(models.Model):
+    """Shop-specific configurations"""
+    
+    CONFIG_TYPES = [
+        ('general', 'General Settings'),
+        ('reporting', 'Reporting Settings'),
+        ('notifications', 'Notification Settings'),
+        ('limits', 'Limit Settings'),
+    ]
+    
+    shop = models.ForeignKey(ShopBranch, on_delete=models.CASCADE, related_name='configurations')
+    config_type = models.CharField(max_length=50, choices=CONFIG_TYPES, default='general')
+    config_key = models.CharField(max_length=100)
+    config_value = models.TextField()
+    description = models.TextField(blank=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    
+    class Meta:
+        unique_together = ['shop', 'config_key']
+        ordering = ['config_type', 'config_key']
+    
+    def __str__(self):
+        return f"{self.shop.name} - {self.config_key}"
+    
+    @classmethod
+    def get_value(cls, shop, key, default=None):
+        """Get configuration value for a shop"""
+        try:
+            config = cls.objects.get(shop=shop, config_key=key)
+            return config.config_value
+        except cls.DoesNotExist:
+            return default
+
+
+# ==================== BANK CLOSING BALANCE (Legacy/Compatibility) ====================
+# Keep for backward compatibility with existing views
 
 class BankClosingBalance(models.Model):
-    """Closing balance for each bank account in a daily report"""
+    """Legacy model - use BankDailyBalance instead"""
     daily_report = models.ForeignKey(DailyShopReport, on_delete=models.CASCADE, related_name='bank_closings')
     bank_account = models.ForeignKey(BankAccount, on_delete=models.CASCADE)
     closing_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
@@ -212,98 +506,3 @@ class BankClosingBalance(models.Model):
     
     def __str__(self):
         return f"{self.daily_report} - {self.bank_account.bank_name}: {self.closing_balance}"
-
-
-class ShopExpense(models.Model):
-    """Individual expenses for a daily report"""
-    daily_report = models.ForeignKey(DailyShopReport, on_delete=models.CASCADE, related_name='expenses')
-    expense_category = models.CharField(max_length=100, blank=True, null=True)
-    description = models.CharField(max_length=200)
-    amount = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
-    payment_method = models.CharField(max_length=50, default='cash', blank=True)
-    receipt_number = models.CharField(max_length=50, blank=True, null=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    
-    class Meta:
-        ordering = ['-created_at']
-    
-    def __str__(self):
-        if self.description:
-            return f"{self.daily_report} - {self.description}: {self.amount}"
-        return f"{self.daily_report} - Expense: {self.amount}"
-
-
-# ==================== M-PESA DAILY SUMMARY MODEL ====================
-
-class MpesaDailySummary(models.Model):
-    """Daily M-Pesa summary for each shop"""
-    shop = models.ForeignKey(ShopBranch, on_delete=models.CASCADE, related_name='mpesa_summaries')
-    report_date = models.DateField()
-    daily_report = models.OneToOneField(DailyShopReport, on_delete=models.CASCADE, related_name='mpesa_summary', null=True, blank=True)
-    
-    # Float balance
-    opening_float = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    float_added = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    float_withdrawn = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    customer_payments = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    cash_out_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    closing_float = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    
-    # Cash balance (physical cash from M-Pesa cash out)
-    opening_cash = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    cash_sales = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    cash_expenses = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    cash_withdrawn = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    closing_cash = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    
-    # Reconciliation
-    expected_float = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    float_variance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    expected_cash = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    cash_variance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    
-    is_reconciled = models.BooleanField(default=False)
-    reconciled_by = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='mpesa_reconciliations')
-    reconciliation_date = models.DateTimeField(null=True, blank=True)
-    notes = models.TextField(blank=True, null=True)
-    
-    class Meta:
-        unique_together = ['shop', 'report_date']
-        ordering = ['-report_date']
-    
-    def __str__(self):
-        return f"{self.shop.name} - M-Pesa {self.report_date}"
-    
-    def calculate_closing_float(self):
-        self.closing_float = self.opening_float + self.float_added - self.float_withdrawn + self.customer_payments - self.cash_out_amount
-        return self.closing_float
-    
-    def calculate_closing_cash(self):
-        self.closing_cash = self.opening_cash + self.cash_sales - self.cash_expenses + self.cash_withdrawn
-        return self.closing_cash
-    
-    def calculate_variances(self):
-        self.float_variance = self.expected_float - self.closing_float
-        self.cash_variance = self.expected_cash - self.closing_cash
-        return self.float_variance, self.cash_variance
-    
-    def save(self, *args, **kwargs):
-        self.calculate_closing_float()
-        self.calculate_closing_cash()
-        super().save(*args, **kwargs)
-
-
-# ==================== SHOP CONFIGURATION MODEL ====================
-
-class ShopConfiguration(models.Model):
-    """Shop-specific configurations"""
-    shop = models.ForeignKey(ShopBranch, on_delete=models.CASCADE, related_name='configurations')
-    config_key = models.CharField(max_length=100)
-    config_value = models.TextField()
-    updated_at = models.DateTimeField(auto_now=True)
-    
-    class Meta:
-        unique_together = ['shop', 'config_key']
-    
-    def __str__(self):
-        return f"{self.shop.name} - {self.config_key}"

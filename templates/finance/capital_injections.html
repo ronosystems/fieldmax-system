@@ -1,0 +1,225 @@
+{% extends 'finance/base.html' %}
+{% load humanize %}
+
+{% block title %}Capital Account{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0">
+            <i class="fas fa-landmark text-success me-2"></i> Capital Account
+        </h1>
+        <a href="{% url 'finance:capital_injection_create' %}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Add Capital
+        </a>
+    </div>
+
+    <!-- Capital Summary Cards - 6 Card Layout -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card bg-success text-white">
+                <div class="card-body text-center">
+                    <h6>Total Capital Injected</h6>
+                    <h3 class="mb-0">KES {{ capital_account.total_capital_injected|floatformat:2|intcomma }}</h3>
+                    <small>Money added to business</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-danger text-white">
+                <div class="card-body text-center">
+                    <h6>Inventory Purchases</h6>
+                    <h3 class="mb-0">KES {{ capital_account.total_purchases|floatformat:2|intcomma }}</h3>
+                    <small>Spent on stock</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-primary text-white">
+                <div class="card-body text-center">
+                    <h6>Net Capital Position</h6>
+                    <h3 class="mb-0">KES {{ capital_account.net_capital|floatformat:2|intcomma }}</h3>
+                    <small>Available capital</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card bg-info text-white">
+                <div class="card-body text-center">
+                    <h6>Sales Revenue</h6>
+                    <h3 class="mb-0">KES {{ total_sales_revenue|floatformat:2|intcomma }}</h3>
+                    <small>Income from sales</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-secondary text-white">
+                <div class="card-body text-center">
+                    <h6>Total Loan Balance</h6>
+                    <h3 class="mb-0">KES {{ total_loan_balance|floatformat:2|intcomma }}</h3>
+                    <small>Remaining loan amount</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-warning text-dark">
+                <div class="card-body text-center">
+                    <h6>Loan Repayments</h6>
+                    <h3 class="mb-0">KES {{ capital_account.total_loan_repayments|floatformat:2|intcomma }}</h3>
+                    <small>Money paid back</small>
+                </div>
+            </div>  
+        </div>
+    </div>
+
+    <!-- Capital Flow Formula -->
+    <div class="card mb-4 bg-light">
+        <div class="card-body">
+            <div class="row text-center">
+                <div class="col-md-3">
+                    <h5 class="text-success">+ KES {{ capital_account.total_capital_injected|floatformat:2|intcomma }}</h5>
+                    <small>Capital Injected</small>
+                </div>
+                <div class="col-md-3">
+                    <h5 class="text-danger">- KES {{ capital_account.total_purchases|floatformat:2|intcomma }}</h5>
+                    <small>Inventory Purchases</small>
+                </div>
+                <div class="col-md-3">
+                    <h5 class="text-warning">- KES {{ capital_account.total_loan_repayments|floatformat:2|intcomma }}</h5>
+                    <small>Loan Repayments</small>
+                </div>
+                <div class="col-md-3">
+                    <h5 class="text-success">+ KES {{ total_sales_revenue|floatformat:2|intcomma }}</h5>
+                    <small>Sales Revenue</small>
+                </div>
+            </div>
+            <div class="row text-center mt-3">
+                <div class="col-md-12">
+                    <h5 class="text-primary">= KES {{ capital_account.net_capital|floatformat:2|intcomma }} Net Capital</h5>
+                </div>
+            </div>
+            <div class="progress mt-3" style="height: 10px;">
+                {% widthratio capital_account.total_purchases capital_account.total_capital_injected 100 as purchase_percent %}
+                <div class="progress-bar bg-danger" role="progressbar" style="width: {{ purchase_percent|default:0 }}%"></div>
+                {% widthratio capital_account.total_loan_repayments capital_account.total_capital_injected 100 as repayment_percent %}
+                <div class="progress-bar bg-warning" role="progressbar" style="width: {{ repayment_percent|default:0 }}%"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loans Summary Section -->
+    <div class="card mb-4">
+        <div class="card-header bg-warning text-dark">
+            <i class="fas fa-hand-holding-usd me-2"></i> Loan Summary
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Injection ID</th>
+                            <th>Source</th>
+                            <th>Total Loan</th>
+                            <th>Repaid</th>
+                            <th>Remaining</th>
+                            <th>Monthly Payment</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for injection in injections %}
+                            {% if injection.is_loan %}
+                            <tr>
+                                <td><code>{{ injection.injection_id }}</code></td>
+                                <td>{{ injection.source_name }}</td>
+                                <td class="text-warning">KES {{ injection.amount|floatformat:2|intcomma }}</td>
+                                <td class="text-success">KES {{ injection.total_repaid|floatformat:2|intcomma }}</td>
+                                <td class="text-danger">KES {{ injection.remaining_balance|floatformat:2|intcomma }}</td>
+                                <td>KES {{ injection.monthly_repayment|floatformat:2|intcomma }}</td>
+                                <td>
+                                    {% if injection.remaining_balance == 0 %}
+                                        <span class="badge bg-success">Paid Off</span>
+                                    {% else %}
+                                        <span class="badge bg-warning">Active</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endif %}
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center">No loans recorded</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot class="table-light">
+                        <tr>
+                            <th colspan="2">Total</th>
+                            <th>KES {{ total_loan_amount|floatformat:2|intcomma }}</th>
+                            <th>KES {{ total_repaid_amount|floatformat:2|intcomma }}</th>
+                            <th>KES {{ total_loan_balance|floatformat:2|intcomma }}</th>
+                            <th colspan="2"></th>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Injections List -->
+    <div class="card">
+        <div class="card-header">
+            <i class="fas fa-list me-2"></i> All Capital Injections
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Source</th>
+                            <th>Type</th>
+                            <th>Amount</th>
+                            <th>Date</th>
+                            <th>Account</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for injection in injections %}
+                        <tr>
+                            <td><code>{{ injection.injection_id }}</code></td>
+                            <td>{{ injection.source_name }}</td>
+                            <td>
+                                <span class="badge bg-info">{{ injection.get_source_type_display }}</span>
+                                {% if injection.is_loan %}
+                                    <span class="badge bg-warning">Loan</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-success fw-bold">KES {{ injection.amount|floatformat:2|intcomma }}</td>
+                            <td>{{ injection.transaction_date|date:"Y-m-d" }}</td>
+                            <td>{{ injection.get_target_account_display }}</td>
+                            <td>
+                                <span class="badge bg-success">{{ injection.get_status_display }}</span>
+                            </td>
+                            <td>
+                                <a href="{% url 'finance:capital_injection_detail' injection.injection_id %}" class="btn btn-sm btn-outline-info">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="8" class="text-center">No capital injections recorded</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

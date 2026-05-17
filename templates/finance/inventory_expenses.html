@@ -1,0 +1,418 @@
+{% extends 'finance/base.html' %}
+{% load humanize %}
+
+{% block title %}Inventory Expenses Report{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0">
+            <i class="fas fa-boxes text-warning me-2"></i> Inventory Expenses Report
+        </h1>
+        <div>
+            <button onclick="window.print()" class="btn btn-outline-secondary me-2">
+                <i class="fas fa-print"></i> Print
+            </button>
+            <button onclick="exportToExcel()" class="btn btn-outline-success">
+                <i class="fas fa-file-excel"></i> Export
+            </button>
+        </div>
+    </div>
+
+    <!-- Progress Bar -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="d-flex justify-content-between mb-1">
+                <small>Cost vs Retail (Current Stock)</small>
+                <small>{{ cost_percentage|floatformat:1 }}% Cost | {{ margin_percentage|floatformat:1 }}% Margin</small>
+            </div>
+            <div class="progress" style="height: 10px;">
+                <div class="progress-bar bg-warning" role="progressbar" 
+                        style="width: {{ cost_percentage|floatformat:0 }}%">
+                </div>
+                <div class="progress-bar bg-success" role="progressbar" 
+                     style="width: {{ margin_percentage|floatformat:0 }}%">
+                </div>
+            </div>
+            <div class="text-center mt-2">
+                <small class="text-muted">Based on {{ total_units|intcomma }} units in stock</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Summary Cards -->
+    <div class="row mb-4">
+        <!-- Card 1: Total Values (Based on all purchases) -->
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fas fa-history"></i>
+                </div>
+                <div class="stat-label">Total Inventory Value</div>
+                <div class="stat-value text-info">KES {{ total_retail_value|floatformat:2|intcomma }}</div>
+                <div class="stat-label mt-2">Total Purchases (Cost)</div>
+                <div class="stat-value text-info">KES {{ total_purchases|floatformat:2|intcomma }}</div>
+            </div>
+        </div>
+        
+        <!-- Card 2: Current Values (Based on current stock) -->
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fas fa-boxes"></i>
+                </div>
+                <div class="stat-label">Current Inventory Value</div>
+                <div class="stat-value text-success">KES {{ current_retail_value|floatformat:2|intcomma }}</div>
+                <div class="stat-label mt-2">Current Stock Cost</div>
+                <div class="stat-value text-success">KES {{ current_cost_value|floatformat:2|intcomma }}</div>
+            </div>
+        </div>
+        
+        <!-- Card 3: Total Potential Profit -->
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fas fa-chart-line"></i>
+                </div>
+                <div class="stat-label">Total Potential Profit</div>
+                <div class="stat-value text-warning">KES {{ total_potential_profit|floatformat:2|intcomma }}</div>
+                <div class="stat-label mt-2">(If all purchases sold at retail)</div>
+                <small class="text-muted">Total Value - Total Cost</small>
+            </div>
+        </div>
+        
+        <!-- Card 4: Current Potential Profit -->
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fas fa-tags"></i>
+                </div>
+                <div class="stat-label">Current Potential Profit</div>
+                <div class="stat-value text-primary">KES {{ current_potential_profit|floatformat:2|intcomma }}</div>
+                <div class="stat-label mt-2">(If current stock sold at retail)</div>
+                <small class="text-muted">Current Value - Current Cost</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- COGS and Realized Profit Row -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card bg-light">
+                <div class="card-body text-center">
+                    <h5>Cost of Goods Sold (COGS)</h5>
+                    <h2 class="text-danger">KES {{ cogs|floatformat:2|intcomma }}</h2>
+                    <small>Total Purchases ({{ total_purchases|floatformat:2|intcomma }}) - Current Cost ({{ current_cost_value|floatformat:2|intcomma }})</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card bg-success text-white">
+                <div class="card-body text-center">
+                    <h5>Realized Profit from Sales</h5>
+                    <h2 class="mb-0">KES {{ realized_profit|floatformat:2|intcomma }}</h2>
+                    <small>Sales Revenue (KES {{ vogs|floatformat:2|intcomma }}) - COGS (KES {{ cogs|floatformat:2|intcomma }})</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Section -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="fas fa-filter me-2"></i> Filter Reports
+        </div>
+        <div class="card-body">
+            <form method="GET" class="row g-3">
+                <div class="col-md-3">
+                    <label for="period" class="form-label">Period</label>
+                    <select name="period" id="period" class="form-select">
+                        <option value="day" {% if selected_period == 'day' %}selected{% endif %}>Today</option>
+                        <option value="week" {% if selected_period == 'week' %}selected{% endif %}>This Week</option>
+                        <option value="month" {% if selected_period == 'month' %}selected{% endif %}>This Month</option>
+                        <option value="year" {% if selected_period == 'year' %}selected{% endif %}>This Year</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="date_from" class="form-label">Date From</label>
+                    <input type="date" name="date_from" id="date_from" class="form-control" value="{{ start_date|date:'Y-m-d' }}">
+                </div>
+                <div class="col-md-3">
+                    <label for="date_to" class="form-label">Date To</label>
+                    <input type="date" name="date_to" id="date_to" class="form-control" value="{{ end_date|date:'Y-m-d' }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">&nbsp;</label>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-search"></i> Apply Filter
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Period Summary Card -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-calendar-alt me-2"></i> Period Summary
+                    <small class="text-muted ms-2">{{ start_date|date:"M d, Y" }} - {{ end_date|date:"M d, Y" }}</small>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h5>Period Purchases</h5>
+                            <h2 class="text-primary">KES {{ period_purchases|floatformat:2|intcomma }}</h2>
+                            {% if purchase_change != 0 %}
+                                {% if purchase_change > 0 %}
+                                    <span class="badge bg-success"><i class="fas fa-arrow-up"></i> +{{ purchase_change|floatformat:1 }}% vs previous period</span>
+                                {% else %}
+                                    <span class="badge bg-danger"><i class="fas fa-arrow-down"></i> {{ purchase_change|floatformat:1 }}% vs previous period</span>
+                                {% endif %}
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <h5>Previous Period</h5>
+                            <h4 class="text-muted">KES {{ prev_purchases|floatformat:2|intcomma }}</h4>
+                            <small>{{ previous_start|date:"M d, Y" }} - {{ previous_end|date:"M d, Y" }}</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Monthly Expense Trend Chart & Low Stock Alert -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-chart-line me-2"></i> Monthly Expense Trend
+                </div>
+                <div class="card-body">
+                    <canvas id="expenseChart" height="100"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header bg-warning text-dark">
+                    <i class="fas fa-exclamation-triangle me-2"></i> Low Stock Alert
+                    <span class="badge bg-danger float-end">{{ low_stock_products|length }}</span>
+                </div>
+                <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+                    {% if low_stock_products %}
+                        <div class="list-group">
+                            {% for product in low_stock_products %}
+                            <div class="list-group-item">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>{{ product.name }}</strong><br>
+                                        <small class="text-muted">{{ product.sku_code }}</small>
+                                    </div>
+                                    <div class="text-end">
+                                        <span class="badge bg-danger">Stock: {{ product.stock_quantity }}</span><br>
+                                        <small>Cost: KES {{ product.buying_price|floatformat:2 }}</small>
+                                    </div>
+                                </div>
+                                <div class="mt-2">
+                                    <div class="progress" style="height: 5px;">
+                                        <div class="progress-bar bg-danger" role="progressbar" 
+                                             style="width: {% widthratio product.stock_quantity product.reorder_level 100 %}%">
+                                        </div>
+                                    </div>
+                                    <small class="text-muted">Reorder at: {{ product.reorder_level }} units</small>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="text-center text-muted py-4">
+                            <i class="fas fa-check-circle fa-3x mb-3 text-success"></i>
+                            <p>No low stock items</p>
+                            <small>All products are well stocked</small>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Stock Purchases (Limited to 5) -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-chart-bar me-2"></i> Top Inventory Purchases by Cost
+                    <span class="badge bg-secondary ms-2">Top 5</span>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>#</th>
+                                    <th>Product Reference</th>
+                                    <th>Transactions</th>
+                                    <th>Total Cost</th>
+                                    <th>% of Period</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for purchase in stock_purchases %}
+                                <tr>
+                                    <td>{{ forloop.counter }}</td>
+                                    <td><code>{{ purchase.reference|default:"N/A" }}</code></td>
+                                    <td>{{ purchase.transaction_count }}</td>
+                                    <td class="text-warning fw-bold">KES {{ purchase.total_cost|floatformat:2|intcomma }}</td>
+                                    <td>
+                                        {% widthratio purchase.total_cost period_purchases 100 as width %}
+                                        <div class="d-flex align-items-center">
+                                            <div class="progress flex-grow-1 me-2" style="height: 6px; width: 100px;">
+                                                <div class="progress-bar bg-warning" role="progressbar" style="width: {{ width }}%"></div>
+                                            </div>
+                                            <small>{{ width|default:0 }}%</small>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="5" class="text-center py-4">
+                                        <i class="fas fa-inbox fa-2x text-muted mb-2 d-block"></i>
+                                        No purchase data available for this period
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Purchase Transactions List (Limited to 5) -->
+    <div class="card">
+        <div class="card-header">
+            <i class="fas fa-list me-2"></i> Recent Inventory Purchase Transactions
+            <span class="badge bg-secondary ms-2">Last 5</span>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Reference</th>
+                            <th>Product</th>
+                            <th>Type</th>
+                            <th>Amount</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for transaction in purchase_transactions %}
+                        <tr>
+                            <td>{{ transaction.transaction_date|date:"Y-m-d H:i" }}</td>
+                            <td><code>{{ transaction.reference|default:"-" }}</code></td>
+                            <td>
+                                {% if transaction.reference %}
+                                    <span class="badge bg-secondary">{{ transaction.reference }}</span>
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="badge {% if 'cogs' in transaction.transaction_type %}bg-warning{% else %}bg-info{% endif %}">
+                                    {{ transaction.get_transaction_type_display }}
+                                </span>
+                            </td>
+                            <td class="text-danger fw-bold">KES {{ transaction.amount|floatformat:2|intcomma }}</td>
+                            <td>{{ transaction.description|default:"-"|truncatechars:50 }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center py-4">
+                                <i class="fas fa-receipt fa-2x text-muted mb-2 d-block"></i>
+                                No purchase transactions found for this period
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% if purchase_transactions|length == 5 %}
+            <div class="text-center mt-3">
+                <small class="text-muted">Showing last 5 transactions. Use filter to see more.</small>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Expense Chart
+    const ctx = document.getElementById('expenseChart').getContext('2d');
+    const monthlyData = {{ monthly_data|safe }};
+    
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: monthlyData.map(d => d.month),
+            datasets: [{
+                label: 'Inventory Expenses',
+                data: monthlyData.map(d => d.amount),
+                backgroundColor: 'rgba(245, 158, 11, 0.6)',
+                borderColor: '#f59e0b',
+                borderWidth: 2,
+                borderRadius: 4,
+                barPercentage: 0.7
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    position: 'top',
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `KES ${context.raw.toLocaleString()}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return 'KES ' + value.toLocaleString();
+                        }
+                    },
+                    title: {
+                        display: true,
+                        text: 'Amount (KES)'
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Month'
+                    }
+                }
+            }
+        }
+    });
+
+    function exportToExcel() {
+        window.location.href = window.location.pathname + '?export=true&' + window.location.search.substring(1);
+    }
+</script>
+{% endblock %}

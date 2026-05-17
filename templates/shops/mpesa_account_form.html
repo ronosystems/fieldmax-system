@@ -1,128 +1,223 @@
-{% extends 'shops/base.html' %}
+<!-- templates/shops/mpesa_account_form.html -->
+{% extends "shops/base.html" %}
+{% load static %}
 
-{% block title %}{{ title }}{% endblock %}
+{% block title %}{{ title }} - Shop Reports{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-section {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 20px;
+        height: 100%;
+    }
+    .form-section h5 {
+        color: #2c3e50;
+        border-bottom: 2px solid #3498db;
+        padding-bottom: 10px;
+        margin-bottom: 20px;
+    }
+    .selection-box {
+        background: white;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 20px;
+        border: 1px solid #e0e0e0;
+    }
+    .input-box {
+        background: white;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 20px;
+        border: 1px solid #e0e0e0;
+    }
+    .section-title {
+        font-weight: 600;
+        color: #2c3e50;
+        margin-bottom: 15px;
+        font-size: 1.1rem;
+    }
+    .required-field::after {
+        content: "*";
+        color: red;
+        margin-left: 4px;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const shopSelect = document.getElementById('id_shop');
+    const userSelect = document.getElementById('id_assigned_user');
+    
+    function loadUsersForShop(shopId) {
+        if (shopId) {
+            // Clear current options
+            userSelect.innerHTML = '<option value="">-- Select User (Optional) --</option>';
+            
+            // Fetch users assigned to this shop
+            fetch(`/shops/api/shop/${shopId}/users/`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.users) {
+                        data.users.forEach(user => {
+                            const option = document.createElement('option');
+                            option.value = user.id;
+                            option.textContent = user.name;
+                            userSelect.appendChild(option);
+                        });
+                    }
+                })
+                .catch(error => console.error('Error loading users:', error));
+        } else {
+            userSelect.innerHTML = '<option value="">-- Select User (Optional) --</option>';
+        }
+    }
+    
+    // Load users when shop changes
+    if (shopSelect) {
+        shopSelect.addEventListener('change', function() {
+            loadUsersForShop(this.value);
+        });
+    }
+    
+    // Load users on page load if shop is pre-selected
+    if (shopSelect && shopSelect.value) {
+        loadUsersForShop(shopSelect.value);
+    }
+});
+</script>
+{% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-    <div class="row mb-4">
-        <div class="col-md-8">
-            <h2>
-                <i class="fas fa-mobile-alt me-2"></i>{{ title }}
-            </h2>
-            <p class="text-muted">Add or edit M-Pesa account details for shop branches</p>
-        </div>
-        <div class="col-md-4 text-end">
-            <a href="{% url 'shops:mpesa_accounts' %}" class="btn btn-secondary">
-                <i class="fas fa-arrow-left me-2"></i>Back to M-Pesa Accounts
-            </a>
-        </div>
-    </div>
-
+<div class="container-fluid py-4">
     <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h4 class="mb-0">
+                <i class="fas fa-mobile-alt"></i> {{ title }}
+            </h4>
+        </div>
         <div class="card-body">
-            <form method="post">
+            <form method="POST">
                 {% csrf_token %}
                 
                 <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label for="{{ form.shop.id_for_label }}" class="form-label">Shop Branch *</label>
-                        {{ form.shop }}
-                        {% if form.shop.errors %}
-                            <div class="text-danger small">{{ form.shop.errors }}</div>
-                        {% endif %}
-                        <small class="text-muted">Select the shop branch this M-Pesa account belongs to</small>
+                    <!-- LEFT COLUMN - SELECTIONS -->
+                    <div class="col-md-6">
+                        <div class="form-section">
+                            <h5><i class="fas fa-hand-pointer"></i> Select Options</h5>
+                            
+                            <!-- Shop Branch (Required) -->
+                            <div class="selection-box">
+                                <label class="form-label fw-bold required-field">Shop Branch</label>
+                                {{ form.shop }}
+                                <small class="text-muted d-block mt-1">Select the shop branch for this M-Pesa account</small>
+                                {% if form.shop.errors %}
+                                <div class="text-danger small mt-1">{{ form.shop.errors }}</div>
+                                {% endif %}
+                            </div>
+                            
+                            <!-- Account Type (Required) -->
+                            <div class="selection-box">
+                                <label class="form-label fw-bold required-field">Account Type</label>
+                                {{ form.account_type }}
+                                <small class="text-muted d-block mt-1">Select account type (Till, Paybill, Agent, or Merchant)</small>
+                                {% if form.account_type.errors %}
+                                <div class="text-danger small mt-1">{{ form.account_type.errors }}</div>
+                                {% endif %}
+                            </div>
+                            
+                            <!-- Assign User (Optional) -->
+                            <div class="selection-box">
+                                <label class="form-label fw-bold">Assign User <span class="text-muted">(Optional)</span></label>
+                                {{ form.assigned_user }}
+                                <small class="text-muted d-block mt-1">Assign this account to a specific cashier/agent</small>
+                                {% if form.assigned_user.errors %}
+                                <div class="text-danger small mt-1">{{ form.assigned_user.errors }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
                     </div>
                     
-                    <div class="col-md-6 mb-3">
-                        <label for="{{ form.account_name.id_for_label }}" class="form-label">Account Name *</label>
-                        {{ form.account_name }}
-                        {% if form.account_name.errors %}
-                            <div class="text-danger small">{{ form.account_name.errors }}</div>
-                        {% endif %}
-                        <small class="text-muted">e.g., Main Till, Business Account</small>
-                    </div>
-                    
-                    <div class="col-md-6 mb-3">
-                        <label for="{{ form.account_number.id_for_label }}" class="form-label">Account Number *</label>
-                        {{ form.account_number }}
-                        {% if form.account_number.errors %}
-                            <div class="text-danger small">{{ form.account_number.errors }}</div>
-                        {% endif %}
-                        <small class="text-muted">Till/Paybill/Agent number</small>
-                    </div>
-                    
-                    <div class="col-md-6 mb-3">
-                        <label for="{{ form.account_type.id_for_label }}" class="form-label">Account Type *</label>
-                        {{ form.account_type }}
-                        {% if form.account_type.errors %}
-                            <div class="text-danger small">{{ form.account_type.errors }}</div>
-                        {% endif %}
-                        <small class="text-muted">Select or enter account type</small>
-                    </div>
-                    
-                    <div class="col-md-6 mb-3">
-                        <label for="{{ form.phone_number.id_for_label }}" class="form-label">Phone Number *</label>
-                        {{ form.phone_number }}
-                        {% if form.phone_number.errors %}
-                            <div class="text-danger small">{{ form.phone_number.errors }}</div>
-                        {% endif %}
-                        <small class="text-muted">Registered M-Pesa phone number</small>
-                    </div>
-                    
-                    <div class="col-md-6 mb-3">
-                        <div class="form-check mt-4">
-                            {{ form.is_active }}
-                            <label for="{{ form.is_active.id_for_label }}" class="form-check-label">
-                                Active Account
-                            </label>
-                            {% if form.is_active.errors %}
-                                <div class="text-danger small">{{ form.is_active.errors }}</div>
-                            {% endif %}
-                            <small class="text-muted d-block">Inactive accounts won't appear in reports</small>
+                    <!-- RIGHT COLUMN - INPUT FIELDS -->
+                    <div class="col-md-6">
+                        <div class="form-section">
+                            <h5><i class="fas fa-keyboard"></i> Enter Details</h5>
+                            
+                            <!-- Account Name (Required) -->
+                            <div class="input-box">
+                                <label class="form-label fw-bold required-field">Account Name</label>
+                                {{ form.account_name }}
+                                <small class="text-muted d-block mt-1">e.g., Main Till, John's Paybill</small>
+                                {% if form.account_name.errors %}
+                                <div class="text-danger small mt-1">{{ form.account_name.errors }}</div>
+                                {% endif %}
+                            </div>
+                            
+                            <!-- Account Till Number (Required) -->
+                            <div class="input-box">
+                                <label class="form-label fw-bold required-field">Account Till Number</label>
+                                {{ form.account_number }}
+                                <small class="text-muted d-block mt-1">M-Pesa till number or paybill number</small>
+                                {% if form.account_number.errors %}
+                                <div class="text-danger small mt-1">{{ form.account_number.errors }}</div>
+                                {% endif %}
+                            </div>
+                            
+                            <!-- Store Number (Required) -->
+                            <div class="input-box">
+                                <label class="form-label fw-bold required-field">Store Number</label>
+                                {{ form.store_number }}
+                                <small class="text-muted d-block mt-1">Store/branch identifier for this account</small>
+                                {% if form.store_number.errors %}
+                                <div class="text-danger small mt-1">{{ form.store_number.errors }}</div>
+                                {% endif %}
+                            </div>
+                            
+                            <!-- Business Hours -->
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="input-box">
+                                        <label class="form-label fw-bold">Business Hours Start <span class="text-muted">(Optional)</span></label>
+                                        {{ form.business_hours_start }}
+                                        <small class="text-muted d-block mt-1">e.g., 08:00</small>
+                                        {% if form.business_hours_start.errors %}
+                                        <div class="text-danger small mt-1">{{ form.business_hours_start.errors }}</div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="input-box">
+                                        <label class="form-label fw-bold">Business Hours End <span class="text-muted">(Optional)</span></label>
+                                        {{ form.business_hours_end }}
+                                        <small class="text-muted d-block mt-1">e.g., 22:00</small>
+                                        {% if form.business_hours_end.errors %}
+                                        <div class="text-danger small mt-1">{{ form.business_hours_end.errors }}</div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
                 
-                <div class="text-end mt-3">
-                    <a href="{% url 'shops:mpesa_accounts' %}" class="btn btn-secondary">Cancel</a>
-                    <button type="submit" class="btn btn-primary">
-                        <i class="fas fa-save me-2"></i>Save M-Pesa Account
-                    </button>
+                <!-- Form Actions -->
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <hr>
+                        <div class="d-flex justify-content-end gap-2">
+                            <a href="{% url 'shops:mpesa_accounts' %}" class="btn btn-secondary btn-lg">
+                                <i class="fas fa-times"></i> Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="fas fa-save"></i> Save Account
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </form>
-        </div>
-    </div>
-    
-    <!-- Help Section -->
-    <div class="card mt-4">
-        <div class="card-header">
-            <h6 class="mb-0">
-                <i class="fas fa-info-circle me-2"></i>About M-Pesa Account Types
-            </h6>
-        </div>
-        <div class="card-body">
-            <div class="row">
-                <div class="col-md-3">
-                    <h6><i class="fas fa-till me-2"></i>Till Number</h6>
-                    <p class="small text-muted">For receiving payments from customers via M-Pesa. Used for daily sales collection.</p>
-                </div>
-                <div class="col-md-3">
-                    <h6><i class="fas fa-receipt me-2"></i>Paybill Number</h6>
-                    <p class="small text-muted">For businesses with multiple branches. Allows payment tracking with account numbers.</p>
-                </div>
-                <div class="col-md-3">
-                    <h6><i class="fas fa-user-tie me-2"></i>Agent Line</h6>
-                    <p class="small text-muted">For M-Pesa agent operations including deposits, withdrawals, and float management.</p>
-                </div>
-                <div class="col-md-3">
-                    <h6><i class="fas fa-building me-2"></i>Business Account</h6>
-                    <p class="small text-muted">Standard business accounts for company operations and bill payments.</p>
-                </div>
-            </div>
-            <div class="alert alert-info mt-3">
-                <i class="fas fa-lightbulb me-2"></i>
-                <strong>Tip:</strong> You can add new account types in <a href="{% url 'shops:manage_choices' %}">Dynamic Choices</a> under "M-Pesa Account Type".
-            </div>
         </div>
     </div>
 </div>

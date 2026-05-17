@@ -1,0 +1,212 @@
+{% extends 'finance/base.html' %}
+{% load static %}
+
+{% block title %}Transfer Details{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8 mx-auto">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">
+                        <i class="fas fa-exchange-alt me-2"></i>
+                        Transfer Details
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <!-- Transfer Status Banner -->
+                    <div class="alert 
+                        {% if transfer.status == 'completed' %}alert-success
+                        {% elif transfer.status == 'pending' %}alert-warning
+                        {% elif transfer.status == 'failed' %}alert-danger
+                        {% else %}alert-secondary{% endif %} mb-4">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <i class="fas 
+                                    {% if transfer.status == 'completed' %}fa-check-circle
+                                    {% elif transfer.status == 'pending' %}fa-clock
+                                    {% elif transfer.status == 'failed' %}fa-times-circle
+                                    {% else %}fa-ban{% endif %} me-2"></i>
+                                <strong>Status: {{ transfer.get_status_display }}</strong>
+                            </div>
+                            <div>
+                                <code>{{ transfer.transfer_reference }}</code>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Transfer Details -->
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card mb-3">
+                                <div class="card-header bg-light">
+                                    <strong><i class="fas fa-arrow-right"></i> From Account</strong>
+                                </div>
+                                <div class="card-body text-center">
+                                    <div class="display-4 mb-2">
+                                        {% if transfer.from_account == 'cash' %}💰
+                                        {% elif transfer.from_account == 'bank' %}🏦
+                                        {% elif transfer.from_account == 'mpesa' %}📱
+                                        {% endif %}
+                                    </div>
+                                    <h5>
+                                        {% if transfer.from_account == 'cash' %}Cash Account
+                                        {% elif transfer.from_account == 'bank' %}Bank Account
+                                        {% elif transfer.from_account == 'mpesa' %}M-Pesa Account
+                                        {% endif %}
+                                    </h5>
+                                    <div class="text-danger mt-2">
+                                        <small>Debited: -KES {{ transfer.amount|floatformat:2 }}</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="card mb-3">
+                                <div class="card-header bg-light">
+                                    <strong><i class="fas fa-arrow-left"></i> To Account</strong>
+                                </div>
+                                <div class="card-body text-center">
+                                    <div class="display-4 mb-2">
+                                        {% if transfer.to_account == 'cash' %}💰
+                                        {% elif transfer.to_account == 'bank' %}🏦
+                                        {% elif transfer.to_account == 'mpesa' %}📱
+                                        {% endif %}
+                                    </div>
+                                    <h5>
+                                        {% if transfer.to_account == 'cash' %}Cash Account
+                                        {% elif transfer.to_account == 'bank' %}Bank Account
+                                        {% elif transfer.to_account == 'mpesa' %}M-Pesa Account
+                                        {% endif %}
+                                    </h5>
+                                    <div class="text-success mt-2">
+                                        <small>Credited: +KES {{ transfer.amount|floatformat:2 }}</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Transfer Information -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-light">
+                            <strong><i class="fas fa-info-circle"></i> Transfer Information</strong>
+                        </div>
+                        <div class="card-body">
+                            <table class="table table-borderless">
+                                <tr>
+                                    <th width="30%">Amount:</th>
+                                    <td><strong class="text-primary">KES {{ transfer.amount|floatformat:2 }}</strong></td>
+                                </tr>
+                                <tr>
+                                    <th>Description:</th>
+                                    <td>{{ transfer.description }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Created At:</th>
+                                    <td>{{ transfer.created_at|date:"Y-m-d H:i:s" }}</td>
+                                </tr>
+                                {% if transfer.completed_at %}
+                                <tr>
+                                    <th>Completed At:</th>
+                                    <td>{{ transfer.completed_at|date:"Y-m-d H:i:s" }}</td>
+                                </tr>
+                                {% endif %}
+                                <tr>
+                                    <th>Requested By:</th>
+                                    <td>{{ transfer.requested_by.username }}</td>
+                                </tr>
+                                {% if transfer.approved_by %}
+                                <tr>
+                                    <th>Approved By:</th>
+                                    <td>{{ transfer.approved_by.username }}</td>
+                                </tr>
+                                {% endif %}
+                                {% if transfer.notes %}
+                                <tr>
+                                    <th>Notes:</th>
+                                    <td>{{ transfer.notes }}</td>
+                                </tr>
+                                {% endif %}
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- Bank Details (if applicable) -->
+                    {% if transfer.bank_name or transfer.bank_account_number %}
+                    <div class="card mb-3">
+                        <div class="card-header bg-light">
+                            <strong><i class="fas fa-university"></i> Bank Details</strong>
+                        </div>
+                        <div class="card-body">
+                            <table class="table table-borderless">
+                                {% if transfer.bank_name %}
+                                <tr>
+                                    <th width="30%">Bank Name:</th>
+                                    <td>{{ transfer.bank_name }}</td>
+                                </tr>
+                                {% endif %}
+                                {% if transfer.bank_account_number %}
+                                <tr>
+                                    <th>Account Number:</th>
+                                    <td>{{ transfer.bank_account_number }}</td>
+                                </tr>
+                                {% endif %}
+                                {% if transfer.bank_account_name %}
+                                <tr>
+                                    <th>Account Name:</th>
+                                    <td>{{ transfer.bank_account_name }}</td>
+                                </tr>
+                                {% endif %}
+                            </table>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- M-Pesa Details (if applicable) -->
+                    {% if transfer.mpesa_phone or transfer.mpesa_receipt %}
+                    <div class="card mb-3">
+                        <div class="card-header bg-light">
+                            <strong><i class="fas fa-mobile-alt"></i> M-Pesa Details</strong>
+                        </div>
+                        <div class="card-body">
+                            <table class="table table-borderless">
+                                {% if transfer.mpesa_phone %}
+                                <tr>
+                                    <th width="30%">Phone Number:</th>
+                                    <td>{{ transfer.mpesa_phone }}</td>
+                                </tr>
+                                {% endif %}
+                                {% if transfer.mpesa_receipt %}
+                                <tr>
+                                    <th>Receipt Number:</th>
+                                    <td>{{ transfer.mpesa_receipt }}</td>
+                                </tr>
+                                {% endif %}
+                            </table>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Action Buttons -->
+                    <div class="d-flex justify-content-between mt-3">
+                        <a href="{% url 'finance:money_transfer_list' %}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left"></i> Back to List
+                        </a>
+                        
+                        {% if transfer.status == 'pending' %}
+                        <div>
+                            <a href="{% url 'finance:money_transfer_cancel' transfer.id %}" class="btn btn-danger">
+                                <i class="fas fa-times"></i> Cancel Transfer
+                            </a>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

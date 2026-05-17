@@ -5,496 +5,591 @@
 
 {% block extra_css %}
 <style>
+    :root {
+        --primary: #3b82f6;
+        --success: #10b981;
+        --danger: #ef4444;
+        --warning: #f59e0b;
+        --dark: #1e293b;
+        --light: #f8fafc;
+        --border: #e2e8f0;
+    }
+
+    /* Header Styles */
     .report-header {
-        background: linear-gradient(135deg, #00eeff 0%, #00eeff 100%);
-        color: rgb(0, 4, 255);
-        border-radius: 15px;
-        box-shadow: 0 5px 15px rgb(0, 0, 0);
-        padding: 25px;
-        margin-bottom: 25px;
+        background: linear-gradient(135deg, #0394e9 0%, #043cf5 100%);
+        border-radius: 20px;
+        padding: 1.5rem 2rem;
+        margin-bottom: 1.5rem;
+        color: white;
     }
-    
-    .report-header h2 {
-        margin-bottom: 5px;
+
+    .report-header h1 {
+        font-size: 1.75rem;
+        font-weight: 700;
+        margin: 0;
     }
-    
+
     .report-header p {
-        margin-bottom: 0;
+        margin: 0.5rem 0 0;
         opacity: 0.9;
     }
-    
-    .info-card {
-        background: var(--card-bg);
-        border: #000000;
-        border-radius: 10px;
-        box-shadow: 0 5px 15px rgb(0, 0, 0);
-        padding: 20px;
-        margin-bottom: 20px;
-        transition: all 0.3s ease;
-    }
-    
-    .info-card:hover {
-        box-shadow: 0 5px 15px rgb(0, 0, 0);
-    }
-    
-    .info-label {
-        font-size: 0.85rem;
-        text-transform: uppercase;
-        color: var(--text-secondary);
-        margin-bottom: 5px;
-    }
-    
-    .info-value-large {
-        font-size: 1.8rem;
-        font-weight: bold;
-        color: var(--primary-color);
-    }
-    
+
     .status-badge {
         display: inline-block;
-        padding: 10px 30px;
-        border-radius: 15px;
-        font-size: 2rem;
-        font-weight: 900;
+        padding: 0.5rem 1.5rem;
+        border-radius: 30px;
+        font-size: 0.85rem;
+        font-weight: 600;
     }
-    
-    .header-status {
-        display: inline-block;
-        margin-right: 15px;
-        vertical-align: middle;
-    }
-    
+
     .status-finalized {
-        background: #ffffff;
-        color: rgb(4, 0, 255);
+        background: rgba(255,255,255,0.2);
+        color: white;
     }
-    
+
     .status-draft {
         background: #f59e0b;
-        color: rgb(0, 0, 0);
+        color: white;
     }
-    
-    .amount-positive {
-        color: #10b981;
+
+    /* Action Buttons */
+    .action-buttons {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        margin-bottom: 1.5rem;
+        padding: 1rem;
+        background: white;
+        border-radius: 12px;
+        border: #000000 1px solid;
+        box-shadow: #000000 0px 1px 3px 0px, #000000 0px 1px 2px 0px;
     }
-    
-    .amount-negative {
-        color: #ef4444;
+
+    /* 4-Column Grid */
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1.5rem;
+        margin-bottom: 1.5rem;
     }
-    
-    @media print {
-        .no-print {
-            display: none !important;
-        }
-        .report-header {
-            background: #059669 !important;
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-        }
+
+    /* Card Styles */
+    .stat-card {
+        background: white;
+        border-radius: 16px;
+        border: 1px solid var(--border);
+        overflow: hidden;
+        transition: all 0.3s;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.986);
     }
-    
-    .table-bank thead th, .table-expense thead th, .table-mpesa thead th {
-        background: var(--light-bg);
+
+    .stat-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1);
+    }
+
+    .card-header-custom {
+        padding: 1rem 1.25rem;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .card-header-custom h3 {
+        font-size: 1rem;
         font-weight: 600;
-        font-size: 0.85rem;
+        margin: 0;
+        color: var(--dark);
     }
-    
-    .table-active {
-        background: var(--light-bg);
+
+    .card-body-custom {
+        padding: 1.25rem;
     }
-    
-    .mpesa-header {
+
+    /* M-Pesa Card */
+    .mpesa-card .card-header-custom {
         background: linear-gradient(135deg, #10b981 0%, #059669 100%);
         color: white;
     }
-    
-    .bank-header {
-        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    .mpesa-card .card-header-custom h3,
+    .mpesa-card .card-header-custom i {
         color: white;
     }
-    
-    .expense-header {
+
+    /* Cash Card */
+    .cash-card .card-header-custom {
         background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
         color: white;
     }
-    
-    .info-header {
-        background: linear-gradient(135deg, #00ffff 0%, #00d9ff 100%);
+    .cash-card .card-header-custom h3,
+    .cash-card .card-header-custom i {
         color: white;
     }
-    
-    .action-buttons {
-        display: flex;
-        gap: 10px;
-        flex-wrap: wrap;
+
+    /* Bank Card */
+    .bank-card .card-header-custom {
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        color: white;
     }
-    
-    .action-buttons .btn {
-        margin-right: 5px;
+    .bank-card .card-header-custom h3,
+    .bank-card .card-header-custom i {
+        color: white;
     }
-    
-    .transaction-count {
+
+    /* Expenses Card */
+    .expense-card .card-header-custom {
+        background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+        color: white;
+    }
+    .expense-card .card-header-custom h3,
+    .expense-card .card-header-custom i {
+        color: white;
+    }
+
+    /* Summary Footer */
+    .summary-footer {
+        background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+        border-radius: 16px;
+        padding: 1.5rem;
+        margin-top: 1.5rem;
+    }
+
+    .summary-stats {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1.5rem;
+    }
+
+    .summary-item {
+        text-align: center;
+        color: white;
+    }
+
+    .summary-item h4 {
         font-size: 1.8rem;
-        font-weight: bold;
-        color: #10b981;
+        font-weight: 700;
+        margin-bottom: 0.25rem;
     }
-    
-    .summary-card-custom {
-        background: linear-gradient(135deg, #059669 0%, #047857 100%);
-        color: white;
-        border-radius: 15px;
-        padding: 20px;
-        margin-bottom: 20px;
+
+    .summary-item p {
+        font-size: 0.85rem;
+        opacity: 0.8;
+        margin: 0;
     }
-    
-    .summary-card-custom h4 {
-        font-size: 1.5rem;
-        margin-bottom: 5px;
+
+    /* Table Styles */
+    .info-table {
+        width: 100%;
+        margin: 0;
     }
-    
-    .summary-card-custom p {
-        margin-bottom: 0;
-        opacity: 0.9;
+
+    .info-table td {
+        padding: 0.5rem 0;
+        border-bottom: 1px solid var(--border);
     }
-    
-    .header-status {
-        display: inline-block;
-        margin-left: 15px;
-        vertical-align: middle;
+
+    .info-table tr:last-child td {
+        border-bottom: none;
+    }
+
+    .amount {
+        font-weight: 700;
+    }
+
+    .amount-positive {
+        color: var(--success);
+    }
+
+    .amount-negative {
+        color: var(--danger);
+    }
+
+    .total-row {
+        background: var(--light);
+        font-weight: 700;
+        border-top: 2px solid var(--border);
+    }
+
+    .single-value {
+        text-align: center;
+        padding: 1rem 0;
+    }
+    .single-value .value {
+        font-size: 2rem;
+        font-weight: 700;
+        color: var(--success);
+    }
+    .single-value .label {
+        font-size: 0.85rem;
+        color: var(--gray);
+        margin-top: 0.5rem;
+    }
+
+    /* Responsive */
+    @media (max-width: 1200px) {
+        .stats-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        .summary-stats {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .stats-grid {
+            grid-template-columns: 1fr;
+        }
+        .summary-stats {
+            grid-template-columns: 1fr;
+        }
+        .report-header {
+            text-align: center;
+        }
+    }
+
+    @media print {
+        .no-print, .action-buttons {
+            display: none !important;
+        }
     }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container-fluid">
-    <!-- Report Header -->
+    <!-- ROW 1: HEADER -->
     <div class="report-header">
         <div class="row align-items-center">
-            <div class="col-md-12">
-                <h2 class="mb-0">
-                    <span class="header-status">
-                        <span class="status-badge {% if report.is_finalized %}status-finalized{% else %}status-draft{% endif %}">
-                            {% if report.is_finalized %}
-                                <i class="fas fa-check-circle me-1"></i>APPROVED
-                            {% else %}
-                                <i class="fas fa-edit me-1"></i>PENDING
-                            {% endif %}
-                                <p>{{ report.report_date|date:"l, F d, Y" }}</p>
-                        </span>
-                    </span>
-                </h2>
+            <div class="col-md-8">
+                <h1>
+                    <i class="fas fa-file-alt me-2"></i>
+                    Daily Shop Report
+                </h1>
+                <p>
+                    <strong>{{ report.shop.name }}</strong> | {{ report.shop.location }}
+                </p>
+                <p class="mb-0">
+                    <i class="fas fa-calendar-alt me-1"></i> 
+                    {{ report.report_date|date:"l, F d, Y" }}
+                </p>
+            </div>
+            <div class="col-md-4 text-md-end mt-3 mt-md-0">
+
+                <span class="me-3">
+                    <i class="fas fa-mobile-alt me-1"></i>
+                    Transactions: {{ report.total_mpesa_transactions|default:0|intcomma }}
+                </span>
+
+            
+                <span class="status-badge {% if report.is_finalized %}status-finalized{% else %}status-draft{% endif %}">
+                    {% if report.is_finalized %}
+                        <i class="fas fa-check-circle me-1"></i>FINALIZED
+                    {% else %}
+                        <i class="fas fa-edit me-1"></i>DRAFT
+                    {% endif %}
+                </span>
             </div>
         </div>
     </div>
 
-<!-- Action Buttons -->
-<div class="row mb-4 no-print">
-    <div class="col-12">
-        <div class="action-buttons">
-            <a href="{% url 'shops:reports_list' %}" class="btn btn-secondary">
-                <i class="fas fa-arrow-left me-2"></i>Back to Reports
+    <!-- ROW 2: ACTION BUTTONS -->
+    <div class="action-buttons no-print">
+        <a href="{% url 'shops:reports_list' %}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left me-2"></i>Back to Reports
+        </a>
+        
+        {% if not report.is_finalized %}
+            <a href="{% url 'shops:edit_report' report.id %}" class="btn btn-warning">
+                <i class="fas fa-edit me-2"></i>Edit Report
             </a>
-            
-            {% if not report.is_finalized %}
-                <!-- Edit Button - Only for draft reports -->
-                <a href="{% url 'shops:edit_report' report.id %}" class="btn btn-warning">
-                    <i class="fas fa-edit me-2"></i>Edit Report
-                </a>
-
-                <!-- Finalize Button - Only visible to superusers for draft reports -->
-                {% if request.user.is_superuser %}
-                <form method="post" action="{% url 'shops:finalize_report' report.id %}" class="d-inline">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-success" onclick="return confirm('ACCEPT TO FINAL STATE ✅.');">
-                        <i class="fas fa-lock me-2"></i>Approve Report
-                    </button>
-                </form>
-                {% endif %}
-                
-            {% else %}
-                <!-- Report is finalized - Show Revert to Draft button for superusers -->
-                {% if request.user.is_superuser %}
-                <form method="post" action="{% url 'shops:unfinalize_report' report.id %}" class="d-inline">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-warning" onclick="return confirm('ACCEPT FOR EDITS ✍️.');">
-                        <i class="fas fa-undo me-2"></i>Revert to Edit
-                    </button>
-                </form>
-                {% endif %}
+            {% if request.user.is_superuser %}
+            <form method="post" action="{% url 'shops:finalize_report' report.id %}" class="d-inline">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-success" onclick="return confirm('Finalize this report?');">
+                    <i class="fas fa-lock me-2"></i>Finalize
+                </button>
+            </form>
             {% endif %}
-            
-            <!-- Print Button - Always visible -->
-            <button onclick="window.print()" class="btn btn-primary">
-                <i class="fas fa-print me-2"></i>Print Report
-            </button>
-        </div>
-    </div>
-</div>
-
-<!-- Summary Cards - Updated Layout -->
-<div class="row mb-4">
-    <div class="col-md-3">
-        <div class="info-card text-center">
-            <div class="info-label">
-                <i class="fas fa-chart-line me-1"></i>Opening Balance
-            </div>
-            <div class="info-value-large">
-                KES {{ opening_balance|floatformat:2|intcomma }}
-            </div>
-            <small class="text-muted">Previous day's closing balance</small>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="info-card text-center">
-            <div class="info-label">
-                <i class="fas fa-receipt me-1"></i>Today's Expenses
-            </div>
-            <div class="info-value-large {% if report.total_expenses > 0 %}amount-negative{% endif %}">
-                KES {{ report.total_expenses|floatformat:2|intcomma }}
-            </div>
-            <small class="text-muted">All expenses today</small>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="info-card text-center">
-            <div class="info-label">
-                <i class="fas fa-chart-pie me-1"></i>Net Position
-            </div>
-            <div class="info-value-large {% if net_position >= 0 %}amount-positive{% else %}amount-negative{% endif %}">
-                KES {{ net_position|floatformat:2|intcomma }}
-            </div>
-            <small class="text-muted">Opening Balance - Expenses</small>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="info-card text-center">
-            <div class="info-label">
-                <i class="fas fa-chart-line me-1"></i>Today's Closing Balance
-            </div>
-            <div class="info-value-large">
-                KES {{ report.total_closing_balance|floatformat:2|intcomma }}
-            </div>
-            <small class="text-muted">Float + Cash + Bank</small>
-        </div>
-    </div>
-</div>
-
-<!-- Show previous day info if available -->
-{% if previous_report %}
-<div class="alert alert-info mb-4">
-    <i class="fas fa-info-circle me-2"></i>
-    <strong>Previous Day Reference:</strong> 
-    Closing balance from {{ previous_report.report_date|date:"F d, Y" }} was 
-    <strong>KES {{ previous_report.total_closing_balance|floatformat:2|intcomma }}</strong>
-</div>
-{% endif %}
-
-    <!-- Additional Info: M-Pesa Transactions -->
-    <div class="row mb-4">
-        <div class="col-md-12">
-            <div class="summary-card-custom">
-                <div class="row align-items-center">
-                    <div class="col-md-8">
-                        <p class="mb-0">
-                            <i class="fas fa-exchange-alt me-2"></i>
-                            <strong>Total M-Pesa Transactions Today:</strong>
-                        </p>
-                    </div>
-                    <div class="col-md-4 text-md-end">
-                        <h3 class="mb-0">{{ report.shop_sales|floatformat:0|intcomma }}</h3>
-                    </div>
-                </div>
-            </div>
-        </div>
+        {% else %}
+            {% if request.user.is_superuser %}
+            <form method="post" action="{% url 'shops:unfinalize_report' report.id %}" class="d-inline">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-warning" onclick="return confirm('Revert to draft?');">
+                    <i class="fas fa-undo me-2"></i>Revert to Draft
+                </button>
+            </form>
+            {% endif %}
+        {% endif %}
+        
+        <button onclick="window.print()" class="btn btn-primary">
+            <i class="fas fa-print me-2"></i>Print Report
+        </button>
     </div>
 
-    <div class="row">
-        <!-- M-Pesa Details -->
-        <div class="col-md-6">
-            <div class="card mb-4">
-                <div class="card-header mpesa-header">
-                    <h5 class="mb-0">
-                        <i class="fas fa-mobile-alt me-2"></i>M-Pesa Closing Balances
-                    </h5>
-                </div>
-                <div class="card-body">
+    <!-- ROW 3: FOUR COLUMNS - MPESA | CASH | BANK | EXPENSES -->
+    <div class="stats-grid">
+        
+        <!-- COLUMN A: MPESA ACCOUNTS -->
+        <div class="stat-card mpesa-card">
+            <div class="card-header-custom">
+                <i class="fas fa-mobile-alt fa-lg"></i>
+                <h3>M-Pesa Accounts</h3>
+            </div>
+            <div class="card-body-custom">
+                {% if mpesa_reports %}
                     <div class="table-responsive">
-                        <table class="table table-hover table-mpesa">
-                            <thead>
-                                <tr>
-                                    <th>Description</th>
-                                    <th class="text-end">Amount (KES)</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td><strong>M-Pesa Float Balance</strong></td>
-                                    <td class="text-end"><strong>KES {{ report.closing_mpesa_float|floatformat:2|intcomma }}</strong></td>
-                                </tr>
-
-                                <tr>
-                                    <td><strong>Airtel Float Balance</strong></td>
-                                    <td class="text-end"><strong>KES {{ report.closing_airtel_float|floatformat:2|intcomma }}</strong></td>
-                                </tr>
-
-                                <tr>
-                                    <td><strong>M-Pesa Cash Balance</strong></td>
-                                    <td class="text-end"><strong>KES {{ report.closing_mpesa_cash|floatformat:2|intcomma }}</strong></td>
-                                </tr>
-                            </tbody>
-                            <tfoot>
-                                <tr class="table-active">
-                                    <td><strong>Total M-Pesa Balance</strong></td>
-                                    <td class="text-end"><strong class="text-success">KES {{ total_mpesa|floatformat:2|intcomma }}</strong></td>
-                                </tr>
-                            </tfoot>
+                        <table class="info-table">
+                            {% for mpesa in mpesa_reports %}
+                            <tr>
+                                <td>
+                                    <strong>{{ mpesa.mpesa_account.account_name }}</strong><br>
+                                    <small class="text-muted">{{ mpesa.mpesa_account.account_number }}</small>
+                                </td>
+                                <td class="text-end">
+                                    <span class="amount amount-positive">
+                                        KES {{ mpesa.closing_mpesa_float|floatformat:2|intcomma }}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                            <tr class="total-row">
+                                <td><strong>Total M-Pesa</strong></td>
+                                <td class="text-end">
+                                    <strong class="amount-positive">
+                                        KES {{ total_mpesa|floatformat:2|intcomma }}
+                                    </strong>
+                                </td>
+                            </tr>
                         </table>
                     </div>
-                </div>
-            </div>
-            
-            <!-- Bank Balances -->
-            <div class="card mb-4">
-                <div class="card-header bank-header">
-                    <h5 class="mb-0">
-                        <i class="fas fa-university me-2"></i>Bank Closing Balances
-                    </h5>
-                </div>
-                <div class="card-body">
-                    {% if bank_closings %}
-                    <div class="table-responsive">
-                        <table class="table table-hover table-bank">
-                            <thead>
-                                <tr>
-                                    <th>Bank Name</th>
-                                    <th>Account Name</th>
-                                    <th class="text-end">Balance (KES)</th>
-                                </thead>
-                            <tbody>
-                                {% for closing in bank_closings %}
-                                <tr>
-                                    <td>{{ closing.bank_account.bank_name }}</div>
-                                    <td>{{ closing.bank_account.account_name }}</div>
-                                    <td class="text-end">KES {{ closing.closing_balance|floatformat:2|intcomma }}</div>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                            <tfoot>
-                                <tr class="table-active">
-                                    <td colspan="2"><strong>Total Bank Balance</strong></div>
-                                    <td class="text-end"><strong>KES {{ bank_total|floatformat:2|intcomma }}</strong></div>
-                                </tr>
-                            </tfoot>
-                        </table>
-                    </div>
-                    {% else %}
+                {% else %}
                     <div class="text-center py-3">
-                        <i class="fas fa-check-circle text-success fa-2x mb-2"></i>
-                        <p class="text-muted mb-0">No bank balances recorded for this report.</p>
+                        <i class="fas fa-info-circle text-muted fa-2x mb-2"></i>
+                        <p class="text-muted mb-0">No M-Pesa accounts recorded</p>
                     </div>
-                    {% endif %}
-                </div>
+                {% endif %}
             </div>
         </div>
 
-        <!-- Expenses & Notes -->
-        <div class="col-md-6">
-            <div class="card mb-4">
-                <div class="card-header expense-header">
-                    <h5 class="mb-0">
-                        <i class="fas fa-receipt me-2"></i>Expenses Breakdown
-                    </h5>
+        <!-- COLUMN B: CASH (Single Value) -->
+        <div class="stat-card cash-card">
+            <div class="card-header-custom">
+                <i class="fas fa-money-bill-wave fa-lg"></i>
+                <h3>Cash Balance</h3>
+            </div>
+            <div class="card-body-custom">
+                <div class="single-value">
+                    <div class="value">
+                        KES {{ total_cash|floatformat:2|intcomma }}
+                    </div>
+                    <div class="label">
+                        <i class="fas fa-coins me-1"></i>
+                        Physical cash from M-Pesa cash-out
+                    </div>
                 </div>
-                <div class="card-body">
-                    {% if expenses %}
+                {% if not total_cash or total_cash == 0 %}
+                <div class="text-center text-muted mt-2">
+                    <small>No cash balance recorded</small>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- COLUMN C: BANK ACCOUNTS -->
+        <div class="stat-card bank-card">
+            <div class="card-header-custom">
+                <i class="fas fa-university fa-lg"></i>
+                <h3>Bank Accounts</h3>
+            </div>
+            <div class="card-body-custom">
+                {% if bank_closings %}
                     <div class="table-responsive">
-                        <table class="table table-hover table-expense">
-                            <thead>
-                                <tr>
-                                    <th>Description</th>
-                                    <th class="text-end">Amount (KES)</th>
-                                </thead>
-                            <tbody>
-                                {% for expense in expenses %}
-                                <tr>
-                                    <td>{{ expense.description|default:"-" }}</div>
-                                    <td class="text-end">KES {{ expense.amount|floatformat:2|intcomma }}</div>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                            <tfoot>
-                                <tr class="table-active">
-                                    <td colspan="1"><strong>Total Expenses</strong></div>
-                                    <td class="text-end"><strong>KES {{ report.total_expenses|floatformat:2|intcomma }}</strong></div>
-                                </tr>
-                            </tfoot>
+                        <table class="info-table">
+                            {% for closing in bank_closings %}
+                            <tr>
+                                <td>
+                                    <strong>{{ closing.bank_account.bank_name }}</strong><br>
+                                    <small class="text-muted">{{ closing.bank_account.account_name }}</small>
+                                    <br>
+                                    <small class="text-muted">{{ closing.bank_account.account_number }}</small>
+                                </td>
+                                <td class="text-end">
+                                    <span class="amount amount-positive">
+                                        KES {{ closing.closing_balance|floatformat:2|intcomma }}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                            <tr class="total-row">
+                                <td><strong>Total Bank</strong></td>
+                                <td class="text-end">
+                                    <strong class="amount-positive">
+                                        KES {{ bank_total|floatformat:2|intcomma }}
+                                    </strong>
+                                </td>
+                            </tr>
                         </table>
                     </div>
-                    {% else %}
+                {% else %}
                     <div class="text-center py-3">
-                        <i class="fas fa-check-circle text-success fa-2x mb-2"></i>
-                        <p class="text-muted mb-0">No expenses recorded for this report.</p>
+                        <i class="fas fa-check-circle text-muted fa-2x mb-2"></i>
+                        <p class="text-muted mb-0">No bank accounts recorded</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- COLUMN D: EXPENSES -->
+        <div class="stat-card expense-card">
+            <div class="card-header-custom">
+                <i class="fas fa-receipt fa-lg"></i>
+                <h3>Expenses</h3>
+            </div>
+            <div class="card-body-custom">
+                {% if expenses %}
+                    <div class="table-responsive">
+                        <table class="info-table">
+                            {% for expense in expenses %}
+                            <tr>
+                                <td>
+                                    <strong>{{ expense.expense_category|default:"Other" }}</strong><br>
+                                    <small class="text-muted">{{ expense.description|default:"-"|truncatechars:30 }}</small>
+                                </td>
+                                <td class="text-end">
+                                    <span class="amount amount-negative">
+                                        KES {{ expense.amount|floatformat:2|intcomma }}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                            <tr class="total-row">
+                                <td><strong>Total Expenses</strong></td>
+                                <td class="text-end">
+                                    <strong class="amount-negative">
+                                        KES {{ expense_total|floatformat:2|intcomma }}
+                                    </strong>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-3">
+                        <i class="fas fa-check-circle text-muted fa-2x mb-2"></i>
+                        <p class="text-muted mb-0">No expenses recorded</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- ROW 4: SUMMARY FOOTER -->
+    <div class="summary-footer">
+        <div class="row">
+            <div class="col-md-12">
+                <h5 class="text-white mb-3 text-center">
+                    <i class="fas fa-chart-line me-2"></i>Financial Summary
+                </h5>
+            </div>
+        </div>
+        <div class="summary-stats">
+            <div class="summary-item">
+                <p><i class="fas fa-chart-line"></i> Opening Balance</p>
+                <h4>KES {{ opening_balance|floatformat:2|intcomma }}</h4>
+                <small>Previous day's closing</small>
+            </div>
+            <div class="summary-item">
+                <p><i class="fas fa-mobile-alt"></i> M-Pesa Total</p>
+                <h4>KES {{ total_mpesa|floatformat:2|intcomma }}</h4>
+                <small>M-Pesa float balance</small>
+            </div>
+            <div class="summary-item">
+                <p><i class="fas fa-money-bill-wave"></i> Cash Total</p>
+                <h4>KES {{ total_cash|floatformat:2|intcomma }}</h4>
+                <small>Physical cash balance</small>
+            </div>
+            <div class="summary-item">
+                <p><i class="fas fa-university"></i> Bank Total</p>
+                <h4>KES {{ bank_total|floatformat:2|intcomma }}</h4>
+                <small>Bank account balances</small>
+            </div>
+            <div class="summary-item">
+                <p><i class="fas fa-receipt"></i> Total Expenses</p>
+                <h4 class="text-danger">KES {{ expense_total|floatformat:2|intcomma }}</h4>
+                <small>All expenses today</small>
+            </div>
+            <div class="summary-item">
+                <p><i class="fas fa-chart-pie"></i> M-Pesa Amount</p>
+                <h4>KES {{ report.total_mpesa_amount|floatformat:2|intcomma }}</h4>
+                <small>{{ report.total_mpesa_transactions|default:0 }} transactions</small>
+            </div>
+            <div class="summary-item">
+                <p><i class="fas fa-calculator"></i> Today's Closing</p>
+                <h4 class="text-success">KES {{ report.total_closing_balance|floatformat:2|intcomma }}</h4>
+                <small>M-Pesa + Cash + Bank</small>
+            </div>
+            <div class="summary-item">
+                <p><i class="fas fa-balance-scale"></i> Net Position</p>
+                <h4 class="{% if net_position >= 0 %}text-success{% else %}text-danger{% endif %}">
+                    KES {{ net_position|floatformat:2|intcomma }}
+                </h4>
+                <small>= Opening + M-Pesa Amount - Expenses</small>
+            </div>
+        </div>
+        
+        <!-- Previous Day Reference -->
+        {% if previous_report %}
+        <div class="mt-3 pt-3 border-top border-secondary text-center">
+            <small class="text-white-50">
+                <i class="fas fa-info-circle me-1"></i>
+                Previous day ({{ previous_report.report_date|date:"F d, Y" }}) closing balance: 
+                <strong>KES {{ previous_report.total_closing_balance|floatformat:2|intcomma }}</strong>
+            </small>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Report Info Footer -->
+    <div class="row mt-3">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <small class="text-muted">Submitted By</small>
+                            <p class="mb-0">{{ report.submitted_by.get_full_name|default:report.submitted_by.username }}</p>
+                        </div>
+                        <div class="col-md-3">
+                            <small class="text-muted">Submission Time</small>
+                            <p class="mb-0">{{ report.submission_time|date:"F d, Y H:i:s" }}</p>
+                        </div>
+                        <div class="col-md-3">
+                            <small class="text-muted">Last Modified</small>
+                            <p class="mb-0">{{ report.last_modified|date:"F d, Y H:i:s" }}</p>
+                        </div>
+                        <div class="col-md-3">
+                            <small class="text-muted">Status</small>
+                            <p class="mb-0">
+                                {% if report.is_finalized %}
+                                    <span class="badge bg-success">Finalized</span>
+                                {% else %}
+                                    <span class="badge bg-warning">Draft</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                    {% if report.notes %}
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <small class="text-muted">Notes</small>
+                            <p class="mb-0">{{ report.notes|linebreaks }}</p>
+                        </div>
                     </div>
                     {% endif %}
                 </div>
             </div>
-            
-            <!-- Notes -->
-            {% if report.notes %}
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h5 class="mb-0">
-                        <i class="fas fa-sticky-note me-2"></i>Additional Notes
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <p class="mb-0">{{ report.notes|linebreaks }}</p>
-                </div>
-            </div>
-            {% endif %}
-            
-<!-- Report Info -->
-<div class="card">
-    <div class="card-header info-header">
-        <h5 class="mb-0">
-            <i class="fas fa-info-circle me-2"></i>Report Information
-        </h5>
-    </div>
-    <div class="card-body">
-        <table class="table table-borderless">
-            <tr>
-                <td width="50%"><strong>Submitted By:</strong></td>
-                <td>{{ report.submitted_by.get_full_name|default:report.submitted_by.username }}</div>
-            </tr>
-            <tr>
-                <td><strong>Submission Time:</strong></div>
-                <td>{{ report.submission_time|date:"F d, Y H:i:s" }}</div>
-            </tr>
-            {% if report.is_finalized %}
-            <tr>
-                <td><strong>Approved By:</strong></div>
-                <td>
-                    {% if report.finalized_by %}
-                        {{ report.finalized_by.get_full_name|default:report.finalized_by.username }}
-                    {% else %}
-                        {{ report.submitted_by.get_full_name|default:report.submitted_by.username }}
-                    {% endif %}
-                </div>
-            </tr>
-            <tr>
-                <td><strong>Approved At:</strong></div>
-                <td>
-                    {% if report.finalized_at %}
-                        {{ report.finalized_at|date:"F d, Y H:i:s" }}
-                    {% else %}
-                        {{ report.last_modified|date:"F d, Y H:i:s" }}
-                    {% endif %}
-                </div>
-            </tr>
-            {% endif %}
-        </table>
-    </div>
-</div>
         </div>
     </div>
 </div>

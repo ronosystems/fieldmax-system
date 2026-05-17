@@ -1,0 +1,51 @@
+{% extends 'finance/base.html' %}
+{% load static %}
+
+{% block title %}Cancel Transfer{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-6 mx-auto">
+            <div class="card">
+                <div class="card-header bg-danger text-white">
+                    <h4 class="mb-0"><i class="fas fa-times-circle me-2"></i>Cancel Transfer</h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Warning:</strong> This action cannot be undone.
+                    </div>
+                    
+                    <p>Are you sure you want to cancel this transfer?</p>
+                    
+                    <div class="card mb-3 bg-light">
+                        <div class="card-body">
+                            <p class="mb-1"><strong>Reference:</strong> {{ transfer.transfer_reference }}</p>
+                            <p class="mb-1"><strong>Amount:</strong> KES {{ transfer.amount|floatformat:2 }}</p>
+                            <p class="mb-0"><strong>Description:</strong> {{ transfer.description }}</p>
+                        </div>
+                    </div>
+                    
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label class="form-label">Reason for cancellation (Optional)</label>
+                            <textarea name="reason" class="form-control" rows="3" placeholder="Enter reason..."></textarea>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between">
+                            <a href="{% url 'finance:money_transfer_detail' transfer.id %}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Go Back
+                            </a>
+                            <button type="submit" class="btn btn-danger">
+                                <i class="fas fa-times"></i> Confirm Cancellation
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

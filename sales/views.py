@@ -1,3 +1,4 @@
+from django.db import models
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -15,15 +16,23 @@ import africastalking
 from datetime import timedelta, datetime, date
 from finance.kopokopo_service import stk_push_request, clean_phone_number
 from finance.models import MpesaTransaction
-from sales.models import Sale, SaleItem, PaymentRecord, generate_sale_id, Customer, LoyaltySettings, LoyaltyTransaction
+from sales.models import Sale, SaleItem, PaymentRecord, create_sale_safely, generate_sale_id, Customer, LoyaltySettings, LoyaltyTransaction
 from inventory.models import Product, StockEntry
 from django.core.paginator import Paginator
 from django.contrib.auth.models import User
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
+from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse
+from inventory.models import Product, ProductUnit, StockEntry
+
+
+
 
 
 logger = logging.getLogger(__name__)
+
+
 
 # ============================================
 # HELPER FUNCTIONS
@@ -49,7 +58,6 @@ def normalize_phone(phone):
         return '254' + phone
     
     return phone
-
 
 def calculate_profit(sale):
     """Calculate profit for a single sale"""
@@ -430,7 +438,6 @@ def get_items_by_month(month_name, year):
 # ============================================
 # MAIN SALES STATISTICS VIEW
 # ============================================
-
 @login_required
 def sales_statistics(request):
     """Sales statistics dashboard - OPTIMIZED VERSION"""
@@ -879,16 +886,9 @@ def sales_statistics(request):
     return render(request, 'sales/statistics.html', context)
 
 
-
-
-
-
-
-
 # ============================================
 # PERIOD DETAILS VIEW
 # ============================================
-
 @login_required
 def period_details(request):
     """Display items sold during a specific period"""
@@ -929,10 +929,10 @@ def period_details(request):
     
     return render(request, 'sales/period_details.html', context)
 
-# ============================================
+
+# ========================================
 # API ENDPOINTS
 # ============================================
-
 @login_required
 def items_by_date_api(request):
     """API endpoint to get items by date"""
@@ -966,110 +966,183 @@ def items_by_month_api(request):
 
 @login_required
 def sale_details_api(request, sale_id):
-    """API endpoint to get sale details with items"""
+    """API endpoint to get sale details with items (SKU-based model)"""
     try:
+        from inventory.models import StockEntry, ProductUnit
+        
         sale = Sale.objects.get(sale_id=sale_id)
-        items = SaleItem.objects.filter(sale=sale).select_related('product')
+        items = SaleItem.objects.filter(sale=sale).select_related(
+            'product', 
+            'product__category',
+            'product_unit'
+        )
         
         total_profit = Decimal('0.00')
+        items_data = []
+        
         for item in items:
-            if item.product and item.product.buying_price:
-                profit = (item.unit_price - item.product.buying_price) * item.quantity
-                total_profit += profit
+            # Get product display name
+            product_name = item.product_name or (item.product.display_name if item.product else 'Unknown')
+            
+            # Get buying price (either from product or from unit override)
+            buying_price = Decimal('0.00')
+            if item.product_unit and item.product_unit.unit_buying_price:
+                buying_price = item.product_unit.unit_buying_price
+            elif item.product and item.product.buying_price:
+                buying_price = item.product.buying_price
+            
+            # Calculate profit
+            profit = (item.unit_price - buying_price) * item.quantity if buying_price > 0 else Decimal('0.00')
+            total_profit += profit
+            
+            # Get identifier if it's a single item
+            identifier = None
+            identifier_type = None
+            if item.product_unit:
+                if item.product_unit.imei_number:
+                    identifier = item.product_unit.imei_number
+                    identifier_type = 'IMEI'
+                elif item.product_unit.serial_number:
+                    identifier = item.product_unit.serial_number
+                    identifier_type = 'Serial'
+            
+            # Get stock entry reference
+            stock_entry = StockEntry.objects.filter(
+                models.Q(product_sku=item.product) | 
+                models.Q(product_unit=item.product_unit),
+                entry_type='sale',
+                reference_id=sale.sale_id
+            ).first()
+            
+            items_data.append({
+                'product_name': product_name,
+                'product_sku': item.product.sku_code if item.product else None,
+                'quantity': item.quantity,
+                'unit_price': float(item.unit_price),
+                'total_price': float(item.total_price),
+                'buying_price': float(buying_price),
+                'profit': float(profit),
+                'profit_margin': float((profit / (item.unit_price * item.quantity) * 100)) if item.unit_price > 0 else 0,
+                'is_single_item': item.product.category.is_single_item if item.product and item.product.category else False,
+                'identifier': identifier,
+                'identifier_type': identifier_type,
+                'sku_type': item.product.category.identifier_type if item.product and item.product.category else None,
+            })
+        
+        # Get customer info
+        customer_name = sale.buyer_name or 'Walk-in Customer'
+        if sale.customer:
+            customer_name = sale.customer.full_name
+        
+        # Get payment method badge color
+        payment_colors = {
+            'Cash': 'success',
+            'M-Pesa': 'info',
+            'Card': 'primary',
+            'Points': 'warning',
+            'Credit': 'danger',
+            'Split': 'secondary'
+        }
         
         sale_data = {
             'success': True,
             'sale': {
                 'id': sale.id,
                 'sale_id': sale.sale_id,
+                'sequence_number': sale.sequence_number,
                 'created_at': sale.sale_date.strftime('%Y-%m-%d %H:%M:%S'),
-                'customer_name': sale.buyer_name or 'Walk-in Customer',
-                'seller_name': sale.seller.get_full_name() if sale.seller else sale.seller.username,
+                'customer_name': customer_name,
+                'customer_phone': sale.buyer_phone or '',
+                'customer_id_number': sale.buyer_id_number or '',
+                'seller_name': sale.seller.get_full_name() if sale.seller else (sale.seller.username if sale.seller else 'System'),
                 'payment_method': sale.payment_method,
+                'payment_method_color': payment_colors.get(sale.payment_method, 'secondary'),
                 'status': 'completed' if not sale.is_reversed else 'reversed',
-                'notes': '',
+                'status_badge': 'success' if not sale.is_reversed else 'danger',
+                'is_credit': sale.is_credit,
+                'is_reversed': sale.is_reversed,
                 'subtotal': float(sale.subtotal),
-                'discount': 0,
+                'tax_amount': float(sale.tax_amount),
+                'discount': float(sale.points_discount) if sale.points_discount else 0,
                 'total_amount': float(sale.total_amount),
+                'amount_paid': float(sale.amount_paid),
+                'change': float(sale.change),
+                'balance': float(sale.balance),
                 'total_profit': float(total_profit),
                 'items_count': items.count(),
-                'profit_margin': (total_profit / sale.total_amount * 100) if sale.total_amount > 0 else 0,
-                'items': [
-                    {
-                        'product_name': item.product_name or (item.product.display_name if item.product else 'Unknown'),
-                        'quantity': item.quantity,
-                        'unit_price': float(item.unit_price),
-                        'total_price': float(item.total_price),
-                        'profit': float((item.unit_price - (item.product.buying_price if item.product and item.product.buying_price else 0)) * item.quantity) if item.product else 0,
-                    } for item in items
-                ]
+                'profit_margin': float((total_profit / sale.total_amount * 100)) if sale.total_amount > 0 else 0,
+                'points_redeemed': sale.points_redeemed,
+                'points_discount': float(sale.points_discount) if sale.points_discount else 0,
+                'points_earned': float(sale.points_earned) if sale.points_earned else 0,
+                'items': items_data,
+                'receipt_url': f'/sales/receipt/{sale.sale_id}/'
             }
         }
+        
+        # Add credit sale info if applicable
+        if sale.is_credit and sale.credit_sale_id:
+            sale_data['sale']['credit_sale_id'] = sale.credit_sale_id
+            sale_data['sale']['credit_url'] = f'/credit/detail/{sale.credit_sale_id}/'
+        
+        # Add ETR info
+        if sale.etr_receipt_number:
+            sale_data['sale']['etr_receipt_number'] = sale.etr_receipt_number
+            sale_data['sale']['etr_status'] = sale.etr_status
+        
         return JsonResponse(sale_data)
+        
     except Sale.DoesNotExist:
-        return JsonResponse({'success': False, 'message': 'Sale not found'})
+        return JsonResponse({'success': False, 'message': 'Sale not found'}, status=404)
     except Exception as e:
-        logger.error(f"Error getting sale details: {str(e)}")
-        return JsonResponse({'success': False, 'message': str(e)})
-
-
+        logger.error(f"Error getting sale details: {str(e)}", exc_info=True)
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)
 
 @login_required
 def search_products(request):
-    """AJAX endpoint to search products from inventory"""
+    """AJAX endpoint to search products - FIXED for SKU model"""
     from django.db.models import Q
-    from inventory.models import Product
     
     query = request.GET.get('q', '').strip()
-    products = []
+    
+    if not query or len(query) < 2:
+        return JsonResponse([], safe=False)
     
     try:
-        # Base queryset - only show active products with stock
-        queryset = Product.objects.filter(is_active=True, quantity__gt=0)
+        # Search by sku_code, name, brand, model
+        products = Product.objects.filter(
+            Q(sku_code__icontains=query) |
+            Q(name__icontains=query) |
+            Q(display_name__icontains=query) |
+            Q(brand__icontains=query) |
+            Q(model__icontains=query),
+            is_active=True,
+            is_discontinued=False
+        ).select_related('category')[:20]
         
-        if query and len(query) >= 2:
-            # Search by product_code, name, brand, model, or sku_value
-            queryset = queryset.filter(
-                Q(product_code__icontains=query) |
-                Q(name__icontains=query) |
-                Q(brand__icontains=query) |
-                Q(model__icontains=query) |
-                Q(sku_value__icontains=query) |
-                Q(barcode__icontains=query)
-            )
-        
-        # Limit to 30 results for performance
-        results = queryset[:30]
-        
-        for product in results:
-            # Build display name
-            display_name = product.display_name
+        results = []
+        for product in products:
+            # Calculate available stock
+            if product.category and product.category.is_single_item:
+                stock = product.units.filter(status='available').count()
+            else:
+                stock = product.bulk_quantity or 0
             
-            # Add SKU info for single items
-            sku_info = ""
-            if product.category and product.category.is_single_item and product.sku_value:
-                sku_info = f" | {product.category.sku_type}: {product.sku_value}"
-            
-            products.append({
-                'code': product.product_code,
-                'name': display_name,
+            results.append({
+                'code': product.sku_code,
+                'name': product.display_name,
                 'price': float(product.selling_price),
-                'best_price': float(product.best_price) if product.best_price else None,
-                'stock': product.quantity,
-                'sku': product.sku_value,
-                'sku_type': product.category.sku_type if product.category else None,
+                'stock': stock,
                 'is_single': product.category.is_single_item if product.category else False,
-                'display_text': f"{display_name} ({product.product_code}){sku_info}"
+                'sku': product.sku_code,
+                'brand': product.brand or '',
+                'category': product.category.name if product.category else '',
             })
-            
+        
+        return JsonResponse(results, safe=False)
+        
     except Exception as e:
-        logger.error(f"Error searching products: {str(e)}")
+        logger.error(f"Error searching products: {str(e)}", exc_info=True)
         return JsonResponse({'error': str(e)}, status=500)
-    
-    return JsonResponse(products, safe=False)
-
-
-
 
 @login_required
 def sales_dashboard(request):
@@ -1183,12 +1256,13 @@ def sales_dashboard(request):
     
     return render(request, 'sales/dashboard.html', context)
 
-
 @login_required
 def sale_list(request):
     """List all sales with filtering"""
-    from django.db.models import Q, Count
+    from django.db.models import Q, Sum, Count
     from django.core.paginator import Paginator
+    from datetime import timedelta
+    from django.utils import timezone
     
     # Base queryset
     sales = Sale.objects.all().order_by('-sale_date')
@@ -1207,7 +1281,7 @@ def sale_list(request):
         sales = sales.filter(sale_date__date__lte=date_to)
     
     # ============================================
-    # PAYMENT METHOD FILTER - FIXED: More robust
+    # PAYMENT METHOD FILTER
     # ============================================
     payment_method = request.GET.get('payment_method')
     if payment_method:
@@ -1220,6 +1294,13 @@ def sale_list(request):
         else:
             # For other methods, use case-insensitive exact match
             sales = sales.filter(payment_method__iexact=payment_method)
+    
+    # Status filter
+    status_filter = request.GET.get('status')
+    if status_filter == 'reversed':
+        sales = sales.filter(is_reversed=True)
+    elif status_filter == 'completed':
+        sales = sales.filter(is_reversed=False)
     
     # Sale type filter (cash vs credit)
     sale_type = request.GET.get('sale_type')
@@ -1234,37 +1315,101 @@ def sale_list(request):
         sales = sales.filter(
             Q(sale_id__icontains=search) |
             Q(buyer_name__icontains=search) |
-            Q(buyer_phone__icontains=search)
+            Q(buyer_phone__icontains=search) |
+            Q(buyer_id_number__icontains=search)
         )
     
     # ============================================
-    # Get distinct payment methods for dropdown
+    # Get per_page parameter (default 20)
     # ============================================
-    available_methods = Sale.objects.values_list('payment_method', flat=True).distinct().order_by('payment_method')
+    per_page = request.GET.get('per_page', '20')
+    if per_page == 'all':
+        # For 'all', use a large number or handle differently
+        per_page = sales.count() if sales.count() > 0 else 20
+    else:
+        try:
+            per_page = int(per_page)
+            if per_page not in [10, 20, 25, 50, 100]:
+                per_page = 20
+        except ValueError:
+            per_page = 20
+    
+    # ============================================
+    # Calculate summary statistics
+    # ============================================
+    # Total sales count (filtered)
+    total_sales_count = sales.count()
+    
+    # Total revenue (filtered)
+    total_revenue = sales.aggregate(total=Sum('total_amount'))['total'] or 0
+    
+    # Today's revenue
+    today = timezone.now().date()
+    today_revenue = Sale.objects.filter(
+        sale_date__date=today,
+        is_reversed=False
+    ).aggregate(total=Sum('total_amount'))['total'] or 0
+    
+    # Today's sales count
+    today_sales_count = Sale.objects.filter(
+        sale_date__date=today,
+        is_reversed=False
+    ).count()
+    
+    # Total items sold (from filtered sales - limit for performance)
+    total_items_sold = 0
+    for sale in sales[:500]:  # Limit to last 500 sales for performance
+        total_items_sold += sale.items.count()
+    
+    # Get available payment methods for dropdown
+    available_methods = Sale.objects.filter(
+        is_reversed=False
+    ).values_list('payment_method', flat=True).distinct().order_by('payment_method')
     
     # ============================================
     # Pagination
     # ============================================
-    paginator = Paginator(sales, 20)
-    page_number = request.GET.get('page')
+    paginator = Paginator(sales, per_page)
+    page_number = request.GET.get('page', 1)
     page_obj = paginator.get_page(page_number)
     
-    # Pass the current filter values to template for maintaining selections
+    # Calculate date shortcuts
+    week_ago = timezone.now().date() - timedelta(days=7)
+    month_ago = timezone.now().date() - timedelta(days=30)
+    year_ago = timezone.now().date() - timedelta(days=365)
+    
+    # ============================================
+    # Context
+    # ============================================
     context = {
         'sales': page_obj,
-        'available_methods': available_methods,  # Add this for dynamic dropdown
+        'available_methods': available_methods,
+        'per_page': per_page,
+        
+        # Summary stats
+        'total_sales_count': total_sales_count,
+        'total_revenue': total_revenue,
+        'today_revenue': today_revenue,
+        'today_sales_count': today_sales_count,
+        'total_items_sold': total_items_sold,
+        
+        # Date shortcuts
+        'today': today,
+        'week_ago': week_ago,
+        'month_ago': month_ago,
+        'year_ago': year_ago,
+        
+        # Current filters for maintaining selections
         'current_filters': {
             'date_from': date_from,
             'date_to': date_to,
             'payment_method': payment_method,
             'sale_type': sale_type,
+            'status': status_filter,
             'search': search,
         }
     }
     return render(request, 'sales/list.html', context)
-
-
-
 
 @login_required
 def sale_create(request):
@@ -1275,7 +1420,7 @@ def sale_create(request):
     # ============================================
     current_shop = None
     try:
-        from staff.models import Staff  # This should work if app is named 'staff'
+        from staff.models import Staff
         staff = Staff.objects.filter(user=request.user).first()
         if staff and staff.assigned_shop:
             current_shop = staff.assigned_shop
@@ -1301,7 +1446,6 @@ def sale_create(request):
         
         # Get data based on request type
         if is_ajax:
-            # Handle JSON data from AJAX
             try:
                 data = json.loads(request.body)
                 buyer_phone = data.get('buyer_phone', '').strip()
@@ -1318,7 +1462,6 @@ def sale_create(request):
             except json.JSONDecodeError:
                 return JsonResponse({'success': False, 'error': 'Invalid JSON data'})
         else:
-            # Handle traditional form POST
             buyer_phone = request.POST.get('buyer_phone', '').strip()
             payment_method = request.POST.get('payment_method', 'Cash')
             is_credit = request.POST.get('is_credit') == 'on'
@@ -1350,11 +1493,8 @@ def sale_create(request):
         
         try:
             with transaction.atomic():
-                # ============================================
-                # NORMALIZE PHONE NUMBER FOR CONSISTENCY
-                # ============================================
+                # Normalize phone number
                 def normalize_phone(phone):
-                    """Convert phone numbers to international format (254XXXXXXXXX)"""
                     if not phone:
                         return ''
                     phone = ''.join(filter(str.isdigit, phone))
@@ -1369,20 +1509,17 @@ def sale_create(request):
                 normalized_phone = normalize_phone(buyer_phone)
                 logger.info(f"Phone normalized: '{buyer_phone}' -> '{normalized_phone}'")
                 
-                # Calculate original subtotal before any discounts
+                # Calculate original subtotal
                 original_subtotal = Decimal('0.00')
                 for item in cart:
                     original_subtotal += Decimal(str(item.get('total', 0)))
                 
-                # =========================================================
-                # LOYALTY POINTS REDEMPTION - ONLY FOR REGISTERED CUSTOMERS
-                # =========================================================
+                # Loyalty points redemption
                 points_discount = Decimal('0.00')
                 final_amount = original_subtotal
                 customer = None
                 is_registered_customer = False
                 
-                # First try by verified_customer_id if provided
                 if verified_customer_id:
                     try:
                         customer = Customer.objects.get(id=verified_customer_id, is_active=True)
@@ -1391,7 +1528,6 @@ def sale_create(request):
                     except Customer.DoesNotExist:
                         logger.warning(f"Customer with ID {verified_customer_id} not found")
                 
-                # If not found by ID, try by normalized phone number
                 if not is_registered_customer and normalized_phone:
                     try:
                         customer = Customer.objects.get(phone_number=normalized_phone, is_active=True)
@@ -1399,10 +1535,7 @@ def sale_create(request):
                         logger.info(f"✅ Registered customer found by phone: {customer.phone_number} - {customer.full_name}")
                     except Customer.DoesNotExist:
                         logger.info(f"⚠️ Unregistered customer: {normalized_phone} - no points awarded")
-                        is_registered_customer = False
-                        customer = None
                 
-                # Only process points for registered customers
                 if is_registered_customer and points_redeemed > 0:
                     if customer.points_balance < points_redeemed:
                         raise ValueError(f"Insufficient points. Available: {customer.points_balance}, Requested: {points_redeemed}")
@@ -1440,46 +1573,88 @@ def sale_create(request):
                 
                 # Process each cart item
                 for item in cart:
-                    product = Product.objects.select_for_update().get(product_code=item['product_code'])
+                    # Get product by SKU code
+                    product = Product.objects.select_for_update().get(sku_code=item['sku_code'], is_active=True)
                     product.refresh_from_db()
                     
-                    if product.quantity < item['quantity']:
-                        raise ValueError(f"Insufficient stock for {product.display_name}. Available: {product.quantity}")
-                    
-                    if product.category and product.category.is_single_item:
+                    # Check stock based on item type
+                    if product.category.is_single_item:
+                        # Check available units
+                        available_units = product.units.filter(status='available').count()
+                        if available_units <= 0:
+                            raise ValueError(f"No available units for {product.display_name}")
+                        
+                        # Get first available unit
+                        unit = product.units.filter(status='available').first()
+                        
+                        # Check if already sold
                         active_sale_exists = SaleItem.objects.filter(
-                            sku_value=product.sku_value, sale__is_reversed=False
+                            sku_value=product.sku_code,
+                            sale__is_reversed=False
                         ).exists()
                         if active_sale_exists:
-                            raise ValueError(f"This {product.display_name} (SKU: {product.sku_value}) has already been sold!")
-                    
-                    SaleItem.objects.create(
-                        sale=sale,
-                        product=product,
-                        product_code=product.product_code,
-                        product_name=product.display_name,
-                        sku_value=product.sku_value,
-                        quantity=item['quantity'],
-                        unit_price=Decimal(str(item['price'])),
-                        total_price=Decimal(str(item['total']))
-                    )
-                    
-                    product.quantity -= item['quantity']
-                    if product.category and product.category.is_single_item:
-                        product.status = 'sold'
-                        product.quantity = 0
-                    product.save()
-                    
-                    StockEntry.objects.create(
-                        product=product,
-                        quantity=-item['quantity'],
-                        entry_type='sale',
-                        unit_price=Decimal(str(item['price'])),
-                        total_amount=Decimal(str(item['total'])),
-                        reference_id=sale.sale_id,
-                        notes=f"Sale #{sale.sale_id} - {product.display_name}",
-                        created_by=request.user
-                    )
+                            raise ValueError(f"This {product.display_name} (SKU: {product.sku_code}) has already been sold!")
+                        
+                        # Mark unit as sold
+                        unit.mark_as_sold(
+                            customer=customer if is_registered_customer else None,
+                            price=Decimal(str(item['price'])),
+                            sold_by=request.user
+                        )
+                        
+                        # Create sale item
+                        SaleItem.objects.create(
+                            sale=sale,
+                            product=product,
+                            product_code=product.sku_code,
+                            product_name=product.display_name,
+                            sku_value=product.sku_code,
+                            quantity=1,
+                            unit_price=Decimal(str(item['price'])),
+                            total_price=Decimal(str(item['total']))
+                        )
+                        
+                        # Create stock entry for unit
+                        StockEntry.objects.create(
+                            product_unit=unit,
+                            quantity=-1,
+                            entry_type='sale',
+                            unit_price=Decimal(str(item['price'])),
+                            total_amount=Decimal(str(item['total'])),
+                            reference_id=sale.sale_id,
+                            notes=f"Sale #{sale.sale_id} - {product.display_name}",
+                            created_by=request.user
+                        )
+                        
+                    else:
+                        # Bulk item
+                        if product.bulk_quantity < item['quantity']:
+                            raise ValueError(f"Insufficient stock for {product.display_name}. Available: {product.bulk_quantity}")
+                        
+                        product.bulk_quantity -= item['quantity']
+                        product.save()
+                        
+                        SaleItem.objects.create(
+                            sale=sale,
+                            product=product,
+                            product_code=product.sku_code,
+                            product_name=product.display_name,
+                            sku_value=product.sku_code,
+                            quantity=item['quantity'],
+                            unit_price=Decimal(str(item['price'])),
+                            total_price=Decimal(str(item['total']))
+                        )
+                        
+                        StockEntry.objects.create(
+                            product_sku=product,
+                            quantity=-item['quantity'],
+                            entry_type='sale',
+                            unit_price=Decimal(str(item['price'])),
+                            total_amount=Decimal(str(item['total'])),
+                            reference_id=sale.sale_id,
+                            notes=f"Sale #{sale.sale_id} - {product.display_name}",
+                            created_by=request.user
+                        )
                 
                 # Loyalty points earning
                 points_earned = 0
@@ -1491,13 +1666,13 @@ def sale_create(request):
                     customer.total_spent += original_subtotal
                     customer.last_purchase_date = timezone.now()
                     customer.save()
-                    # Calculate points as 1% of sale value
+                    
                     points_to_add = customer.calculate_points_to_earn(float(final_amount))
                     points_earned = customer.add_points(points_to_add, sale=sale, description=f"Purchase #{sale.sale_id}")
                     
                     logger.info(f"💰 Registered customer {customer.phone_number}: Earned {points_earned} points")
                 
-                # Clear the cart (unless skip_cart_clear is True for M-Pesa)
+                # Clear the cart
                 if not skip_cart_clear:
                     request.session['sales_cart'] = []
                 
@@ -1520,7 +1695,7 @@ def sale_create(request):
                     except Exception as e:
                         logger.error(f"Credit record creation failed: {str(e)}")
                 
-                # Return appropriate response
+                # Return response
                 if is_ajax:
                     response_data = {
                         'success': True,
@@ -1567,10 +1742,7 @@ def sale_create(request):
             messages.error(request, f'Error processing sale: {str(e)}')
             return redirect('sales:sale_create')
     
-    # ============================================
     # GET request - show the sale form with cart
-    # ============================================
-    
     cart = request.session.get('sales_cart', [])
     subtotal = Decimal('0.00')
     for item in cart:
@@ -1584,9 +1756,6 @@ def sale_create(request):
         'current_shop': current_shop, 
     }
     return render(request, 'sales/create.html', context)
-
-
-
 
 @login_required
 def sale_create_api(request):
@@ -1602,6 +1771,19 @@ def sale_create_api(request):
         
         if not cart:
             return JsonResponse({'success': False, 'error': 'No items in cart'})
+        
+        # Debug: Print cart contents
+        print("=" * 60)
+        print("🔍 SALE CREATE API - CART ITEMS:")
+        for idx, item in enumerate(cart):
+            print(f"Item {idx}:")
+            print(f"  sku_code: {item.get('sku_code')}")
+            print(f"  unit_id: {item.get('unit_id')}")
+            print(f"  is_single: {item.get('is_single')}")
+            print(f"  identifier: {item.get('identifier')}")
+            print(f"  quantity: {item.get('quantity')}")
+            print(f"  price: {item.get('price')}")
+        print("=" * 60)
         
         with transaction.atomic():
             # Normalize phone
@@ -1663,12 +1845,12 @@ def sale_create_api(request):
                         points_discount = original_subtotal
                         points_redeemed = int(original_subtotal)
                     final_amount = original_subtotal - points_discount
-                    # ✅ NO NEED TO DEDUCT HERE - will deduct after sale creation
                 else:
                     raise ValueError(f"Insufficient points. Available: {customer.points_balance}, Requested: {points_redeemed}")
             
+            print("📝 Creating sale...")
             # Create sale
-            sale = Sale.objects.create(
+            sale = create_sale_safely(
                 seller=request.user,
                 buyer_name=customer.full_name if is_registered_customer and customer else data.get('buyer_name', 'Walk-in Customer'),
                 buyer_phone=normalized_phone,
@@ -1681,71 +1863,159 @@ def sale_create_api(request):
                 points_discount=points_discount if is_registered_customer else Decimal('0.00'),
                 original_subtotal=original_subtotal
             )
+            print(f"✅ Sale created: {sale.sale_id}")
             
-            # ✅ ADD THIS: Deduct points AFTER sale is created (needs sale ID)
+            # Deduct points AFTER sale is created (needs sale ID)
             if is_registered_customer and points_redeemed > 0:
                 customer.redeem_points(points_redeemed, sale=sale, description=f"Redeemed {points_redeemed} points for sale #{sale.sale_id}")
                 logger.info(f"💰 Points redeemed: {points_redeemed} points deducted from customer {customer.phone_number}")
             
             # Process items
-            for item in cart:
-                product = Product.objects.select_for_update().get(product_code=item['product_code'])
-                if product.quantity < item['quantity']:
-                    raise ValueError(f"Insufficient stock for {product.display_name}")
+            for idx, item in enumerate(cart):
+                print(f"\n📦 Processing item {idx}...")
+                # Get product by SKU code
+                sku_code = item.get('sku_code') or item.get('product_code')
+                product = Product.objects.select_for_update().get(sku_code=sku_code, is_active=True)
                 
-                SaleItem.objects.create(
-                    sale=sale,
-                    product=product,
-                    product_code=product.product_code,
-                    product_name=product.display_name,
-                    sku_value=product.sku_value,
-                    quantity=item['quantity'],
-                    unit_price=Decimal(str(item['price'])),
-                    total_price=Decimal(str(item['total']))
-                )
-                
-                product.quantity -= item['quantity']
-                if product.category and product.category.is_single_item:
-                    product.status = 'sold'
-                    product.quantity = 0
-                product.save()
-                
-                StockEntry.objects.create(
-                    product=product,
-                    quantity=-item['quantity'],
-                    entry_type='sale',
-                    unit_price=Decimal(str(item['price'])),
-                    total_amount=Decimal(str(item['total'])),
-                    reference_id=sale.sale_id,
-                    notes=f"Sale #{sale.sale_id}",
-                    created_by=request.user
-                )
+                if product.category.is_single_item:
+                    # ============================================
+                    # SINGLE ITEM (Phones, Electronics with unique ID)
+                    # ============================================
+                    print(f"   Single item - product: {product.sku_code}")
+                    unit_id = item.get('unit_id')
+                    
+                    if unit_id:
+                        unit = ProductUnit.objects.select_for_update().get(id=unit_id, product=product)
+                        print(f"   Found unit by ID {unit_id}: Status={unit.status}")
+                    else:
+                        unit = product.units.filter(status='available').first()
+                        print(f"   No unit_id, using first available: ID={unit.id if unit else 'None'}")
+                    
+                    if not unit:
+                        raise ValueError(f"No available units for {product.display_name}")
+                    
+                    if unit.status != 'available':
+                        raise ValueError(f"Unit {unit.unique_identifier} is not available (status: {unit.status})")
+                    
+                    # ✅ FIXED ORDER: Create StockEntry FIRST while unit is still 'available'
+                    
+                    # 1. Create stock entry for unit (validation passes because status is 'available')
+                    print(f"   Creating StockEntry...")
+                    StockEntry.objects.create(
+                        product_unit=unit,
+                        quantity=-1,
+                        entry_type='sale',
+                        unit_price=Decimal(str(item['price'])),
+                        total_amount=Decimal(str(item['total'])),
+                        reference_id=sale.sale_id,
+                        notes=f"Sale #{sale.sale_id}",
+                        created_by=request.user
+                    )
+                    print(f"   ✅ StockEntry created")
+                    
+                    # 2. Create sale item
+                    print(f"   Creating SaleItem...")
+                    SaleItem.objects.create(
+                        sale=sale,
+                        product=product,
+                        product_code=product.sku_code,
+                        product_name=product.display_name,
+                        sku_value=product.sku_code,
+                        quantity=1,
+                        unit_price=Decimal(str(item['price'])),
+                        total_price=Decimal(str(item['total']))
+                    )
+                    print(f"   ✅ SaleItem created")
+                    
+                    # 3. Mark unit as sold LAST (after StockEntry validation passed)
+                    print(f"   Marking unit {unit.id} as sold...")
+                    unit.mark_as_sold(
+                        customer=customer if is_registered_customer else None,
+                        price=Decimal(str(item['price'])),
+                        sold_by=request.user
+                    )
+                    print(f"   ✅ Unit {unit.id} marked as sold")
+                    
+                else:
+                    # ============================================
+                    # BULK ITEM (Cables, Accessories without unique ID)
+                    # ============================================
+                    print(f"   Bulk item - product: {product.sku_code}")
+                    quantity = item.get('quantity', 1)
+                    
+                    if product.bulk_quantity < quantity:
+                        raise ValueError(f"Insufficient stock for {product.display_name}. Available: {product.bulk_quantity}")
+                    
+                    # 1. Create stock entry for bulk item
+                    print(f"   Creating StockEntry...")
+                    StockEntry.objects.create(
+                        product_sku=product,
+                        quantity=-quantity,
+                        entry_type='sale',
+                        unit_price=Decimal(str(item['price'])),
+                        total_amount=Decimal(str(item['total'])),
+                        reference_id=sale.sale_id,
+                        notes=f"Sale #{sale.sale_id}",
+                        created_by=request.user
+                    )
+                    print(f"   ✅ StockEntry created")
+                    
+                    # 2. Update bulk quantity
+                    product.bulk_quantity -= quantity
+                    product.save(update_fields=['bulk_quantity', 'updated_at'])
+                    print(f"   ✅ Bulk quantity updated: {product.bulk_quantity} remaining")
+                    
+                    # 3. Create sale item
+                    print(f"   Creating SaleItem...")
+                    SaleItem.objects.create(
+                        sale=sale,
+                        product=product,
+                        product_code=product.sku_code,
+                        product_name=product.display_name,
+                        sku_value=product.sku_code,
+                        quantity=quantity,
+                        unit_price=Decimal(str(item['price'])),
+                        total_price=Decimal(str(item['total']))
+                    )
+                    print(f"   ✅ SaleItem created")
             
-            # Award points (only if no points were redeemed)
+            # Award points
+            print("\n💰 Awarding points...")
             points_earned = 0
-            if is_registered_customer and customer and points_redeemed == 0 and points_to_award > 0:
-                points_earned = customer.add_points(points_to_award, sale=sale, description=f"Points earned for sale #{sale.sale_id}")
+            if is_registered_customer and customer:
+                # Only award points if no points were redeemed
+                if points_redeemed == 0:
+                    # Calculate points to award (1 point per 100 KES spent)
+                    points_to_award = points_to_award or int(final_amount / 100)
+                    if points_to_award > 0:
+                        points_earned = customer.add_points(
+                            points_to_award, 
+                            sale=sale, 
+                            description=f"Points earned for sale #{sale.sale_id}"
+                        )
+                        print(f"   ✅ Points earned: {points_earned}")
+                else:
+                    print(f"   ℹ️ No points awarded because points were redeemed")
+                
+                # Update customer purchase statistics
                 customer.total_purchases += 1
                 customer.total_spent += original_subtotal
                 customer.last_purchase_date = timezone.now()
-                customer.save()
-            elif is_registered_customer and customer and points_redeemed > 0:
-                # Still update purchase stats even when redeeming points
-                customer.total_purchases += 1
-                customer.total_spent += original_subtotal
-                customer.last_purchase_date = timezone.now()
-                customer.save()
+                customer.save(update_fields=['total_purchases', 'total_spent', 'last_purchase_date', 'updated_at'])
+                print(f"   ✅ Customer stats updated")
             
-            # Clear cart
+            # Clear the cart from session
             request.session['sales_cart'] = []
+            print("\n✅ Cart cleared")
             
-            # Return JSON response
+            # Prepare response data
             response_data = {
                 'success': True,
                 'sale_id': sale.sale_id,
                 'message': 'Sale completed successfully!'
             }
             
+            # Add points information if customer is registered
             if is_registered_customer and customer:
                 response_data['points'] = {
                     'earned': int(points_earned),
@@ -1753,21 +2023,33 @@ def sale_create_api(request):
                     'balance': customer.points_balance,
                     'discount': float(points_discount) if points_discount > 0 else 0
                 }
+            elif normalized_phone and not is_registered_customer:
+                response_data['warning'] = f'Phone {normalized_phone} is not registered. No points awarded.'
             
+            print("\n🎉 Sale completed successfully!\n")
             return JsonResponse(response_data)
             
-    except Exception as e:
-        logger.error(f"Sale API error: {str(e)}")
+    except Product.DoesNotExist as e:
+        print(f"\n❌ Product not found: {str(e)}")
+        logger.error(f"Product not found: {str(e)}")
+        return JsonResponse({'success': False, 'error': f'Product not found: {str(e)}'})
+    
+    except ProductUnit.DoesNotExist as e:
+        print(f"\n❌ Product unit not found: {str(e)}")
+        logger.error(f"Product unit not found: {str(e)}")
+        return JsonResponse({'success': False, 'error': f'Product unit not found: {str(e)}'})
+    
+    except ValueError as e:
+        print(f"\n❌ Validation error: {str(e)}")
+        logger.error(f"Validation error: {str(e)}")
         return JsonResponse({'success': False, 'error': str(e)})
-
-
-
-
-
-
-
-from django.views.decorators.csrf import csrf_exempt
-from django.http import JsonResponse
+    
+    except Exception as e:
+        print(f"\n❌ ERROR: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        logger.error(f"Sale API error: {str(e)}", exc_info=True)
+        return JsonResponse({'success': False, 'error': str(e)})
 
 @login_required
 @csrf_exempt
@@ -1809,10 +2091,6 @@ def award_points_to_sale(request, sale_id):
         logger.error(f"Error awarding points: {str(e)}")
         return JsonResponse({'success': False, 'error': str(e)})
 
-
-
-
-
 @login_required
 def update_sale_payment(request, sale_id):
     """Update sale payment status without finalizing (for M-Pesa)"""
@@ -1829,7 +2107,7 @@ def update_sale_payment(request, sale_id):
             verified_customer_id = data.get('verified_customer_id')
             buyer_phone = data.get('buyer_phone', '')
             points_redeemed = data.get('points_redeemed', 0)
-            finalize = data.get('finalize', False)  # NEW: Check if we should finalize
+            finalize = data.get('finalize', False)
             
             logger.info(f"📦 UPDATING SALE {sale_id}")
             logger.info(f"   Amount: {amount}, Payment: {payment_method}")
@@ -1868,7 +2146,6 @@ def update_sale_payment(request, sale_id):
                         logger.error(f"Failed to award points: {str(e)}")
                 
                 # Deduct stock if not already deducted
-                from inventory.models import StockEntry
                 for item in sale.items.all():
                     if item.product:
                         stock_entry_exists = StockEntry.objects.filter(
@@ -1877,14 +2154,28 @@ def update_sale_payment(request, sale_id):
                         ).exists()
                         
                         if not stock_entry_exists:
-                            item.product.quantity -= item.quantity
-                            if item.product.category and item.product.category.is_single_item:
-                                item.product.status = 'sold'
-                                item.product.quantity = 0
-                            item.product.save()
+                            product = item.product
+                            
+                            if product.category.is_single_item:
+                                # For single items, mark the unit as sold
+                                unit = ProductUnit.objects.filter(
+                                    product=product,
+                                    status='available'
+                                ).first()
+                                if unit:
+                                    unit.mark_as_sold(
+                                        customer=None,
+                                        price=item.unit_price,
+                                        sold_by=request.user
+                                    )
+                            else:
+                                # For bulk items, deduct from bulk_quantity
+                                product.bulk_quantity -= item.quantity
+                                product.save()
                             
                             StockEntry.objects.create(
-                                product=item.product,
+                                product_sku=product if not product.category.is_single_item else None,
+                                product_unit=unit if product.category.is_single_item else None,
                                 quantity=-item.quantity,
                                 entry_type='sale',
                                 unit_price=item.unit_price,
@@ -1917,125 +2208,276 @@ def update_sale_payment(request, sale_id):
     
     return JsonResponse({'success': False, 'error': 'Invalid method'})
 
-
-
-
-
-
 @login_required
 def sale_detail(request, sale_id):
-    """View sale details"""
-    sale = get_object_or_404(Sale.objects.prefetch_related('items__product'), sale_id=sale_id)
+    """View sale details with actual product information"""
     
-    # Calculate change and balance in the view
-    change = sale.amount_paid - sale.total_amount
-    balance = sale.total_amount - sale.amount_paid if sale.amount_paid < sale.total_amount else 0
+    from decimal import Decimal
+    from inventory.models import StockEntry, ProductUnit
+    from django.db.models import Q
+    
+    # Get sale with related data
+    sale = get_object_or_404(
+        Sale.objects.select_related('seller', 'customer', 'reversed_by'),
+        sale_id=sale_id
+    )
+    
+    # Get items with product info
+    items = sale.items.select_related('product', 'product__category').all()
+    
+    # Get all stock entries for this sale in ONE query
+    stock_entries = StockEntry.objects.filter(
+        Q(reference_id=sale.sale_id) | 
+        Q(reference_id__icontains=sale.sale_id),
+        entry_type='sale'
+    ).select_related('product_unit', 'product_sku')
+    
+    # Create a mapping for quick lookup
+    stock_map = {}
+    for entry in stock_entries:
+        if entry.product_unit:
+            stock_map[entry.product_unit.product_id] = entry
+        elif entry.product_sku:
+            stock_map[entry.product_sku_id] = entry
+    
+    # Create a list to hold enhanced item data
+    enhanced_items = []
+    total_profit = Decimal('0.00')
+    
+    for item in items:
+        if not item.product:
+            continue
+            
+        # Calculate profit for this item
+        if item.product.buying_price:
+            item_profit = (item.unit_price - item.product.buying_price) * item.quantity
+        else:
+            item_profit = Decimal('0.00')
+        
+        total_profit += item_profit
+        
+        # Calculate margin percentage
+        if item.total_price > 0:
+            margin_percentage = (item_profit / item.total_price * 100)
+        else:
+            margin_percentage = Decimal('0.00')
+        
+        # Create item data dictionary
+        item_data = {
+            'item': item,
+            'profit': item_profit,
+            'margin_percentage': margin_percentage,
+            'imei_number': None,
+            'serial_number': None,
+            'sold_date': None,
+            'unit_buying_price': None,
+            'unit_selling_price': None,
+            'is_in_warranty': False,
+            'warranty_remaining_days': 0,
+            'item_type_display': '',
+            'item_icon': '',
+        }
+        
+        if item.product.category.is_single_item:
+            # Try to get stock entry from the map
+            stock_entry = stock_map.get(item.product_id)
+            
+            if stock_entry and stock_entry.product_unit:
+                item_data['imei_number'] = stock_entry.product_unit.imei_number
+                item_data['serial_number'] = stock_entry.product_unit.serial_number
+                item_data['sold_date'] = stock_entry.product_unit.sold_date
+                item_data['unit_buying_price'] = stock_entry.product_unit.unit_buying_price
+                item_data['unit_selling_price'] = stock_entry.product_unit.unit_selling_price
+                item_data['is_in_warranty'] = stock_entry.product_unit.is_in_warranty
+                item_data['warranty_remaining_days'] = stock_entry.product_unit.warranty_remaining_days
+            else:
+                # Fallback
+                unit = ProductUnit.objects.filter(
+                    product=item.product,
+                    status='sold',
+                    sold_date__date=sale.sale_date.date()
+                ).select_related('product').first()
+                
+                if unit:
+                    item_data['imei_number'] = unit.imei_number
+                    item_data['serial_number'] = unit.serial_number
+                    item_data['sold_date'] = unit.sold_date
+                    item_data['unit_buying_price'] = unit.unit_buying_price
+                    item_data['unit_selling_price'] = unit.unit_selling_price
+                    item_data['is_in_warranty'] = unit.is_in_warranty
+                    item_data['warranty_remaining_days'] = unit.warranty_remaining_days
+            
+            item_data['item_type_display'] = 'Single Item'
+            item_data['item_icon'] = '📱'
+        else:
+            # Bulk item
+            item_data['item_type_display'] = 'Bulk Item'
+            item_data['item_icon'] = '📦'
+        
+        enhanced_items.append(item_data)
+    
+    # Calculate change and balance
+    amount_paid = sale.amount_paid or Decimal('0.00')
+    total_amount = sale.total_amount or Decimal('0.00')
+    
+    change = amount_paid - total_amount
+    balance = total_amount - amount_paid if amount_paid < total_amount else Decimal('0.00')
+    
+    # Calculate overall profit margin
+    overall_margin = (total_profit / total_amount * 100) if total_amount > 0 else Decimal('0.00')
     
     context = {
         'sale': sale,
-        'items': sale.items.all(),
+        'enhanced_items': enhanced_items,
         'change': change,
         'balance': balance,
+        'amount_paid': amount_paid,
+        'total_amount': total_amount,
+        'items_count': items.count(),
+        'total_profit': total_profit,
+        'profit_margin': overall_margin,
     }
+    
     return render(request, 'sales/detail.html', context)
-
-
-
-
-
 
 @login_required
 def sale_receipt(request, sale_id):
     """View/print sale receipt with loyalty points and VAT calculation"""
-    sale = get_object_or_404(Sale.objects.prefetch_related('items__product'), sale_id=sale_id)
+    from decimal import Decimal
+    from inventory.models import StockEntry, ProductUnit
+    from django.db.models import Q
+    
+    # Get sale with related data
+    sale = get_object_or_404(
+        Sale.objects.select_related('seller', 'customer'),
+        sale_id=sale_id
+    )
+    
+    # Get items with product and unit info
+    items = sale.items.select_related(
+        'product', 
+        'product__category',
+        'product_unit'
+    ).all()
+    
+    # Enhance items with identifier information
+    enhanced_items = []
+    for item in items:
+        item_data = {
+            'product_name': item.product_name or (item.product.display_name if item.product else 'Unknown'),
+            'product_code': item.product_code,
+            'sku_value': item.sku_value,
+            'sku_code': item.product.sku_code if item.product else None,
+            'quantity': item.quantity,
+            'unit_price': item.unit_price,
+            'total_price': item.total_price,
+            'is_single_item': item.product.category.is_single_item if item.product and item.product.category else False,
+            'imei_number': None,
+            'serial_number': None,
+        }
+        
+        # Get identifier from product_unit if available
+        if item.product_unit:
+            item_data['imei_number'] = item.product_unit.imei_number
+            item_data['serial_number'] = item.product_unit.serial_number
+        elif item.product and item.product.category.is_single_item:
+            # Try to find the unit via StockEntry
+            stock_entry = StockEntry.objects.filter(
+                Q(product_unit__product=item.product),
+                entry_type='sale',
+                reference_id=sale.sale_id
+            ).select_related('product_unit').first()
+            
+            if stock_entry and stock_entry.product_unit:
+                item_data['imei_number'] = stock_entry.product_unit.imei_number
+                item_data['serial_number'] = stock_entry.product_unit.serial_number
+        
+        enhanced_items.append(item_data)
     
     # Calculate change
-    change = sale.amount_paid - sale.total_amount if sale.amount_paid else 0
+    amount_paid = sale.amount_paid or Decimal('0.00')
+    total_amount = sale.total_amount or Decimal('0.00')
+    change = amount_paid - total_amount
+    balance = total_amount - amount_paid if amount_paid < total_amount else Decimal('0.00')
     
-    # ============================================
-    # VAT CALCULATION
-    # ============================================
-    # VAT rate is 16%
-    vat_rate = Decimal('0.16')
-    
-    # Grand total is the total amount of the sale (including VAT)
-    grand_total = sale.total_amount
-    
-    # Calculate VAT amount (16% of grand total)
-    # If grand total is inclusive of VAT, then VAT = grand_total - (grand_total / 1.16)
-    # OR directly: VAT = grand_total * 16/116
-    if grand_total > 0:
-        vat_amount = (grand_total * vat_rate) / (1 + vat_rate)
-        subtotal_excl_vat = grand_total - vat_amount
+    # Get VAT amount from sale if available, otherwise calculate
+    if sale.tax_amount and sale.tax_amount > 0:
+        vat_amount = sale.tax_amount
+        subtotal_excl_vat = total_amount - vat_amount
     else:
-        vat_amount = Decimal('0.00')
-        subtotal_excl_vat = Decimal('0.00')
+        # Calculate VAT (16%)
+        vat_rate = Decimal('0.16')
+        if total_amount > 0:
+            vat_amount = (total_amount * vat_rate) / (1 + vat_rate)
+            subtotal_excl_vat = total_amount - vat_amount
+        else:
+            vat_amount = Decimal('0.00')
+            subtotal_excl_vat = Decimal('0.00')
     
-    # Format for display
     vat_amount_display = vat_amount.quantize(Decimal('0.01'))
     subtotal_excl_vat_display = subtotal_excl_vat.quantize(Decimal('0.01'))
     
-    # ============================================
-    # GET CUSTOMER DATA FOR LOYALTY POINTS
-    # ============================================
+    # Get customer data for loyalty points
     customer = None
     previous_points = 0
     points_earned_today = 0
     
-    if sale.buyer_phone:
+    # Try to get customer from sale.customer first, then by phone
+    if sale.customer:
+        customer = sale.customer
+        logger.info(f"✅ Customer from sale.customer: {customer.full_name}")
+    elif sale.buyer_phone:
         try:
-            # Find customer by phone number
             customer = Customer.objects.get(phone_number=sale.buyer_phone, is_active=True)
-            
-            # Get points earned in this sale from LoyaltyTransaction
-            earned_trans = LoyaltyTransaction.objects.filter(
-                customer=customer,
-                sale=sale,
-                transaction_type='earned'
-            ).first()
-            
-            if earned_trans:
-                points_earned_today = earned_trans.points
-            else:
-                # If no transaction record, calculate from amount (1 point per 100 KSH)
-                points_earned_today = int(sale.total_amount / 100)
-            
-            # Calculate previous points (current balance - points earned today)
-            previous_points = customer.points_balance - points_earned_today
-            if previous_points < 0:
-                previous_points = 0
-                
-            logger.info(f"✅ Receipt customer: {customer.full_name}, Previous: {previous_points}, Earned today: {points_earned_today}")
-            
+            logger.info(f"✅ Customer found by phone: {customer.full_name}")
         except Customer.DoesNotExist:
             logger.info(f"ℹ️ No customer found with phone {sale.buyer_phone}")
         except Exception as e:
-            logger.error(f"Error getting customer for receipt: {str(e)}")
+            logger.error(f"Error getting customer: {str(e)}")
     
+    # Get points earned for this sale
+    if customer:
+        earned_trans = LoyaltyTransaction.objects.filter(
+            customer=customer,
+            sale=sale,
+            transaction_type='earned'
+        ).first()
+        
+        if earned_trans:
+            points_earned_today = int(earned_trans.points)
+        else:
+            # Calculate points as 1% of total (minimum 100 KSH to earn)
+            if total_amount >= 100:
+                points_earned_today = int(total_amount / 100)
+        
+        # Calculate previous points balance
+        previous_points = max(0, (customer.points_balance or 0) - points_earned_today)
+        
+        logger.info(f"✅ Receipt customer: {customer.full_name}, Previous: {previous_points}, Earned today: {points_earned_today}")
+    
+    # Prepare context
     context = {
         'sale': sale,
-        'items': sale.items.all(),
+        'items': enhanced_items,
         'change': change,
+        'balance': balance,
+        'amount_paid': amount_paid,
         'customer': customer,
         'previous_points': previous_points,
         'points_earned_today': points_earned_today,
         'vat_amount': vat_amount_display,
         'subtotal_excl_vat': subtotal_excl_vat_display,
-        'grand_total': grand_total,
+        'grand_total': total_amount,
         'vat_rate': 16,
+        'items_count': len(enhanced_items),
+        'has_identifiers': any(item['imei_number'] or item['serial_number'] for item in enhanced_items),
     }
     
     return render(request, 'sales/receipt.html', context)
 
-
-
-
-
-
-
 @login_required
 def sale_reverse(request, sale_id):
-    """Reverse a sale"""
+    """Reverse a sale and restore stock"""
     sale = get_object_or_404(Sale, sale_id=sale_id)
     
     if sale.is_reversed:
@@ -2047,10 +2489,63 @@ def sale_reverse(request, sale_id):
         
         try:
             with transaction.atomic():
-                # Reverse the sale - PASS THE REASON!
-                result = sale.reverse_sale(reversed_by=request.user, reason=reason)
+                # Reverse each sale item to restore stock
+                for item in sale.items.all():
+                    product = item.product
+                    
+                    if product.category.is_single_item:
+                        # For single items, find the sold unit and mark as available
+                        unit = ProductUnit.objects.filter(
+                            product=product,
+                            status='sold',
+                            sold_date__isnull=False
+                        ).order_by('-sold_date').first()
+                        
+                        if unit:
+                            unit.mark_as_available()
+                            unit.notes = f"Returned from sale reversal: {reason}"
+                            unit.save()
+                    else:
+                        # For bulk items, restore quantity
+                        product.bulk_quantity += item.quantity
+                        product.save()
+                    
+                    # Create reversal stock entry
+                    StockEntry.objects.create(
+                        product_sku=product if not product.category.is_single_item else None,
+                        product_unit=unit if product.category.is_single_item else None,
+                        quantity=item.quantity,
+                        entry_type='reversal',
+                        unit_price=item.unit_price,
+                        total_amount=item.total_price,
+                        reference_id=f"REV-{sale.sale_id}",
+                        notes=f"Sale reversal: {reason}",
+                        created_by=request.user
+                    )
                 
-                messages.success(request, result)
+                # Mark sale as reversed
+                sale.is_reversed = True
+                sale.reversal_reason = reason
+                sale.reversed_by = request.user
+                sale.reversed_at = timezone.now()
+                sale.save()
+                
+                # Reverse points if any were awarded
+                if sale.points_redeemed > 0:
+                    # Return points that were redeemed
+                    if sale.buyer_phone:
+                        try:
+                            customer = Customer.objects.get(phone_number=sale.buyer_phone)
+                            customer.add_points(
+                                sale.points_redeemed,
+                                sale=sale,
+                                description=f"Points refunded from sale reversal #{sale.sale_id}"
+                            )
+                            logger.info(f"💰 Reversed {sale.points_redeemed} points to customer {customer.phone_number}")
+                        except Customer.DoesNotExist:
+                            pass
+                
+                messages.success(request, f'Sale #{sale.sale_id} has been reversed successfully. Stock has been restored.')
                 return redirect('sales:sale_detail', sale_id=sale_id)
                 
         except Exception as e:
@@ -2065,44 +2560,26 @@ def sale_reverse(request, sale_id):
     return render(request, 'sales/reverse.html', context)
 
 
-
-
-
-
-
-# ====================================
-# API VIEWS FOR CART MANAGEMENT
-# ====================================
-
-@login_required
-def get_product_details(request, product_code):
-    """AJAX endpoint to get product details by code or barcode"""
+    """AJAX endpoint to get product details by SKU code"""
     try:
-        # Search by product_code or barcode
-        product = Product.objects.get(
-            Q(product_code=product_code) | Q(barcode=product_code)
-        )
+        # Search by SKU code (primary identifier now)
+        product = Product.objects.get(sku_code=sku_code, is_active=True)
         
-        # Check if single item is already sold
+        # Check if single item is available
         if product.category.is_single_item:
-            # Check status
-            if product.status == 'sold':
-                return JsonResponse({
-                    'success': False,
-                    'error': 'This item has already been sold'
-                })
+            # Check available units count
+            available_units = product.units.filter(status='available').count()
             
-            # Check quantity
-            if product.quantity <= 0:
+            if available_units <= 0:
                 return JsonResponse({
                     'success': False,
-                    'error': 'Product out of stock'
+                    'error': 'This item has already been sold or no units available'
                 })
             
             # Check if already in an active sale
             from sales.models import SaleItem
             active_sale_exists = SaleItem.objects.filter(
-                product=product,
+                sku_value=product.sku_code,  # Use sku_code
                 sale__is_reversed=False
             ).exists()
             
@@ -2111,52 +2588,355 @@ def get_product_details(request, product_code):
                     'success': False,
                     'error': 'This item has already been sold in another transaction'
                 })
+            
+            # Get the first available unit's price (if overridden)
+            unit = product.units.filter(status='available').first()
+            selling_price = float(unit.effective_selling_price) if unit else float(product.selling_price)
+            
         else:
-            # Bulk items check quantity
-            if product.quantity <= 0:
+            # Bulk items - check bulk quantity
+            if product.bulk_quantity <= 0:
                 return JsonResponse({
                     'success': False,
                     'error': 'Product out of stock'
                 })
+            selling_price = float(product.selling_price)
         
         return JsonResponse({
             'success': True,
             'product': {
-                'product_code': product.product_code,
+                'sku_code': product.sku_code,
                 'name': product.display_name,
-                'price': float(product.selling_price),
-                'stock': product.quantity,
-                'sku': product.sku_value,
+                'price': selling_price,
+                'stock': product.bulk_quantity if product.category.is_bulk_item else product.units.filter(status='available').count(),
                 'is_single': product.category.is_single_item,
-                'status': product.status
             }
         })
+        
     except Product.DoesNotExist:
         return JsonResponse({
             'success': False,
-            'error': 'Product not found'
+            'error': f'Product with SKU "{sku_code}" not found'
+        })
+    except Exception as e:
+        logger.error(f"Error getting product details: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        })
+
+@login_required
+def get_product_details(request, sku_code):
+    """AJAX endpoint to get product details by SKU code - IMPROVED ERROR HANDLING"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        # Try to find product by sku_code
+        product = Product.objects.filter(
+            Q(sku_code=sku_code) | 
+            Q(product_code=sku_code),
+            is_active=True
+        ).select_related('category').first()
+        
+        if not product:
+            return JsonResponse({
+                'success': False,
+                'error': f'Product with SKU "{sku_code}" not found',
+                'debug': 'Product does not exist or is inactive'
+            }, status=404)
+        
+        # Check stock based on category
+        if product.category and product.category.is_single_item:
+            available_units = product.units.filter(status='available').count()
+            stock = available_units
+            is_single = True
+            
+            # Get first available unit for price
+            unit = product.units.filter(status='available').first()
+            selling_price = float(unit.effective_selling_price) if unit else float(product.selling_price)
+            
+            if available_units <= 0:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'{product.display_name} is out of stock (no available units)',
+                    'product': {
+                        'name': product.display_name,
+                        'stock': 0,
+                        'is_single': True
+                    }
+                }, status=400)
+        else:
+            # Bulk item
+            stock = product.bulk_quantity or 0
+            is_single = False
+            selling_price = float(product.selling_price)
+            
+            if stock <= 0:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'{product.display_name} is out of stock',
+                    'product': {
+                        'name': product.display_name,
+                        'stock': 0,
+                        'is_single': False
+                    }
+                }, status=400)
+        
+        # Return success response
+        return JsonResponse({
+            'success': True,
+            'product': {
+                'sku_code': product.sku_code,
+                'name': product.display_name,
+                'price': selling_price,
+                'stock': stock,
+                'is_single': is_single,
+                'category': product.category.name if product.category else None,
+                'brand': product.brand or '',
+                'model': product.model or '',
+            }
+        })
+        
+    except Product.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': f'Product with SKU "{sku_code}" not found'
+        }, status=404)
+        
+    except Exception as e:
+        logger.error(f"Error in get_product_details for SKU '{sku_code}': {str(e)}", exc_info=True)
+        return JsonResponse({
+            'success': False,
+            'error': f'Server error: {str(e)}'
+        }, status=500)
+    
+@login_required
+def get_product_by_identifier(request, identifier):
+    """Alternative endpoint to search by sku_code or old product_code"""
+    try:
+        # Try by sku_code first
+        try:
+            product = Product.objects.get(sku_code=identifier, is_active=True)
+        except Product.DoesNotExist:
+            # Try by old product_code field (if it exists) or barcode
+            from django.db.models import Q
+            product = Product.objects.get(
+                Q(product_code=identifier) if hasattr(Product, 'product_code') else Q(sku_code=identifier),
+                is_active=True
+            )
+        
+        # ... rest of the logic same as above
+        if product.category.is_single_item:
+            available_units = product.units.filter(status='available').count()
+            if available_units <= 0:
+                return JsonResponse({'success': False, 'error': 'Item not available'})
+            
+            unit = product.units.filter(status='available').first()
+            selling_price = float(unit.effective_selling_price) if unit else float(product.selling_price)
+            stock = available_units
+        else:
+            if product.bulk_quantity <= 0:
+                return JsonResponse({'success': False, 'error': 'Out of stock'})
+            selling_price = float(product.selling_price)
+            stock = product.bulk_quantity
+        
+        return JsonResponse({
+            'success': True,
+            'product': {
+                'sku_code': product.sku_code,
+                'name': product.display_name,
+                'price': selling_price,
+                'stock': stock,
+                'is_single': product.category.is_single_item,
+            }
+        })
+        
+    except Product.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': f'Product "{identifier}" not found'
         })
 
 
 
 
-
+# ====================================
+# VIEWS FOR CART MANAGEMENT
+# ====================================
+@login_required
+def add_to_cart(request):
+    """AJAX endpoint to add item to cart with custom price and identifier for single items"""
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            sku_code = data.get('sku_code') or data.get('product_code')
+            quantity = int(data.get('quantity', 1))
+            custom_price = data.get('custom_price')
+            allow_price_edit = data.get('allow_price_edit', False)
+            identifier = data.get('identifier')  # IMEI or Serial number
+            identifier_type = data.get('identifier_type')  # 'imei' or 'serial'
+            
+            if not sku_code:
+                return JsonResponse({'success': False, 'error': 'Product SKU is required'})
+            
+            try:
+                product = Product.objects.get(sku_code=sku_code, is_active=True)
+            except Product.DoesNotExist:
+                return JsonResponse({'success': False, 'error': f'Product with SKU "{sku_code}" not found'})
+            
+            # ============================================
+            # CHECK SINGLE ITEM AVAILABILITY
+            # ============================================
+            if product.category and product.category.is_single_item:
+                # Find the specific unit by identifier
+                unit = None
+                if identifier_type == 'imei' and identifier:
+                    unit = product.units.filter(imei_number=identifier, status='available').first()
+                elif identifier_type == 'serial' and identifier:
+                    unit = product.units.filter(serial_number=identifier, status='available').first()
+                
+                if not unit:
+                    # If identifier not provided, return product info to get it
+                    if not identifier:
+                        return JsonResponse({
+                            'success': True,
+                            'is_single': True,
+                            'requires_identifier': True,
+                            'product_data': {
+                                'product_code': product.sku_code,
+                                'sku_code': product.sku_code,
+                                'name': product.display_name,
+                                'identifier_type': product.category.identifier_type,
+                                'custom_price': custom_price if allow_price_edit else None,
+                                'allow_price_edit': allow_price_edit
+                            }
+                        })
+                    else:
+                        return JsonResponse({
+                            'success': False,
+                            'error': f'{identifier_type.upper()} {identifier} not found or already sold'
+                        })
+                
+                # Check if already in cart
+                cart = request.session.get('sales_cart', [])
+                for item in cart:
+                    if item.get('unit_id') == unit.id:
+                        return JsonResponse({
+                            'success': False,
+                            'error': f'❌ {product.display_name} with {identifier_type.upper()}: {identifier} is already in the cart'
+                        })
+                
+                # Single items must have quantity = 1
+                if quantity != 1:
+                    return JsonResponse({'success': False, 'error': 'Single items can only be sold one at a time'})
+                
+                # Determine price
+                if custom_price is not None and custom_price and allow_price_edit:
+                    price = float(custom_price)
+                else:
+                    price = float(unit.effective_selling_price)
+                
+                # Add to cart with unit info
+                cart.append({
+                    'unit_id': unit.id,
+                    'product_id': product.id,
+                    'sku_code': product.sku_code,
+                    'name': product.display_name,
+                    'identifier': identifier,
+                    'identifier_type': identifier_type,
+                    'price': price,
+                    'original_price': float(product.selling_price),
+                    'quantity': 1,
+                    'total': price,
+                    'is_single': True,
+                    'price_editable': allow_price_edit,
+                    'unique_id': f"{sku_code}_{identifier}_{price}"
+                })
+                
+                request.session['sales_cart'] = cart
+                request.session.modified = True
+                
+                return JsonResponse({
+                    'success': True,
+                    'cart': cart,
+                    'message': f'{product.display_name} ({identifier_type.upper()}: {identifier}) added to cart'
+                })
+                
+            else:
+                # BULK ITEMS - existing logic
+                if product.bulk_quantity < quantity:
+                    return JsonResponse({'success': False, 'error': f'Insufficient stock. Available: {product.bulk_quantity}'})
+                
+                # Determine price
+                if custom_price is not None and custom_price and allow_price_edit:
+                    price = float(custom_price)
+                else:
+                    price = float(product.selling_price)
+                
+                cart = request.session.get('sales_cart', [])
+                
+                # Check for existing item
+                found = False
+                for item in cart:
+                    if item.get('sku_code') == sku_code and item.get('price') == price and not item.get('is_single'):
+                        new_quantity = item['quantity'] + quantity
+                        if product.bulk_quantity < new_quantity:
+                            return JsonResponse({'success': False, 'error': f'Only {product.bulk_quantity} available'})
+                        item['quantity'] = new_quantity
+                        item['total'] = item['price'] * new_quantity
+                        found = True
+                        break
+                
+                if not found:
+                    cart.append({
+                        'product_id': product.id,
+                        'sku_code': product.sku_code,
+                        'name': product.display_name,
+                        'price': price,
+                        'original_price': float(product.selling_price),
+                        'quantity': quantity,
+                        'total': price * quantity,
+                        'is_single': False,
+                        'price_editable': allow_price_edit,
+                        'unique_id': f"{sku_code}_{price}_{len(cart)}"
+                    })
+                
+                request.session['sales_cart'] = cart
+                request.session.modified = True
+                
+                return JsonResponse({
+                    'success': True,
+                    'cart': cart,
+                    'message': f'{product.display_name} added to cart'
+                })
+            
+        except Exception as e:
+            logger.error(f"Error adding to cart: {str(e)}")
+            return JsonResponse({'success': False, 'error': str(e)})
+    
+    return JsonResponse({'success': False, 'error': 'Invalid request method'})
 
 @login_required
 def get_cart(request):
     """AJAX endpoint to get current cart contents"""
     cart = request.session.get('sales_cart', [])
     
-    # Migrate old cart items to include sku_value
+    # Migrate old cart items to use sku_code
     for item in cart:
-        if 'sku_value' not in item:
-            # Try to get product from database to fill missing sku_value
+        if 'sku_code' not in item and 'product_code' in item:
+            # Try to get product from database to fill missing sku_code
             try:
                 from inventory.models import Product
-                product = Product.objects.get(product_code=item['product_code'])
-                item['sku_value'] = product.sku_value or ''
+                product = Product.objects.get(sku_code=item.get('sku_code') or item.get('product_code'))
+                item['sku_code'] = product.sku_code
             except:
-                item['sku_value'] = ''
+                # If can't find, keep the old product_code as identifier
+                item['sku_code'] = item.get('product_code', '')
+        
+        # Ensure all required fields exist
+        if 'is_single' not in item:
+            item['is_single'] = False
     
     subtotal = sum(item.get('total', 0) for item in cart)
     
@@ -2167,204 +2947,57 @@ def get_cart(request):
         'cart_count': len(cart)
     })
 
-
-
-
-@login_required
-def add_to_cart(request):
-    """AJAX endpoint to add item to cart with custom price"""
-    if request.method == 'POST':
-        try:
-            data = json.loads(request.body)
-            product_code = data.get('product_code')
-            quantity = int(data.get('quantity', 1))
-            custom_price = data.get('custom_price')
-            allow_price_edit = data.get('allow_price_edit', False)
-            
-            try:
-                product = Product.objects.get(product_code=product_code)
-            except Product.DoesNotExist:
-                return JsonResponse({
-                    'success': False,
-                    'error': f'Product with code "{product_code}" not found'
-                })
-            
-            # ============================================
-            # FIX: Check if single item is already sold
-            # ============================================
-            if product.category and product.category.is_single_item:
-                # Check if the product is already marked as sold
-                if product.status == 'sold':
-                    return JsonResponse({
-                        'success': False,
-                        'error': f'❌ {product.display_name} has already been sold and cannot be added to cart.'
-                    })
-                
-                # Check if quantity is 0 or less
-                if product.quantity <= 0:
-                    return JsonResponse({
-                        'success': False,
-                        'error': f'❌ {product.display_name} is out of stock and cannot be sold.'
-                    })
-                
-                # Check if already sold in an ACTIVE sale (not reversed)
-                from sales.models import SaleItem
-                active_sale_exists = SaleItem.objects.filter(
-                    product=product,
-                    sale__is_reversed=False
-                ).exists()
-                
-                if active_sale_exists:
-                    return JsonResponse({
-                        'success': False,
-                        'error': f'❌ {product.display_name} (SKU: {product.sku_value}) has already been sold in another transaction!'
-                    })
-                
-                # Check if already in cart
-                cart = request.session.get('sales_cart', [])
-                for item in cart:
-                    if item.get('product_code') == product_code:
-                        return JsonResponse({
-                            'success': False,
-                            'error': f'❌ {product.display_name} is already in the cart'
-                        })
-                
-                # Single items must have quantity = 1
-                if quantity != 1:
-                    return JsonResponse({
-                        'success': False,
-                        'error': 'Single items can only be sold one at a time'
-                    })
-            
-            # Check stock for bulk items
-            if not product.category.is_single_item and product.quantity < quantity:
-                return JsonResponse({
-                    'success': False,
-                    'error': f'Insufficient stock. Available: {product.quantity}'
-                })
-            
-            # Determine the price
-            if custom_price is not None and custom_price and allow_price_edit:
-                try:
-                    price = float(custom_price)
-                except (ValueError, TypeError):
-                    price = float(product.selling_price)
-            else:
-                price = float(product.selling_price)
-            
-            # Get or create cart in session
-            cart = request.session.get('sales_cart', [])
-            
-            # Check if product with SAME PRICE already exists in cart (for bulk items)
-            found = False
-            for item in cart:
-                # Only combine if same product code AND same price (for bulk items)
-                if item.get('product_code') == product_code and item.get('price') == price:
-                    # Don't combine single items
-                    if product.category and product.category.is_single_item:
-                        continue
-                    
-                    # Same product with same price - combine quantities
-                    new_quantity = item['quantity'] + quantity
-                    if product.quantity < new_quantity:
-                        return JsonResponse({
-                            'success': False,
-                            'error': f'Only {product.quantity} available'
-                        })
-                    
-                    item['quantity'] = new_quantity
-                    item['total'] = item['price'] * item['quantity']
-                    found = True
-                    break
-            
-            if not found:
-                # Add as new row
-                cart.append({
-                    'product_id': product.id,
-                    'product_code': product.product_code,
-                    'name': product.display_name,
-                    'sku_value': product.sku_value or '',
-                    'price': price,
-                    'original_price': float(product.selling_price),
-                    'quantity': quantity,
-                    'total': price * quantity,
-                    'is_single': product.category.is_single_item if product.category else False,
-                    'price_editable': allow_price_edit,
-                    'unique_id': f"{product_code}_{price}_{len(cart)}"
-                })
-            
-            # Save cart to session
-            request.session['sales_cart'] = cart
-            request.session.modified = True
-            
-            # Calculate new totals
-            subtotal = sum(item['total'] for item in cart)
-            cart_count = len(cart)
-            
-            return JsonResponse({
-                'success': True,
-                'cart': cart,
-                'subtotal': subtotal,
-                'cart_count': cart_count,
-                'message': f'{product.display_name} added to cart' + 
-                          (f' at KSH {price}' if custom_price else '')
-            })
-            
-        except Exception as e:
-            logger.error(f"Error adding to cart: {str(e)}")
-            return JsonResponse({
-                'success': False,
-                'error': str(e)
-            })
-    
-    return JsonResponse({'success': False, 'error': 'Invalid request method'})
-
-
-
-
 def validate_single_items_in_cart(cart):
     """
     Validate that no single items in cart have been sold already
     """
+    from inventory.models import Product, ProductUnit
+    from sales.models import SaleItem
+    
     for item in cart:
         if item.get('is_single'):
             try:
-                product = Product.objects.get(product_code=item['product_code'])
-                if product.status == 'sold' or product.quantity <= 0:
+                # Use sku_code to find product
+                sku_code = item.get('sku_code') or item.get('product_code')
+                product = Product.objects.get(sku_code=sku_code, is_active=True)
+                
+                # Check if any available units exist
+                available_units = product.units.filter(status='available').count()
+                if available_units <= 0:
                     return False, f"Item {product.display_name} has already been sold"
                 
-                # Check if this SKU appears in any sale
-                if SaleItem.objects.filter(sku_value=product.sku_value).exists():
-                    return False, f"Item {product.display_name} (SKU: {product.sku_value}) has already been sold"
+                # Check if this SKU appears in any active sale
+                if SaleItem.objects.filter(
+                    sku_value=product.sku_code, 
+                    sale__is_reversed=False
+                ).exists():
+                    return False, f"Item {product.display_name} (SKU: {product.sku_code}) has already been sold"
                     
             except Product.DoesNotExist:
-                return False, f"Product {item['product_code']} not found"
+                return False, f"Product with SKU {item.get('sku_code', item.get('product_code'))} not found"
     
     return True, "All items are available"
 
-
-
-
-
 @login_required
 def remove_from_cart(request):
-    """AJAX endpoint to remove item from cart"""
+    """AJAX endpoint to remove item from cart by unique_id"""
     if request.method == 'POST':
         try:
             data = json.loads(request.body)
-            product_code = data.get('product_code')
-            price = float(data.get('price', 0))  # Get price to identify specific row
+            unique_id = data.get('unique_id')  # Use unique_id instead of row_id
+            
+            if not unique_id:
+                return JsonResponse({'success': False, 'error': 'Unique ID required'})
             
             cart = request.session.get('sales_cart', [])
             
-            # Remove the specific item with matching code AND price
-            new_cart = [item for item in cart 
-                       if not (item['product_code'] == product_code and item['price'] == price)]
+            # Remove the specific item with matching unique_id
+            new_cart = [item for item in cart if item.get('unique_id') != unique_id]
             
             request.session['sales_cart'] = new_cart
             request.session.modified = True
             
-            subtotal = sum(item['total'] for item in new_cart)
+            subtotal = sum(item.get('total', 0) for item in new_cart)
             
             return JsonResponse({
                 'success': True,
@@ -2374,16 +3007,10 @@ def remove_from_cart(request):
             })
             
         except Exception as e:
-            return JsonResponse({
-                'success': False,
-                'error': str(e)
-            })
+            logger.error(f"Error removing from cart: {str(e)}")
+            return JsonResponse({'success': False, 'error': str(e)})
     
     return JsonResponse({'success': False, 'error': 'Invalid request'})
-
-
-
-
 
 @login_required
 def update_cart(request):
@@ -2391,9 +3018,9 @@ def update_cart(request):
     if request.method == 'POST':
         try:
             data = json.loads(request.body)
-            product_code = data.get('product_code')
+            sku_code = data.get('sku_code') or data.get('product_code')  # Support both
             quantity = int(data.get('quantity', 1))
-            price = float(data.get('price', 0))  # Also get price to identify the specific row
+            price = float(data.get('price', 0))
             
             cart = request.session.get('sales_cart', [])
             
@@ -2403,20 +3030,23 @@ def update_cart(request):
                     'error': 'Quantity must be at least 1'
                 })
             
-            # Find the specific item with matching code AND price
+            # Find the specific item with matching SKU AND price
             found = False
             for item in cart:
-                if item['product_code'] == product_code and item['price'] == price:
-                    # Check stock
-                    try:
-                        product = Product.objects.get(product_code=product_code)
-                        if product.quantity < quantity:
-                            return JsonResponse({
-                                'success': False,
-                                'error': f'Only {product.quantity} available'
-                            })
-                    except Product.DoesNotExist:
-                        pass
+                item_sku = item.get('sku_code') or item.get('product_code')
+                if item_sku == sku_code and item.get('price') == price:
+                    # Check stock for bulk items
+                    if not item.get('is_single', False):
+                        try:
+                            from inventory.models import Product
+                            product = Product.objects.get(sku_code=sku_code, is_active=True)
+                            if product.bulk_quantity < quantity:
+                                return JsonResponse({
+                                    'success': False,
+                                    'error': f'Only {product.bulk_quantity} available'
+                                })
+                        except Product.DoesNotExist:
+                            pass
                     
                     item['quantity'] = quantity
                     item['total'] = item['price'] * quantity
@@ -2449,17 +3079,13 @@ def update_cart(request):
     
     return JsonResponse({'success': False, 'error': 'Invalid request'})
 
-
-
-
-
 @login_required
 def update_cart_price(request):
     """AJAX endpoint to update item price in cart"""
     if request.method == 'POST':
         try:
             data = json.loads(request.body)
-            product_code = data.get('product_code')
+            sku_code = data.get('sku_code') or data.get('product_code')
             old_price = float(data.get('old_price', 0))
             new_price = float(data.get('price', 0))
             
@@ -2471,10 +3097,11 @@ def update_cart_price(request):
             
             cart = request.session.get('sales_cart', [])
             
-            # Find the specific item with matching code AND old price
+            # Find the specific item with matching SKU AND old price
             found = False
             for item in cart:
-                if item['product_code'] == product_code and item['price'] == old_price:
+                item_sku = item.get('sku_code') or item.get('product_code')
+                if item_sku == sku_code and item.get('price') == old_price:
                     if not item.get('price_editable', False):
                         return JsonResponse({
                             'success': False,
@@ -2512,41 +3139,43 @@ def update_cart_price(request):
     
     return JsonResponse({'success': False, 'error': 'Invalid request'})
 
-
-    
-
-
 @login_required
 def clear_cart(request):
     """AJAX endpoint to clear the entire cart"""
     if request.method == 'POST':
         request.session['sales_cart'] = []
+        request.session.modified = True
         return JsonResponse({
             'success': True,
             'message': 'Cart cleared'
         })
     return JsonResponse({'success': False, 'error': 'Invalid request'})
 
-
-
-
-
-
 @login_required
 def sold_items_list(request):
-    """List all sold items with details"""
+    """List all sold items with details matching SKU model"""
+    from django.db.models import Q, Sum
+    from django.core.paginator import Paginator
+    from datetime import timedelta
+    from django.utils import timezone
+    from inventory.models import Category, ProductUnit, StockEntry
     
     # Get all sold items with related data
     sold_items = SaleItem.objects.select_related(
-        'sale', 'product'
+        'sale', 
+        'product',
+        'product__category',
     ).filter(
         sale__is_reversed=False  # Exclude reversed sales
     ).order_by('-sale__sale_date')
     
-    # Apply filters if any
+    # ============================================
+    # Apply filters
+    # ============================================
     date_from = request.GET.get('date_from')
     date_to = request.GET.get('date_to')
     search = request.GET.get('search', '').strip()
+    category_id = request.GET.get('category')
     
     if date_from:
         sold_items = sold_items.filter(sale__sale_date__date__gte=date_from)
@@ -2554,47 +3183,116 @@ def sold_items_list(request):
     if date_to:
         sold_items = sold_items.filter(sale__sale_date__date__lte=date_to)
     
+    if category_id:
+        sold_items = sold_items.filter(product__category_id=category_id)
+    
     if search:
         sold_items = sold_items.filter(
             Q(sale__sale_id__icontains=search) |
-            Q(sale__etr_receipt_number__icontains=search) |
             Q(product__name__icontains=search) |
-            Q(product__product_code__icontains=search) |
-            Q(product__sku_value__icontains=search) |
-            Q(sale__buyer_name__icontains=search)
+            Q(product__sku_code__icontains=search) |
+            Q(product__brand__icontains=search) |
+            Q(product__model__icontains=search) |
+            Q(sale__buyer_name__icontains=search) |
+            Q(sale__buyer_phone__icontains=search)
         )
     
-    # Create a list of items with profit calculated as a dictionary attribute
-    items_with_profit = []
-    for item in sold_items:
-        # Calculate profit
-        if item.product and item.product.buying_price:
-            profit_value = (item.unit_price - item.product.buying_price) * item.quantity
-        else:
-            profit_value = 0
-        
-        # Add profit as a dictionary key instead of object attribute
-        items_with_profit.append({
-            'item': item,
-            'profit': profit_value
-        })
-    
-    # Pagination - need to paginate the original queryset, then map to our list
-    paginator = Paginator(sold_items, 50)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-    
-    # Calculate totals
+    # ============================================
+    # Calculate summary statistics
+    # ============================================
     total_sold = sold_items.aggregate(total=Sum('quantity'))['total'] or 0
     total_revenue = sold_items.aggregate(total=Sum('total_price'))['total'] or 0
     
-    # Calculate total profit
+    # Calculate total profit manually
     total_profit = 0
-    for item in sold_items:
+    for item in sold_items[:1000]:
         if item.product and item.product.buying_price:
             total_profit += (item.unit_price - item.product.buying_price) * item.quantity
     
+    # ============================================
+    # Per page pagination
+    # ============================================
+    per_page = request.GET.get('per_page', '50')
+    try:
+        per_page = int(per_page)
+        if per_page not in [10, 25, 50, 100]:
+            per_page = 50
+    except ValueError:
+        per_page = 50
+    
+    paginator = Paginator(sold_items, per_page)
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+    
+    # ============================================
+    # Get all sale IDs from current page
+    # ============================================
+    sale_ids = [item.sale.sale_id for item in page_obj]
+    
+    # ============================================
+    # Get stock entries for these sales (by reference_id)
+    # Since product_sku is None, we need to use product_unit directly
+    # ============================================
+    stock_entries = StockEntry.objects.filter(
+        reference_id__in=sale_ids,
+        entry_type='sale'
+    ).select_related('product_unit')
+    
+    # Create mapping from sale_id to the stock entry's product_unit
+    sale_unit_map = {}
+    for entry in stock_entries:
+        if entry.product_unit:
+            sale_unit_map[entry.reference_id] = entry.product_unit
+    
+    # ============================================
+    # Create a list of item dictionaries with additional data
+    # ============================================
+    items_with_details = []
+    
+    for item in page_obj:
+        # Calculate profit
+        if item.product and item.product.buying_price:
+            profit = (item.unit_price - item.product.buying_price) * item.quantity
+        else:
+            profit = 0
+        
+        # Get the unit from the stock entry mapping
+        product_unit = sale_unit_map.get(item.sale.sale_id)
+        
+        imei_number = None
+        serial_number = None
+        
+        if product_unit:
+            imei_number = product_unit.imei_number
+            serial_number = product_unit.serial_number
+        
+        # Add to list
+        items_with_details.append({
+            'item': item,
+            'profit': profit,
+            'imei_number': imei_number,
+            'serial_number': serial_number,
+            'product_unit': product_unit,
+        })
+    
+    # ============================================
+    # Get categories for filter dropdown
+    # ============================================
+    categories = Category.objects.filter(is_active=True).order_by('name')
+    
+    # ============================================
+    # Date shortcuts
+    # ============================================
+    today = timezone.now().date()
+    week_ago = today - timedelta(days=7)
+    month_ago = today - timedelta(days=30)
+    year_ago = today - timedelta(days=365)
+    
+    # ============================================
+    # Context
+    # ============================================
     context = {
+        'items_with_details': items_with_details,
         'page_obj': page_obj,
         'total_sold': total_sold,
         'total_revenue': total_revenue,
@@ -2602,76 +3300,184 @@ def sold_items_list(request):
         'search': search,
         'date_from': date_from,
         'date_to': date_to,
+        'category_id': category_id,
+        'categories': categories,
+        'today': today,
+        'week_ago': week_ago,
+        'month_ago': month_ago,
+        'year_ago': year_ago,
+        'per_page': per_page,
     }
     
     return render(request, 'sales/sold_items_list.html', context)
 
-
-
-
 @login_required
 def export_sold_items(request):
-    """Export sold items to CSV"""
+    """Export sold items to Excel"""
     import csv
     from django.http import HttpResponse
+    from django.utils import timezone
     
-    # Get filtered items (same as in sold_items_list)
+    # Get filtered queryset (same as above)
     sold_items = SaleItem.objects.select_related(
-        'sale', 'product'
-    ).filter(
-        sale__is_reversed=False
-    ).order_by('-sale__sale_date')
+        'sale', 'product', 'product__category', 'product_unit'
+    ).filter(sale__is_reversed=False).order_by('-sale__sale_date')
     
-    # Apply same filters
+    # Apply filters (same as above)
     date_from = request.GET.get('date_from')
     date_to = request.GET.get('date_to')
     search = request.GET.get('search', '').strip()
+    category_id = request.GET.get('category')
     
     if date_from:
         sold_items = sold_items.filter(sale__sale_date__date__gte=date_from)
     if date_to:
         sold_items = sold_items.filter(sale__sale_date__date__lte=date_to)
+    if category_id:
+        sold_items = sold_items.filter(product__category_id=category_id)
     if search:
         sold_items = sold_items.filter(
             Q(sale__sale_id__icontains=search) |
-            Q(sale__etr_receipt_number__icontains=search) |
             Q(product__name__icontains=search) |
-            Q(product__product_code__icontains=search)
+            Q(product__sku_code__icontains=search) |
+            Q(product_unit__imei_number__icontains=search)
         )
     
+    # Create CSV response
     response = HttpResponse(content_type='text/csv')
-    response['Content-Disposition'] = f'attachment; filename="sold_items_{timezone.now().strftime("%Y%m%d_%H%M%S")}.csv"'
+    response['Content-Disposition'] = f'attachment; filename="sold_items_{timezone.now().date()}.csv"'
     
     writer = csv.writer(response)
-    writer.writerow(['Sale ID', 'ETR Number', 'Product', 'SKU/Code', 'Category', 
-                    'Quantity', 'Unit Price', 'Total Amount', 'Profit', 'Sold By', 'Date Sold', 'Customer'])
+    writer.writerow([
+        'Sale ID', 'Date', 'Product SKU', 'Product Name', 'Identifier',
+        'Quantity', 'Unit Price', 'Total', 'Profit', 'Sold By', 'Customer', 'Customer Phone'
+    ])
     
     for item in sold_items:
-        # FIXED: Use unit_price instead of price
-        profit = (item.unit_price - item.product.buying_price) * item.quantity if item.product and item.product.buying_price else 0
+        # Get identifier
+        if item.product_unit:
+            identifier = item.product_unit.imei_number or item.product_unit.serial_number or '-'
+        else:
+            identifier = 'Bulk Item'
+        
+        # Calculate profit
+        buying_price = item.product_unit.effective_buying_price if item.product_unit else item.product.buying_price if item.product else 0
+        profit = (item.unit_price - buying_price) * item.quantity if buying_price else 0
+        
         writer.writerow([
             item.sale.sale_id,
-            item.sale.etr_receipt_number or '',
-            item.product.display_name if item.product else item.product_name,
-            item.sku_value or (item.product.sku_value if item.product else '') or (item.product.product_code if item.product else ''),
-            item.product.category.name if item.product and item.product.category else '',
-            item.quantity,
-            item.unit_price,  # FIXED: Use unit_price
-            item.total_price,
-            profit,
-            item.sale.seller.get_full_name() or item.sale.seller.username,
             item.sale.sale_date.strftime('%Y-%m-%d %H:%M'),
-            item.sale.buyer_name or 'Walk-in Customer'
+            item.product.sku_code if item.product else '-',
+            item.product.name if item.product else '-',
+            identifier,
+            item.quantity,
+            f"{item.unit_price:.2f}",
+            f"{item.total_price:.2f}",
+            f"{profit:.2f}",
+            item.sale.seller.username,
+            item.sale.buyer_name or 'Walk-in Customer',
+            item.sale.buyer_phone or '-',
         ])
     
     return response
 
+@login_required
+def imei_suggestions(request):
+    """API endpoint to get IMEI suggestions for autocomplete - FILTERED BY PRODUCT"""
+    query = request.GET.get('q', '').strip()
+    product_sku = request.GET.get('product_sku', '').strip()  # ← ADD THIS
+    
+    if not query or len(query) < 2:
+        return JsonResponse({'success': True, 'suggestions': []})
+    
+    # Get current cart from session to exclude items already in cart
+    cart = request.session.get('sales_cart', [])
+    cart_unit_ids = [item.get('unit_id') for item in cart if item.get('unit_id')]
+    
+    # Base queryset
+    units = ProductUnit.objects.filter(
+        imei_number__icontains=query,
+        status='available'
+    ).exclude(
+        id__in=cart_unit_ids
+    )
+    
+    # ✅ FILTER BY PRODUCT SKU if provided
+    if product_sku:
+        units = units.filter(product__sku_code=product_sku)
+    
+    units = units.select_related('product')[:10]
+    
+    suggestions = []
+    for unit in units:
+        suggestions.append({
+            'imei_number': unit.imei_number,
+            'product_name': unit.product.name,
+            'sku_code': unit.product.sku_code,
+            'status': unit.status,
+            'unit_id': unit.id,
+            'sold_date': unit.sold_date.isoformat() if unit.sold_date else None,
+        })
+    
+    return JsonResponse({'success': True, 'suggestions': suggestions})
+
+@login_required
+def serial_suggestions(request):
+    """API endpoint to get Serial Number suggestions - FILTERED BY PRODUCT"""
+    query = request.GET.get('q', '').strip()
+    product_sku = request.GET.get('product_sku', '').strip()  # ← ADD THIS
+    
+    if not query or len(query) < 2:
+        return JsonResponse({'success': True, 'suggestions': []})
+    
+    # Get current cart from session
+    cart = request.session.get('sales_cart', [])
+    cart_unit_ids = [item.get('unit_id') for item in cart if item.get('unit_id')]
+    
+    # Also exclude units already sold
+    from sales.models import SaleItem
+    sold_unit_ids = SaleItem.objects.filter(
+        product_unit__isnull=False,
+        sale__is_reversed=False
+    ).values_list('product_unit_id', flat=True).distinct()
+    
+    # Base queryset
+    units = ProductUnit.objects.filter(
+        serial_number__icontains=query,
+        status='available'
+    ).exclude(
+        id__in=cart_unit_ids
+    ).exclude(
+        id__in=sold_unit_ids
+    )
+    
+    # ✅ FILTER BY PRODUCT SKU if provided
+    if product_sku:
+        units = units.filter(product__sku_code=product_sku)
+    
+    units = units.select_related('product')[:10]
+    
+    suggestions = []
+    for unit in units:
+        suggestions.append({
+            'serial_number': unit.serial_number,
+            'product_name': unit.product.name,
+            'sku_code': unit.product.sku_code,
+            'status': unit.status,
+            'is_available': unit.status == 'available',
+            'unit_id': unit.id,
+        })
+    
+    return JsonResponse({'success': True, 'suggestions': suggestions})
 
 
 
 
 
 
+# ============================================
+# VIEWS FOR CUSTOMER LOYALTY PROGRAM
+# ============================================
 @login_required
 def customer_register(request):
     """Register a new customer for loyalty points"""
@@ -2786,10 +3592,6 @@ def customer_register(request):
     }
     return render(request, 'sales/customer_register.html', context)
 
-
-
-
-
 @login_required
 def customer_search(request):
     """AJAX endpoint to search customers by phone or name"""
@@ -2836,13 +3638,6 @@ def customer_search(request):
     } for c in customers]
     
     return JsonResponse({'customers': data})
-
-
-
-
-
-
-    
 
 @login_required
 def customer_detail(request, pk):
@@ -2899,11 +3694,6 @@ def customer_detail(request, pk):
     }
     return render(request, 'sales/customer_detail.html', context)
 
-
-
-
-
-
 @login_required
 def customer_transactions(request, pk):
     """Get customer transaction history"""
@@ -2923,10 +3713,6 @@ def customer_transactions(request, pk):
         'transactions': page_obj,
     }
     return render(request, 'sales/customer_transactions.html', context)
-
-
-
-
 
 @login_required
 def customer_list(request):
@@ -2973,7 +3759,6 @@ def customer_list(request):
         'sort': sort,
     }
     return render(request, 'sales/customer_list.html', context)
-
 
 @login_required
 def customer_edit(request, pk):
@@ -3043,7 +3828,6 @@ def customer_edit(request, pk):
         'customer': customer,
     }
     return render(request, 'sales/customer_edit.html', context)
-
 
 @login_required
 def customer_delete(request, pk):
@@ -3178,9 +3962,6 @@ def send_otp(request):
             return JsonResponse({'success': False, 'error': str(e)})
     
     return JsonResponse({'success': False, 'error': 'Invalid method'})
-
-
-
 
 @login_required
 def verify_otp(request):
@@ -3317,8 +4098,6 @@ def initiate_mpesa_payment(request, sale_id):
     
     return JsonResponse({'success': False, 'error': 'Invalid request method'})
 
-
-
 @login_required
 def check_payment_status(request, sale_id):
     """Check if M-Pesa payment has been received for a sale (for direct till payments)"""
@@ -3355,10 +4134,6 @@ def check_payment_status(request, sale_id):
     except Exception as e:
         logger.error(f"Error checking payment status: {str(e)}")
         return JsonResponse({'paid': False, 'error': str(e)})
-
-
-
-from datetime import timedelta
 
 @login_required
 def check_payment_by_phone(request):
@@ -3413,10 +4188,6 @@ def check_payment_by_phone(request):
     except Exception as e:
         logger.error(f"Error checking payment by phone: {str(e)}")
         return JsonResponse({'success': False, 'error': str(e)})
-
-
-
-
 
 @login_required
 def record_direct_payment(request, sale_id):
@@ -3475,9 +4246,6 @@ def record_direct_payment(request, sale_id):
             return JsonResponse({'success': False, 'error': str(e)})
     
     return JsonResponse({'success': False, 'error': 'Invalid method'})
-
-
-
 
 @login_required
 def complete_sale_payment(request, sale_id):
@@ -3588,9 +4356,6 @@ def complete_sale_payment(request, sale_id):
         import traceback
         traceback.print_exc()
         return JsonResponse({'success': False, 'error': str(e)})
-    
-    
-
 
 @login_required
 def delete_pending_sale(request, sale_id):
@@ -3608,9 +4373,6 @@ def delete_pending_sale(request, sale_id):
     except Exception as e:
         logger.error(f"Error deleting pending sale: {str(e)}")
         return JsonResponse({'success': False, 'error': str(e)})
-
-
-
 
 @login_required
 def check_mpesa_pending(request):
@@ -3649,8 +4411,6 @@ def check_mpesa_pending(request):
     except Exception as e:
         logger.error(f"Error checking pending M-Pesa: {str(e)}")
         return JsonResponse({'has_pending': False})
-
-
 
 @login_required
 def cancel_pending_mpesa(request):
@@ -3692,17 +4452,10 @@ def cancel_pending_mpesa(request):
     
     return JsonResponse({'success': False, 'error': 'Invalid method'})
 
-
-
-
-
 @require_http_methods(["POST"])
 @csrf_exempt
 def create_split_payment_sale(request):
-    """
-    Handle split payment sales with multiple payment methods
-    Integration with existing Sale, SaleItem, and Customer models
-    """
+    """Handle split payment sales with multiple payment methods"""
     
     try:
         data = json.loads(request.body)
@@ -3724,10 +4477,6 @@ def create_split_payment_sale(request):
         
         # Start database transaction
         with transaction.atomic():
-            # Generate sale ID using your existing system
-            from .models import Sale, PaymentRecord
-            sale_id = generate_sale_id ()
-            
             # ============================================
             # FIRST: Get customer info for points redemption
             # ============================================
@@ -3771,12 +4520,11 @@ def create_split_payment_sale(request):
             # Calculate original subtotal (before points discount)
             original_subtotal = total_amount + Decimal(str(points_redeemed_total))
             
-            # Create sale record with CORRECT customer name
+            # Create sale record - LET THE MODEL GENERATE THE ID
             sale = Sale.objects.create(
-                sale_id=generate_sale_id(),
                 seller=request.user if request.user.is_authenticated else None,
-                buyer_name=buyer_name,  # NOW USING CUSTOMER NAME
-                buyer_phone=buyer_phone,  # NOW USING CUSTOMER PHONE
+                buyer_name=buyer_name,
+                buyer_phone=buyer_phone,
                 buyer_id_number=points_customer.id_number if points_customer else data.get('buyer_id_number', ''),
                 total_amount=total_amount,
                 amount_paid=total_paid,
@@ -3788,6 +4536,8 @@ def create_split_payment_sale(request):
                 original_subtotal=original_subtotal,
                 subtotal=original_subtotal,
             )
+            
+            logger.info(f"✅ Split payment sale created: {sale.sale_id}")
             
             # Track change amount for cash payments
             total_cash = sum(p.get('amount', 0) for p in split_payments if p.get('method') == 'Cash')
@@ -3867,13 +4617,12 @@ def create_split_payment_sale(request):
             sale.save(update_fields=['payment_breakdown'])
             
             # Create sale items and process inventory
-            from inventory.models import StockEntry
+            from inventory.models import Product
             from .models import SaleItem
             
             for item in cart_items:
-                from inventory.models import Product
                 product = Product.objects.select_for_update().get(
-                    product_code=item.get('product_code')
+                    sku_code=item.get('sku_code') or item.get('product_code')
                 )
                 
                 quantity = item.get('quantity', 1)
@@ -3884,16 +4633,49 @@ def create_split_payment_sale(request):
                 sale_item = SaleItem.objects.create(
                     sale=sale,
                     product=product,
-                    product_code=product.product_code,
-                    product_name=product.display_name or product.name,
-                    sku_value=product.sku_value or '',
+                    product_code=product.sku_code,
+                    product_name=product.display_name,
+                    sku_value=product.sku_code,
                     quantity=quantity,
                     unit_price=unit_price,
                     total_price=total_price
                 )
                 
-                # Process the sale (deduct stock)
-                sale_item.process_sale()
+                # For single items, handle stock
+                if product.category.is_single_item:
+                    unit = product.units.filter(status='available').first()
+                    if unit:
+                        unit.mark_as_sold(
+                            customer=points_customer if points_customer else None,
+                            price=unit_price,
+                            sold_by=request.user
+                        )
+                        
+                        StockEntry.objects.create(
+                            product_unit=unit,
+                            quantity=-quantity,
+                            entry_type='sale',
+                            unit_price=unit_price,
+                            total_amount=total_price,
+                            reference_id=sale.sale_id,
+                            notes=f"Sale #{sale.sale_id}",
+                            created_by=request.user
+                        )
+                else:
+                    # Bulk items - reduce quantity
+                    product.bulk_quantity -= quantity
+                    product.save()
+                    
+                    StockEntry.objects.create(
+                        product_sku=product,
+                        quantity=-quantity,
+                        entry_type='sale',
+                        unit_price=unit_price,
+                        total_amount=total_price,
+                        reference_id=sale.sale_id,
+                        notes=f"Sale #{sale.sale_id}",
+                        created_by=request.user
+                    )
             
             # Award loyalty points ONLY if points were NOT redeemed
             points_earned = 0
@@ -3918,7 +4700,7 @@ def create_split_payment_sale(request):
                     new_balance = points_customer.points_balance
                     logger.info(f"✅ Points awarded: {points_earned} to customer {points_customer.phone_number}")
             
-            # Return success response with customer info
+            # Return success response
             return JsonResponse({
                 'success': True,
                 'sale_id': sale.sale_id,
@@ -3939,7 +4721,6 @@ def create_split_payment_sale(request):
     except Exception as e:
         logger.error(f"Split payment sale error: {str(e)}", exc_info=True)
         return JsonResponse({'success': False, 'error': f'Sale failed: {str(e)}'}, status=500)
-
 
 @require_http_methods(["GET"])
 def get_sale_payment_details(request, sale_id):

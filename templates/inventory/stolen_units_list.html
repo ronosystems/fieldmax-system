@@ -1,0 +1,180 @@
+{% extends 'inventory/staff_base.html' %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col">
+            <h2>
+                <i class="fas fa-skull-crosswalk text-danger"></i> 
+                {{ title }}
+            </h2>
+            <p class="text-muted">Track and manage stolen/lost inventory</p>
+        </div>
+        <div class="col text-right">
+            <a href="{% url 'inventory:stolen_units_report' %}" class="btn btn-success">
+                <i class="fas fa-download"></i> Export CSV
+            </a>
+            <a href="{% url 'inventory:bulk_report_stolen_units' %}" class="btn btn-danger">
+                <i class="fas fa-plus"></i> Bulk Report
+            </a>
+        </div>
+    </div>
+    
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card bg-danger text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Total Loss Value</h5>
+                    <h2 class="mb-0">KES {{ total_loss_value|intcomma }}</h2>
+                    <small>At buying price</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Insurance Recovered</h5>
+                    <h2 class="mb-0">KES {{ insurance_recovered|intcomma }}</h2>
+                    <small>Paid out by insurance</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-warning text-dark">
+                <div class="card-body">
+                    <h5 class="card-title">Net Loss</h5>
+                    <h2 class="mb-0">KES {{ net_loss|intcomma }}</h2>
+                    <small>After insurance</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Products Table -->
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Product Code</th>
+                            <th>Product Name</th>
+                            <th>SKU/IMEI</th>
+                            <th>Loss Type</th>
+                            <th>Loss Date</th>
+                            <th>Police Report</th>
+                            <th>Buying Price</th>
+                            <th>Insurance</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for product in products %}
+                        <tr>
+                            <td><code>{{ product.product_code }}</code></td>
+                            <td>{{ product.display_name }}</td>
+                            <td><code>{{ product.sku_value|default:"N/A" }}</code></td>
+                            <td>
+                                <span class="badge bg-danger">
+                                    {{ product.get_loss_type_display|default:product.loss_type|title }}
+                                </span>
+                            </td>
+                            <td>{{ product.loss_reported_date|date:"Y-m-d H:i" }}</td>
+                            <td>
+                                {% if product.police_report_number %}
+                                    <small>{{ product.police_report_number }}</small>
+                                {% else %}
+                                    <span class="text-muted">N/A</span>
+                                {% endif %}
+                            </td>
+                            <td>KES {{ product.buying_price|intcomma }}</td>
+                            <td>
+                                {% if product.insurance_claim_filed %}
+                                    <span class="badge bg-info">Claim Filed</span>
+                                    {% if product.insurance_payout_amount %}
+                                        <br><small>Paid: KES {{ product.insurance_payout_amount|intcomma }}</small>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="badge bg-secondary">No Claim</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if product.recovered_date %}
+                                    <span class="badge bg-success">Recovered</span>
+                                {% else %}
+                                    <span class="badge bg-danger">Active Loss</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    {% if not product.recovered_date %}
+                                    <a href="{% url 'inventory:recover_product' product.id %}" 
+                                       class="btn btn-success" title="Recover Product">
+                                        <i class="fas fa-undo"></i>
+                                    </a>
+                                    {% endif %}
+                                    
+                                    {% if not product.insurance_claim_filed %}
+                                    <a href="{% url 'inventory:file_insurance' product.id %}" 
+                                       class="btn btn-info" title="File Insurance">
+                                        <i class="fas fa-file-invoice-dollar"></i>
+                                    </a>
+                                    {% endif %}
+                                    
+                                    <a href="{% url 'inventory:product_detail' product.id %}" 
+                                       class="btn btn-primary" title="View Details">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="10" class="text-center">
+                                <div class="alert alert-info mb-0">
+                                    No stolen or lost products found.
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Pagination -->
+            {% if products.has_other_pages %}
+            <nav aria-label="Page navigation">
+                <ul class="pagination justify-content-center">
+                    {% if products.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ products.previous_page_number }}{% for key,value in current_filters.items %}{% if value %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Previous</a>
+                        </li>
+                    {% endif %}
+                    
+                    {% for num in products.paginator.page_range %}
+                        {% if products.number == num %}
+                            <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                        {% elif num > products.number|add:'-3' and num < products.number|add:'3' %}
+                            <li class="page-item"><a class="page-link" href="?page={{ num }}{% for key,value in current_filters.items %}{% if value %}&{{ key }}={{ value }}{% endif %}{% endfor %}">{{ num }}</a></li>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if products.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ products.next_page_number }}{% for key,value in current_filters.items %}{% if value %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Next</a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -998,7 +998,7 @@ def transaction_create(request):
                 if existing_transaction:
                     messages.error(
                         request, 
-                        f'Product {product.product_code} already has a credit transaction. '
+                        f'Product {product.sku_code} already has a credit transaction. '
                         f'Each product can only be used once for credit.'
                     )
                     return redirect('credit:transaction_create')
@@ -1032,32 +1032,47 @@ def transaction_create(request):
                 )
                 
                 # ============================================
-                # UPDATE PRODUCT STATUS (Single item only)
+                # UPDATE PRODUCT STOCK (Single item only)
                 # ============================================
                 if product.category.is_single_item:
-                    product.status = 'sold'
-                    product.quantity = 0
-                    product.save()
+                    # For single items, find and mark a specific unit as sold
+                    # Get the first available unit (or the one with specific IMEI)
+                    if imei:
+                        unit = product.units.filter(imei_number=imei, status='available').first()
+                    else:
+                        unit = product.units.filter(status='available').first()
                     
-                    # Create stock entry for inventory tracking
-                    from inventory.models import StockEntry
-                    StockEntry.objects.create(
-                        product=product,
-                        quantity=-1,
-                        entry_type='sale',
-                        unit_price=ceiling_price,
-                        total_amount=ceiling_price,
-                        reference_id=credit_transaction.transaction_id,
-                        notes=f'Credit sale - {customer.full_name} via {company.name} (Commission: KSH {commission_amount})',
-                        created_by=request.user
-                    )
+                    if unit:
+                        unit.status = 'sold'
+                        unit.sold_date = timezone.now()
+                        unit.sold_by = request.user
+                        unit.sold_at_price = ceiling_price
+                        unit.save()
+                        
+                        # Create stock entry for inventory tracking
+                        from inventory.models import StockEntry
+                        StockEntry.objects.create(
+                            product_unit=unit,  # Link to the unit, not product
+                            quantity=-1,
+                            entry_type='sale',
+                            unit_price=ceiling_price,
+                            total_amount=ceiling_price,
+                            reference_id=credit_transaction.transaction_id,
+                            notes=f'Credit sale - {customer.full_name} via {company.name} (Commission: KSH {commission_amount})',
+                            created_by=request.user
+                        )
+                        
+                        # Update product quantities
+                        product.update_quantities()
+                    else:
+                        raise ValueError(f"No available unit found for product {product.sku_code}")
                 
                 # Create log
                 CreditTransactionLog.objects.create(
                     transaction=credit_transaction,
                     action='created',
                     performed_by=request.user,
-                    notes=f'Product {product.product_code} - Commission: KSH {commission_amount}'
+                    notes=f'Product {product.sku_code} - Commission: KSH {commission_amount}'
                 )
                 
                 # Update seller commission summary
@@ -1066,7 +1081,7 @@ def transaction_create(request):
                 
                 logger.info(
                     f"[CREDIT TRANSACTION] Created: {credit_transaction.transaction_id} | "
-                    f"Product: {product.product_code} | "
+                    f"Product: {product.sku_code} | "
                     f"Commission: KSH {commission_amount}"
                 )
                 
@@ -1089,32 +1104,39 @@ def transaction_create(request):
     # Get IDs of products that already have ANY credit transaction
     products_with_credit = CreditTransaction.objects.values_list('product_id', flat=True).distinct()
     
-    # Filter products:
+    # Filter products for single items with available units
+    # Get all single item products that have available units
+    available_products = []
     products = Product.objects.filter(
         category__item_type='single',
-        status='available',
-        quantity__gt=0
+        is_active=True,
+        is_discontinued=False
     ).exclude(
         id__in=products_with_credit
-    ).select_related('category').order_by('-created_at')
+    ).select_related('category')
+    
+    # Filter only products with available units
+    for product in products:
+        if product.available_quantity > 0:
+            available_products.append(product)
     
     # Log for debugging
-    logger.info(f"Credit product selection - Single items available: {products.count()}")
+    logger.info(f"Credit product selection - Single items available: {len(available_products)}")
     
     # If no products available, show warning
-    if products.count() == 0:
+    if len(available_products) == 0:
         messages.warning(
             request, 
             'No single items available for credit. All available items either:\n'
             '- Have existing credit transactions\n'
-            '- Are out of stock\n'
-            '- Have status other than "available"'
+            '- Have no available units\n'
+            '- Are out of stock'
         )
     
     context = {
         'companies': companies,
         'customers': customers,
-        'products': products,
+        'products': available_products,
         'commission_types': CreditTransaction._meta.get_field('commission_type').choices,
     }
     return render(request, 'credit/transactions/create.html', context)
@@ -1234,6 +1256,11 @@ def transaction_reverse(request, pk):
             return redirect('credit:transaction_detail', pk=pk)
     
     return render(request, 'credit/transactions/reverse.html', {'transaction': transaction})
+
+
+
+
+
 
 
 # ====================================

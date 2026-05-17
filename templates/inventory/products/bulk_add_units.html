@@ -1,0 +1,333 @@
+{% extends 'inventory/staff_base.html' %}
+{% load static %}
+
+{% block title %}Add Units to {{ product.sku_code }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <!-- Left Column - Form -->
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="fas fa-microchip me-2"></i>Add Units to {{ product.sku_code }}</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" id="bulkAddForm">
+                        {% csrf_token %}
+                        
+                        <div class="row">
+                            <div class="col-md-12 mb-3">
+                                <div class="alert alert-info">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    Enter IMEI numbers (15-digit) or Serial Numbers below. Each line will create one product unit.
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <div class="card mb-3">
+                                    <div class="card-header bg-warning">
+                                        <h6 class="mb-0"><i class="fas fa-qrcode me-2"></i>IMEI Numbers (15-digit)</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <textarea name="imeis" id="imeiTextarea" class="form-control" rows="12" 
+                                                  placeholder="123456789012345&#10;123456789012346&#10;123456789012347"
+                                                  style="font-family: monospace;"></textarea>
+                                        <div class="mt-2">
+                                            <span class="badge bg-warning" id="imeiCount">0 IMEIs</span>
+                                        </div>
+                                        <small class="text-muted">Enter one IMEI per line (exactly 15 digits)</small>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <div class="card mb-3">
+                                    <div class="card-header bg-info">
+                                        <h6 class="mb-0"><i class="fas fa-hashtag me-2"></i>Serial Numbers</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <textarea name="serials" id="serialTextarea" class="form-control" rows="12" 
+                                                  placeholder="SN001&#10;SN002&#10;SN003"
+                                                  style="font-family: monospace;"></textarea>
+                                        <div class="mt-2">
+                                            <span class="badge bg-info" id="serialCount">0 Serials</span>
+                                        </div>
+                                        <small class="text-muted">Enter one serial number per line</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-3">
+                                <label class="form-label">Condition</label>
+                                <select name="condition" class="form-select">
+                                    <option value="new">Brand New</option>
+                                    <option value="refurbished">Refurbished</option>
+                                    <option value="used_excellent">Used - Excellent</option>
+                                    <option value="used_good">Used - Good</option>
+                                    <option value="used_fair">Used - Fair</option>
+                                </select>
+                            </div>
+                            
+                            <div class="col-md-3">
+                                <label class="form-label">Warranty (months)</label>
+                                <input type="number" name="warranty_months" class="form-control" value="{{ product.warranty_months }}">
+                                <small><i class="fas fa-info-circle"></i> Warranty: {{ product.warranty_months }} months (inherited from product)</small>
+                            </div>
+                            
+                            <div class="col-md-3">
+                                <label class="form-label">Unit Buying Price (KES)</label>
+                                <input type="number" name="unit_buying_price" class="form-control" step="0.01" placeholder="Optional">
+                                <small><i class="fas fa-info-circle"></i> Default: KES {{ product.buying_price }}</small>
+                            </div>
+                            
+                            <div class="col-md-3">
+                                <label class="form-label">Unit Selling Price (KES)</label>
+                                <input type="number" name="unit_selling_price" class="form-control" step="0.01" placeholder="Optional">
+                                <small><i class="fas fa-info-circle"></i>   Default: KES {{ product.selling_price }}</small>
+                            </div>
+                        </div>
+                        
+                        <div class="form-check mt-3">
+                            <input type="checkbox" class="form-check-input" name="mark_available" id="markAvailable" checked>
+                            <label class="form-check-label" for="markAvailable">
+                                <i class="fas fa-check-circle text-success"></i> Mark units as Available immediately
+                            </label>
+                        </div>
+                        
+                        <div class="d-flex justify-content-end gap-2 mt-4">
+                            <a href="{% url 'inventory:product_detail' product.id %}" class="btn btn-secondary">
+                                <i class="fas fa-times me-2"></i>Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary" id="submitBtn">
+                                <i class="fas fa-save me-2"></i>Add Units (<span id="totalUnits">0</span>)
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Right Column - Product Info & Summary -->
+        <div class="col-md-4">
+            <!-- Product Info Card -->
+            <div class="card mb-3">
+                <div class="card-header bg-primary text-white">
+                    <h6 class="mb-0"><i class="fas fa-box me-2"></i>Product Information</h6>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm table-borderless">
+                        <tr>
+                            <th width="40%">SKU Code:</th>
+                            <td><code class="fw-bold">{{ product.sku_code }}</code></td>
+                        </tr>
+                        <tr>
+                            <th>Product Name:</th>
+                            <td>{{ product.name|default:"-" }}</td>
+                        </tr>
+                        <tr>
+                            <th>Brand:</th>
+                            <td>{{ product.brand|default:"-" }}</td>
+                        </tr>
+                        <tr>
+                            <th>Model:</th>
+                            <td>{{ product.model|default:"-" }}</td>
+                        </tr>
+                        <tr>
+                            <th>Category:</th>
+                            <td>{{ product.category.name }}</td>
+                        </tr>
+                        <tr>
+                            <th>Buying Price:</th>
+                            <td class="text-success">KES {{ product.buying_price|floatformat:2 }}</td>
+                        </tr>
+                        <tr>
+                            <th>Selling Price:</th>
+                            <td class="text-success">KES {{ product.selling_price|floatformat:2 }}</td>
+                        </tr>
+                        <tr>
+                            <th>Current Units:</th>
+                            <td>
+                                <span class="badge bg-info">{{ product.total_quantity }}</span> Total
+                                <span class="badge bg-success ms-1">{{ product.available_quantity }}</span> Available
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- Summary Card - Live Updates -->
+            <div class="card border-success">
+                <div class="card-header bg-success text-white">
+                    <h6 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Summary - Units to Add</h6>
+                </div>
+                <div class="card-body">
+                    <div class="text-center mb-3">
+                        <h2 class="display-4" id="liveTotalCount">0</h2>
+                        <p class="text-muted">Total units to add</p>
+                    </div>
+                    <hr>
+                    <div class="row text-center">
+                        <div class="col-6">
+                            <div class="border rounded p-2">
+                                <i class="fas fa-qrcode fa-2x text-warning"></i>
+                                <h4 id="liveImeiCount" class="mb-0">0</h4>
+                                <small class="text-muted">IMEI Numbers</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="border rounded p-2">
+                                <i class="fas fa-hashtag fa-2x text-info"></i>
+                                <h4 id="liveSerialCount" class="mb-0">0</h4>
+                                <small class="text-muted">Serial Numbers</small>
+                            </div>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="alert alert-info mt-3 mb-0 small">
+                        <i class="fas fa-info-circle me-1"></i>
+                        After adding, total units will become: <strong id="newTotalUnits">{{ product.total_quantity }}</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const imeiTextarea = document.getElementById('imeiTextarea');
+    const serialTextarea = document.getElementById('serialTextarea');
+    const imeiCountSpan = document.getElementById('imeiCount');
+    const serialCountSpan = document.getElementById('serialCount');
+    const liveImeiCount = document.getElementById('liveImeiCount');
+    const liveSerialCount = document.getElementById('liveSerialCount');
+    const liveTotalCount = document.getElementById('liveTotalCount');
+    const totalUnitsSpan = document.getElementById('totalUnits');
+    const newTotalUnitsSpan = document.getElementById('newTotalUnits');
+    const submitBtn = document.getElementById('submitBtn');
+    
+    const currentTotalUnits = {{ product.total_quantity|default:0 }};
+    
+    function updateCounts() {
+        // Get IMEI lines (non-empty trimmed lines)
+        const imeiText = imeiTextarea.value;
+        const imeiLines = imeiText.split('\n').filter(line => line.trim() !== '');
+        const imeiCount = imeiLines.length;
+        
+        // Get Serial lines (non-empty trimmed lines)
+        const serialText = serialTextarea.value;
+        const serialLines = serialText.split('\n').filter(line => line.trim() !== '');
+        const serialCount = serialLines.length;
+        
+        const total = imeiCount + serialCount;
+        
+        // Update badges
+        imeiCountSpan.textContent = `${imeiCount} IMEI${imeiCount !== 1 ? 's' : ''}`;
+        serialCountSpan.textContent = `${serialCount} Serial${serialCount !== 1 ? 's' : ''}`;
+        
+        // Update live counters
+        liveImeiCount.textContent = imeiCount;
+        liveSerialCount.textContent = serialCount;
+        liveTotalCount.textContent = total;
+        totalUnitsSpan.textContent = total;
+        
+        // Update new total units prediction
+        const newTotal = currentTotalUnits + total;
+        newTotalUnitsSpan.textContent = newTotal;
+        
+        // Enable/disable submit button based on having at least one unit
+        if (total > 0) {
+            submitBtn.disabled = false;
+            submitBtn.classList.remove('btn-secondary');
+            submitBtn.classList.add('btn-primary');
+        } else {
+            submitBtn.disabled = true;
+            submitBtn.classList.remove('btn-primary');
+            submitBtn.classList.add('btn-secondary');
+        }
+    }
+    
+    // IMEI validation (optional - just clean up non-digits)
+    imeiTextarea.addEventListener('input', function() {
+        let value = this.value;
+        // Optional: Remove non-digit characters but don't force 15 digits
+        // This allows pasting with spaces or dashes
+        const lines = value.split('\n');
+        const cleanedLines = [];
+        
+        for (let line of lines) {
+            // Remove non-digit characters for counting only
+            const digitsOnly = line.replace(/[^0-9]/g, '');
+            if (digitsOnly) {
+                cleanedLines.push(digitsOnly);
+            }
+        }
+        
+        // Update display count based on cleaned lines
+        updateCounts();
+    });
+    
+    serialTextarea.addEventListener('input', updateCounts);
+    
+    // Form validation before submit
+    document.getElementById('bulkAddForm').addEventListener('submit', function(e) {
+        const imeiText = imeiTextarea.value;
+        const serialText = serialTextarea.value;
+        const imeiLines = imeiText.split('\n').filter(line => line.trim() !== '');
+        const serialLines = serialText.split('\n').filter(line => line.trim() !== '');
+        
+        if (imeiLines.length === 0 && serialLines.length === 0) {
+            e.preventDefault();
+            Swal.fire({
+                icon: 'error',
+                title: 'No Units to Add',
+                text: 'Please enter at least one IMEI or serial number.'
+            });
+            return;
+        }
+        
+        // Validate IMEI lengths (15 digits)
+        const invalidImeis = [];
+        for (let imei of imeiLines) {
+            const cleanImei = imei.replace(/[^0-9]/g, '');
+            if (cleanImei.length !== 15) {
+                invalidImeis.push(imei);
+            }
+        }
+        
+        if (invalidImeis.length > 0) {
+            e.preventDefault();
+            Swal.fire({
+                icon: 'warning',
+                title: 'Invalid IMEI Numbers',
+                html: `The following IMEI numbers are not 15 digits:<br><code>${invalidImeis.slice(0, 5).join('<br>')}</code>${invalidImeis.length > 5 ? `<br>... and ${invalidImeis.length - 5} more` : ''}`,
+                confirmButtonText: 'OK'
+            });
+            return;
+        }
+        
+        const total = imeiLines.length + serialLines.length;
+        
+        Swal.fire({
+            title: 'Confirm Addition',
+            html: `Are you sure you want to add <strong>${total}</strong> unit(s) to <strong>{{ product.sku_code }}</strong>?`,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#28a745',
+            confirmButtonText: 'Yes, Add Units',
+            cancelButtonText: 'Cancel'
+        }).then((result) => {
+            if (!result.isConfirmed) {
+                e.preventDefault();
+            }
+        });
+    });
+    
+    // Initial update
+    updateCounts();
+});
+</script>
+{% endblock %}

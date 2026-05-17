@@ -6,7 +6,7 @@ from django.db import models
 from decimal import Decimal
 import uuid
 import logging
-from django.db import models, transaction
+from django.db import models, transaction, IntegrityError
 from django.db.models import F, Max, Sum
 from django.contrib.auth.models import User
 from django.utils import timezone
@@ -29,7 +29,7 @@ class SaleCounter(models.Model):
     ETR Receipt: 00001, 00002, 00003...
     Both share the same sequential number
     """
-    counter = models.PositiveIntegerField(default=0)  # Start at 0, first will be 1 -> 00001
+    counter = models.PositiveIntegerField(default=0)
     last_used = models.DateTimeField(auto_now=True)
     
     class Meta:
@@ -45,60 +45,92 @@ class SaleCounter(models.Model):
 # SALE ID & ETR RECEIPT GENERATOR (SAME NUMBER)
 # ============================================
 
-def generate_next_counter() -> int:
+def get_next_sequence_number() -> int:
     """
-    Generate next sequential counter number
-    Starts from 1 -> 00001, then 2 -> 00002, etc.
-    
-    Returns:
-        int: The next counter number
+    Get the next sequential number by checking existing sales and counter
+    This ensures no gaps and proper sequencing
     """
     with transaction.atomic():
-        # Get or create counter with database lock
+        # Get the max sequence from existing sales
+        max_sequence = Sale.objects.aggregate(max_seq=Max('sequence_number'))['max_seq'] or 0
+        
+        # Get or create counter with lock
         counter_obj, created = SaleCounter.objects.select_for_update().get_or_create(
             pk=1,
-            defaults={'counter': 0}
+            defaults={'counter': max_sequence}
         )
         
-        # Increment counter atomically
+        # Increment counter
         counter_obj.counter += 1
         counter_obj.save(update_fields=['counter', 'last_used'])
         
-        logger.info(f"[COUNTER GENERATED] Counter: {counter_obj.counter:05d}")
+        new_sequence = counter_obj.counter
         
-        return counter_obj.counter
+        logger.info(f"[SEQUENCE GENERATED] New sequence: {new_sequence:05d}")
+        
+        return new_sequence
 
 
 def generate_sale_id() -> str:
     """
-    Generate sale ID using the unified counter
+    Generate sale ID using the unified counter with proper sequencing
     Format: SALE-00001, SALE-00002, SALE-00003...
     """
-    counter = generate_next_counter()
-    sale_id = f"SALE-{counter:05d}"
+    sequence = get_next_sequence_number()
+    sale_id = f"SALE-{sequence:05d}"
     
     logger.info(f"[SALE ID GENERATED] Sale ID: {sale_id}")
     
     return sale_id
 
 
-def generate_etr_receipt_number(counter: int = None) -> str:
+def generate_etr_receipt_number(sequence_number: int = None) -> str:
     """
     Generate ETR receipt number (same number as Sale ID)
     Format: 00001, 00002, 00003...
-    
-    Args:
-        counter: Optional counter number (if not provided, generates new one)
     """
-    if counter is None:
-        counter = generate_next_counter()
+    if sequence_number is None:
+        sequence_number = get_next_sequence_number()
     
-    receipt_number = f"{counter:05d}"
+    receipt_number = f"{sequence_number:05d}"
     
     logger.info(f"[ETR RECEIPT GENERATED] Receipt: {receipt_number}")
     
     return receipt_number
 
+
+# ============================================
+# SAFE SALE CREATION HELPER
+# ============================================
+from django.db import IntegrityError
+def create_sale_safely(**kwargs):
+    """
+    Create a sale safely without risking sequence gaps
+    Let the Sale.save() method handle the ID generation
+    """
+    max_retries = 3
+    
+    for attempt in range(max_retries):
+        try:
+            with transaction.atomic():
+                # Just create the sale WITHOUT any ID fields
+                # Let the save() method generate everything
+                sale = Sale(**kwargs)
+                sale.save()  # This will trigger the save() method which generates ID
+                
+                logger.info(f"[SAFE CREATE] Sale created: {sale.sale_id} (seq: {sale.sequence_number})")
+                return sale
+                
+        except IntegrityError as e:
+            logger.warning(f"[SAFE CREATE] Attempt {attempt + 1} failed: {str(e)}")
+            if attempt == max_retries - 1:
+                raise
+            continue
+        except Exception as e:
+            logger.error(f"[SAFE CREATE] Error: {str(e)}")
+            raise
+    
+    raise Exception(f"Failed to create sale after {max_retries} attempts")
 
 # ==================================
 # SALE MODEL
@@ -118,6 +150,7 @@ class Sale(models.Model):
         ('Card', 'Card'),
         ('Points', 'Points'),
         ('Credit', 'Credit'),
+        ('Split', 'Split Payment'),
     ]
     
     ETR_STATUS_CHOICES = [
@@ -132,8 +165,7 @@ class Sale(models.Model):
     sale_id = models.CharField(
         max_length=40, 
         primary_key=True, 
-        editable=False, 
-        default=generate_sale_id
+        editable=False
     )
     
     # The sequential number (shared between sale_id and etr_receipt_number)
@@ -288,19 +320,46 @@ class Sale(models.Model):
 
     def save(self, *args, **kwargs):
         is_new = not self.sale_id or self._state.adding
-        
+
         if is_new:
-            # Generate new sequence number
-            self.sequence_number = generate_next_counter()
-            self.sale_id = f"SALE-{self.sequence_number:05d}"
-            self.etr_receipt_number = f"{self.sequence_number:05d}"
-            
-            logger.info(
-                f"[SALE CREATED] Sale ID: {self.sale_id} | "
-                f"ETR Receipt: {self.etr_receipt_number} | "
-                f"Sequence: {self.sequence_number:05d}"
-            )
-        
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    with transaction.atomic():
+                        # Use select_for_update with nowait to prevent deadlocks
+                        counter = SaleCounter.objects.select_for_update(nowait=True).get(pk=1)
+                    
+                        # Increment counter
+                        counter.counter += 1
+                        counter.save(update_fields=['counter', 'last_used'])
+                    
+                        # Set the sale's sequence number
+                        self.sequence_number = counter.counter
+                        self.sale_id = f"SALE-{self.sequence_number:05d}"
+                        self.etr_receipt_number = f"{self.sequence_number:05d}"
+                    
+                        logger.info(
+                            f"[SALE CREATED] Sale ID: {self.sale_id} | "
+                            f"Sequence: {self.sequence_number:05d}"
+                        )
+                        break  # Success, exit retry loop
+                    
+                except SaleCounter.DoesNotExist:
+                # Create counter if it doesn't exist
+                    with transaction.atomic():
+                        max_seq = Sale.objects.aggregate(max_seq=Max('sequence_number'))['max_seq'] or 0
+                        counter = SaleCounter.objects.create(pk=1, counter=max_seq + 1)
+                        self.sequence_number = counter.counter
+                        self.sale_id = f"SALE-{self.sequence_number:05d}"
+                        self.etr_receipt_number = f"{self.sequence_number:05d}"
+                        break
+                    
+                except Exception as e:
+                    logger.warning(f"Attempt {attempt + 1} failed: {str(e)}")
+                    if attempt == max_retries - 1:
+                        raise
+                    continue
+    
         super().save(*args, **kwargs)
 
     def recalculate_totals(self):
@@ -325,9 +384,6 @@ class Sale(models.Model):
                 f"{self.etr_receipt_number}"
             )
             return
-        
-        # ETR receipt number is already set during save
-        # This method is kept for compatibility with external systems
         
         if fiscal_receipt_number:
             self.fiscal_receipt_number = fiscal_receipt_number
@@ -368,33 +424,36 @@ class Sale(models.Model):
                     product = item.product
                     
                     # Store old values for logging
-                    old_quantity = product.quantity
-                    old_status = product.status
+                    old_quantity = product.bulk_quantity if hasattr(product, 'bulk_quantity') else 0
+                    old_status = 'available'
                     
-                    logger.info(f"Reversing item: {product.product_code}, Status: {old_status}, Quantity: {old_quantity}")
+                    logger.info(f"Reversing item: {product.sku_code}")
                     
                     # ============================================
                     # PROPERLY RESTORE PRODUCT
                     # ============================================
                     if product.category.is_single_item:
-                        # Single item: Restore to available (status only, no quantity)
-                        product.status = 'available'
-                        # Quantity remains 0 (not used for single items)
-                        logger.info(f"Single item {product.product_code}: Status changed to 'available'")
+                        # Single item: Find and restore the unit
+                        from inventory.models import ProductUnit
+                        unit = ProductUnit.objects.filter(
+                            product=product,
+                            status='sold'
+                        ).order_by('-sold_date').first()
+                        
+                        if unit:
+                            unit.mark_as_available()
+                            unit.notes = f"Returned from sale reversal: {reason}"
+                            unit.save()
+                            logger.info(f"Single item {product.sku_code}: Unit {unit.id} restored to available")
                     else:
                         # Bulk item: Add quantity back
-                        product.quantity += item.quantity
-                        # If quantity > 0 and status was 'outofstock', set to available
-                        if product.quantity > 0 and product.status in ['outofstock', 'sold']:
-                            product.status = 'available'
-                        logger.info(f"Bulk item {product.product_code}: Quantity restored to {product.quantity}")
-                    
-                    # Save the product
-                    product.save()
+                        product.bulk_quantity += item.quantity
+                        product.save()
+                        logger.info(f"Bulk item {product.sku_code}: Quantity restored to {product.bulk_quantity}")
                     
                     # Create stock entry for the reversal
                     stock_entry = StockEntry.objects.create(
-                        product=product,
+                        product_sku=product if not product.category.is_single_item else None,
                         quantity=item.quantity,
                         entry_type='reversal',
                         unit_price=item.unit_price,
@@ -405,16 +464,12 @@ class Sale(models.Model):
                     )
                     
                     reversed_items.append({
-                        'product': product.product_code,
+                        'product': product.sku_code,
                         'name': product.display_name,
-                        'quantity': item.quantity,
-                        'old_status': old_status,
-                        'new_status': product.status,
-                        'old_quantity': old_quantity,
-                        'new_quantity': product.quantity
+                        'quantity': item.quantity
                     })
                     
-                    logger.info(f"Stock entry created: {stock_entry.id} for product {product.product_code}")
+                    logger.info(f"Stock entry created: {stock_entry.id} for product {product.sku_code}")
                 
                 # Mark sale as reversed
                 self.is_reversed = True
@@ -423,12 +478,10 @@ class Sale(models.Model):
                 self.reversal_reason = reason
                 self.save()
                 
-                # Log summary
                 logger.info(
                     f"SALE REVERSED: #{self.sale_id} | "
                     f"Items: {len(reversed_items)} | "
-                    f"Reason: {reason or 'Not specified'} | "
-                    f"By: {reversed_by.username if reversed_by else 'System'}"
+                    f"Reason: {reason or 'Not specified'}"
                 )
                 
                 return f"Sale #{self.sale_id} reversed successfully. {len(reversed_items)} items restored to inventory."
@@ -451,7 +504,7 @@ class Sale(models.Model):
     
     @property
     def has_sku_items(self):
-        return self.items.filter(product__sku_value__isnull=False).exclude(product__sku_value="").exists()
+        return self.items.filter(product__sku_code__isnull=False).exists()
     
     @property
     def reversed(self):
@@ -485,7 +538,7 @@ class SaleItem(models.Model):
     - Properly handles single items vs bulk items
     """
     
-    sale = models.ForeignKey('Sale', on_delete=models.CASCADE, related_name='items')
+    sale = models.ForeignKey(Sale, on_delete=models.CASCADE, related_name='items')
     product = models.ForeignKey(
         Product, 
         on_delete=models.CASCADE, 
@@ -503,6 +556,15 @@ class SaleItem(models.Model):
     unit_price = models.DecimalField(max_digits=10, decimal_places=2, default=0.0)
     total_price = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
     
+    # Product unit for single items
+    product_unit = models.ForeignKey(
+        'inventory.ProductUnit',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='sale_items'
+    )
+    
     # FIFO tracking
     created_at = models.DateTimeField(auto_now_add=True)
     product_age_days = models.PositiveIntegerField(
@@ -516,6 +578,7 @@ class SaleItem(models.Model):
         indexes = [
             models.Index(fields=['sale', 'product']),
             models.Index(fields=['product']),
+            models.Index(fields=['product_unit']),
         ]
 
     def __str__(self):
@@ -535,133 +598,39 @@ class SaleItem(models.Model):
         # Update parent sale totals
         self.sale.recalculate_totals()
 
-    # ============================================
-    # CAN BE SOLD METHOD
-    # ============================================
-    def can_be_sold(self) -> tuple:
-        """
-        Check if this item can be sold
-        Returns: (bool, str) - (can_sell, reason_if_not)
-        """
-        try:
-            product = self.product
-            
-            # Refresh product from database to get latest status
-            product.refresh_from_db()
-            
-            if product.category.is_single_item:
-                # Single items: just check status
-                if product.status == 'sold':
-                    return False, f"Item {product.display_name} has already been sold"
-                if self.quantity != 1:
-                    return False, "Single items must be sold one at a time"
-                
-                # Check if this product appears in any active sale (not reversed)
-                from sales.models import SaleItem
-                active_sales = SaleItem.objects.filter(
-                    product=product,
-                    sale__is_reversed=False
-                ).exclude(sale=self.sale if self.sale_id else None)
-                
-                if active_sales.exists():
-                    return False, f"Item {product.display_name} has already been sold in another transaction"
-            else:
-                # Bulk items: check quantity
-                if product.quantity < self.quantity:
-                    return False, f"Insufficient stock. Available: {product.quantity}, Requested: {self.quantity}"
-            
-            return True, "Available for sale"
-            
-        except Exception as e:
-            logger.error(f"Error checking availability: {str(e)}")
-            return False, f"Error checking availability: {str(e)}"
-
-    def process_sale(self):
-        """
-        Process this item's sale (deduct stock)
-        - For single items: Mark as SOLD (no quantity change)
-        - For bulk items: Reduce quantity
-        - Create stock entry for the sale
-        """
-        with transaction.atomic():
-            # Lock the product row to prevent race conditions
-            product = Product.objects.select_for_update().get(pk=self.product.pk)
-            
-            # Store old values for logging
-            old_quantity = product.quantity
-            old_status = product.status
-            
-            # Update product based on type
-            if product.category.is_single_item:
-                # Single item: just mark as sold - NO QUANTITY CHANGE
-                if product.status == 'sold':
-                    raise ValueError(
-                        f"Cannot sell {product.display_name} - "
-                        f"This item has already been sold"
-                    )
-                product.status = 'sold'
-                # Quantity remains 0 (not used for single items)
-                log_type = "SINGLE ITEM"
-            else:
-                # Bulk item: reduce quantity
-                if product.quantity < self.quantity:
-                    raise ValueError(
-                        f"Insufficient stock for {product.display_name}. "
-                        f"Available: {product.quantity}, Requested: {self.quantity}"
-                    )
-                product.quantity -= self.quantity
-                log_type = "BULK ITEM"
-            
-            # Save product
-            product.save()
-            
-            # Create stock entry for the sale
-            stock_entry = StockEntry.objects.create(
-                product=product,
-                quantity=-self.quantity if not product.category.is_single_item else -1,
-                entry_type='sale',
-                unit_price=self.unit_price,
-                total_amount=self.total_price,
-                reference_id=f"SALE-{self.sale.sale_id}",
-                created_by=self.sale.seller,
-                notes=f"Sale #{self.sale.sale_id} - {self.product_name}"
-            )
-            
-            # Detailed logging
-            logger.info(
-                f"[SALE ITEM PROCESSED] "
-                f"Sale: {self.sale.sale_id} | "
-                f"Type: {log_type} | "
-                f"Product: {product.product_code} | "
-                f"Name: {product.display_name} | "
-                f"Quantity: {self.quantity} | "
-                f"Old Status: {old_status} | "
-                f"New Status: {product.status} | "
-                f"Unit Price: KSH {self.unit_price} | "
-                f"Total: KSH {self.total_price}"
-            )
-            
-            return True
-
-    @property
-    def item_type(self) -> str:
-        """Return item type (Single/Bulk)"""
-        return "Single" if self.product.category.is_single_item else "Bulk"
-    
     @property
     def profit(self) -> Decimal:
         """Calculate profit for this item"""
-        if self.product.buying_price:
+        if self.product and self.product.buying_price:
             return (self.unit_price - self.product.buying_price) * self.quantity
         return Decimal('0.00')
     
     @property
     def margin_percentage(self) -> float:
         """Calculate profit margin percentage"""
-        if self.product.buying_price and self.product.buying_price > 0:
+        if self.product and self.product.buying_price and self.product.buying_price > 0:
             profit_per_unit = self.unit_price - self.product.buying_price
             return float((profit_per_unit / self.product.buying_price) * 100)
         return 0.0
+
+
+# Export the safe create function
+__all__ = [
+    'Sale',
+    'SaleItem',
+    'SaleCounter',
+    'get_next_sequence_number',
+    'generate_sale_id',
+    'generate_etr_receipt_number',
+    'create_sale_safely',
+]
+
+
+
+
+
+
+
 
 
 # ============================================

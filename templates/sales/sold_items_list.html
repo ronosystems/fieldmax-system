@@ -78,12 +78,12 @@
 <!-- Filters - Compact 2 Rows -->
 <div class="card mb-4">
     <div class="card-body py-2">
-        <form method="GET">
+        <form method="GET" id="filterForm">
             <!-- Row 1: Filters -->
             <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
                 <input type="text" name="search" class="form-control form-control-sm" 
-                       value="{{ search }}" placeholder="Sale ID, ETR, Product, Customer..." 
-                       style="width: 220px;">
+                       value="{{ search }}" placeholder="Sale ID, Product, IMEI, Customer..." 
+                       style="width: 250px;">
                 
                 <input type="date" name="date_from" class="form-control form-control-sm" 
                        value="{{ date_from }}" style="width: auto;" placeholder="Date From">
@@ -91,11 +91,20 @@
                 <input type="date" name="date_to" class="form-control form-control-sm" 
                        value="{{ date_to }}" style="width: auto;" placeholder="Date To">
                 
+                <select name="category" class="form-select form-select-sm" style="width: auto; min-width: 130px;">
+                    <option value="">All Categories</option>
+                    {% for category in categories %}
+                    <option value="{{ category.id }}" {% if category_id == category.id|stringformat:"s" %}selected{% endif %}>
+                        {{ category.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+                
                 <button type="submit" class="btn btn-primary btn-sm">
                     <i class="fas fa-search"></i> Filter
                 </button>
                 
-                <a href="#" class="btn btn-secondary btn-sm">
+                <a href="{% url 'sales:sold_items_list' %}" class="btn btn-secondary btn-sm">
                     <i class="fas fa-undo"></i> Clear
                 </a>
             </div>
@@ -117,78 +126,74 @@
 
 <!-- Sold Items Table -->
 <div class="card">
-    <div class="card-body">
+    <div class="card-header bg-white">
+        <div class="d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <i class="fas fa-list me-2 text-success"></i>Sold Items List
+            </h5>
+            <span class="badge bg-secondary">{{ page_obj.paginator.count }} Total Records</span>
+        </div>
+    </div>
+    <div class="card-body p-0">
         <div class="table-responsive">
-            <table class="table table-bordered table-hover">
-                <thead>
-                    <tr class="table-light">
-                        <th width="8%" class="bg-primary text-white text-center" style="border: 2px solid #0d47a1;">
-                            Sale ID
-                        </th>
-                        <th width="15%" class="bg-info text-white" style="border: 2px solid #0097a7;">
-                            Product
-                        </th>
-                        <th width="8%" class="bg-teal text-white" style="border: 2px solid #00695c;">
-                            Product Code
-                        </th>
-                        <th width="10%" class="bg-secondary text-white" style="border: 2px solid #424242;">
-                            SKU/IMEI
-                        </th>
-                        <th width="5%" class="bg-warning text-dark text-center" style="border: 2px solid #e65100;">
-                            Qty
-                        </th>
-                        <th width="10%" class="bg-success text-white text-end" style="border: 2px solid #1b5e20;">
-                            Unit Price
-                        </th>
-                        <th width="10%" class="bg-success text-white text-end" style="border: 2px solid #1b5e20;">
-                            Total
-                        </th>
-                        <th width="10%" class="bg-gold text-dark text-end" style="border: 2px solid #b8860b;">
-                            Profit
-                        </th>
-                        <th width="8%" class="bg-purple text-white" style="border: 2px solid #4a2c8a;">
-                            Sold By
-                        </th>
-                        <th width="8%" class="bg-info text-white" style="border: 2px solid #0097a7;">
-                            Date Sold
-                        </th>
-                        <th width="8%" class="bg-teal text-white" style="border: 2px solid #00695c;">
-                            Customer
-                        </th>
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Sale ID</th>
+                        <th>Product</th>
+                        <th>SKU Code</th>
+                        <th>Identifier (IMEI/Serial)</th>
+                        <th class="text-center">Qty</th>
+                        <th class="text-end">Unit Price</th>
+                        <th class="text-end">Total</th>
+                        <th class="text-end">Profit</th>
+                        <th>Sold By</th>
+                        <th>Date Sold</th>
+                        <th>Customer</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for item in page_obj %}
+                    {% for detail in items_with_details %}
+                    {% with item=detail.item %}
                     <tr>
-                        <td class="text-center align-middle">
+                        <td class="align-middle">
                             <a href="{% url 'sales:sale_detail' item.sale.sale_id %}" class="badge bg-primary text-decoration-none">
                                 {{ item.sale.sale_id }}
                             </a>
-                        </td>
-                        <td class="align-middle">
-                            <strong>{{ item.product.name|default:item.product.display_name }}</strong>
-                            {% if item.product.category %}
-                            <br>
-                            <small class="text-muted">
-                                <i class="fas fa-folder"></i> {{ item.product.category.name }}
-                            </small>
+                            {% if item.sale.points_redeemed > 0 %}
+                                <br><small class="text-warning">⭐ {{ item.sale.points_redeemed }} pts</small>
                             {% endif %}
                         </td>
                         <td class="align-middle">
-                            <code class="text-primary">{{ item.product.product_code|default:"-" }}</code>
+                            <strong>{{ item.product.name }}</strong>
+                            {% if item.product.brand %}
+                                <br>
+                                <small class="text-muted">
+                                    {{ item.product.brand }} {{ item.product.model }}
+                                </small>
+                            {% endif %}
+                            {% if item.product.category %}
+                                <br>
+                                <small class="text-muted">
+                                    <i class="fas fa-folder"></i> {{ item.product.category.name }}
+                                </small>
+                            {% endif %}
                         </td>
                         <td class="align-middle">
-                            {% if item.product.imei_number %}
-                                <span class="badge bg-primary" title="IMEI">
-                                    <i class="fas fa-qrcode"></i> {{ item.product.imei_number }}
+                            <code class="text-primary">{{ item.product.sku_code }}</code>
+                        </td>
+                        <td class="align-middle">
+                            {% if detail.imei_number %}
+                                <span class="badge bg-info" style="font-family: monospace;" title="IMEI">
+                                    <i class="fas fa-microchip me-1"></i> {{ detail.imei_number }}
                                 </span>
-                            {% elif item.product.serial_number %}
-                                <span class="badge bg-secondary" title="Serial Number">
-                                    <i class="fas fa-hashtag"></i> {{ item.product.serial_number|truncatechars:12 }}
+                            {% elif detail.serial_number %}
+                                <span class="badge bg-secondary" style="font-family: monospace;" title="Serial Number">
+                                    <i class="fas fa-barcode me-1"></i> {{ detail.serial_number|truncatechars:15 }}
                                 </span>
-                            {% elif item.product.sku_value %}
+                            {% elif item.product.category.is_bulk_item %}
                                 <span class="badge bg-secondary">
-                                    {{ item.product.sku_value|truncatechars:12 }}
+                                    <i class="fas fa-boxes me-1"></i> Bulk Item
                                 </span>
                             {% else %}
                                 <span class="text-muted">-</span>
@@ -198,14 +203,14 @@
                             {{ item.quantity }}
                         </td>
                         <td class="text-end align-middle">
-                            KSH {{ item.unit_price|floatformat:0 }}
+                            KSH {{ item.unit_price|floatformat:2 }}
                         </td>
                         <td class="text-end align-middle fw-bold text-success">
-                            KSH {{ item.total_price|floatformat:0 }}
+                            KSH {{ item.total_price|floatformat:2 }}
                         </td>
                         <td class="text-end align-middle fw-bold 
-                            {% if item.profit > 0 %}text-success{% else %}text-danger{% endif %}">
-                            KSH {{ item.profit|floatformat:0 }}
+                            {% if detail.profit > 0 %}text-success{% else %}text-danger{% endif %}">
+                            KSH {{ detail.profit|floatformat:2 }}
                         </td>
                         <td class="align-middle">
                             <span class="badge bg-secondary">
@@ -220,7 +225,7 @@
                             </small>
                         </td>
                         <td class="align-middle">
-                            {% if item.sale.buyer_name %}
+                            {% if item.sale.buyer_name and item.sale.buyer_name != "Walk-in Customer" %}
                                 <strong>{{ item.sale.buyer_name }}</strong>
                                 {% if item.sale.buyer_phone %}
                                 <br>
@@ -228,115 +233,122 @@
                                     <i class="fas fa-phone"></i> {{ item.sale.buyer_phone }}
                                 </small>
                                 {% endif %}
+                                {% if item.sale.buyer_id_number %}
+                                <br>
+                                <small class="text-muted">
+                                    <i class="fas fa-id-card"></i> {{ item.sale.buyer_id_number }}
+                                </small>
+                                {% endif %}
                             {% else %}
                                 <span class="badge bg-secondary">Walk-in Customer</span>
                             {% endif %}
                         </td>
                     </tr>
+                    {% endwith %}
                     {% empty %}
                     <tr>
                         <td colspan="11" class="text-center py-5">
                             <i class="fas fa-tag fa-4x text-muted mb-3"></i>
                             <p class="text-muted mb-3">No sold items found</p>
+                            <a href="{% url 'sales:sale_create' %}" class="btn btn-success">
+                                <i class="fas fa-plus"></i> Create Sale
+                            </a>
                         </td>
                     </tr>
                     {% endfor %}
                 </tbody>
+                {% if items_with_details %}
+                <tfoot class="table-light">
+                    <tr class="fw-bold">
+                        <td colspan="6" class="text-end">Totals:</td>
+                        <td class="text-end text-success">KSH {{ total_revenue|floatformat:2 }}</td>
+                        <td class="text-end text-success">KSH {{ total_profit|floatformat:2 }}</td>
+                        <td colspan="3"></td>
+                    </tr>
+                </tfoot>
+                {% endif %}
             </table>
         </div>
         
         <!-- Pagination -->
         {% if page_obj.has_other_pages %}
-        <nav class="mt-4">
-            <ul class="pagination justify-content-center">
-                {% if page_obj.has_previous %}
-                <li class="page-item">
-                    <a class="page-link" href="?page=1{% if search %}&search={{ search }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}">
-                        <i class="fas fa-chevron-double-left"></i>
-                    </a>
-                </li>
-                <li class="page-item">
-                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search %}&search={{ search }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}">
-                        <i class="fas fa-chevron-left"></i> Previous
-                    </a>
-                </li>
-                {% else %}
-                <li class="page-item disabled">
-                    <span class="page-link"><i class="fas fa-chevron-left"></i> Previous</span>
-                </li>
-                {% endif %}
-                
-                {% for num in page_obj.paginator.page_range %}
-                    {% if page_obj.number == num %}
-                    <li class="page-item active"><span class="page-link">{{ num }}</span></li>
-                    {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+        <div class="card-body border-top">
+            <nav>
+                <ul class="pagination justify-content-center mb-0">
+                    {% if page_obj.has_previous %}
                     <li class="page-item">
-                        <a class="page-link" href="?page={{ num }}{% if search %}&search={{ search }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}">
-                            {{ num }}
+                        <a class="page-link" href="?page=1&per_page={{ per_page }}{% for key,value in request.GET.items %}{% if key != 'page' and key != 'per_page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                            <i class="fas fa-angle-double-left"></i> First
                         </a>
                     </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}&per_page={{ per_page }}{% for key,value in request.GET.items %}{% if key != 'page' and key != 'per_page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                            <i class="fas fa-chevron-left"></i> Previous
+                        </a>
+                    </li>
+                    {% else %}
+                    <li class="page-item disabled">
+                        <span class="page-link"><i class="fas fa-angle-double-left"></i> First</span>
+                    </li>
+                    <li class="page-item disabled">
+                        <span class="page-link"><i class="fas fa-chevron-left"></i> Previous</span>
+                    </li>
                     {% endif %}
-                {% endfor %}
-                
-                {% if page_obj.has_next %}
-                <li class="page-item">
-                    <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search %}&search={{ search }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}">
-                        Next <i class="fas fa-chevron-right"></i>
-                    </a>
-                </li>
-                <li class="page-item">
-                    <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if search %}&search={{ search }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}">
-                        <i class="fas fa-chevron-double-right"></i>
-                    </a>
-                </li>
-                {% else %}
-                <li class="page-item disabled">
-                    <span class="page-link">Next <i class="fas fa-chevron-right"></i></span>
-                </li>
-                {% endif %}
-            </ul>
-        </nav>
+                    
+                    {% for num in page_obj.paginator.page_range %}
+                        {% if page_obj.number == num %}
+                        <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ num }}&per_page={{ per_page }}{% for key,value in request.GET.items %}{% if key != 'page' and key != 'per_page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                                {{ num }}
+                            </a>
+                        </li>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if page_obj.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.next_page_number }}&per_page={{ per_page }}{% for key,value in request.GET.items %}{% if key != 'page' and key != 'per_page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                            Next <i class="fas fa-chevron-right"></i>
+                        </a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}&per_page={{ per_page }}{% for key,value in request.GET.items %}{% if key != 'page' and key != 'per_page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                            Last <i class="fas fa-angle-double-right"></i>
+                        </a>
+                    </li>
+                    {% else %}
+                    <li class="page-item disabled">
+                        <span class="page-link">Next <i class="fas fa-chevron-right"></i></span>
+                    </li>
+                    <li class="page-item disabled">
+                        <span class="page-link">Last <i class="fas fa-angle-double-right"></i></span>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            <div class="text-center text-muted small mt-2">
+                Showing {{ page_obj.start_index }} to {{ page_obj.end_index }} of {{ page_obj.paginator.count }} sold items
+            </div>
+        </div>
         {% endif %}
     </div>
 </div>
 
 <style>
-    .bg-purple {
-        background-color: #6f42c1 !important;
-    }
-    .bg-teal {
-        background-color: #20c997 !important;
-    }
-    .bg-gold {
-        background-color: #ffc107 !important;
-    }
-    .bg-navy {
-        background-color: #001f3f !important;
-    }
     .text-white-50 {
         color: rgba(255, 255, 255, 0.8);
     }
-    .table-bordered {
-        border: 2px solid #dee2e6 !important;
-    }
-    .table-bordered thead th,
-    .table-bordered thead td {
-        border-bottom-width: 2px;
-    }
-    .table-bordered tbody tr td {
-        border-right: 1px solid #dee2e6;
-    }
-    .table-bordered tbody tr td:last-child {
-        border-right: none;
-    }
     .table-hover tbody tr:hover {
-        background-color: rgba(0, 0, 0, 0.05);
+        background-color: rgba(0, 0, 0, 0.02);
     }
     code {
         background: #f8f9fa;
         padding: 2px 6px;
         border-radius: 4px;
         font-size: 11px;
+        font-family: monospace;
     }
     .badge {
         font-size: 0.75rem;
@@ -359,16 +371,15 @@
         }
     }
 </style>
-{% endblock %}
 
-{% block extra_js %}
 <script>
 function exportToExcel() {
     const urlParams = new URLSearchParams(window.location.search);
     const search = urlParams.get('search') || '';
     const date_from = urlParams.get('date_from') || '';
     const date_to = urlParams.get('date_to') || '';
-    window.location.href = `{% url 'sales:export_sold_items' %}?search=${search}&date_from=${date_from}&date_to=${date_to}`;
+    const category = urlParams.get('category') || '';
+    window.location.href = `{% url 'sales:export_sold_items' %}?search=${search}&date_from=${date_from}&date_to=${date_to}&category=${category}`;
 }
 
 function printReport() {

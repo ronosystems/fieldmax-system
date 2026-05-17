@@ -1,0 +1,454 @@
+{% extends 'finance/base.html' %}
+{% load humanize %}
+
+{% block title %}Sales Income Report{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0">
+            <i class="fas fa-chart-line text-success me-2"></i> Sales Income Report
+        </h1>
+        <div>
+            <button onclick="window.print()" class="btn btn-outline-secondary me-2">
+                <i class="fas fa-print"></i> Print
+            </button>
+            <button onclick="exportToExcel()" class="btn btn-outline-success">
+                <i class="fas fa-file-excel"></i> Export
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Summary Cards -->
+    <div class="row mb-4">
+        <!-- Card 1: Total Sales Income -->
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fas fa-money-bill-wave"></i>
+                </div>
+                <div class="stat-label">Total Sales Revenue (VOGS)</div>
+                <div class="stat-value text-success">KES {{ period_income|floatformat:2|intcomma }}</div>
+                <div class="stat-label mt-2">{{ period_sales_count }} Transactions</div>
+                <small>{{ period_total_quantity|intcomma }} units sold</small>
+            </div>
+        </div>
+        
+        <!-- Card 2: Cost of Goods Sold -->
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fas fa-shopping-cart"></i>
+                </div>
+                <div class="stat-label">Cost of Goods Sold (COGS)</div>
+                <div class="stat-value text-warning">KES {{ period_cogs|floatformat:2|intcomma }}</div>
+                <small class="text-muted">What the sold items cost you</small>
+            </div>
+        </div>
+        
+        <!-- Card 3: Gross Profit -->
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fas fa-chart-line"></i>
+                </div>
+                <div class="stat-label">Gross Profit</div>
+                <div class="stat-value text-primary">KES {{ period_profit|floatformat:2|intcomma }}</div>
+                <div class="stat-label mt-2">Profit Margin</div>
+                <div class="stat-value text-primary">{{ period_margin|floatformat:1 }}%</div>
+            </div>
+        </div>
+        
+        <!-- Card 4: Period Comparison -->
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fas fa-calendar-alt"></i>
+                </div>
+                <div class="stat-label">Period: {{ start_date|date:"M d" }} - {{ end_date|date:"M d, Y" }}</div>
+                <div class="stat-value text-info">KES {{ period_income|floatformat:2|intcomma }}</div>
+                {% if income_change != 0 %}
+                    {% if income_change > 0 %}
+                        <span class="badge bg-success mt-2"><i class="fas fa-arrow-up"></i> +{{ income_change|floatformat:1 }}% vs previous</span>
+                    {% else %}
+                        <span class="badge bg-danger mt-2"><i class="fas fa-arrow-down"></i> {{ income_change|floatformat:1 }}% vs previous</span>
+                    {% endif %}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Financial Summary Row -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card bg-light">
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-md-4">
+                            <h4 class="text-success">KES {{ period_income|floatformat:2|intcomma }}</h4>
+                            <small>Sales Revenue (VOGS)</small>
+                        </div>
+                        <div class="col-md-4">
+                            <h4 class="text-danger">- KES {{ period_cogs|floatformat:2|intcomma }}</h4>
+                            <small>COGS</small>
+                        </div>
+                        <div class="col-md-4">
+                            <h4 class="text-primary">= KES {{ period_profit|floatformat:2|intcomma }}</h4>
+                            <small>Gross Profit</small>
+                        </div>
+                    </div>
+                    
+                    <!-- Progress Bar -->
+                    <div class="mt-3">
+                        <div class="d-flex justify-content-between mb-1">
+                            <small>Revenue Breakdown</small>
+                            <small>COGS: {{ period_cogs|floatformat:2|intcomma }} | Profit: {{ period_profit|floatformat:2|intcomma }}</small>
+                        </div>
+                        <div class="progress" style="height: 10px;">
+                            {% widthratio period_cogs period_income 100 as cogs_percent %}
+                            {% widthratio period_profit period_income 100 as profit_percent %}
+                            <div class="progress-bar bg-danger" role="progressbar" 
+                                 style="width: {{ cogs_percent|default:0 }}%">
+                            </div>
+                            <div class="progress-bar bg-success" role="progressbar" 
+                                 style="width: {{ profit_percent|default:0 }}%">
+                            </div>
+                        </div>
+                        <div class="text-center mt-2">
+                            <small class="text-muted">{{ period_margin|floatformat:1 }}% profit margin on sales</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Comparison with Previous Period -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-chart-line me-2"></i> Period Comparison
+                    <small class="text-muted ms-2">{{ start_date|date:"M d, Y" }} - {{ end_date|date:"M d, Y" }} vs {{ previous_start|date:"M d, Y" }} - {{ previous_end|date:"M d, Y" }}</small>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-md-3">
+                            <h6>Sales Revenue</h6>
+                            <h4 class="text-success">KES {{ period_income|floatformat:2|intcomma }}</h4>
+                            <small class="text-muted">Previous: KES {{ prev_income|floatformat:2|intcomma }}</small>
+                            {% if income_change > 0 %}
+                                <span class="badge bg-success d-block mt-2">+{{ income_change|floatformat:1 }}%</span>
+                            {% elif income_change < 0 %}
+                                <span class="badge bg-danger d-block mt-2">{{ income_change|floatformat:1 }}%</span>
+                            {% else %}
+                                <span class="badge bg-secondary d-block mt-2">No change</span>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-3">
+                            <h6>COGS</h6>
+                            <h4 class="text-warning">KES {{ period_cogs|floatformat:2|intcomma }}</h4>
+                            <small class="text-muted">Previous: KES {{ prev_cogs|floatformat:2|intcomma }}</small>
+                        </div>
+                        <div class="col-md-3">
+                            <h6>Gross Profit</h6>
+                            <h4 class="text-primary">KES {{ period_profit|floatformat:2|intcomma }}</h4>
+                            <small class="text-muted">Previous: KES {{ prev_profit|floatformat:2|intcomma }}</small>
+                            {% if profit_change > 0 %}
+                                <span class="badge bg-success d-block mt-2">+{{ profit_change|floatformat:1 }}%</span>
+                            {% elif profit_change < 0 %}
+                                <span class="badge bg-danger d-block mt-2">{{ profit_change|floatformat:1 }}%</span>
+                            {% else %}
+                                <span class="badge bg-secondary d-block mt-2">No change</span>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-3">
+                            <h6>Profit Margin</h6>
+                            <h4 class="text-info">{{ period_margin|floatformat:1 }}%</h4>
+                            <small class="text-muted">Previous: {{ prev_margin|floatformat:1 }}%</small>
+                            {% if margin_change > 0 %}
+                                <span class="badge bg-success d-block mt-2">+{{ margin_change|floatformat:1 }}%</span>
+                            {% elif margin_change < 0 %}
+                                <span class="badge bg-danger d-block mt-2">{{ margin_change|floatformat:1 }}%</span>
+                            {% else %}
+                                <span class="badge bg-secondary d-block mt-2">No change</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Section -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <i class="fas fa-filter me-2"></i> Filter Reports
+        </div>
+        <div class="card-body">
+            <form method="GET" class="row g-3">
+                <div class="col-md-3">
+                    <label for="period" class="form-label">Period</label>
+                    <select name="period" id="period" class="form-select">
+                        <option value="day" {% if selected_period == 'day' %}selected{% endif %}>Today</option>
+                        <option value="week" {% if selected_period == 'week' %}selected{% endif %}>This Week</option>
+                        <option value="month" {% if selected_period == 'month' %}selected{% endif %}>This Month</option>
+                        <option value="year" {% if selected_period == 'year' %}selected{% endif %}>This Year</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="date_from" class="form-label">Date From</label>
+                    <input type="date" name="date_from" id="date_from" class="form-control" value="{{ start_date|date:'Y-m-d' }}">
+                </div>
+                <div class="col-md-3">
+                    <label for="date_to" class="form-label">Date To</label>
+                    <input type="date" name="date_to" id="date_to" class="form-control" value="{{ end_date|date:'Y-m-d' }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">&nbsp;</label>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-search"></i> Apply Filter
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Sales Chart -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-chart-bar me-2"></i> Daily Sales Trend
+                </div>
+                <div class="card-body">
+                    <canvas id="salesChart" height="100"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Selling Products (Limited to 5) -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-crown me-2"></i> Top Selling Products (This Period)
+                    <span class="badge bg-secondary ms-2">Top 5</span>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>#</th>
+                                    <th>Product</th>
+                                    <th>Quantity</th>
+                                    <th>Revenue</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for product in top_products %}
+                                <tr>
+                                    <td>{{ forloop.counter }}</td>
+                                    <td>{{ product.product_name }}<br>
+                                        <small class="text-muted">{{ product.product_code }}</small>
+                                    </td>
+                                    <td>{{ product.total_quantity|intcomma }} units</td>
+                                    <td class="text-success">KES {{ product.total_revenue|floatformat:2|intcomma }}</td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="4" class="text-center">No sales data available</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-history me-2"></i> Top Selling Products (Previous Period)
+                    <span class="badge bg-secondary ms-2">Top 5</span>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>#</th>
+                                    <th>Product</th>
+                                    <th>Quantity</th>
+                                    <th>Revenue</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for product in prev_top_products %}
+                                <tr>
+                                    <td>{{ forloop.counter }}</td>
+                                    <td>{{ product.product_name }}<br>
+                                        <small class="text-muted">{{ product.product_code }}</small>
+                                    </td>
+                                    <td>{{ product.total_quantity|intcomma }} units</td>
+                                    <td class="text-success">KES {{ product.total_revenue|floatformat:2|intcomma }}</td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="4" class="text-center">No previous sales data available</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Sales Transactions (Limited to 5) -->
+    <div class="card">
+        <div class="card-header">
+            <i class="fas fa-list me-2"></i> Recent Sales Transactions
+            <span class="badge bg-secondary ms-2">Last 5</span>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Product</th>
+                            <th>Quantity</th>
+                            <th>Selling Price</th>
+                            <th>Cost Price</th>
+                            <th>Profit</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for entry in recent_sales_entries %}
+                        <tr>
+                            <td>{{ entry.created_at|date:"Y-m-d H:i" }}</td>
+                            <td>
+                                {% if entry.product_sku %}
+                                    {{ entry.product_sku.name }}<br>
+                                    <small class="text-muted">{{ entry.product_sku.sku_code }}</small>
+                                {% elif entry.product_unit %}
+                                    {{ entry.product_unit.product.name }}<br>
+                                    <small class="text-muted">{{ entry.product_unit.product.sku_code }}</small>
+                                {% else %}
+                                    Unknown
+                                {% endif %}
+                            </td>
+                            <td>{{ entry.quantity|stringformat:"s"|slice:"1:" }} units</td>
+                            <td class="text-success">KES {{ entry.unit_price|floatformat:2|intcomma }}</td>
+                            <td class="text-warning">
+                                {% if entry.product_sku %}
+                                    KES {{ entry.product_sku.buying_price|floatformat:2|intcomma }}
+                                {% elif entry.product_unit %}
+                                    KES {{ entry.product_unit.product.buying_price|floatformat:2|intcomma }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            <td class="text-primary">
+                                {% if entry.product_sku %}
+                                    KES {{ entry.unit_price|add:entry.product_sku.buying_price|floatformat:2|intcomma }}
+                                {% elif entry.product_unit %}
+                                    KES {{ entry.unit_price|add:entry.product_unit.product.buying_price|floatformat:2|intcomma }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center py-4">
+                                <i class="fas fa-receipt fa-2x text-muted mb-2 d-block"></i>
+                                No sales transactions found for this period
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Sales Chart
+    const ctx = document.getElementById('salesChart').getContext('2d');
+    const dailyData = {{ daily_data|safe }};
+    
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: dailyData.map(d => d.date),
+            datasets: [
+                {
+                    label: 'Sales Revenue',
+                    data: dailyData.map(d => d.income),
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                },
+                {
+                    label: 'Gross Profit',
+                    data: dailyData.map(d => d.profit),
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    position: 'top',
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `${context.dataset.label}: KES ${context.raw.toLocaleString()}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return 'KES ' + value.toLocaleString();
+                        }
+                    },
+                    title: {
+                        display: true,
+                        text: 'Amount (KES)'
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Date'
+                    }
+                }
+            }
+        }
+    });
+
+    function exportToExcel() {
+        window.location.href = window.location.pathname + '?export=true&' + window.location.search.substring(1);
+    }
+</script>
+{% endblock %}

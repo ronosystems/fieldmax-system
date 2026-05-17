@@ -1,221 +1,867 @@
 {% extends 'inventory/staff_base.html' %}
 {% load static %}
 
-{% block title %}Edit Product{% endblock %}
+{% block title %}Edit Product SKU{% endblock %}
 
 {% block content %}
-<div class="mb-4">
-    <nav aria-label="breadcrumb">
-        <ol class="breadcrumb">
-            <li class="breadcrumb-item"><a href="{% url 'inventory:dashboard' %}">Dashboard</a></li>
-            <li class="breadcrumb-item"><a href="{% url 'inventory:product_list' %}">Products</a></li>
-            <li class="breadcrumb-item"><a href="{% url 'inventory:product_detail' product.id %}">{{ product.display_name }}</a></li>
-            <li class="breadcrumb-item active">Edit</li>
-        </ol>
-    </nav>
+<style>
+:root {
+  --primary: #0d6efd;
+  --primary-light: #e7f1ff;
+  --success: #198754;
+  --success-light: #d1e7dd;
+  --warning: #ffc107;
+  --danger: #dc3545;
+  --gray-100: #f8f9fa;
+  --gray-200: #e9ecef;
+  --gray-300: #dee2e6;
+  --gray-600: #6c757d;
+  --gray-800: #343a40;
+  --border-radius: 12px;
+  --box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+.container-fluid {
+  max-width: 2000px;
+  margin: 0 auto;
+  padding: 20px 24px;
+}
+
+/* Row 1 - Page Title */
+.page-header {
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  border-radius: var(--border-radius);
+  padding: 20px 28px;
+  margin-bottom: 28px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 20px;
+  box-shadow: #00000020 0px 4px 12px;
+}
+
+.page-title {
+  flex: 1;
+}
+
+.page-title h1 {
+  color: rgb(0, 0, 0);
+  font-size: 30px;
+  font-weight: 800;
+  margin: 0 0 4px 0;
+  letter-spacing: -0.3px;
+}
+
+.page-title p {
+  color: rgb(0, 0, 0);
+  font-size: 13px;
+  margin: 0;
+}
+
+/* SKU Badge */
+.sku-badge {
+  background: rgba(0, 0, 0, 0.2);
+  padding: 6px 14px;
+  border-radius: 40px;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgb(0, 0, 0);
+}
+
+.sku-badge i {
+  margin-right: 6px;
+}
+
+/* Header Actions */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.security-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgb(0, 0, 0);
+  padding: 8px 14px;
+  border-radius: 40px;
+  color: white;
+  font-size: 12px;
+}
+
+.security-badge i {
+  font-size: 13px;
+}
+
+.header-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.btn-header {
+  padding: 8px 18px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+}
+
+.btn-header-secondary {
+  background: rgb(0, 0, 0);
+  color: white;
+}
+
+.btn-header-secondary:hover {
+  background: rgb(255, 255, 255);
+  color: rgb(0, 0, 0);
+}
+
+.btn-header-primary {
+  background: rgb(4, 0, 255);
+  color: white;
+  font-weight: 700;
+}
+
+.btn-header-primary:hover {
+  background: rgba(38, 0, 255, 0.95);
+  transform: translateY(-1px);
+}
+
+/* Form Cards */
+.form-card {
+  background: white;
+  border-radius: var(--border-radius);
+  border: 1px solid var(--gray-200);
+  overflow: hidden;
+  margin-bottom: 24px;
+  box-shadow: var(--box-shadow);
+  height: fit-content;
+}
+
+.card-header {
+  background: var(--gray-100);
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--gray-200);
+}
+
+.card-header h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--gray-800);
+}
+
+.card-header h3 i {
+  margin-right: 8px;
+  color: var(--primary);
+}
+
+.card-body {
+  padding: 20px;
+}
+
+/* Two Column Layout */
+.two-col-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.main-two-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+/* Form Fields */
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 5px;
+  color: var(--gray-800);
+}
+
+.form-group label .required {
+  color: var(--danger);
+  margin-left: 4px;
+}
+
+.form-group label .optional {
+  color: var(--gray-600);
+  font-weight: normal;
+  font-size: 10px;
+  margin-left: 6px;
+}
+
+.form-control, .form-select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--gray-300);
+  border-radius: 8px;
+  font-size: 13px;
+  transition: all 0.2s;
+}
+
+.form-control:focus, .form-select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.1);
+}
+
+.form-control.is-invalid {
+  border-color: var(--danger);
+}
+
+.form-text {
+  font-size: 10px;
+  color: var(--gray-600);
+  margin-top: 3px;
+}
+
+/* Price Input */
+.price-input {
+  position: relative;
+}
+
+.price-input span {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--gray-600);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.price-input input {
+  padding-left: 40px;
+}
+
+/* Margin Chip */
+.margin-chip {
+  margin-top: 6px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  display: inline-block;
+}
+
+.margin-chip.positive {
+  background: var(--success-light);
+  color: var(--success);
+}
+
+.margin-chip.negative {
+  background: #f8d7da;
+  color: var(--danger);
+}
+
+/* Alert Boxes */
+.alert-info {
+  background: var(--primary-light);
+  border-left: 4px solid var(--primary);
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--gray-800);
+  margin-bottom: 16px;
+}
+
+.alert-info i {
+  color: var(--primary);
+  margin-right: 8px;
+}
+
+.alert-warning {
+  background: #fff3cd;
+  border-left: 4px solid var(--warning);
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  margin-bottom: 16px;
+}
+
+.alert-success {
+  background: var(--success-light);
+  border-left: 4px solid var(--success);
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+/* Specs Row */
+.specs-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+/* Current Stock Info */
+.stock-info {
+  background: #e7f3ff;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.stock-info p {
+  margin: 0;
+  font-size: 12px;
+}
+
+.stock-info strong {
+  color: var(--primary);
+}
+
+/* Hidden Fields */
+.hidden-field {
+  display: none;
+}
+
+/* Responsive */
+@media (max-width: 992px) {
+  .main-two-columns {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  
+  .page-header {
+    flex-direction: column;
+    text-align: center;
+  }
+  
+  .header-actions {
+    width: 100%;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  
+  .two-col-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  
+  .specs-row {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+}
+
+.is-invalid {
+  border-color: var(--danger) !important;
+  background-color: #fff0f0;
+}
+
+.is-invalid:focus {
+  box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.25) !important;
+}
+</style>
+
+<div class="container-fluid">
+  <!-- ROW 1: Page Header -->
+  <div class="page-header">
+    <div class="page-title">
+      <h1><i class="fas fa-edit me-2"></i>EDIT PRODUCT SKU</h1>
+      <p>Update product variant details in your inventory system</p>
+    </div>
+    
+    <div class="sku-badge">
+      <i class="fas fa-barcode"></i> SKU: {{ product.sku_code }}
+    </div>
+    
+    <div class="header-actions">
+      <div class="security-badge">
+        <i class="fas fa-shield-alt"></i>
+        <span>Secure</span>
+      </div>
+      <div class="header-buttons">
+        <a href="{% url 'inventory:product_detail' product.id %}" class="btn-header btn-header-secondary">
+          <i class="fas fa-times"></i> Cancel
+        </a>
+        <button type="submit" form="productForm" class="btn-header btn-header-primary">
+          <i class="fas fa-save"></i> Update
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <form method="post" enctype="multipart/form-data" id="productForm">
+    {% csrf_token %}
+
+    <div class="main-two-columns">
+      
+      <!-- LEFT COLUMN: Product Details -->
+      <div class="form-card">
+        <div class="card-header">
+          <h3><i class="fas fa-info-circle"></i> Product Details</h3>
+        </div>
+        <div class="card-body">
+          <!-- Row 1: Category + Product Name -->
+          <div class="two-col-grid">
+            <div class="form-group">
+              <label>Category <span class="required">*</span></label>
+              <select name="category" id="categorySelect" class="form-select" required>
+                <option value="">Select Category</option>
+                {% for cat in categories %}
+                <option value="{{ cat.id }}" 
+                        data-item-type="{{ cat.item_type }}"
+                        {% if product.category.id == cat.id %}selected{% endif %}>
+                  {{ cat.name }} ({{ cat.get_item_type_display }})
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Product Name</label>
+              <input type="text" name="name" id="productName" class="form-control" value="{{ product.name }}">
+              <small class="form-text"><i class="fas fa-magic"></i> Auto-generated from Brand, Model & Specs</small>
+            </div>
+          </div>
+
+          <!-- Row 2: Brand + Model -->
+          <div class="two-col-grid">
+            <div class="form-group">
+              <label>Brand <span class="required" id="brandRequired">*</span></label>
+              <input type="text" name="brand" id="brandInput" class="form-control" value="{{ product.brand }}">
+              <small class="form-text" id="brandHelp">Required for single items</small>
+            </div>
+            <div class="form-group">
+              <label>Model <span class="required" id="modelRequired">*</span></label>
+              <input type="text" name="model" id="modelInput" class="form-control" value="{{ product.model }}">
+              <small class="form-text" id="modelHelp">Required for single items</small>
+            </div>
+          </div>
+
+          <!-- Specifications Section (for single items) -->
+          <div id="specsSection">
+            <div class="form-group">
+              <label>Specifications <span class="required" id="specsRequired">*</span></label>
+              <div class="specs-row">
+                <input type="text" name="ram" class="form-control specs-input" 
+                       placeholder="RAM (e.g., 4GB)" 
+                       value="{{ product.specifications.ram|default:'' }}">
+                <input type="text" name="storage" class="form-control specs-input" 
+                       placeholder="Storage (e.g., 128GB)"
+                       value="{{ product.specifications.storage|default:'' }}">
+                <input type="text" name="color" class="form-control specs-input" 
+                       placeholder="Color (e.g., Black)"
+                       value="{{ product.specifications.color|default:'' }}">
+              </div>
+              <small class="form-text">At least one specification required for single items</small>
+            </div>
+
+            <div class="form-group">
+              <label>Additional Specs <span class="optional">(JSON format)</span></label>
+              <textarea name="specifications_json" class="form-control" rows="2" 
+                        placeholder='{"processor": "Snapdragon", "battery": "5000mAh"}'></textarea>
+              <small class="form-text">Add any other specifications in JSON format</small>
+            </div>
+
+            <div class="form-group">
+              <label>Warranty (months)</label>
+              <input type="number" name="warranty_months" class="form-control" value="{{ product.warranty_months }}" min="0">
+            </div>
+          </div>
+
+          <!-- Bulk Serial Number Field (for bulk items) -->
+          <div id="identifierField" class="hidden-field">
+            <div class="form-group">
+              <label>Bulk Serial / Batch Number</label>
+              <input type="text" name="bulk_serial_number" id="bulkSerialNumber" 
+                     class="form-control" value="{{ product.bulk_serial_number|default:'' }}"
+                     placeholder="e.g., BATCH-CABLES-001, SN-CABLE-BULK-2024">
+              <small class="form-text text-muted">
+                  🔑 ONE serial number/batch ID for ALL units in this bulk item
+              </small>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Description <span class="optional">(optional)</span></label>
+            <textarea name="description" class="form-control" rows="2" 
+                      placeholder="Product description...">{{ product.description|default:'' }}</textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT COLUMN: Pricing & Inventory -->
+      <div class="form-card">
+        <div class="card-header">
+          <h3><i class="fas fa-tags"></i> Pricing & Inventory</h3>
+        </div>
+        <div class="card-body">
+          <!-- Current Stock Info -->
+          <div class="stock-info">
+            <p><i class="fas fa-boxes"></i> <strong>Current Stock:</strong> 
+               {% if product.category.is_single_item %}
+                 {{ product.available_quantity }} available / {{ product.total_quantity }} total units
+               {% else %}
+                 {{ product.bulk_quantity }} units
+               {% endif %}
+            </p>
+            {% if product.category.is_bulk_item and product.bulk_serial_number %}
+            <p><i class="fas fa-barcode"></i> <strong>Batch/Serial:</strong> {{ product.bulk_serial_number }}</p>
+            {% endif %}
+          </div>
+
+          <!-- Pricing Row -->
+          <div class="two-col-grid">
+            <div class="form-group">
+              <label>Buying Price (KES) <span class="required">*</span></label>
+              <div class="price-input">
+                <span>KES</span>
+                <input type="number" name="buying_price" id="buyingPrice" 
+                       class="form-control" step="0.01" min="0" required
+                       value="{{ product.buying_price }}">
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Selling Price (KES) <span class="required">*</span></label>
+              <div class="price-input">
+                <span>KES</span>
+                <input type="number" name="selling_price" id="sellingPrice" 
+                       class="form-control" step="0.01" min="0" required
+                       value="{{ product.selling_price }}">
+              </div>
+              <div id="marginChip" class="margin-chip"></div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Best / Retail Price (KES)</label>
+            <div class="price-input">
+              <span>KES</span>
+              <input type="number" name="best_price" id="bestPrice" 
+                     class="form-control" step="0.01" min="0"
+                     value="{{ product.best_price|default:'' }}">
+            </div>
+            <small class="form-text">Must be less than or equal to selling price</small>
+          </div>
+
+          <!-- Inventory Settings -->
+          <div class="alert-info" style="margin-top: 16px;">
+            <i class="fas fa-boxes"></i>
+            <strong>Inventory Settings</strong>
+          </div>
+
+          <!-- Bulk Quantity (read-only for edit, use stock entries to adjust) -->
+          <div id="bulkItemFields" class="hidden-field">
+            <div class="form-group">
+              <label>Current Bulk Quantity</label>
+              <input type="number" name="bulk_quantity_display" class="form-control" 
+                     value="{{ product.bulk_quantity }}" readonly disabled>
+              <small class="form-text text-muted">
+                  <i class="fas fa-info-circle"></i> Use "Restock" or "Stock Movements" to change quantity
+              </small>
+            </div>
+            <div class="alert-warning" style="margin-top: 8px; padding: 8px;">
+              <i class="fas fa-exclamation-triangle"></i>
+              <small>To add or remove stock for bulk items, go to Stock Movements or use the Restock feature.</small>
+            </div>
+          </div>
+
+          <div class="form-group" id="reorderField">
+            <label>Reorder Level</label>
+            <input type="number" name="reorder_level" class="form-control" 
+                   value="{{ product.reorder_level }}" min="0">
+            <small class="form-text">Alert when stock falls below this level</small>
+          </div>
+
+          <!-- Supplier -->
+          <div class="form-group">
+            <label>Supplier</label>
+            <select name="supplier" class="form-select">
+              <option value="">-- Select Supplier --</option>
+              {% for sup in suppliers %}
+              <option value="{{ sup.id }}" {% if product.supplier.id == sup.id %}selected{% endif %}>
+                {{ sup.name }}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <!-- Image Upload -->
+          <div class="form-group">
+            <label>Product Image</label>
+            {% if product.image %}
+            <div class="mb-2">
+              <img src="{{ product.image.url }}" alt="{{ product.name }}" style="max-width: 100px; max-height: 100px;" class="img-thumbnail">
+              <br>
+              <small><input type="checkbox" name="remove_image"> Remove current image</small>
+            </div>
+            {% endif %}
+            <input type="file" name="image" class="form-control" accept="image/*">
+            <small class="form-text">JPEG, PNG, WebP (max 5MB). Leave empty to keep current image.</small>
+          </div>
+
+          <!-- Status -->
+          <div class="form-group">
+            <label>Status</label>
+            <select name="is_active" class="form-select">
+              <option value="true" {% if product.is_active %}selected{% endif %}>Active</option>
+              <option value="false" {% if not product.is_active %}selected{% endif %}>Inactive</option>
+            </select>
+            <small class="form-text">Inactive products won't appear in sales or reports</small>
+          </div>
+
+          <!-- Single Item Info -->
+          <div id="singleItemInfo" class="hidden-field">
+            <div class="alert-success" style="margin-top: 12px;">
+              <i class="fas fa-microchip"></i>
+              <strong>Single Item Product</strong><br>
+              <small>Manage individual units (IMEI/Serial numbers) from the product details page.</small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </form>
 </div>
 
-<div class="card">
-    <div class="card-header">
-        <h5 class="mb-0"><i class="fas fa-edit me-2"></i>Edit Product: {{ product.display_name }}</h5>
-    </div>
-    <div class="card-body">
-        <form method="post" enctype="multipart/form-data" id="productForm">
-            {% csrf_token %}
-            
-            <div class="row">
-                <!-- Basic Information -->
-                <div class="col-md-6">
-                    <h6 class="mb-3">Basic Information</h6>
-                    
-                    <div class="mb-3">
-                        <label class="form-label">Product Code</label>
-                        <input type="text" class="form-control" value="{{ product.product_code }}" readonly disabled>
-                        <small class="text-muted">Product code cannot be changed</small>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label">Product Name <span class="text-danger">*</span></label>
-                        <input type="text" name="name" class="form-control" value="{{ product.name }}" required>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label">Category <span class="text-danger">*</span></label>
-                        <select name="category" class="form-select" required>
-                            <option value="">Select Category</option>
-                            {% for cat in categories %}
-                            <option value="{{ cat.id }}" data-item-type="{{ cat.item_type }}" {% if product.category.id == cat.id %}selected{% endif %}>
-                                {{ cat.name }} ({{ cat.get_item_type_display }})
-                            </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Brand</label>
-                            <input type="text" name="brand" class="form-control" value="{{ product.brand|default:'' }}">
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Model</label>
-                            <input type="text" name="model" class="form-control" value="{{ product.model|default:'' }}">
-                        </div>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label">Description</label>
-                        <textarea name="description" class="form-control" rows="3">{{ product.description|default:'' }}</textarea>
-                    </div>
-                </div>
-                
-                <!-- Pricing -->
-                <div class="col-md-6">
-                    <h6 class="mb-3">Pricing Information</h6>
-                    
-                    <div class="mb-3">
-                        <label class="form-label">Buying Price (KSH) <span class="text-danger">*</span></label>
-                        <input type="number" name="buying_price" class="form-control" step="0.01" value="{{ product.buying_price }}" required>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label">Selling Price (KSH) <span class="text-danger">*</span></label>
-                        <input type="number" name="selling_price" class="form-control" step="0.01" value="{{ product.selling_price }}" required>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label">Best Price (KSH)</label>
-                        <input type="number" name="best_price" class="form-control" step="0.01" value="{{ product.best_price|default:'' }}">
-                    </div>
-                </div>
-            </div>
-            
-            <div class="row mt-3">
-                <!-- Inventory -->
-                <div class="col-md-6">
-                    <h6 class="mb-3">Inventory Details</h6>
-                    
-                    <div class="mb-3" id="skuField">
-                        <label class="form-label">SKU (IMEI/Serial) <span class="text-danger" id="skuRequired">*</span></label>
-                        <input type="text" name="sku_value" class="form-control" value="{{ product.sku_value|default:'' }}">
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label">Barcode</label>
-                        <input type="text" name="barcode" class="form-control" value="{{ product.barcode|default:'' }}">
-                    </div>
-                    
-                    <div class="mb-3" id="quantityField">
-                        <label class="form-label">Quantity</label>
-                        <input type="number" name="quantity" class="form-control" value="{{ product.quantity }}" min="0">
-                    </div>
-                    
-                    <div class="mb-3" id="reorderField">
-                        <label class="form-label">Reorder Level</label>
-                        <input type="number" name="reorder_level" class="form-control" value="{{ product.reorder_level|default:5 }}" min="0">
-                    </div>
-                </div>
-                
-                <!-- Additional Info -->
-                <div class="col-md-6">
-                    <h6 class="mb-3">Additional Information</h6>
-                    
-                    <div class="mb-3">
-                        <label class="form-label">Condition</label>
-                        <select name="condition" class="form-select">
-                            <option value="new" {% if product.condition == 'new' %}selected{% endif %}>Brand New</option>
-                            <option value="refurbished" {% if product.condition == 'refurbished' %}selected{% endif %}>Refurbished</option>
-                            <option value="used" {% if product.condition == 'used' %}selected{% endif %}>Used - Excellent</option>
-                            <option value="used_good" {% if product.condition == 'used_good' %}selected{% endif %}>Used - Good</option>
-                            <option value="used_fair" {% if product.condition == 'used_fair' %}selected{% endif %}>Used - Fair</option>
-                        </select>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label">Warranty (months)</label>
-                        <input type="number" name="warranty_months" class="form-control" value="{{ product.warranty_months }}">
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label">Supplier</label>
-                        <select name="supplier" class="form-select">
-                            <option value="">Select Supplier</option>
-                            {% for sup in suppliers %}
-                            <option value="{{ sup.id }}" {% if product.supplier.id == sup.id %}selected{% endif %}>{{ sup.name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label">Product Image</label>
-                        {% if product.image %}
-                        <div class="mb-2">
-                            <img src="{{ product.image.url }}" alt="Current image" style="max-height: 100px;">
-                            <small class="d-block text-muted">Current image</small>
-                        </div>
-                        {% endif %}
-                        <input type="file" name="image" class="form-control" accept="image/*">
-                    </div>
-                </div>
-            </div>
-            
-            <div class="row mt-4">
-                <div class="col-12">
-                    <h6 class="mb-3">Specifications (JSON format)</h6>
-                    <div class="mb-3">
-                        <textarea name="specifications" class="form-control" rows="3">{{ product.specifications|default:'' }}</textarea>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="d-flex justify-content-end gap-2 mt-4">
-                <a href="{% url 'inventory:product_detail' product.id %}" class="btn btn-secondary">
-                    <i class="fas fa-times"></i> Cancel
-                </a>
-                <button type="submit" class="btn btn-primary">
-                    <i class="fas fa-save"></i> Update Product
-                </button>
-            </div>
-        </form>
-    </div>
-</div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const categorySelect = document.querySelector('select[name="category"]');
-    const skuField = document.getElementById('skuField');
-    const quantityField = document.getElementById('quantityField');
-    const reorderField = document.getElementById('reorderField');
-    const skuRequired = document.getElementById('skuRequired');
-    const quantityInput = document.querySelector('input[name="quantity"]');
+  const categorySelect = document.getElementById('categorySelect');
+  const brandInput = document.getElementById('brandInput');
+  const modelInput = document.getElementById('modelInput');
+  const brandRequired = document.getElementById('brandRequired');
+  const modelRequired = document.getElementById('modelRequired');
+  const brandHelp = document.getElementById('brandHelp');
+  const modelHelp = document.getElementById('modelHelp');
+  const specsRequired = document.getElementById('specsRequired');
+  const specsInputs = document.querySelectorAll('.specs-input');
+  const singleItemInfo = document.getElementById('singleItemInfo');
+  const bulkItemFields = document.getElementById('bulkItemFields');
+  const identifierField = document.getElementById('identifierField');
+  const reorderField = document.getElementById('reorderField');
+  const nameInput = document.getElementById('productName');
+  const buyingPrice = document.getElementById('buyingPrice');
+  const sellingPrice = document.getElementById('sellingPrice');
+  const bestPrice = document.getElementById('bestPrice');
+  const marginChip = document.getElementById('marginChip');
+  const specsSection = document.getElementById('specsSection');
+  const bulkSerialNumber = document.getElementById('bulkSerialNumber');
+
+  // Initial values
+  const isProductBulk = {{ product.category.is_bulk_item|yesno:"true,false" }};
+  
+  // Store original name to prevent overwriting if user edited it
+  let originalName = nameInput.value;
+
+  // Update form fields based on category selection
+  function updateCategoryFields() {
+    const selected = categorySelect.options[categorySelect.selectedIndex];
+    if (!selected || !selected.value) {
+      brandRequired.style.display = 'none';
+      modelRequired.style.display = 'none';
+      specsRequired.style.display = 'none';
+      singleItemInfo.classList.add('hidden-field');
+      bulkItemFields.classList.add('hidden-field');
+      identifierField.classList.add('hidden-field');
+      specsSection.classList.add('hidden-field');
+      return;
+    }
+
+    const itemType = selected.dataset.itemType;
     
-    function updateFields() {
-        const selectedOption = categorySelect.options[categorySelect.selectedIndex];
-        if (selectedOption && selectedOption.value) {
-            const itemType = selectedOption.dataset.itemType;
-            
-            if (itemType === 'single') {
-                // Single item
-                skuRequired.style.display = 'inline';
-                skuField.style.display = 'block';
-                quantityField.style.display = 'none';
-                reorderField.style.display = 'none';
-                quantityInput.value = 1;
-            } else {
-                // Bulk item
-                skuRequired.style.display = 'none';
-                skuField.style.display = 'block';
-                quantityField.style.display = 'block';
-                reorderField.style.display = 'block';
-            }
-        }
+    if (itemType === 'single') {
+      // Single item mode
+      brandRequired.style.display = 'inline';
+      modelRequired.style.display = 'inline';
+      specsRequired.style.display = 'inline';
+      brandInput.required = true;
+      modelInput.required = true;
+      brandHelp.innerHTML = '<span class="text-danger">Required</span> - Creates unique variant';
+      modelHelp.innerHTML = '<span class="text-danger">Required</span> - Creates unique variant';
+      singleItemInfo.classList.remove('hidden-field');
+      bulkItemFields.classList.add('hidden-field');
+      identifierField.classList.add('hidden-field');
+      specsSection.classList.remove('hidden-field');
+      
+      // Don't auto-generate name if user has manually edited it
+      if (nameInput.value === originalName) {
+        autoGenerateName();
+      }
+      
+    } else {
+      // Bulk item mode
+      brandRequired.style.display = 'none';
+      modelRequired.style.display = 'none';
+      specsRequired.style.display = 'none';
+      brandInput.required = false;
+      modelInput.required = false;
+      brandHelp.innerHTML = 'Optional for bulk items - all units are identical';
+      modelHelp.innerHTML = 'Optional for bulk items - all units are identical';
+      singleItemInfo.classList.add('hidden-field');
+      bulkItemFields.classList.remove('hidden-field');
+      identifierField.classList.remove('hidden-field');
+      specsSection.classList.add('hidden-field');
+      
+      // Don't auto-generate name if user has manually edited it
+      if (nameInput.value === originalName) {
+        autoGenerateName();
+      }
     }
     
-    if (categorySelect) {
-        categorySelect.addEventListener('change', updateFields);
-        updateFields(); // Initial call
+    updateMargin();
+  }
+
+ // Detect if we're in edit mode (has product.id in URL or hidden field)
+const isEditMode = true; // Since this is edit.html template
+
+// Auto-generate product name - DISABLED in edit mode
+function autoGenerateName() {
+  // For edit mode, never auto-generate - preserve the original name
+  if (isEditMode) {
+    return;
+  }
+  
+  // Only auto-generate for new products (create mode)
+  const selected = categorySelect.options[categorySelect.selectedIndex];
+  const itemType = selected ? selected.dataset.itemType : null;
+  
+  // For bulk items with serial number
+  if (itemType !== 'single' && bulkSerialNumber && bulkSerialNumber.value.trim()) {
+    const categoryName = selected ? selected.text.split('(')[0].trim() : 'Product';
+    nameInput.value = `${categoryName} - Batch ${bulkSerialNumber.value}`;
+    return;
+  }
+  
+  // For single items
+  const brand = brandInput.value.trim();
+  const model = modelInput.value.trim();
+  const ram = document.querySelector('input[name="ram"]')?.value.trim() || '';
+  const storage = document.querySelector('input[name="storage"]')?.value.trim() || '';
+  const color = document.querySelector('input[name="color"]')?.value.trim() || '';
+  
+  const parts = [];
+  if (brand) parts.push(brand);
+  if (model) parts.push(model);
+  
+  const specs = [];
+  if (ram) specs.push(ram);
+  if (storage) specs.push(storage);
+  if (color) specs.push(color);
+  
+  if (specs.length) parts.push(`(${specs.join(' ')})`);
+  
+  if (parts.length) {
+    nameInput.value = parts.join(' ');
+  }
+}
+
+
+
+
+  // Update margin display
+  function updateMargin() {
+    const buying = parseFloat(buyingPrice.value) || 0;
+    const selling = parseFloat(sellingPrice.value) || 0;
+    const best = parseFloat(bestPrice?.value) || 0;
+    
+    let isValid = true;
+    
+    if (selling > 0 && buying > 0 && buying > selling) {
+      sellingPrice.setCustomValidity('Selling price cannot be less than buying price');
+      sellingPrice.classList.add('is-invalid');
+      isValid = false;
+    } else {
+      sellingPrice.setCustomValidity('');
+      sellingPrice.classList.remove('is-invalid');
     }
+    
+    if (best > 0 && selling > 0 && best > selling) {
+      bestPrice.setCustomValidity('Best price cannot exceed selling price');
+      bestPrice.classList.add('is-invalid');
+      isValid = false;
+    } else {
+      bestPrice.setCustomValidity('');
+      bestPrice.classList.remove('is-invalid');
+    }
+    
+    if (buying > 0 && selling > 0) {
+      const profit = selling - buying;
+      const margin = (profit / buying * 100).toFixed(1);
+      marginChip.className = `margin-chip ${profit >= 0 ? 'positive' : 'negative'}`;
+      marginChip.innerHTML = `${profit >= 0 ? '▲' : '▼'} ${margin}% margin (KES ${profit.toLocaleString()})`;
+    } else {
+      marginChip.className = 'margin-chip';
+      marginChip.innerHTML = '';
+    }
+    
+    return isValid;
+  }
+
+  // Validate specs for single items
+  function validateSpecs() {
+    const selected = categorySelect.options[categorySelect.selectedIndex];
+    if (selected && selected.value && selected.dataset.itemType === 'single') {
+      const hasSpec = Array.from(specsInputs).some(input => input.value.trim());
+      if (!hasSpec) {
+        specsRequired.style.color = '#dc3545';
+        return false;
+      }
+    }
+    specsRequired.style.color = '';
+    return true;
+  }
+
+  // Form submission validation
+  document.getElementById('productForm').addEventListener('submit', function(e) {
+    const isPriceValid = updateMargin();
+    const isSpecsValid = validateSpecs();
+    
+    if (!isPriceValid || !isSpecsValid) {
+      e.preventDefault();
+      let errorMsg = 'Please fix the following errors:\n';
+      if (!isPriceValid) errorMsg += '- Invalid pricing (selling price must be >= buying price)\n';
+      if (!isSpecsValid) errorMsg += '- At least one specification (RAM, Storage, or Color) required for single items\n';
+      alert(errorMsg);
+    }
+  });
+
+  // Event listeners
+  categorySelect.addEventListener('change', updateCategoryFields);
+  brandInput.addEventListener('input', autoGenerateName);
+  modelInput.addEventListener('input', autoGenerateName);
+  
+  specsInputs.forEach(input => input.addEventListener('input', () => { 
+    autoGenerateName(); 
+    validateSpecs();
+  }));
+  
+  if (bulkSerialNumber) {
+    bulkSerialNumber.addEventListener('input', autoGenerateName);
+  }
+  
+  buyingPrice.addEventListener('input', updateMargin);
+  sellingPrice.addEventListener('input', updateMargin);
+  bestPrice.addEventListener('input', updateMargin);
+  
+  // Initial calls
+  updateCategoryFields();
+  updateMargin();
+  validateSpecs();
 });
 </script>
 {% endblock %}

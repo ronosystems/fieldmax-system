@@ -28,6 +28,8 @@
     </div>
 </div>
 
+
+
 <!-- Summary Cards -->
 <div class="row mb-4">
     <div class="col-md-3">
@@ -77,27 +79,27 @@
             </div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card bg-info text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="text-white-50 mb-2">Total Profit (Sales)</h6>
-                        <h2 class="mb-0">KES {{ total_profit|floatformat:0|intcomma }}</h2>
-                    </div>
-                    <div class="bg-white bg-opacity-25 rounded-circle p-3">
-                        <i class="fas fa-chart-pie fa-2x text-white"></i>
-                    </div>
+ <div class="col-md-3">
+    <div class="card bg-info text-white">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="text-white-50 mb-2">Total Profit (Sales)</h6>
+                    <h2 class="mb-0">KES {{ total_profit|floatformat:0|intcomma }}</h2>
                 </div>
+                <div class="bg-white bg-opacity-25 rounded-circle p-3">
+                    <i class="fas fa-chart-pie fa-2x text-white"></i>
+                </div> 
             </div>
         </div>
     </div>
 </div>
+</div>
 
-<!-- Filters - Compact 2 Rows -->
+<!-- Filters - Compact 3 Rows -->
 <div class="card mb-4">
     <div class="card-body py-2">
-        <form method="GET">
+        <form method="GET" id="filterForm">
             <!-- Row 1: Filters -->
             <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
                 <select name="type" class="form-select form-select-sm" style="width: auto; min-width: 140px;">
@@ -133,18 +135,30 @@
                 </a>
             </div>
             
-            <!-- Row 2: Quick Date Shortcuts -->
-            <div class="d-flex gap-2 align-items-center">
+            <!-- Row 2: Quick Date Shortcuts - Extended -->
+            <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
                 <span class="badge bg-info text-white">Quick Date:</span>
-                <a href="?date=today" class="btn btn-link btn-sm p-0">Today</a>
+                <a href="#" class="btn btn-link btn-sm p-0" onclick="setDateFilter('today')">Today</a>
                 <span class="text-muted">|</span>
-                <a href="?date=week" class="btn btn-link btn-sm p-0">This Week</a>
+                <a href="#" class="btn btn-link btn-sm p-0" onclick="setDateFilter('yesterday')">Yesterday</a>
                 <span class="text-muted">|</span>
-                <a href="?date=month" class="btn btn-link btn-sm p-0">This Month</a>
+                <a href="#" class="btn btn-link btn-sm p-0" onclick="setDateFilter('week')">This Week</a>
                 <span class="text-muted">|</span>
-                <a href="?date=quarter" class="btn btn-link btn-sm p-0">This Quarter</a>
+                <a href="#" class="btn btn-link btn-sm p-0" onclick="setDateFilter('prev_week')">Previous Week</a>
                 <span class="text-muted">|</span>
-                <a href="?date=year" class="btn btn-link btn-sm p-0">This Year</a>
+                <a href="#" class="btn btn-link btn-sm p-0" onclick="setDateFilter('month')">This Month</a>
+                <span class="text-muted">|</span>
+                <a href="#" class="btn btn-link btn-sm p-0" onclick="setDateFilter('prev_month')">Previous Month</a>
+                <span class="text-muted">|</span>
+                <a href="#" class="btn btn-link btn-sm p-0" onclick="setDateFilter('quarter')">This Quarter</a>
+                <span class="text-muted">|</span>
+                <a href="#" class="btn btn-link btn-sm p-0" onclick="setDateFilter('year')">This Year</a>
+            </div>
+            
+            <!-- Row 3: Custom Range Help -->
+            <div class="small text-muted mt-1">
+                <i class="fas fa-info-circle"></i> 
+                Use custom date range above for specific periods
             </div>
         </form>
     </div>
@@ -219,7 +233,7 @@
                             {% else %}
                                 <span class="badge bg-secondary">{{ transaction.source|title }}</span>
                             {% endif %}
-                         </td>
+                          </td>
                         <td class="text-center align-middle">
                             {% if transaction.transaction_type == 'income' %}
                                 <span class="badge bg-success w-100">
@@ -232,7 +246,7 @@
                             {% else %}
                                 <span class="badge bg-secondary w-100">{{ transaction.transaction_type|title }}</span>
                             {% endif %}
-                         </td>
+                          </td>
                         <td class="align-middle">
                             <div class="fw-bold">{{ transaction.description|truncatechars:60 }}</div>
                             {% if transaction.notes %}
@@ -240,7 +254,7 @@
                                 <i class="fas fa-sticky-note me-1"></i> {{ transaction.notes|truncatechars:40 }}
                             </small>
                             {% endif %}
-                         </td>
+                          </td>
                         <td class="text-end align-middle fw-bold 
                             {% if transaction.transaction_type == 'income' %}text-success{% else %}text-danger{% endif %}">
                             {% if transaction.transaction_type == 'income' %}
@@ -248,17 +262,17 @@
                             {% else %}
                                 - KES {{ transaction.amount|floatformat:0|intcomma }}
                             {% endif %}
-                         </td>
+                          </td>
                         <td class="text-center align-middle">
                             <code>{{ transaction.reference|default:"—" }}</code>
-                         </td>
+                          </td>
                         <td class="align-middle">
                             <small>
                                 <i class="fas fa-user me-1"></i>
                                 {{ transaction.created_by.get_full_name|default:transaction.created_by.username|default:"System" }}
                             </small>
-                         </td>
-                     </tr>
+                          </td>
+                      </tr>
                     {% empty %}
                     <tr>
                         <td colspan="7" class="text-center py-5">
@@ -267,8 +281,8 @@
                             <a href="{% url 'finance:add_account_transaction' %}" class="btn btn-primary">
                                 <i class="fas fa-plus-circle me-2"></i>Add Transaction
                             </a>
-                         </td>
-                     </tr>
+                          </td>
+                      </tr>
                     {% endfor %}
                 </tbody>
                 <tfoot class="table-light">
@@ -276,11 +290,11 @@
                         <td colspan="4" class="text-end">TOTAL:</td>
                         <td class="text-end {% if net_balance >= 0 %}text-success{% else %}text-danger{% endif %}">
                             KES {{ net_balance|floatformat:0|intcomma }}
-                         </td>
+                          </td>
                         <td colspan="2"></td>
-                     </tr>
+                      </tr>
                 </tfoot>
-            </table>
+             </table>
         </div>
     </div>
     
@@ -405,6 +419,97 @@
 </style>
 
 <script>
+// Date filter helper function
+function setDateFilter(range) {
+    const currentUrl = new URL(window.location.href);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+    
+    let fromDate, toDate;
+    
+    switch(range) {
+        case 'today':
+            fromDate = today.toISOString().split('T')[0];
+            toDate = today.toISOString().split('T')[0];
+            break;
+        case 'yesterday':
+            fromDate = yesterday.toISOString().split('T')[0];
+            toDate = yesterday.toISOString().split('T')[0];
+            break;
+        case 'week':
+            // This Week (Monday to Sunday)
+            const dayOfWeek = today.getDay();
+            const diffToMonday = (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
+            const monday = new Date(today);
+            monday.setDate(today.getDate() - diffToMonday);
+            const sunday = new Date(monday);
+            sunday.setDate(monday.getDate() + 6);
+            fromDate = monday.toISOString().split('T')[0];
+            toDate = sunday.toISOString().split('T')[0];
+            break;
+        case 'prev_week':
+            // Previous Week
+            const lastWeek = new Date(today);
+            lastWeek.setDate(today.getDate() - 7);
+            const lastWeekMonday = new Date(lastWeek);
+            const lastWeekDay = lastWeek.getDay();
+            const lastWeekDiff = (lastWeekDay === 0 ? 6 : lastWeekDay - 1);
+            lastWeekMonday.setDate(lastWeek.getDate() - lastWeekDiff);
+            const lastWeekSunday = new Date(lastWeekMonday);
+            lastWeekSunday.setDate(lastWeekMonday.getDate() + 6);
+            fromDate = lastWeekMonday.toISOString().split('T')[0];
+            toDate = lastWeekSunday.toISOString().split('T')[0];
+            break;
+        case 'month':
+            // This Month
+            const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+            const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+            fromDate = firstDayOfMonth.toISOString().split('T')[0];
+            toDate = lastDayOfMonth.toISOString().split('T')[0];
+            break;
+        case 'prev_month':
+            // Previous Month
+            const firstDayOfPrevMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+            const lastDayOfPrevMonth = new Date(today.getFullYear(), today.getMonth(), 0);
+            fromDate = firstDayOfPrevMonth.toISOString().split('T')[0];
+            toDate = lastDayOfPrevMonth.toISOString().split('T')[0];
+            break;
+        case 'quarter':
+            // This Quarter
+            const quarter = Math.floor(today.getMonth() / 3);
+            const firstDayOfQuarter = new Date(today.getFullYear(), quarter * 3, 1);
+            const lastDayOfQuarter = new Date(today.getFullYear(), (quarter + 1) * 3, 0);
+            fromDate = firstDayOfQuarter.toISOString().split('T')[0];
+            toDate = lastDayOfQuarter.toISOString().split('T')[0];
+            break;
+        case 'year':
+            // This Year
+            const firstDayOfYear = new Date(today.getFullYear(), 0, 1);
+            const lastDayOfYear = new Date(today.getFullYear(), 11, 31);
+            fromDate = firstDayOfYear.toISOString().split('T')[0];
+            toDate = lastDayOfYear.toISOString().split('T')[0];
+            break;
+        default:
+            return;
+    }
+    
+    // Clear existing date filters and set new ones
+    currentUrl.searchParams.delete('date_from');
+    currentUrl.searchParams.delete('date_to');
+    
+    if (fromDate) currentUrl.searchParams.set('date_from', fromDate);
+    if (toDate) currentUrl.searchParams.set('date_to', toDate);
+    
+    // Preserve other filters
+    const type = new URLSearchParams(window.location.search).get('type');
+    const account = new URLSearchParams(window.location.search).get('account');
+    if (type) currentUrl.searchParams.set('type', type);
+    if (account) currentUrl.searchParams.set('account', account);
+    
+    window.location.href = currentUrl.toString();
+}
+
 // Auto-submit when filters change
 document.getElementById('type')?.addEventListener('change', function() {
     this.form.submit();
@@ -420,64 +525,6 @@ document.getElementById('date_from')?.addEventListener('change', function() {
 
 document.getElementById('date_to')?.addEventListener('change', function() {
     this.form.submit();
-});
-
-// Quick date filters
-document.querySelectorAll('a[href*="date="]').forEach(function(link) {
-    link.addEventListener('click', function(e) {
-        e.preventDefault();
-        var dateParam = this.href.split('date=')[1];
-        var currentUrl = new URL(window.location.href);
-        
-        // Clear existing date filters
-        currentUrl.searchParams.delete('date_from');
-        currentUrl.searchParams.delete('date_to');
-        
-        var today = new Date();
-        var fromDate, toDate;
-        
-        switch(dateParam) {
-            case 'today':
-                fromDate = today.toISOString().split('T')[0];
-                toDate = today.toISOString().split('T')[0];
-                break;
-            case 'week':
-                var weekAgo = new Date(today);
-                weekAgo.setDate(today.getDate() - 7);
-                fromDate = weekAgo.toISOString().split('T')[0];
-                toDate = today.toISOString().split('T')[0];
-                break;
-            case 'month':
-                var monthAgo = new Date(today);
-                monthAgo.setMonth(today.getMonth() - 1);
-                fromDate = monthAgo.toISOString().split('T')[0];
-                toDate = today.toISOString().split('T')[0];
-                break;
-            case 'quarter':
-                var quarterAgo = new Date(today);
-                quarterAgo.setMonth(today.getMonth() - 3);
-                fromDate = quarterAgo.toISOString().split('T')[0];
-                toDate = today.toISOString().split('T')[0];
-                break;
-            case 'year':
-                var yearAgo = new Date(today);
-                yearAgo.setFullYear(today.getFullYear() - 1);
-                fromDate = yearAgo.toISOString().split('T')[0];
-                toDate = today.toISOString().split('T')[0];
-                break;
-        }
-        
-        if (fromDate) currentUrl.searchParams.set('date_from', fromDate);
-        if (toDate) currentUrl.searchParams.set('date_to', toDate);
-        
-        // Preserve other filters
-        var type = new URLSearchParams(window.location.search).get('type');
-        var account = new URLSearchParams(window.location.search).get('account');
-        if (type) currentUrl.searchParams.set('type', type);
-        if (account) currentUrl.searchParams.set('account', account);
-        
-        window.location.href = currentUrl.toString();
-    });
 });
 
 // Redirect to appropriate detail page
@@ -501,5 +548,15 @@ function redirectToDetail(transactionId, transactionType) {
         console.log('No detail view available for:', transactionId);
     }
 }
+
+// Show active date range indicator
+document.addEventListener('DOMContentLoaded', function() {
+    const dateFrom = new URLSearchParams(window.location.search).get('date_from');
+    const dateTo = new URLSearchParams(window.location.search).get('date_to');
+    
+    if (dateFrom && dateTo) {
+        console.log(`Active filter: ${dateFrom} to ${dateTo}`);
+    }
+});
 </script>
 {% endblock %}

@@ -40,34 +40,148 @@ from .kopokopo_service import stk_push_request, clean_phone_number, check_pendin
 logger = logging.getLogger(__name__)
 
 
-
 # ============================================
 # FINANCE DASHBOARD
 # ============================================
 
 @login_required
 def finance_dashboard(request):
-    """Finance dashboard overview - Salaries are for previous month (paid at start of current month)"""
+    """Finance dashboard overview - ALL cards respect date filters"""
     from decimal import Decimal
     from django.db.models import Sum, Q
     from datetime import datetime, timedelta
     from .models import AccountTransaction
+    from credit.models import CreditTransaction, SellerCommission, CompanyPayment
+    
+    # ============================================
+    # GET DATE RANGE FROM REQUEST
+    # ============================================
+    date_range = request.GET.get('range', 'month')  # day, week, month, year, custom
+    date_from_str = request.GET.get('date_from')
+    date_to_str = request.GET.get('date_to')
     
     today = timezone.now().date()
+    
+    if date_range == 'today':
+        date_from = today
+        date_to = today
+    elif date_range == 'week':
+        date_from = today - timedelta(days=7)
+        date_to = today
+    elif date_range == 'month':
+        date_from = today - timedelta(days=30)
+        date_to = today
+    elif date_range == 'year':
+        date_from = today - timedelta(days=365)
+        date_to = today
+    elif date_from_str and date_to_str:
+        date_from = datetime.strptime(date_from_str, '%Y-%m-%d').date()
+        date_to = datetime.strptime(date_to_str, '%Y-%m-%d').date()
+        date_range = 'custom'
+    else:
+        # Default to current month
+        date_from = today.replace(day=1)
+        date_to = today
+        date_range = 'month'
+    
+    date_from_aware = timezone.make_aware(datetime.combine(date_from, datetime.min.time()))
+    date_to_aware = timezone.make_aware(datetime.combine(date_to, datetime.max.time()))
+    
+    # ============================================
+    # FILTERED INCOME (based on date range)
+    # ============================================
+    
+    # Sales Income
+    filtered_sales_income = Sale.objects.filter(
+        sale_date__range=[date_from_aware, date_to_aware],
+        is_reversed=False
+    ).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+    
+    # Credit Income (paid_date)
+    filtered_credit_income = CreditTransaction.objects.filter(
+        paid_date__range=[date_from_aware, date_to_aware],
+        payment_status='paid'
+    ).aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
+    
+    # Account Income
+    filtered_account_income = AccountTransaction.objects.filter(
+        transaction_date__range=[date_from_aware, date_to_aware],
+        transaction_type='income'
+    ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+    
+    filtered_total_income = filtered_sales_income + filtered_credit_income + filtered_account_income
+    
+    # ============================================
+    # FILTERED EXPENSES (based on date range)
+    # ============================================
+    
+    # Salary Expenses (paid_date)
+    filtered_salary_expenses = Salary.objects.filter(
+        paid_date__range=[date_from_aware, date_to_aware],
+        status='paid'
+    ).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+    
+    # Commission Expenses (paid_date)
+    filtered_commission_expenses = SellerCommission.objects.filter(
+        status='paid',
+        paid_date__range=[date_from_aware, date_to_aware]
+    ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+    
+    # Account Expenses
+    filtered_account_expenses = AccountTransaction.objects.filter(
+        transaction_date__range=[date_from_aware, date_to_aware],
+        transaction_type='expense'
+    ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+    
+    filtered_total_expenses = filtered_salary_expenses + filtered_commission_expenses + filtered_account_expenses
+    
+    # ============================================
+    # FILTERED PROFIT
+    # ============================================
+    
+    # Sales Profit from filtered sales
+    filtered_sales = Sale.objects.filter(
+        sale_date__range=[date_from_aware, date_to_aware],
+        is_reversed=False
+    )
+    
+    filtered_sales_profit = Decimal('0.00')
+    for sale in filtered_sales:
+        for item in sale.items.all():
+            if item.product and item.product.buying_price:
+                profit = (item.unit_price - item.product.buying_price) * item.quantity
+                filtered_sales_profit += profit
+    
+    # Credit payments within date range
+    filtered_credit_payments = CompanyPayment.objects.filter(
+        payment_date__range=[date_from, date_to]
+    )
+    filtered_credit_profit = filtered_credit_payments.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+    
+    filtered_total_profit = filtered_sales_profit + filtered_credit_profit
+    
+    # ============================================
+    # FILTERED NET PROFIT & MARGIN
+    # ============================================
+    filtered_net_profit = filtered_total_income - filtered_total_expenses
+    filtered_profit_margin = (filtered_net_profit / filtered_total_income * 100) if filtered_total_income > 0 else 0
+    
+    # ============================================
+    # STATIC PERIOD CALCULATIONS (for comparison charts)
+    # ============================================
+    
     current_month = today.month
     current_year = today.year
     
-    # Calculate previous month (the month salaries are FOR)
+    # Calculate previous month
     if current_month == 1:
         previous_month = 12
         previous_year = current_year - 1
-        previous_month_name = calendar.month_name[previous_month]
     else:
         previous_month = current_month - 1
         previous_year = current_year
-        previous_month_name = calendar.month_name[previous_month]
     
-    # Get month start and end dates for the MONTH WE ARE REPORTING ON (not payment date)
+    # Month start and end dates
     month_start = datetime(current_year, current_month, 1)
     if current_month == 12:
         month_end = datetime(current_year + 1, 1, 1) - timedelta(seconds=1)
@@ -77,24 +191,23 @@ def finance_dashboard(request):
     month_start_aware = timezone.make_aware(month_start)
     month_end_aware = timezone.make_aware(month_end)
     
-    # Get year start and end dates
+    # Year start and end dates
     year_start = datetime(current_year, 1, 1)
     year_end = datetime(current_year + 1, 1, 1) - timedelta(seconds=1)
     year_start_aware = timezone.make_aware(year_start)
     year_end_aware = timezone.make_aware(year_end)
     
-    # Get last 7 days for weekly stats
+    # Week start
     week_start = today - timedelta(days=7)
     week_start_aware = timezone.make_aware(datetime.combine(week_start, datetime.min.time()))
     
-    # Get today's start for daily stats
+    # Today's range
     today_start = timezone.make_aware(datetime.combine(today, datetime.min.time()))
     today_end = timezone.make_aware(datetime.combine(today, datetime.max.time()))
     
     # ============================================
-    # MONTHLY INCOME
+    # MONTHLY INCOME (Static - for charts)
     # ============================================
-    
     monthly_sales_income = Sale.objects.filter(
         sale_date__range=[month_start_aware, month_end_aware],
         is_reversed=False
@@ -113,86 +226,19 @@ def finance_dashboard(request):
     monthly_total_income = monthly_sales_income + monthly_credit_income + monthly_account_income
     
     # ============================================
-    # ANNUAL INCOME
+    # MONTHLY EXPENSES (Static)
     # ============================================
-    
-    annual_sales_income = Sale.objects.filter(
-        sale_date__range=[year_start_aware, year_end_aware],
-        is_reversed=False
-    ).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-    
-    annual_credit_income = CreditTransaction.objects.filter(
-        paid_date__range=[year_start_aware, year_end_aware],
-        payment_status='paid'
-    ).aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
-    
-    annual_account_income = AccountTransaction.objects.filter(
-        transaction_date__range=[year_start_aware, year_end_aware],
-        transaction_type='income'
-    ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-    
-    annual_total_income = annual_sales_income + annual_credit_income + annual_account_income
-    
-    # ============================================
-    # WEEKLY INCOME (Last 7 days)
-    # ============================================
-    
-    weekly_sales_income = Sale.objects.filter(
-        sale_date__gte=week_start_aware,
-        is_reversed=False
-    ).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-    
-    weekly_credit_income = CreditTransaction.objects.filter(
-        paid_date__gte=week_start_aware,
-        payment_status='paid'
-    ).aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
-    
-    weekly_account_income = AccountTransaction.objects.filter(
-        transaction_date__gte=week_start_aware,
-        transaction_type='income'
-    ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-    
-    weekly_total_income = weekly_sales_income + weekly_credit_income + weekly_account_income
-    
-    # ============================================
-    # DAILY INCOME (Today)
-    # ============================================
-    
-    daily_sales_income = Sale.objects.filter(
-        sale_date__range=[today_start, today_end],
-        is_reversed=False
-    ).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-    
-    daily_credit_income = CreditTransaction.objects.filter(
-        paid_date__range=[today_start, today_end],
-        payment_status='paid'
-    ).aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0.00')
-    
-    daily_account_income = AccountTransaction.objects.filter(
-        transaction_date__range=[today_start, today_end],
-        transaction_type='income'
-    ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-    
-    daily_total_income = daily_sales_income + daily_credit_income + daily_account_income
-    
-    # ============================================
-    # MONTHLY EXPENSES - SALARIES FOR PREVIOUS MONTH
-    # ============================================
-    
-    # Salaries are FOR previous month (paid at start of current month)
     monthly_salary_expenses = Salary.objects.filter(
         month=previous_month,
         year=previous_year,
         status='paid'
     ).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
     
-    # Commission Expenses
     monthly_commission_expenses = SellerCommission.objects.filter(
         status='paid',
         paid_date__range=[month_start_aware, month_end_aware]
     ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
     
-    # Account Expenses
     monthly_account_expenses = AccountTransaction.objects.filter(
         transaction_date__range=[month_start_aware, month_end_aware],
         transaction_type='expense'
@@ -201,118 +247,68 @@ def finance_dashboard(request):
     monthly_total_expenses = monthly_salary_expenses + monthly_commission_expenses + monthly_account_expenses
     
     # ============================================
-    # ANNUAL EXPENSES
+    # NET PROFIT (Static)
     # ============================================
-    
-    annual_salary_expenses = Salary.objects.filter(
-        year=previous_year,
-        status='paid'
-    ).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-    
-    annual_commission_expenses = SellerCommission.objects.filter(
-        status='paid',
-        paid_date__range=[year_start_aware, year_end_aware]
-    ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-    
-    annual_account_expenses = AccountTransaction.objects.filter(
-        transaction_date__range=[year_start_aware, year_end_aware],
-        transaction_type='expense'
-    ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-    
-    annual_total_expenses = annual_salary_expenses + annual_commission_expenses + annual_account_expenses
-    
-    # ============================================
-    # WEEKLY EXPENSES (Last 7 days)
-    # ============================================
-    
-    weekly_salary_expenses = Salary.objects.filter(
-        paid_date__gte=week_start_aware,
-        status='paid'
-    ).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-    
-    weekly_commission_expenses = SellerCommission.objects.filter(
-        status='paid',
-        paid_date__gte=week_start_aware
-    ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-    
-    weekly_account_expenses = AccountTransaction.objects.filter(
-        transaction_date__gte=week_start_aware,
-        transaction_type='expense'
-    ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-    
-    weekly_total_expenses = weekly_salary_expenses + weekly_commission_expenses + weekly_account_expenses
-    
-    # ============================================
-    # DAILY EXPENSES (Today)
-    # ============================================
-    
-    daily_salary_expenses = Salary.objects.filter(
-        paid_date__range=[today_start, today_end],
-        status='paid'
-    ).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-    
-    daily_commission_expenses = SellerCommission.objects.filter(
-        status='paid',
-        paid_date__range=[today_start, today_end]
-    ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-    
-    daily_account_expenses = AccountTransaction.objects.filter(
-        transaction_date__range=[today_start, today_end],
-        transaction_type='expense'
-    ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-    
-    daily_total_expenses = daily_salary_expenses + daily_commission_expenses + daily_account_expenses
-    
-    # ============================================
-    # NET PROFIT CALCULATIONS
-    # ============================================
-    
     monthly_net_profit = monthly_total_income - monthly_total_expenses
     monthly_profit_margin = (monthly_net_profit / monthly_total_income * 100) if monthly_total_income > 0 else 0
     
-    annual_net_profit = annual_total_income - annual_total_expenses
-    annual_profit_margin = (annual_net_profit / annual_total_income * 100) if annual_total_income > 0 else 0
-    
-    weekly_net_profit = weekly_total_income - weekly_total_expenses
-    weekly_profit_margin = (weekly_net_profit / weekly_total_income * 100) if weekly_total_income > 0 else 0
-    
-    daily_net_profit = daily_total_income - daily_total_expenses
-    
-    # Average daily profit (last 30 days)
+    # ============================================
+    # CHART DATA (Last 30 days)
+    # ============================================
     thirty_days_ago = today - timedelta(days=30)
     thirty_days_ago_aware = timezone.make_aware(datetime.combine(thirty_days_ago, datetime.min.time()))
     
-    last_30_days_profit = 0
-    days_with_data = 0
+    chart_labels = []
+    income_data = []
+    expense_data = []
+    profit_data = []
+    
     for i in range(30):
         day = thirty_days_ago + timedelta(days=i)
         day_start = timezone.make_aware(datetime.combine(day, datetime.min.time()))
         day_end = timezone.make_aware(datetime.combine(day, datetime.max.time()))
         
-        day_income = (
-            Sale.objects.filter(sale_date__range=[day_start, day_end], is_reversed=False).aggregate(total=Sum('total_amount'))['total'] or 0
-        ) + (
-            CreditTransaction.objects.filter(paid_date__range=[day_start, day_end], payment_status='paid').aggregate(total=Sum('ceiling_price'))['total'] or 0
-        ) + (
-            AccountTransaction.objects.filter(transaction_date__range=[day_start, day_end], transaction_type='income').aggregate(total=Sum('amount'))['total'] or 0
-        )
+        day_sales = Sale.objects.filter(
+            sale_date__range=[day_start, day_end],
+            is_reversed=False
+        ).aggregate(total=Sum('total_amount'))['total'] or 0
         
-        day_expenses = (
-            Salary.objects.filter(paid_date__range=[day_start, day_end], status='paid').aggregate(total=Sum('total_amount'))['total'] or 0
-        ) + (
-            SellerCommission.objects.filter(paid_date__range=[day_start, day_end], status='paid').aggregate(total=Sum('amount'))['total'] or 0
-        ) + (
-            AccountTransaction.objects.filter(transaction_date__range=[day_start, day_end], transaction_type='expense').aggregate(total=Sum('amount'))['total'] or 0
-        )
+        day_credit = CreditTransaction.objects.filter(
+            paid_date__range=[day_start, day_end],
+            payment_status='paid'
+        ).aggregate(total=Sum('ceiling_price'))['total'] or 0
         
-        if day_income > 0 or day_expenses > 0:
-            days_with_data += 1
-            last_30_days_profit += (day_income - day_expenses)
-    
-    avg_daily_profit = last_30_days_profit / days_with_data if days_with_data > 0 else 0
+        day_account_income = AccountTransaction.objects.filter(
+            transaction_date__range=[day_start, day_end],
+            transaction_type='income'
+        ).aggregate(total=Sum('amount'))['total'] or 0
+        
+        daily_income = day_sales + day_credit + day_account_income
+        
+        day_commissions = SellerCommission.objects.filter(
+            paid_date__range=[day_start, day_end],
+            status='paid'
+        ).aggregate(total=Sum('amount'))['total'] or 0
+        
+        day_account_expenses = AccountTransaction.objects.filter(
+            transaction_date__range=[day_start, day_end],
+            transaction_type='expense'
+        ).aggregate(total=Sum('amount'))['total'] or 0
+        
+        day_salaries = Salary.objects.filter(
+            paid_date__range=[day_start, day_end],
+            status='paid'
+        ).aggregate(total=Sum('total_amount'))['total'] or 0
+        
+        daily_expense = day_salaries + day_commissions + day_account_expenses
+        
+        chart_labels.append(day.strftime('%d %b'))
+        income_data.append(float(daily_income))
+        expense_data.append(float(daily_expense))
+        profit_data.append(float(daily_income - daily_expense))
     
     # ============================================
-    # SALARY SUMMARY - FOR PREVIOUS MONTH
+    # SALARY SUMMARY
     # ============================================
     previous_month_salaries = Salary.objects.filter(
         month=previous_month,
@@ -328,10 +324,9 @@ def finance_dashboard(request):
     salaries_approved = previous_month_salaries.filter(status='approved').aggregate(total=Sum('total_amount'))['total'] or 0
     salaries_paid = previous_month_salaries.filter(status='paid').aggregate(total=Sum('total_amount'))['total'] or 0
     salaries_paid_count = previous_month_salaries.filter(status='paid').count()
+    previous_month_salaries_paid = previous_month_salaries.filter(status='paid')
     previous_month_salaries_count = previous_month_salaries.count()
-    previous_month_salaries_paid = salaries_paid
     
-    # Current month salaries (for display in table - being prepared)
     current_month_salaries = Salary.objects.filter(
         month=current_month,
         year=current_year
@@ -366,122 +361,44 @@ def finance_dashboard(request):
     total_pending_commissions = commissions_pending
     
     # ============================================
-    # EXPENSE DISTRIBUTION (for pie chart)
+    # EXPENSE DISTRIBUTION
     # ============================================
     salary_expenses_total = monthly_salary_expenses
     commission_expenses_total = monthly_commission_expenses
     operational_expenses = monthly_account_expenses
-    other_expenses = Decimal('0.00')
     
     # ============================================
-    # RECENT TRANSACTIONS (Last 10)
+    # RECENT TRANSACTIONS
     # ============================================
     recent_transactions = FinancialTransaction.objects.select_related('created_by').order_by('-transaction_date')[:10]
-    
-    # ============================================
-    # CHART DATA (Last 30 days by transaction/payment date)
-    # ============================================
-    chart_labels = []
-    income_data = []
-    expense_data = []
-    profit_data = []
-    
-    for i in range(30):
-        day = thirty_days_ago + timedelta(days=i)
-        day_start = timezone.make_aware(datetime.combine(day, datetime.min.time()))
-        day_end = timezone.make_aware(datetime.combine(day, datetime.max.time()))
-        
-        # Daily income
-        day_sales = Sale.objects.filter(
-            sale_date__range=[day_start, day_end],
-            is_reversed=False
-        ).aggregate(total=Sum('total_amount'))['total'] or 0
-        
-        day_credit = CreditTransaction.objects.filter(
-            paid_date__range=[day_start, day_end],
-            payment_status='paid'
-        ).aggregate(total=Sum('ceiling_price'))['total'] or 0
-        
-        day_account_income = AccountTransaction.objects.filter(
-            transaction_date__range=[day_start, day_end],
-            transaction_type='income'
-        ).aggregate(total=Sum('amount'))['total'] or 0
-        
-        daily_income = day_sales + day_credit + day_account_income
-        
-        # Daily expenses
-        day_commissions = SellerCommission.objects.filter(
-            paid_date__range=[day_start, day_end],
-            status='paid'
-        ).aggregate(total=Sum('amount'))['total'] or 0
-        
-        day_account_expenses = AccountTransaction.objects.filter(
-            transaction_date__range=[day_start, day_end],
-            transaction_type='expense'
-        ).aggregate(total=Sum('amount'))['total'] or 0
-        
-        day_salaries = Salary.objects.filter(
-            paid_date__range=[day_start, day_end],
-            status='paid'
-        ).aggregate(total=Sum('total_amount'))['total'] or 0
-        
-        daily_expense = day_salaries + day_commissions + day_account_expenses
-        
-        chart_labels.append(day.strftime('%d %b'))
-        income_data.append(float(daily_income))
-        expense_data.append(float(daily_expense))
-        profit_data.append(float(daily_income - daily_expense))
-    
-    # ============================================
-    # DEBUG PRINT
-    # ============================================
-    print("=" * 60)
-    print("FINANCE DASHBOARD SUMMARY")
-    print(f"Current Month: {calendar.month_name[current_month]} {current_year}")
-    print(f"Salaries are FOR: {calendar.month_name[previous_month]} {previous_year}")
-    print("-" * 40)
-    print(f"MONTHLY Income: KSH {monthly_total_income:,.2f}")
-    print(f"MONTHLY Expenses (Salaries for {calendar.month_name[previous_month]}): KSH {monthly_salary_expenses:,.2f}")
-    print(f"MONTHLY Net Profit: KSH {monthly_net_profit:,.2f}")
-    print("-" * 40)
-    print(f"WEEKLY Income: KSH {weekly_total_income:,.2f}")
-    print(f"WEEKLY Expenses: KSH {weekly_total_expenses:,.2f}")
-    print(f"WEEKLY Net Profit: KSH {weekly_net_profit:,.2f}")
-    print("-" * 40)
-    print(f"DAILY Income: KSH {daily_total_income:,.2f}")
-    print(f"DAILY Expenses: KSH {daily_total_expenses:,.2f}")
-    print(f"DAILY Net Profit: KSH {daily_net_profit:,.2f}")
-    print("=" * 60)
     
     # ============================================
     # CONTEXT
     # ============================================
     context = {
-        # Monthly Summary
+        # FILTERED SUMMARY (for main cards)
+        'filtered_total_income': filtered_total_income,
+        'filtered_total_expenses': filtered_total_expenses,
+        'filtered_net_profit': filtered_net_profit,
+        'filtered_profit_margin': filtered_profit_margin,
+        'filtered_total_profit': filtered_total_profit,
+        'filtered_date_from': date_from,
+        'filtered_date_to': date_to,
+        'selected_range': date_range,
+        
+        # Static Monthly Summary (for reference/charts)
         'total_income': monthly_total_income,
         'total_expenses': monthly_total_expenses,
         'net_profit': monthly_net_profit,
         'profit_margin': monthly_profit_margin,
         
-        # Annual Summary
-        'annual_total_income': annual_total_income,
-        'annual_total_expenses': annual_total_expenses,
-        'annual_net_profit': annual_net_profit,
-        'annual_profit_margin': annual_profit_margin,
+        # Chart data
+        'chart_labels': chart_labels,
+        'income_data': income_data,
+        'expense_data': expense_data,
+        'profit_data': profit_data,
         
-        # Weekly Summary
-        'weekly_total_income': weekly_total_income,
-        'weekly_total_expenses': weekly_total_expenses,
-        'weekly_net_profit': weekly_net_profit,
-        'weekly_profit_margin': weekly_profit_margin,
-        
-        # Daily Summary
-        'daily_income': daily_total_income,
-        'daily_expenses': daily_total_expenses,
-        'daily_profit': daily_net_profit,
-        'avg_daily_profit': avg_daily_profit,
-        
-        # Salaries (Previous Month)
+        # Salaries
         'salaries_pending': salaries_pending,
         'salaries_approved': salaries_approved,
         'salaries_paid': salaries_paid,
@@ -505,17 +422,10 @@ def finance_dashboard(request):
         'pending_commissions': pending_commissions,
         'total_pending_commissions': total_pending_commissions,
         
-        # Chart data
-        'chart_labels': chart_labels,
-        'income_data': income_data,
-        'expense_data': expense_data,
-        'profit_data': profit_data,
-        
         # Expense distribution
         'salary_expenses': salary_expenses_total,
         'commission_expenses': commission_expenses_total,
         'operational_expenses': operational_expenses,
-        'other_expenses': other_expenses,
         
         # Recent transactions
         'recent_transactions': recent_transactions,
@@ -530,6 +440,18 @@ def finance_dashboard(request):
     
     return render(request, 'finance/dashboard.html', context)
 
+
+
+
+
+
+
+
+
+
+
+
+    
 
 # ============================================
 # SALARY MANAGEMENT VIEWS
@@ -1905,7 +1827,7 @@ def commission_export(request):
 
 
 # ============================================
-# FINANCIAL TRANSACTIONS VIEW
+# FINANCIAL TRANSACTIONS VIEW - FIXED
 # ============================================
 @login_required
 def financial_transactions(request):
@@ -1921,6 +1843,28 @@ def financial_transactions(request):
             return dt.date()
         return dt
     
+    # ============================================
+    # GET DATE FILTERS FROM REQUEST (for profit calculation)
+    # ============================================
+    date_from_str = request.GET.get('date_from')
+    date_to_str = request.GET.get('date_to')
+    
+    date_from = None
+    date_to = None
+    if date_from_str:
+        try:
+            date_from = datetime.strptime(date_from_str, '%Y-%m-%d').date()
+        except:
+            pass
+    if date_to_str:
+        try:
+            date_to = datetime.strptime(date_to_str, '%Y-%m-%d').date()
+        except:
+            pass
+    
+    date_from_aware = timezone.make_aware(datetime.combine(date_from, datetime.min.time())) if date_from else None
+    date_to_aware = timezone.make_aware(datetime.combine(date_to, datetime.max.time())) if date_to else None
+    
     transactions = []
     
     # ============================================
@@ -1932,7 +1876,7 @@ def financial_transactions(request):
         transactions.append({
             'id': f'salary_{salary.id}',
             'transaction_date': trans_date,
-            'sort_date': to_date(trans_date),  # Add sort_date for sorting
+            'sort_date': to_date(trans_date),
             'source': 'salary',
             'transaction_type': 'expense',
             'description': f"Salary payment - {salary.staff.get_full_name() or salary.staff.username} - {salary.get_month_display()} {salary.year}",
@@ -2007,10 +1951,11 @@ def financial_transactions(request):
     ).select_related('credit_company', 'created_by')
     
     for payment in credit_payments:
+        payment_date = payment.payment_date
         transactions.append({
             'id': f'credit_payment_{payment.id}',
             'transaction_date': payment.payment_date,
-            'sort_date': payment.payment_date,  # Already a date
+            'sort_date': payment.payment_date,
             'source': 'credit_payment',
             'transaction_type': 'income',
             'description': f"Credit payment from {payment.credit_company.name} - {payment.payment_id}",
@@ -2036,18 +1981,16 @@ def financial_transactions(request):
     if account_filter:
         transactions = [t for t in transactions if t['source'] == account_filter]
     
-    date_from = request.GET.get('date_from')
-    if date_from:
+    if date_from_str:
         try:
-            date_from_obj = datetime.strptime(date_from, '%Y-%m-%d').date()
+            date_from_obj = datetime.strptime(date_from_str, '%Y-%m-%d').date()
             transactions = [t for t in transactions if t['sort_date'] >= date_from_obj]
         except:
             pass
     
-    date_to = request.GET.get('date_to')
-    if date_to:
+    if date_to_str:
         try:
-            date_to_obj = datetime.strptime(date_to, '%Y-%m-%d').date()
+            date_to_obj = datetime.strptime(date_to_str, '%Y-%m-%d').date()
             transactions = [t for t in transactions if t['sort_date'] <= date_to_obj]
         except:
             pass
@@ -2060,22 +2003,38 @@ def financial_transactions(request):
     page_obj = paginator.get_page(page_number)
     
     # ============================================
-    # CALCULATE TOTALS
+    # CALCULATE TOTALS FROM FILTERED TRANSACTIONS
     # ============================================
     total_income = sum(t['amount'] for t in transactions if t['transaction_type'] == 'income')
     total_expenses = sum(t['amount'] for t in transactions if t['transaction_type'] == 'expense')
     net_balance = total_income - total_expenses
     
+    # ============================================
+    # CALCULATE PROFIT FROM FILTERED DATE RANGE
+    # ============================================
+    
+    # Filter sales by date range for profit calculation
+    filtered_sales = Sale.objects.filter(is_reversed=False)
+    if date_from_aware:
+        filtered_sales = filtered_sales.filter(sale_date__gte=date_from_aware)
+    if date_to_aware:
+        filtered_sales = filtered_sales.filter(sale_date__lte=date_to_aware)
+    
     total_sales_profit = Decimal('0.00')
-    for sale in sales:
+    for sale in filtered_sales:
         for item in sale.items.all():
             if item.product and item.product.buying_price:
                 profit = (item.unit_price - item.product.buying_price) * item.quantity
                 total_sales_profit += profit
     
-    total_credit_profit = Decimal('0.00')
-    for payment in credit_payments:
-        total_credit_profit += payment.amount
+    # Filter credit payments by date range
+    filtered_credit_payments = CompanyPayment.objects.all()
+    if date_from:
+        filtered_credit_payments = filtered_credit_payments.filter(payment_date__gte=date_from)
+    if date_to:
+        filtered_credit_payments = filtered_credit_payments.filter(payment_date__lte=date_to)
+    
+    total_credit_profit = filtered_credit_payments.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
     
     total_profit = total_sales_profit + total_credit_profit
     
@@ -2104,7 +2063,6 @@ def financial_transactions(request):
     }
     
     return render(request, 'finance/transactions.html', context)
-
 
 
 
@@ -2355,28 +2313,58 @@ def financial_expenses(request):
 
 
 
-
-
-# ============================================
-# FINANCE ACCOUNTS VIEWS
-# ============================================
 @login_required
 def bank_account(request):
     """Bank account dashboard with bank sales and credit payments"""
     from .models import BankAccount, AccountTransaction
     from credit.models import CompanyPayment
-    from sales.models import Sale  # Add this import
+    from sales.models import Sale
     from decimal import Decimal
-    from datetime import datetime, timedelta
+    from datetime import datetime
     from django.utils import timezone
     
     bank_account, created = BankAccount.objects.get_or_create(id=1)
     
-    transactions = []
+    # ============================================
+    # CALCULATE TOTALS FOR THE CARDS
+    # ============================================
+    
+    # Calculate Total Income
+    bank_sales_total = Sale.objects.filter(
+        payment_method__in=['M-Pesa', 'Card', 'Bank'],
+        is_reversed=False
+    ).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+    
+    credit_bank_total = CompanyPayment.objects.filter(
+        payment_method__in=['bank', 'mpesa']
+    ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+    
+    manual_income_total = AccountTransaction.objects.filter(
+        account_type='bank',
+        transaction_type='income'
+    ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+    
+    total_income = bank_sales_total + credit_bank_total + manual_income_total
+    
+    # Calculate Total Expenses
+    manual_expense_total = AccountTransaction.objects.filter(
+        account_type='bank',
+        transaction_type='expense'
+    ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+    
+    total_expenses = manual_expense_total
     
     # ============================================
-    # BANK/MPESA SALES (from Sales App)
+    # NET BALANCE = CURRENT BALANCE (from the account)
     # ============================================
+    net_balance = bank_account.balance  # This is the actual current balance
+    
+    # ============================================
+    # BUILD TRANSACTIONS LIST FOR DISPLAY
+    # ============================================
+    transactions = []
+    
+    # Add bank sales
     bank_sales = Sale.objects.filter(
         payment_method__in=['M-Pesa', 'Card', 'Bank'],
         is_reversed=False
@@ -2384,28 +2372,22 @@ def bank_account(request):
     
     for sale in bank_sales:
         transactions.append({
-            'id': f'sale_{sale.sale_id}',
             'date': sale.sale_date,
             'type': 'income',
             'description': f"{sale.payment_method} Sale - {sale.sale_id} - {sale.buyer_name or 'Walk-in Customer'}",
             'amount': sale.total_amount,
             'reference': sale.sale_id,
             'created_by': sale.seller,
-            'source': 'bank_sale',
-            'items_count': sale.items.count(),
-            'payment_method': sale.payment_method
+            'source': 'bank_sale'
         })
     
-    # ============================================
-    # MANUAL TRANSACTIONS
-    # ============================================
+    # Add manual transactions
     manual_trans = AccountTransaction.objects.filter(
         account_type='bank'
     ).select_related('created_by')
     
     for t in manual_trans:
         transactions.append({
-            'id': f'manual_{t.id}',
             'date': t.transaction_date,
             'type': t.transaction_type,
             'description': t.description,
@@ -2415,9 +2397,7 @@ def bank_account(request):
             'source': 'manual'
         })
     
-    # ============================================
-    # CREDIT COMPANY PAYMENTS (Bank/MPesa payments)
-    # ============================================
+    # Add credit payments
     credit_payments = CompanyPayment.objects.filter(
         payment_method__in=['bank', 'mpesa']
     ).select_related('credit_company', 'created_by')
@@ -2426,34 +2406,59 @@ def bank_account(request):
         payment_date = datetime.combine(payment.payment_date, datetime.min.time())
         if timezone.is_naive(payment_date):
             payment_date = timezone.make_aware(payment_date)
-            
         transactions.append({
-            'id': f'credit_{payment.id}',
             'date': payment_date,
             'type': 'income',
-            'description': f'Credit company payment - {payment.credit_company.name} - {payment.payment_id}',
+            'description': f'Credit payment - {payment.credit_company.name}',
             'amount': payment.amount,
             'reference': payment.payment_reference,
             'created_by': payment.created_by,
-            'source': 'credit'
+            'source': 'credit_payment'
         })
     
-    # ============================================
-    # SORT AND DISPLAY
-    # ============================================
+    # Add money transfers
+    transfers_in = MoneyTransfer.objects.filter(
+        to_account='bank',
+        status='completed'
+    ).order_by('-created_at')
+    
+    transfers_out = MoneyTransfer.objects.filter(
+        from_account='bank',
+        status='completed'
+    ).order_by('-created_at')
+    
+    for transfer in transfers_in:
+        transactions.append({
+            'date': transfer.created_at,
+            'type': 'transfer',
+            'description': f'Transfer from {transfer.get_from_account_display()} to Bank - {transfer.description}',
+            'amount': transfer.amount,
+            'reference': transfer.transfer_reference,
+            'created_by': transfer.requested_by,
+            'source': 'transfer_in'
+        })
+    
+    for transfer in transfers_out:
+        transactions.append({
+            'date': transfer.created_at,
+            'type': 'transfer',
+            'description': f'Transfer from Bank to {transfer.get_to_account_display()} - {transfer.description}',
+            'amount': transfer.amount,
+            'reference': transfer.transfer_reference,
+            'created_by': transfer.requested_by,
+            'source': 'transfer_out'
+        })
+    
+    # Sort by date
     transactions.sort(key=lambda x: x['date'], reverse=True)
     recent_transactions = transactions[:50]
-    
-    total_income = sum(t['amount'] for t in transactions if t['type'] == 'income')
-    total_expenses = sum(t['amount'] for t in transactions if t['type'] == 'expense')
-    net_balance = total_income - total_expenses
     
     context = {
         'account': bank_account,
         'transactions': recent_transactions,
         'total_income': total_income,
         'total_expenses': total_expenses,
-        'net_balance': net_balance,
+        'net_balance': net_balance,  # This is the current balance
         'account_type': 'Bank Account',
         'account_icon': 'fa-university',
         'account_color': 'primary',
@@ -2467,24 +2472,58 @@ def bank_account(request):
 
 
 
-
 @login_required
 def cash_account(request):
     """Cash account dashboard with cash sales and credit payments"""
     from .models import CashAccount, AccountTransaction
     from credit.models import CompanyPayment
-    from sales.models import Sale  # Add this import
+    from sales.models import Sale
     from decimal import Decimal
     from datetime import datetime
     from django.utils import timezone
     
     cash_account, created = CashAccount.objects.get_or_create(id=1)
     
-    transactions = []
+    # ============================================
+    # CALCULATE TOTALS FOR THE CARDS
+    # ============================================
+    
+    # Calculate Total Income (for the green card)
+    cash_sales_total = Sale.objects.filter(
+        payment_method='Cash',
+        is_reversed=False
+    ).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+    
+    credit_cash_total = CompanyPayment.objects.filter(
+        payment_method='cash'
+    ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+    
+    manual_income_total = AccountTransaction.objects.filter(
+        account_type='cash',
+        transaction_type='income'
+    ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+    
+    total_income = cash_sales_total + credit_cash_total + manual_income_total
+    
+    # Calculate Total Expenses (for the red card)
+    manual_expense_total = AccountTransaction.objects.filter(
+        account_type='cash',
+        transaction_type='expense'
+    ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+    
+    total_expenses = manual_expense_total
     
     # ============================================
-    # CASH SALES (from Sales App)
+    # NET BALANCE = CURRENT BALANCE (from the account)
     # ============================================
+    net_balance = cash_account.balance  # This is the actual current balance
+    
+    # ============================================
+    # BUILD TRANSACTIONS LIST FOR DISPLAY
+    # ============================================
+    transactions = []
+    
+    # Add cash sales (income)
     cash_sales = Sale.objects.filter(
         payment_method='Cash',
         is_reversed=False
@@ -2492,40 +2531,33 @@ def cash_account(request):
     
     for sale in cash_sales:
         transactions.append({
-            'id': f'sale_{sale.sale_id}',
             'date': sale.sale_date,
             'type': 'income',
             'description': f"Cash Sale - {sale.sale_id} - {sale.buyer_name or 'Walk-in Customer'}",
             'amount': sale.total_amount,
             'reference': sale.sale_id,
             'created_by': sale.seller,
-            'source': 'cash_sale',
-            'items_count': sale.items.count(),
-            'payment_method': sale.payment_method
+            'source': 'cash_sale'
         })
     
-    # ============================================
-    # MANUAL TRANSACTIONS
-    # ============================================
+    # Add manual transactions
     manual_trans = AccountTransaction.objects.filter(
         account_type='cash'
     ).select_related('created_by')
     
     for t in manual_trans:
         transactions.append({
-            'id': f'manual_{t.id}',
             'date': t.transaction_date,
             'type': t.transaction_type,
             'description': t.description,
             'amount': t.amount,
             'reference': t.reference or '',
             'created_by': t.created_by,
-            'source': 'manual'
+            'source': 'manual',
+            'notes': t.notes
         })
     
-    # ============================================
-    # CREDIT COMPANY PAYMENTS (Cash payments from companies)
-    # ============================================
+    # Add credit company cash payments (income)
     cash_payments = CompanyPayment.objects.filter(
         payment_method='cash'
     ).select_related('credit_company', 'created_by')
@@ -2534,47 +2566,65 @@ def cash_account(request):
         payment_date = datetime.combine(payment.payment_date, datetime.min.time())
         if timezone.is_naive(payment_date):
             payment_date = timezone.make_aware(payment_date)
-            
         transactions.append({
-            'id': f'credit_{payment.id}',
             'date': payment_date,
             'type': 'income',
-            'description': f'Credit company payment (cash) - {payment.credit_company.name} - {payment.payment_id}',
+            'description': f'Credit payment (cash) - {payment.credit_company.name}',
             'amount': payment.amount,
             'reference': payment.payment_reference,
             'created_by': payment.created_by,
-            'source': 'credit'
+            'source': 'credit_payment'
         })
     
-    # ============================================
-    # SORT AND DISPLAY
-    # ============================================
+    # Add money transfers (for display only)
+    transfers_in = MoneyTransfer.objects.filter(
+        to_account='cash',
+        status='completed'
+    ).order_by('-created_at')
+    
+    transfers_out = MoneyTransfer.objects.filter(
+        from_account='cash',
+        status='completed'
+    ).order_by('-created_at')
+    
+    for transfer in transfers_in:
+        transactions.append({
+            'date': transfer.created_at,
+            'type': 'transfer',
+            'description': f'Transfer from {transfer.get_from_account_display()} to Cash - {transfer.description}',
+            'amount': transfer.amount,
+            'reference': transfer.transfer_reference,
+            'created_by': transfer.requested_by,
+            'source': 'transfer_in'
+        })
+    
+    for transfer in transfers_out:
+        transactions.append({
+            'date': transfer.created_at,
+            'type': 'transfer',
+            'description': f'Transfer from Cash to {transfer.get_to_account_display()} - {transfer.description}',
+            'amount': transfer.amount,
+            'reference': transfer.transfer_reference,
+            'created_by': transfer.requested_by,
+            'source': 'transfer_out'
+        })
+    
+    # Sort by date (newest first)
     transactions.sort(key=lambda x: x['date'], reverse=True)
     recent_transactions = transactions[:50]
-    
-    total_income = sum(t['amount'] for t in transactions if t['type'] == 'income')
-    total_expenses = sum(t['amount'] for t in transactions if t['type'] == 'expense')
-    net_balance = total_income - total_expenses
-
-    # Update cash account balance
-    cash_account.balance = total_income - total_expenses
-    cash_account.last_updated = timezone.now()
-    cash_account.save(update_fields=['balance', 'last_updated'])
     
     context = {
         'account': cash_account,
         'transactions': recent_transactions,
         'total_income': total_income,
         'total_expenses': total_expenses,
-        'net_balance': net_balance,
+        'net_balance': net_balance,  # This is the current balance
         'account_type': 'Cash Account',
         'account_icon': 'fa-wallet',
         'account_color': 'success',
     }
     
     return render(request, 'finance/account_detail.html', context)
-
-
 
 
 
@@ -2591,6 +2641,19 @@ def credit_account(request):
         account_type='credit'
     ).order_by('-transaction_date')[:50]
     
+    # Create transaction list for display
+    transaction_list = []
+    for t in transactions:
+        transaction_list.append({
+            'date': t.transaction_date,
+            'type': t.transaction_type,
+            'description': t.description,
+            'amount': t.amount,
+            'reference': t.reference or '',
+            'created_by': t.created_by,
+            'source': 'manual'
+        })
+    
     total_credit_taken = AccountTransaction.objects.filter(
         account_type='credit',
         transaction_type='expense'
@@ -2605,11 +2668,10 @@ def credit_account(request):
     
     context = {
         'account': credit_account,
-        'transactions': transactions,
-        'total_credit_taken': total_credit_taken,
-        'total_payments_made': total_payments_made,
+        'transactions': transaction_list,
+        'total_income': total_payments_made,
+        'total_expenses': total_credit_taken,
         'net_balance': net_balance,
-        'available_credit': credit_account.available_credit,
         'account_type': 'Credit Account',
         'account_icon': 'fa-credit-card',
         'account_color': 'warning',
@@ -3091,6 +3153,90 @@ def income_detail(request, transaction_id):
 
 
 
+@login_required
+def stock_purchase_expenses(request):
+    """View all stock purchase expenses"""
+    from inventory.models import StockEntry
+    from decimal import Decimal
+    from django.core.paginator import Paginator
+    from datetime import datetime, timedelta
+    from django.db.models import Sum, Q
+    
+    # Get all purchase stock entries
+    stock_purchases = StockEntry.objects.filter(
+        quantity__gt=0,
+        entry_type__in=['purchase', 'adjustment']
+    ).select_related(
+        'product_sku', 'product_unit__product', 'created_by'
+    ).order_by('-created_at')
+    
+    # Apply filters
+    date_from = request.GET.get('date_from')
+    if date_from:
+        try:
+            stock_purchases = stock_purchases.filter(created_at__date__gte=date_from)
+        except:
+            pass
+    
+    date_to = request.GET.get('date_to')
+    if date_to:
+        try:
+            stock_purchases = stock_purchases.filter(created_at__date__lte=date_to)
+        except:
+            pass
+    
+    search = request.GET.get('search')
+    if search:
+        stock_purchases = stock_purchases.filter(
+            Q(product_sku__sku_code__icontains=search) |
+            Q(product_sku__name__icontains=search) |
+            Q(product_unit__product__sku_code__icontains=search) |
+            Q(product_unit__product__name__icontains=search)
+        )
+    
+    # Calculate totals
+    total_purchase_value = stock_purchases.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+    total_items_purchased = stock_purchases.aggregate(total=Sum('quantity'))['total'] or 0
+    
+    # Pagination
+    paginator = Paginator(stock_purchases, 50)
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+    
+    # Enhance each entry
+    for entry in page_obj:
+        if entry.product_sku:
+            entry.product_display = entry.product_sku.name
+            entry.sku_display = entry.product_sku.sku_code
+            entry.item_type = 'Bulk Item'
+        elif entry.product_unit:
+            entry.product_display = entry.product_unit.product.name
+            entry.sku_display = entry.product_unit.product.sku_code
+            entry.item_type = 'Single Unit'
+        else:
+            entry.product_display = 'Unknown'
+            entry.sku_display = 'N/A'
+            entry.item_type = 'Unknown'
+    
+    context = {
+        'purchases': page_obj,
+        'total_purchase_value': total_purchase_value,
+        'total_items_purchased': total_items_purchased,
+        'date_from': date_from,
+        'date_to': date_to,
+        'search': search,
+    }
+    
+    return render(request, 'finance/stock_purchase_expenses.html', context)
+
+
+
+
+
+
+
+
+
 
 # ============================================
 # M-PESA PAYMENT INTEGRATION - COMPLETE
@@ -3388,3 +3534,830 @@ def mpesa_callback(request):
         import traceback
         traceback.print_exc()
         return JsonResponse({"ResultCode": 0, "ResultDesc": "OK"})
+
+
+
+
+
+
+
+
+
+
+# ============================================
+# MONEY TRANSFER VIEWS
+# ============================================
+# finance/views.py
+
+from django.shortcuts import render, get_object_or_404, redirect
+from django.contrib.admin.views.decorators import staff_member_required
+from django.contrib import messages
+from django.core.paginator import Paginator
+from decimal import Decimal
+from .models import MoneyTransfer, CashAccount, BankAccount
+
+@staff_member_required
+def money_transfer_list(request):
+    """List all internal money transfers (NOT income/expense)"""
+    transfers = MoneyTransfer.objects.all().order_by('-created_at')
+    
+    # Apply filters
+    status = request.GET.get('status')
+    if status:
+        transfers = transfers.filter(status=status)
+    
+    from_account = request.GET.get('from_account')
+    if from_account:
+        transfers = transfers.filter(from_account=from_account)
+    
+    to_account = request.GET.get('to_account')
+    if to_account:
+        transfers = transfers.filter(to_account=to_account)
+    
+    # Pagination
+    paginator = Paginator(transfers, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    context = {
+        'transfers': page_obj,
+        'status_choices': MoneyTransfer.STATUS_CHOICES,
+        'account_choices': MoneyTransfer.ACCOUNT_CHOICES,
+        'title': 'Internal Money Transfers'
+    }
+    return render(request, 'finance/money_transfer_list.html', context)
+
+
+@staff_member_required
+def money_transfer_create(request):
+    """Create new internal money transfer"""
+    
+    if request.method == 'POST':
+        from_account = request.POST.get('from_account')
+        to_account = request.POST.get('to_account')
+        amount = request.POST.get('amount')
+        description = request.POST.get('description')
+        notes = request.POST.get('notes', '')
+        
+        # Validate
+        if from_account == to_account:
+            messages.error(request, 'Source and destination accounts cannot be the same')
+            return redirect('finance:money_transfer_create')
+        
+        try:
+            amount_decimal = Decimal(amount)
+            if amount_decimal <= 0:
+                messages.error(request, 'Amount must be greater than zero')
+                return redirect('finance:money_transfer_create')
+        except:
+            messages.error(request, 'Invalid amount')
+            return redirect('finance:money_transfer_create')
+        
+        # Check balance
+        if from_account == 'cash':
+            cash = CashAccount.objects.first()
+            if not cash or cash.balance < amount_decimal:
+                messages.error(request, f'Insufficient cash balance. Available: KES {cash.balance if cash else 0:,.2f}')
+                return redirect('finance:money_transfer_create')
+        elif from_account == 'bank':
+            bank = BankAccount.objects.first()
+            if not bank or bank.balance < amount_decimal:
+                messages.error(request, f'Insufficient bank balance. Available: KES {bank.balance if bank else 0:,.2f}')
+                return redirect('finance:money_transfer_create')
+        
+        # Create transfer
+        transfer = MoneyTransfer.objects.create(
+            from_account=from_account,
+            to_account=to_account,
+            amount=amount_decimal,
+            description=description,
+            notes=notes,
+            requested_by=request.user
+        )
+        
+        # Complete the transfer (internal - no income/expense)
+        if transfer.complete_transfer(approved_by=request.user):
+            messages.success(
+                request, 
+                f'✅ Internal transfer of KES {amount_decimal:,.2f} from {transfer.get_from_account_display()} to {transfer.get_to_account_display()} completed successfully!'
+            )
+        else:
+            messages.error(request, 'Transfer failed due to insufficient balance')
+        
+        return redirect('finance:money_transfer_list')
+    
+    # GET request
+    cash = CashAccount.objects.first()
+    bank = BankAccount.objects.first()
+    
+    context = {
+        'cash_balance': cash.balance if cash else 0,
+        'bank_balance': bank.balance if bank else 0,
+    }
+    return render(request, 'finance/money_transfer_form.html', context)
+
+
+@staff_member_required
+def money_transfer_detail(request, pk):
+    """View transfer details"""
+    transfer = get_object_or_404(MoneyTransfer, pk=pk)
+    return render(request, 'finance/money_transfer_detail.html', {'transfer': transfer})
+
+
+@staff_member_required
+def money_transfer_cancel(request, pk):
+    """Cancel a pending transfer"""
+    transfer = get_object_or_404(MoneyTransfer, pk=pk, status='pending')
+    
+    if request.method == 'POST':
+        reason = request.POST.get('reason', '')
+        transfer.cancel(cancelled_by=request.user, reason=reason)
+        messages.warning(request, f'Transfer {transfer.transfer_reference} has been cancelled.')
+        return redirect('finance:money_transfer_list')
+    
+    return render(request, 'finance/money_transfer_cancel.html', {'transfer': transfer})
+
+
+
+
+
+
+from django.shortcuts import render
+from django.contrib.auth.decorators import login_required
+from django.db.models import Sum, Count, Q
+from django.utils import timezone
+from datetime import datetime, timedelta
+from decimal import Decimal
+from .models import (
+    IncomeAccount, PurchaseAccount, ProfitAccount, 
+    IncomeTransaction, PurchaseTransaction, ProfitTransaction
+)
+from sales.models import Sale, SaleItem
+from inventory.models import Product, StockEntry
+
+
+@login_required
+def sales_income_page(request):
+    """Display sales income and profit analysis with comparisons"""
+    
+    # Get filter parameters
+    date_from = request.GET.get('date_from')
+    date_to = request.GET.get('date_to')
+    period = request.GET.get('period', 'month')
+    
+    # Initialize variables
+    days_diff = 30
+    start_date = None
+    end_date = None
+    previous_start = None
+    previous_end = None
+    
+    # Set date range based on period
+    today = timezone.now().date()
+    
+    if period == 'day':
+        start_date = today
+        end_date = today
+        days_diff = 1
+        previous_start = today - timedelta(days=1)
+        previous_end = today - timedelta(days=1)
+    elif period == 'week':
+        start_date = today - timedelta(days=7)
+        end_date = today
+        days_diff = 7
+        previous_start = start_date - timedelta(days=7)
+        previous_end = end_date - timedelta(days=7)
+    elif period == 'month':
+        start_date = today - timedelta(days=30)
+        end_date = today
+        days_diff = 30
+        previous_start = start_date - timedelta(days=30)
+        previous_end = end_date - timedelta(days=30)
+    elif period == 'year':
+        start_date = today - timedelta(days=365)
+        end_date = today
+        days_diff = 365
+        previous_start = start_date - timedelta(days=365)
+        previous_end = end_date - timedelta(days=365)
+    else:
+        start_date = today - timedelta(days=30)
+        end_date = today
+        days_diff = 30
+        previous_start = start_date - timedelta(days=30)
+        previous_end = end_date - timedelta(days=30)
+    
+    # Apply custom date filters if provided
+    if date_from:
+        start_date = datetime.strptime(date_from, '%Y-%m-%d').date()
+        if date_to:
+            end_date = datetime.strptime(date_to, '%Y-%m-%d').date()
+            days_diff = (end_date - start_date).days
+            if days_diff <= 0:
+                days_diff = 1
+        else:
+            end_date = start_date + timedelta(days=days_diff)
+    
+    if date_to and not date_from:
+        end_date = datetime.strptime(date_to, '%Y-%m-%d').date()
+        start_date = end_date - timedelta(days=days_diff)
+    
+    # Calculate previous period
+    if previous_start is None or previous_end is None:
+        previous_start = start_date - timedelta(days=days_diff)
+        previous_end = end_date - timedelta(days=days_diff)
+    
+    # ============================================
+    # USE STOCKENTRY FOR CONSISTENT DATA (matches Inventory Expenses)
+    # ============================================
+    from inventory.models import StockEntry
+    from decimal import Decimal
+    from django.db.models import Sum
+    
+    # Get sales from StockEntry
+    period_sales_entries = StockEntry.objects.filter(
+        entry_type='sale',
+        quantity__lt=0,
+        created_at__date__gte=start_date,
+        created_at__date__lte=end_date
+    )
+    
+    # Calculate total sales revenue (VOGS)
+    period_total_income = abs(period_sales_entries.aggregate(total=Sum('total_amount'))['total'] or Decimal('0'))
+    
+    # Calculate COGS from the same sales entries using product buying price
+    period_cogs = Decimal('0')
+    period_total_quantity = 0
+    
+    for entry in period_sales_entries:
+        qty = abs(entry.quantity)
+        period_total_quantity += qty
+        
+        if entry.product_sku:
+            period_cogs += qty * (entry.product_sku.buying_price or Decimal('0'))
+        elif entry.product_unit:
+            period_cogs += qty * (entry.product_unit.product.buying_price or Decimal('0'))
+    
+    period_profit = period_total_income - period_cogs
+    period_margin = (period_profit / period_total_income * 100) if period_total_income > 0 else 0
+    period_sales_count = period_sales_entries.count()
+    
+    # ============================================
+    # PREVIOUS PERIOD using same logic
+    # ============================================
+    prev_sales_entries = StockEntry.objects.filter(
+        entry_type='sale',
+        quantity__lt=0,
+        created_at__date__gte=previous_start,
+        created_at__date__lte=previous_end
+    )
+    
+    prev_total_income = abs(prev_sales_entries.aggregate(total=Sum('total_amount'))['total'] or Decimal('0'))
+    
+    prev_cogs = Decimal('0')
+    for entry in prev_sales_entries:
+        qty = abs(entry.quantity)
+        if entry.product_sku:
+            prev_cogs += qty * (entry.product_sku.buying_price or Decimal('0'))
+        elif entry.product_unit:
+            prev_cogs += qty * (entry.product_unit.product.buying_price or Decimal('0'))
+    
+    prev_profit = prev_total_income - prev_cogs
+    prev_margin = (prev_profit / prev_total_income * 100) if prev_total_income > 0 else 0
+    
+    # Calculate percentage changes
+    income_change = ((period_total_income - prev_total_income) / prev_total_income * 100) if prev_total_income > 0 else 100 if period_total_income > 0 else 0
+    profit_change = ((period_profit - prev_profit) / prev_profit * 100) if prev_profit > 0 else 100 if period_profit > 0 else 0
+    margin_change = period_margin - prev_margin
+    
+    # ============================================
+    # TOP SELLING PRODUCTS (from SaleItem for names)
+    # ============================================
+    from sales.models import SaleItem
+    
+    top_products = SaleItem.objects.filter(
+        sale__sale_date__date__gte=start_date,
+        sale__sale_date__date__lte=end_date,
+        sale__is_reversed=False
+    ).values(
+        'product_name', 'product_code'
+    ).annotate(
+        total_quantity=Sum('quantity'),
+        total_revenue=Sum('total_price')
+    ).order_by('-total_revenue')[:5]
+    
+    # Previous period top products
+    prev_top_products = SaleItem.objects.filter(
+        sale__sale_date__date__gte=previous_start,
+        sale__sale_date__date__lte=previous_end,
+        sale__is_reversed=False
+    ).values(
+        'product_name', 'product_code'
+    ).annotate(
+        total_quantity=Sum('quantity'),
+        total_revenue=Sum('total_price')
+    ).order_by('-total_revenue')[:5]
+    
+    # ============================================
+    # DAILY SALES DATA FOR CHART
+    # ============================================
+    daily_data = []
+    current_date = start_date
+    
+    while current_date <= end_date:
+        day_sales = StockEntry.objects.filter(
+            entry_type='sale',
+            quantity__lt=0,
+            created_at__date=current_date
+        )
+        
+        day_income = abs(day_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0'))
+        
+        day_cogs = Decimal('0')
+        for entry in day_sales:
+            qty = abs(entry.quantity)
+            if entry.product_sku:
+                day_cogs += qty * (entry.product_sku.buying_price or Decimal('0'))
+            elif entry.product_unit:
+                day_cogs += qty * (entry.product_unit.product.buying_price or Decimal('0'))
+        
+        day_profit = day_income - day_cogs
+        
+        daily_data.append({
+            'date': current_date.strftime('%Y-%m-%d'),
+            'income': float(day_income),
+            'profit': float(day_profit),
+            'cogs': float(day_cogs)
+        })
+        current_date += timedelta(days=1)
+    
+    # ============================================
+    # RECENT SALES (from StockEntry, limited to 5)
+    # ============================================
+    recent_sales_entries = period_sales_entries.order_by('-created_at')[:5]
+    
+    # ============================================
+    # Get account balances
+    # ============================================
+    from .models import IncomeAccount, PurchaseAccount, ProfitAccount
+    
+    income_account = IncomeAccount.get_or_create_account()
+    purchase_account = PurchaseAccount.get_or_create_account()
+    profit_account = ProfitAccount.get_or_create_account()
+    
+    context = {
+        'title': 'Sales Income Report',
+        # Account balances
+        'income_account': income_account,
+        'purchase_account': purchase_account,
+        'profit_account': profit_account,
+        # Current period totals
+        'period_income': period_total_income,
+        'period_cogs': period_cogs,
+        'period_profit': period_profit,
+        'period_margin': period_margin,
+        'period_sales_count': period_sales_count,
+        'period_total_quantity': period_total_quantity,
+        # Previous period totals
+        'prev_income': prev_total_income,
+        'prev_cogs': prev_cogs,
+        'prev_profit': prev_profit,
+        'prev_margin': prev_margin,
+        # Changes
+        'income_change': income_change,
+        'profit_change': profit_change,
+        'margin_change': margin_change,
+        # Top products
+        'top_products': top_products,
+        'prev_top_products': prev_top_products,
+        # Chart data
+        'daily_data': daily_data,
+        # Recent sales
+        'recent_sales_entries': recent_sales_entries,
+        # Date info
+        'start_date': start_date,
+        'end_date': end_date,
+        'previous_start': previous_start,
+        'previous_end': previous_end,
+        'selected_period': period,
+        'period_name': period,
+    }
+    
+    return render(request, 'finance/sales_income.html', context)
+
+
+@login_required
+def inventory_expenses_page(request):
+    """Display inventory purchase expenses and cost analysis with comparisons"""
+    
+    # Get filter parameters
+    date_from = request.GET.get('date_from')
+    date_to = request.GET.get('date_to')
+    period = request.GET.get('period', 'month')
+    
+    # Initialize variables
+    days_diff = 30
+    start_date = None
+    end_date = None
+    previous_start = None
+    previous_end = None
+    
+    # Set date range based on period
+    today = timezone.now().date()
+    
+    if period == 'day':
+        start_date = today
+        end_date = today
+        days_diff = 1
+        previous_start = today - timedelta(days=1)
+        previous_end = today - timedelta(days=1)
+    elif period == 'week':
+        start_date = today - timedelta(days=7)
+        end_date = today
+        days_diff = 7
+        previous_start = start_date - timedelta(days=7)
+        previous_end = end_date - timedelta(days=7)
+    elif period == 'month':
+        start_date = today - timedelta(days=30)
+        end_date = today
+        days_diff = 30
+        previous_start = start_date - timedelta(days=30)
+        previous_end = end_date - timedelta(days=30)
+    elif period == 'year':
+        start_date = today - timedelta(days=365)
+        end_date = today
+        days_diff = 365
+        previous_start = start_date - timedelta(days=365)
+        previous_end = end_date - timedelta(days=365)
+    else:
+        start_date = today - timedelta(days=30)
+        end_date = today
+        days_diff = 30
+        previous_start = start_date - timedelta(days=30)
+        previous_end = end_date - timedelta(days=30)
+    
+    # Apply custom date filters if provided
+    if date_from:
+        start_date = datetime.strptime(date_from, '%Y-%m-%d').date()
+        if date_to:
+            end_date = datetime.strptime(date_to, '%Y-%m-%d').date()
+            days_diff = (end_date - start_date).days
+            if days_diff <= 0:
+                days_diff = 1
+        else:
+            end_date = start_date + timedelta(days=days_diff)
+    
+    if date_to and not date_from:
+        end_date = datetime.strptime(date_to, '%Y-%m-%d').date()
+        start_date = end_date - timedelta(days=days_diff)
+    
+    # Calculate previous period
+    if previous_start is None or previous_end is None:
+        previous_start = start_date - timedelta(days=days_diff)
+        previous_end = end_date - timedelta(days=days_diff)
+    
+    # ============================================
+    # CALCULATIONS FROM INVENTORY
+    # ============================================
+    active_products = Product.objects.filter(is_active=True, is_discontinued=False)
+    
+    # CURRENT VALUES (what you have now)
+    current_cost_value = Decimal('0')
+    current_retail_value = Decimal('0')
+    total_units = 0
+    low_stock_products = []
+    
+    for product in active_products:
+        if product.category.is_single_item:
+            stock = product.available_quantity or 0
+        else:
+            stock = product.bulk_quantity or 0
+        
+        total_units += stock
+        current_cost_value += stock * (product.buying_price or Decimal('0'))
+        current_retail_value += stock * (product.selling_price or Decimal('0'))
+        
+        if stock <= product.reorder_level and stock > 0:
+            low_stock_products.append({
+                'name': product.name,
+                'sku_code': product.sku_code,
+                'stock_quantity': stock,
+                'buying_price': product.buying_price,
+                'selling_price': product.selling_price,
+                'reorder_level': product.reorder_level,
+                'category': product.category.name
+            })
+    
+    # TOTAL VALUES (all time purchases)
+    total_purchases_cost = StockEntry.objects.filter(
+        entry_type='purchase',
+        quantity__gt=0
+    ).aggregate(total=Sum('total_amount'))['total'] or Decimal('0')
+    
+    # Calculate average markup
+    if current_cost_value > 0:
+        markup_ratio = current_retail_value / current_cost_value
+        total_retail_value = total_purchases_cost * markup_ratio
+    else:
+        total_retail_value = total_purchases_cost * Decimal('2.5')
+    
+    # Calculate COGS and VOGS
+    cogs = total_purchases_cost - current_cost_value
+    
+    total_sales_value = StockEntry.objects.filter(
+        entry_type='sale',
+        quantity__lt=0
+    ).aggregate(total=Sum('total_amount'))['total'] or Decimal('0')
+    vogs = abs(total_sales_value)
+    
+    # Calculate profits
+    total_potential_profit = total_retail_value - total_purchases_cost
+    current_potential_profit = current_retail_value - current_cost_value
+    realized_profit = vogs - cogs
+    
+    # Calculate percentages
+    current_margin_percentage = (current_potential_profit / current_retail_value * 100) if current_retail_value > 0 else 0
+    current_cost_percentage = (current_cost_value / current_retail_value * 100) if current_retail_value > 0 else 0
+    
+    # Limit low stock products to 5
+    low_stock_products = low_stock_products[:5]
+    
+    # ============================================
+    # PERIOD PURCHASES
+    # ============================================
+    period_purchases = PurchaseTransaction.objects.filter(
+        transaction_type__in=['cogs', 'stock'],
+        transaction_date__date__gte=start_date,
+        transaction_date__date__lte=end_date
+    ).aggregate(total=Sum('amount'))['total'] or 0
+    
+    prev_purchases = PurchaseTransaction.objects.filter(
+        transaction_type__in=['cogs', 'stock'],
+        transaction_date__date__gte=previous_start,
+        transaction_date__date__lte=previous_end
+    ).aggregate(total=Sum('amount'))['total'] or 0
+    
+    purchase_change = ((period_purchases - prev_purchases) / prev_purchases * 100) if prev_purchases > 0 else 100 if period_purchases > 0 else 0
+    
+    # ============================================
+    # TOP STOCK PURCHASES (Limited to 5)
+    # ============================================
+    stock_purchases = PurchaseTransaction.objects.filter(
+        transaction_type='cogs',
+        transaction_date__date__gte=start_date,
+        transaction_date__date__lte=end_date
+    ).values('reference').annotate(
+        total_cost=Sum('amount'),
+        transaction_count=Count('id')
+    ).order_by('-total_cost')[:5]
+    
+    # ============================================
+    # MONTHLY EXPENSE TREND
+    # ============================================
+    monthly_data = []
+    current_date = start_date.replace(day=1)
+    month_count = 0
+    
+    while current_date <= end_date and month_count < 12:
+        month_start = current_date
+        if current_date.month == 12:
+            month_end = current_date.replace(year=current_date.year + 1, month=1, day=1) - timedelta(days=1)
+        else:
+            month_end = current_date.replace(month=current_date.month + 1, day=1) - timedelta(days=1)
+        
+        month_purchases = PurchaseTransaction.objects.filter(
+            transaction_type__in=['cogs', 'stock'],
+            transaction_date__date__gte=month_start,
+            transaction_date__date__lte=month_end
+        ).aggregate(total=Sum('amount'))['total'] or 0
+        
+        monthly_data.append({
+            'month': month_start.strftime('%B %Y'),
+            'amount': float(month_purchases),
+        })
+        
+        if current_date.month == 12:
+            current_date = current_date.replace(year=current_date.year + 1, month=1, day=1)
+        else:
+            current_date = current_date.replace(month=current_date.month + 1, day=1)
+        month_count += 1
+    
+    # ============================================
+    # PURCHASE TRANSACTIONS (Limited to 5)
+    # ============================================
+    purchase_transactions = PurchaseTransaction.objects.filter(
+        transaction_type__in=['cogs', 'stock'],
+        transaction_date__date__gte=start_date,
+        transaction_date__date__lte=end_date
+    ).order_by('-transaction_date')[:5]
+    
+    # Get account balances
+    purchase_account = PurchaseAccount.get_or_create_account()
+    income_account = IncomeAccount.get_or_create_account()
+    
+    context = {
+        'title': 'Inventory Expenses Report',
+        # Account balances
+        'purchase_account': purchase_account,
+        'income_account': income_account,
+        # TOTAL VALUES
+        'total_purchases': total_purchases_cost,
+        'total_retail_value': total_retail_value,
+        'total_potential_profit': total_potential_profit,
+        # CURRENT VALUES
+        'current_cost_value': current_cost_value,
+        'current_retail_value': current_retail_value,
+        'current_potential_profit': current_potential_profit,
+        # Other metrics
+        'cogs': cogs,
+        'vogs': vogs,
+        'realized_profit': realized_profit,
+        # Percentages
+        'margin_percentage': current_margin_percentage,
+        'cost_percentage': current_cost_percentage,
+        'total_units': total_units,
+        # Period data
+        'period_purchases': period_purchases,
+        'prev_purchases': prev_purchases,
+        'purchase_change': purchase_change,
+        'trend': 'up' if purchase_change > 0 else 'down' if purchase_change < 0 else 'stable',
+        # Tables and charts
+        'stock_purchases': stock_purchases,
+        'monthly_data': monthly_data,
+        'purchase_transactions': purchase_transactions,
+        'low_stock_products': low_stock_products,
+        # Date info
+        'start_date': start_date,
+        'end_date': end_date,
+        'previous_start': previous_start,
+        'previous_end': previous_end,
+        'selected_period': period,
+        'period_name': period,
+    }
+    
+    return render(request, 'finance/inventory_expenses.html', context)
+
+
+
+
+
+
+from .models import CapitalInjection, CapitalInjectionRepayment, CapitalAccount
+
+@login_required
+def capital_injection_list(request):
+    """List all capital injections"""
+    from decimal import Decimal
+    from django.db.models import Sum
+    from sales.models import Sale
+    
+    injections = CapitalInjection.objects.all().order_by('-transaction_date')
+    capital_account = CapitalAccount.get_or_create_account()
+    capital_account.refresh_from_db()
+    
+    # Calculate sales revenue - DIRECTLY FROM SALES MODEL (not IncomeTransaction)
+    total_sales_revenue = Sale.objects.filter(
+        is_reversed=False
+    ).aggregate(total=Sum('total_amount'))['total'] or Decimal('0')
+    
+    # Calculate loan totals
+    total_loan_amount = Decimal('0')
+    total_repaid_amount = Decimal('0')
+    total_loan_balance = Decimal('0')
+    
+    for injection in injections:
+        if injection.is_loan:
+            # Calculate repaid amount for this loan
+            repaid = injection.repayments.aggregate(total=Sum('amount'))['total'] or Decimal('0')
+            injection.total_repaid = repaid
+            injection.remaining_balance = injection.amount - repaid
+            
+            total_loan_amount += injection.amount
+            total_repaid_amount += repaid
+            total_loan_balance += injection.remaining_balance
+    
+    context = {
+        'injections': injections,
+        'capital_account': capital_account,
+        'total_sales_revenue': total_sales_revenue,  # Now gets from Sale model
+        'total_loan_amount': total_loan_amount,
+        'total_repaid_amount': total_repaid_amount,
+        'total_loan_balance': total_loan_balance,
+        'title': 'Capital Account'
+    }
+    return render(request, 'finance/capital_injections.html', context)
+
+    
+
+
+@login_required
+def capital_injection_create(request):
+    """Create a new capital injection"""
+    if request.method == 'POST':
+        source_type = request.POST.get('source_type')
+        source_name = request.POST.get('source_name')
+        amount = Decimal(request.POST.get('amount'))
+        payment_method = request.POST.get('payment_method')
+        target_account = request.POST.get('target_account')
+        is_loan = request.POST.get('is_loan') == 'on'
+        interest_rate = Decimal(request.POST.get('interest_rate', 0))
+        repayment_term = int(request.POST.get('repayment_term', 0))
+        notes = request.POST.get('notes', '')
+        
+        # Calculate monthly repayment for loans
+        monthly_repayment = Decimal('0')
+        if is_loan and repayment_term > 0:
+            monthly_repayment = amount / Decimal(repayment_term)
+        
+        injection = CapitalInjection.objects.create(
+            source_type=source_type,
+            source_name=source_name,
+            amount=amount,
+            payment_method=payment_method,
+            target_account=target_account,
+            is_loan=is_loan,
+            interest_rate=interest_rate,
+            repayment_term_months=repayment_term,
+            monthly_repayment=monthly_repayment,
+            notes=notes,
+            created_by=request.user,
+            status='completed'
+        )
+        
+        # Process the injection
+        injection.process_injection(request.user)
+        
+        messages.success(request, f'Capital injection of KES {amount:,.2f} added successfully!')
+        return redirect('finance:capital_injection_list')
+    
+    return render(request, 'finance/capital_injection_form.html')
+
+
+@login_required
+def capital_injection_detail(request, injection_id):
+    """View capital injection details"""
+    from decimal import Decimal
+    from django.db.models import Sum
+    
+    injection = get_object_or_404(CapitalInjection, injection_id=injection_id)
+    repayments = injection.repayments.all()
+    
+    # Calculate total repaid safely (handle None)
+    total_repaid = repayments.aggregate(total=Sum('amount'))['total']
+    if total_repaid is None:
+        total_repaid = Decimal('0')
+    
+    remaining_balance = injection.amount - total_repaid
+    
+    context = {
+        'injection': injection,
+        'repayments': repayments,
+        'total_repaid': total_repaid,
+        'remaining_balance': remaining_balance,
+    }
+    return render(request, 'finance/capital_injection_detail.html', context)
+
+
+@login_required
+def loan_repayment_create(request, injection_id):
+    """Record a loan repayment"""
+    injection = get_object_or_404(CapitalInjection, injection_id=injection_id)
+    
+    if request.method == 'POST':
+        amount = Decimal(request.POST.get('amount'))
+        payment_reference = request.POST.get('payment_reference', '')
+        notes = request.POST.get('notes', '')
+        
+        repayment = CapitalInjectionRepayment.objects.create(
+            capital_injection=injection,
+            amount=amount,
+            payment_reference=payment_reference,
+            notes=notes,
+            created_by=request.user
+        )
+        
+        # Create financial transaction for repayment (expense)
+        fin_trans = FinancialTransaction.objects.create(
+            transaction_type='expense',
+            category='other',
+            amount=amount,
+            description=f"Loan Repayment: {injection.source_name} - {injection.injection_id}",
+            payment_method='bank',
+            payment_reference=payment_reference,
+            recipient_name=injection.source_name,
+            created_by=request.user
+        )
+        repayment.financial_transaction = fin_trans
+        repayment.save()
+        
+        # Update bank/cash balance (money going out)
+        bank_account, _ = BankAccount.objects.get_or_create(id=1)
+        bank_account.update_balance(amount, 'expense', request.user)
+        
+        messages.success(request, f'Repayment of KES {amount:,.2f} recorded for {injection.injection_id}')
+        return redirect('finance:capital_injection_detail', injection_id=injection.injection_id)
+    
+    context = {
+        'injection': injection,
+        'suggested_amount': injection.monthly_repayment
+    }
+    return render(request, 'finance/loan_repayment_form.html', context)

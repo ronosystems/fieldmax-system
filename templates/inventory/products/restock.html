@@ -37,7 +37,7 @@
                     <div class="input-group mb-3">
                         <span class="input-group-text"><i class="fas fa-barcode"></i></span>
                         <input type="text" id="productSearch" class="form-control form-control-lg" 
-                               placeholder="Enter bulk product code, name or SKU..." autocomplete="off">
+                               placeholder="Enter SKU code, product name, brand, or model..." autocomplete="off">
                         <button class="btn btn-primary" type="button" id="searchBtn">
                             <i class="fas fa-search me-2"></i>Search Bulk Items
                         </button>
@@ -92,7 +92,9 @@
                             <div class="d-flex justify-content-between align-items-start">
                                 <div>
                                     <h5 class="fw-bold" id="productName"></h5>
-                                    <!-- Brand and Model Display -->
+                                    <div class="mt-2">
+                                        <span class="badge bg-dark" id="productSku">-</span>
+                                    </div>
                                     <div class="mt-2">
                                         <span class="badge bg-primary" id="productBrand">-</span>
                                         <span class="badge bg-secondary ms-2" id="productModel">-</span>
@@ -103,36 +105,41 @@
                             <hr>
                             <table class="table table-sm">
                                 <tr>
-                                    <th>Code:</th>
-                                    <td id="productCode"></td>
+                                    <th>SKU Code:</th>
+                                    <td id="productSkuDetail">-</td>
                                 </tr>
                                 <tr>
                                     <th>Category:</th>
-                                    <td id="productCategory"></td>
+                                    <td id="productCategory">-</td>
                                 </tr>
                                 <tr>
                                     <th>Brand:</th>
-                                    <td id="brandDetail"></td>
+                                    <td id="brandDetail">-</td>
                                 </tr>
                                 <tr>
                                     <th>Model:</th>
-                                    <td id="modelDetail"></td>
+                                    <td id="modelDetail">-</td>
                                 </tr>
                                 <tr>
                                     <th>Current Stock:</th>
-                                    <td><span class="badge bg-info fs-6" id="currentStock">0</span></td>
+                                    <td><span class="badge bg-info fs-6" id="currentStock">0</span>
+                                    <span id="lowStockWarning" class="text-danger ms-2" style="display: none;">⚠️ Low Stock</span>
+                                </td>
                                 </tr>
                                 <tr>
                                     <th>Reorder Level:</th>
-                                    <td><span id="reorderLevel">0</span></td>
+                                    <td><span id="reorderLevel">0</span>
+                                </td>
                                 </tr>
                                 <tr>
                                     <th>Current Buying Price:</th>
-                                    <td>KSH <span id="currentBuying">0</span></td>
+                                    <td>KES <span id="currentBuying">0</span>
+                                </td>
                                 </tr>
                                 <tr>
                                     <th>Current Selling Price:</th>
-                                    <td>KSH <span id="currentSelling">0</span></td>
+                                    <td>KES <span id="currentSelling">0</span>
+                                </td>
                                 </tr>
                             </table>
                         </div>
@@ -151,12 +158,12 @@
                         </div>
                         
                         <div class="mb-3">
-                            <label class="form-label required">Buying Price (KSH)</label>
+                            <label class="form-label required">Buying Price (KES)</label>
                             <input type="number" name="buying_price" id="buyingPrice" class="form-control" step="0.01" min="0" required>
                         </div>
                         
                         <div class="mb-3">
-                            <label class="form-label">Selling Price (KSH)</label>
+                            <label class="form-label">Selling Price (KES)</label>
                             <input type="number" name="selling_price" id="sellingPrice" class="form-control" step="0.01" min="0">
                             <small class="text-muted">Leave blank to keep current price</small>
                         </div>
@@ -177,7 +184,7 @@
                                     </div>
                                     <div class="col-6">
                                         <small>Total Cost:</small>
-                                        <h5>KSH <span id="previewTotalCost">0</span></h5>
+                                        <h5>KES <span id="previewTotalCost">0</span></h5>
                                     </div>
                                 </div>
                                 <small class="mt-2 d-block">After restock, you can adjust selling price if needed</small>
@@ -205,7 +212,7 @@
         <i class="fas fa-box-open fa-4x text-muted mb-3"></i>
         <h5 class="text-muted">No Bulk Item Selected</h5>
         <p class="text-muted">Search for a bulk item above to begin restocking</p>
-        <small class="text-muted">Bulk items include accessories, cables, chargers, and other stock items.</small>
+        <small class="text-muted">Bulk items include accessories, cables, chargers, and other stock items with quantity tracking.</small>
     </div>
 </div>
 
@@ -260,6 +267,10 @@
         border-radius: 4px;
         font-size: 12px;
     }
+    .sku-code {
+        font-family: monospace;
+        font-size: 12px;
+    }
 </style>
 {% endblock %}
 
@@ -294,16 +305,18 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Display fields
     const productName = document.getElementById('productName');
+    const productSku = document.getElementById('productSku');
+    const productSkuDetail = document.getElementById('productSkuDetail');
     const productBrand = document.getElementById('productBrand');
     const productModel = document.getElementById('productModel');
     const brandDetail = document.getElementById('brandDetail');
     const modelDetail = document.getElementById('modelDetail');
-    const productCode = document.getElementById('productCode');
     const productCategory = document.getElementById('productCategory');
     const currentStock = document.getElementById('currentStock');
     const reorderLevel = document.getElementById('reorderLevel');
     const currentBuying = document.getElementById('currentBuying');
     const currentSelling = document.getElementById('currentSelling');
+    const lowStockWarning = document.getElementById('lowStockWarning');
     
     let searchTimer;
     
@@ -349,7 +362,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (bulkProducts.length > 0) {
                         showMultipleResults(bulkProducts);
                     } else {
-                        // All results were single items
                         searchMessage.className = 'alert alert-warning';
                         searchMessage.innerHTML = 'Found only single items. Single items cannot be restocked.';
                         searchMessage.style.display = 'block';
@@ -358,7 +370,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 } else {
                     // Single product found - check if it's bulk
                     if (data.product.is_single_item) {
-                        // Show single item alert
                         singleItemMessage.textContent = `"${data.product.name}" is a single item. Single items cannot be restocked.`;
                         singleItemAlert.style.display = 'block';
                         hideAllSections();
@@ -367,7 +378,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 }
             } else {
-                // Error or no results
                 searchMessage.className = 'alert alert-warning';
                 searchMessage.innerHTML = data.message || 'No bulk items found';
                 searchMessage.style.display = 'block';
@@ -397,15 +407,15 @@ document.addEventListener('DOMContentLoaded', function() {
             
             html += `
                 <button class="list-group-item list-group-item-action search-result-item" 
-                        onclick="selectProductFromList(${JSON.stringify(p)})">
+                        onclick='selectProductFromList(${JSON.stringify(p).replace(/'/g, "&#39;")})'>
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
-                            <strong>${p.name}</strong>
-                            <span class="badge bg-secondary ms-2">${p.product_code}</span>
+                            <strong>${escapeHtml(p.name)}</strong>
+                            <span class="badge bg-dark ms-2">${escapeHtml(p.sku_code)}</span>
                             <span class="bulk-badge ms-2">BULK</span>
                             <div class="mt-2">
-                                <span class="badge bg-info">Brand: ${brand}</span>
-                                <span class="badge bg-secondary ms-2">Model: ${model}</span>
+                                <span class="badge bg-info">Brand: ${escapeHtml(brand)}</span>
+                                <span class="badge bg-secondary ms-2">Model: ${escapeHtml(model)}</span>
                             </div>
                         </div>
                         <div>
@@ -422,6 +432,13 @@ document.addEventListener('DOMContentLoaded', function() {
         selectProduct(product);
     };
     
+    function escapeHtml(text) {
+        if (!text) return '-';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
     function selectProduct(product) {
         // Hide other sections
         multipleResults.style.display = 'none';
@@ -436,12 +453,12 @@ document.addEventListener('DOMContentLoaded', function() {
         // Set form values
         productId.value = product.id;
         
-        // Update display with name, brand and model
+        // Update display
         productName.textContent = product.name;
-        productCode.textContent = product.product_code;
+        productSku.textContent = product.sku_code;
+        productSkuDetail.textContent = product.sku_code;
         productCategory.textContent = product.category;
         
-        // Display brand and model
         const brand = product.brand || 'N/A';
         const model = product.model || 'N/A';
         
@@ -452,8 +469,15 @@ document.addEventListener('DOMContentLoaded', function() {
         
         currentStock.textContent = product.current_quantity;
         reorderLevel.textContent = product.reorder_level || 5;
-        currentBuying.textContent = product.buying_price.toFixed(0);
-        currentSelling.textContent = product.selling_price.toFixed(0);
+        currentBuying.textContent = product.buying_price.toFixed(2);
+        currentSelling.textContent = product.selling_price.toFixed(2);
+        
+        // Show low stock warning if needed
+        if (product.current_quantity <= 5) {
+            lowStockWarning.style.display = 'inline';
+        } else {
+            lowStockWarning.style.display = 'none';
+        }
         
         // Set default buying price
         buyingPrice.value = product.buying_price;
@@ -492,7 +516,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const totalCost = qty * price;
             
             previewNewStock.textContent = newStock;
-            previewTotalCost.textContent = totalCost.toFixed(0);
+            previewTotalCost.textContent = totalCost.toFixed(2);
             previewCard.style.display = 'block';
         } else {
             previewCard.style.display = 'none';
@@ -530,9 +554,16 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(data => {
             if (data.success) {
                 // Update stock display
-                currentStock.textContent = data.product.new_quantity;
-                currentBuying.textContent = data.product.buying_price.toFixed(0);
-                currentSelling.textContent = data.product.selling_price.toFixed(0);
+                currentStock.textContent = data.product.new_stock;
+                currentBuying.textContent = data.product.buying_price.toFixed(2);
+                currentSelling.textContent = data.product.selling_price.toFixed(2);
+                
+                // Update low stock warning
+                if (data.product.new_stock <= 5) {
+                    lowStockWarning.style.display = 'inline';
+                } else {
+                    lowStockWarning.style.display = 'none';
+                }
                 
                 // Show success message
                 formMessage.className = 'alert alert-success';

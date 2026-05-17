@@ -1,755 +1,768 @@
-{% extends 'shops/base.html' %}
+{% extends "staff/base.html" %}
+{% load static %}
 {% load humanize %}
 
-{% block title %}Shop Statistics & Analytics{% endblock %}
+{% block title %}Shop Statistics - FieldMax{% endblock %}
 
 {% block extra_css %}
 <style>
-    /* Professional Stats Cards */
-    .stats-card {
-        background: var(--card-bg);
-        border-radius: 20px;
-        padding: 24px;
-        margin-bottom: 24px;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-        border: 1px solid var(--border-color);
-        transition: all 0.3s ease;
+    :root {
+        --primary: #3b82f6;
+        --primary-dark: #2563eb;
+        --success: #10b981;
+        --danger: #ef4444;
+        --warning: #f59e0b;
+        --info: #8b5cf6;
+        --dark: #1e293b;
+        --gray: #64748b;
+        --light: #f8fafc;
+        --border: #e2e8f0;
+    }
+
+    .stats-container {
+        padding: 1.5rem;
+        max-width: 2000px;
+        margin: 0 auto;
+        background: #f1f5f9;
+        min-height: 100vh;
+    }
+
+    /* Modern Header */
+    .dashboard-header {
+        background: linear-gradient(135deg, #667eea 0%, #019ffa 100%);
+        border-radius: 24px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        color: white;
         position: relative;
         overflow: hidden;
     }
-    
-    .stats-card:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+
+    .dashboard-header::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        right: -50%;
+        width: 200%;
+        height: 200%;
+        background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+        transform: rotate(45deg);
     }
-    
-    .stats-card::before {
+
+    .dashboard-header h1 {
+        font-size: 1.75rem;
+        font-weight: 700;
+        margin: 0;
+        position: relative;
+    }
+
+    .dashboard-header p {
+        margin: 0.5rem 0 0;
+        opacity: 0.9;
+        position: relative;
+    }
+
+    .date-badge {
+        display: inline-block;
+        background: rgba(255,255,255,0.2);
+        padding: 0.5rem 1rem;
+        border-radius: 12px;
+        font-size: 0.85rem;
+        margin-top: 1rem;
+    }
+
+    /* Filter Bar */
+    .filter-bar {
+        background: white;
+        border-radius: 16px;
+        padding: 1rem 1.5rem;
+        margin-bottom: 2rem;
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+        align-items: center;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        border: 1px solid var(--border);
+    }
+
+    .filter-group {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .filter-group label {
+        font-weight: 500;
+        color: var(--dark);
+        font-size: 0.85rem;
+    }
+
+    .filter-select {
+        padding: 0.5rem 1rem;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: white;
+        cursor: pointer;
+        font-size: 0.85rem;
+        transition: all 0.2s;
+    }
+
+    .filter-select:hover {
+        border-color: var(--primary);
+    }
+
+    /* Stats Grid */
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .stat-card {
+        background: white;
+        border-radius: 20px;
+        padding: 1.25rem;
+        transition: all 0.3s;
+        border: 1px solid var(--border);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .stat-card::before {
         content: '';
         position: absolute;
         top: 0;
         left: 0;
-        width: 4px;
-        height: 100%;
-        background: linear-gradient(135deg, #059669 0%, #047857 100%);
+        right: 0;
+        height: 3px;
+        background: linear-gradient(90deg, var(--primary), var(--success));
     }
-    
-    .stats-card h3 {
-        font-size: 2.2rem;
-        font-weight: 700;
-        margin-bottom: 8px;
-        color: var(--text-primary);
+
+    .stat-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 20px 25px -12px rgba(0,0,0,0.1);
     }
-    
-    .stats-card p {
-        margin-bottom: 0;
-        color: var(--text-secondary);
-        font-weight: 500;
-        font-size: 0.85rem;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    
-    .stats-icon {
-        position: absolute;
-        right: 20px;
-        top: 20px;
-        font-size: 2.5rem;
-        opacity: 0.12;
-        color: var(--primary-color);
-    }
-    
-    /* Date Filter Form */
-    .date-filter-form {
-        background: var(--card-bg);
-        padding: 24px;
-        border-radius: 20px;
-        margin-bottom: 24px;
-        border: 1px solid var(--border-color);
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-    }
-    
-    .date-filter-form .form-label {
-        font-weight: 600;
-        margin-bottom: 8px;
-        color: var(--text-primary);
-    }
-    
-    .date-filter-form .form-control {
-        border-radius: 12px;
-        border: 1px solid var(--border-color);
-        padding: 10px 14px;
-    }
-    
-    .date-filter-form .form-control:focus {
-        border-color: var(--primary-color);
-        box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.1);
-    }
-    
-    /* Chart Container */
-    .chart-container {
-        position: relative;
-        height: 350px;
-        margin-top: 20px;
-    }
-    
-    /* Transaction Count Styling */
-    .transaction-count {
-        font-size: 2.2rem;
-        font-weight: 700;
-        color: #10b981;
-    }
-    
-    .expense-amount {
-        font-size: 2.2rem;
-        font-weight: 700;
-        color: #f59e0b;
-    }
-    
-    /* Badge Styles */
-    .badge-excellent {
-        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-        color: white;
-        padding: 6px 14px;
-        border-radius: 30px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-    }
-    
-    .badge-good {
-        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-        color: white;
-        padding: 6px 14px;
-        border-radius: 30px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-    }
-    
-    .badge-fair {
-        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-        color: white;
-        padding: 6px 14px;
-        border-radius: 30px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-    }
-    
-    .badge-poor {
-        background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-        color: white;
-        padding: 6px 14px;
-        border-radius: 30px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-    }
-    
-    /* Table Styles */
-    .table {
-        margin-bottom: 0;
-    }
-    
-    .table thead th {
-        background: var(--light-bg);
-        border-bottom: 2px solid var(--border-color);
-        padding: 14px 16px;
-        font-weight: 600;
-        font-size: 0.85rem;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        color: var(--text-secondary);
-    }
-    
-    .table tbody td {
-        padding: 14px 16px;
-        vertical-align: middle;
-        border-bottom: 1px solid var(--border-color);
-    }
-    
-    .table tbody tr:hover {
-        background: var(--light-bg);
-    }
-    
-    /* Alert Styles */
-    .alert {
-        border-radius: 16px;
-        border: none;
-        padding: 16px 20px;
-        margin-bottom: 16px;
-    }
-    
-    .alert-success {
-        background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
-        color: #065f46;
-        border-left: 4px solid #10b981;
-    }
-    
-    .alert-warning {
-        background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
-        color: #92400e;
-        border-left: 4px solid #f59e0b;
-    }
-    
-    .alert-info {
-        background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
-        color: #1e40af;
-        border-left: 4px solid #3b82f6;
-    }
-    
-    /* Section Title */
-    .section-title {
-        font-size: 1.2rem;
-        font-weight: 700;
-        margin-bottom: 20px;
-        padding-bottom: 12px;
-        border-bottom: 2px solid var(--primary-color);
-        display: inline-block;
-        color: var(--text-primary);
-    }
-    
-    /* Card Header */
-    .card-header-custom {
-        background: transparent;
-        border-bottom: 2px solid var(--border-color);
-        padding: 18px 24px;
-        font-weight: 700;
-        font-size: 1.1rem;
-    }
-    
-    /* 2-Column Layout */
-    .two-column-layout {
+
+    .stat-header {
         display: flex;
-        gap: 24px;
-        flex-wrap: wrap;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
     }
-    
-    .left-column {
-        flex: 1;
-        min-width: 300px;
+
+    .stat-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
     }
-    
-    .right-column {
-        flex: 1;
-        min-width: 300px;
+
+    .stat-icon.primary { background: #dbeafe; color: #3b82f6; }
+    .stat-icon.success { background: #d1fae5; color: #10b981; }
+    .stat-icon.warning { background: #fed7aa; color: #f59e0b; }
+    .stat-icon.danger { background: #fee2e2; color: #ef4444; }
+    .stat-icon.info { background: #e0f2fe; color: #0ea5e9; }
+    .stat-icon.purple { background: #e9d5ff; color: #9333ea; }
+
+    .stat-value {
+        font-size: 2rem;
+        font-weight: 800;
+        color: var(--dark);
+        line-height: 1.1;
+        margin-bottom: 0.5rem;
     }
-    
+
+    .stat-label {
+        font-size: 0.8rem;
+        color: var(--gray);
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .stat-date {
+        font-size: 0.7rem;
+        color: var(--gray);
+        margin-top: 0.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
+    /* Section Cards */
+    .section-card {
+        background: white;
+        border-radius: 20px;
+        margin-bottom: 1.5rem;
+        overflow: hidden;
+        border: 1px solid var(--border);
+        transition: all 0.3s;
+    }
+
+    .section-card:hover {
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    }
+
+    .section-header {
+        padding: 1.25rem 1.5rem;
+        background: var(--light);
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .section-header h2 {
+        font-size: 1.1rem;
+        font-weight: 700;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: var(--dark);
+    }
+
+    .section-header h2 i {
+        color: var(--primary);
+    }
+
+    .badge-count {
+        background: white;
+        color: var(--gray);
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        border: 1px solid var(--border);
+    }
+
+    .section-body {
+        padding: 1.5rem;
+    }
+
+    /* 3-Column Grid for Accounts */
+    .accounts-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .account-card {
+        background: white;
+        border-radius: 16px;
+        border: 1px solid var(--border);
+        overflow: hidden;
+    }
+
+    .account-header {
+        padding: 1rem 1.25rem;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .account-header i {
+        font-size: 1.25rem;
+    }
+
+    .account-header h3 {
+        font-size: 1rem;
+        font-weight: 600;
+        margin: 0;
+        color: var(--dark);
+    }
+
+    .account-body {
+        padding: 1.25rem;
+    }
+
+    .balance-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .balance-row:last-child {
+        border-bottom: none;
+    }
+
+    .balance-label {
+        font-size: 0.85rem;
+        color: var(--gray);
+    }
+
+    .balance-value {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: var(--dark);
+    }
+
+    .balance-value.success { color: var(--success); }
+    .balance-value.warning { color: var(--warning); }
+
+    /* Tables */
+    .data-table {
+        width: 100%;
+        overflow-x: auto;
+    }
+
+    .data-table table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .data-table th,
+    .data-table td {
+        padding: 0.75rem;
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .data-table th {
+        background: var(--light);
+        font-weight: 600;
+        color: var(--dark);
+        font-size: 0.85rem;
+    }
+
+    .data-table tr:hover td {
+        background: var(--light);
+    }
+
+    /* Progress Bar */
+    .progress-container {
+        background: #e2e8f0;
+        border-radius: 10px;
+        height: 8px;
+        overflow: hidden;
+    }
+
+    .progress-bar {
+        height: 100%;
+        border-radius: 10px;
+        transition: width 0.5s;
+    }
+
+    .progress-bar.success { background: var(--success); }
+    .progress-bar.warning { background: var(--warning); }
+    .progress-bar.primary { background: var(--primary); }
+
     /* Responsive */
-    @media (max-width: 992px) {
-        .two-column-layout {
+    @media (max-width: 1200px) {
+        .stats-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        .accounts-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    @media (max-width: 768px) {
+        .stats-container {
+            padding: 1rem;
+        }
+        .stats-grid {
+            grid-template-columns: 1fr;
+        }
+        .accounts-grid {
+            grid-template-columns: 1fr;
+        }
+        .filter-bar {
             flex-direction: column;
+            align-items: stretch;
         }
-        
-        .stats-card h3 {
-            font-size: 1.5rem;
-        }
-        
-        .stats-icon {
-            font-size: 1.8rem;
-        }
-        
-        .chart-container {
-            height: 250px;
-        }
-    }
-    
-    /* Dark Mode Adjustments */
-    [data-theme="dark"] .stats-card {
-        background: var(--card-bg);
-        border-color: var(--border-color);
-    }
-    
-    [data-theme="dark"] .alert-success {
-        background: linear-gradient(135deg, #022c22 0%, #064e3b 100%);
-        color: #34d399;
-    }
-    
-    [data-theme="dark"] .alert-warning {
-        background: linear-gradient(135deg, #451a03 0%, #78350f 100%);
-        color: #fbbf24;
-    }
-    
-    [data-theme="dark"] .alert-info {
-        background: linear-gradient(135deg, #172554 0%, #1e3a8a 100%);
-        color: #60a5fa;
-    }
-    
-    /* Print Styles */
-    @media print {
-        .no-print, .btn, .date-filter-form {
-            display: none !important;
-        }
-        
-        .stats-card {
-            break-inside: avoid;
-            box-shadow: none;
-            border: 1px solid #ddd;
-        }
-        
-        .chart-container {
-            break-inside: avoid;
+        .section-header {
+            flex-direction: column;
+            gap: 0.5rem;
         }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-    <!-- Header -->
-    <div class="row mb-4">
-        <div class="col-md-8">
-            <h2 class="fw-bold">
-                <i class="fas fa-chart-line me-2" style="color: var(--primary-color);"></i>
-                Statistics & Analytics
-            </h2>
-            <p class="text-muted">Comprehensive analysis of M-Pesa transactions and financial metrics</p>
-        </div>
-        <div class="col-md-4 text-md-end">
-            <button onclick="window.print()" class="btn btn-outline-secondary">
-                <i class="fas fa-print me-2"></i>Print Report
-            </button>
+<div class="stats-container">
+    <!-- Modern Header -->
+    <div class="dashboard-header">
+        <div>
+            <h1><i class="fas fa-chart-line"></i> Shop Statistics Dashboard</h1>
+            <p>Real-time analytics and performance metrics across all branches</p>
+            <div class="date-badge">
+                <i class="fas fa-calendar-alt"></i> 
+                {{ start_date|date:"F j, Y" }} - {{ end_date|date:"F j, Y" }}
+            </div>
         </div>
     </div>
 
-    <!-- Date Range Filter -->
-    <div class="date-filter-form">
-        <form method="get" class="row g-3" id="filterForm">
-            <div class="col-md-4">
-                <label for="start_date" class="form-label">
-                    <i class="fas fa-calendar-alt me-1"></i>Start Date
-                </label>
-                <input type="date" name="start_date" id="start_date" class="form-control" value="{{ start_date }}">
+    <!-- Filter Bar -->
+    <div class="filter-bar">
+        <form method="GET" style="display: contents;">
+            <div class="filter-group">
+                <label><i class="fas fa-store"></i> Branch:</label>
+                <select name="shop" class="filter-select" onchange="this.form.submit()">
+                    <option value="all" {% if selected_shop == 'all' %}selected{% endif %}>All Branches</option>
+                    {% for shop in shops %}
+                    <option value="{{ shop.id }}" {% if selected_shop|stringformat:"s" == shop.id|stringformat:"s" %}selected{% endif %}>
+                        {{ shop.name }}
+                    </option>
+                    {% endfor %}
+                </select>
             </div>
-            <div class="col-md-4">
-                <label for="end_date" class="form-label">
-                    <i class="fas fa-calendar-check me-1"></i>End Date
-                </label>
-                <input type="date" name="end_date" id="end_date" class="form-control" value="{{ end_date }}">
-            </div>
-            <div class="col-md-4">
-                <label class="form-label">&nbsp;</label>
-                <button type="submit" class="btn btn-primary w-100">
-                    <i class="fas fa-chart-line me-2"></i>Update Statistics
-                </button>
+            
+            <div class="filter-group">
+                <label><i class="fas fa-calendar"></i> Period:</label>
+                <select name="date_range" class="filter-select" onchange="this.form.submit()">
+                    <option value="today" {% if date_range == 'today' %}selected{% endif %}>Today</option>
+                    <option value="week" {% if date_range == 'week' %}selected{% endif %}>Last 7 Days</option>
+                    <option value="month" {% if date_range == 'month' %}selected{% endif %}>Last 30 Days</option>
+                    <option value="quarter" {% if date_range == 'quarter' %}selected{% endif %}>Last 90 Days</option>
+                    <option value="year" {% if date_range == 'year' %}selected{% endif %}>Last Year</option>
+                </select>
             </div>
         </form>
     </div>
 
-    <!-- Key Metrics Cards - 3 Columns -->
-    <div class="row">
-        <div class="col-md-4">
-            <div class="stats-card">
-                <div class="stats-icon">
-                    <i class="fas fa-file-alt"></i>
-                </div>
-                <h3>{{ total_reports|intcomma }}</h3>
-                <p>Total Reports</p>
-                <small class="text-muted">All reports submitted</small>
+    <!-- Key Metrics Grid -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-header">
+                <div class="stat-icon primary"><i class="fas fa-chart-line"></i></div>
+            </div>
+            <div class="stat-value">KES {{ latest_revenue|floatformat:0|intcomma }}</div>
+            <div class="stat-label">Latest Revenue</div>
+            <div class="stat-date">
+                <i class="fas fa-calendar-alt"></i> {{ latest_report_date|date:"M d, Y"|default:"No reports" }}
             </div>
         </div>
-        <div class="col-md-4">
-            <div class="stats-card">
-                <div class="stats-icon">
-                    <i class="fas fa-exchange-alt"></i>
-                </div>
-                <h3 class="transaction-count">{{ total_transactions|default:0|floatformat:0|intcomma }}</h3>
-                <p>Total Transactions</p>
-                {% if total_reports > 0 %}
-                <small class="text-muted">Avg: {{ total_transactions|default:0|floatformat:0|intcomma }} per report</small>
-                {% endif %}
+
+        <div class="stat-card">
+            <div class="stat-header">
+                <div class="stat-icon danger"><i class="fas fa-receipt"></i></div>
+            </div>
+            <div class="stat-value">KES {{ latest_expenses|floatformat:0|intcomma }}</div>
+            <div class="stat-label">Latest Expenses</div>
+            <div class="stat-date">
+                <i class="fas fa-calendar-alt"></i> {{ latest_report_date|date:"M d, Y"|default:"No reports" }}
             </div>
         </div>
-        <div class="col-md-4">
-            <div class="stats-card">
-                <div class="stats-icon">
-                    <i class="fas fa-money-bill-wave"></i>
-                </div>
-                <h3 class="expense-amount">KES {{ total_expenses|floatformat:0|intcomma }}</h3>
-                <p>Total Expenses</p>
-                <small class="text-muted">Sum of all expenses</small>
+
+        <div class="stat-card">
+            <div class="stat-header">
+                <div class="stat-icon success"><i class="fas fa-coins"></i></div>
+            </div>
+            <div class="stat-value">KES {{ latest_closing_balance|floatformat:0|intcomma }}</div>
+            <div class="stat-label">Latest Closing Balance</div>
+            <div class="stat-date">
+                <i class="fas fa-chart-pie"></i> M-Pesa + Cash + Bank
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-header">
+                <div class="stat-icon info"><i class="fas fa-exchange-alt"></i></div>
+            </div>
+            <div class="stat-value">{{ latest_transactions|intcomma }}</div>
+            <div class="stat-label">Latest Transactions</div>
+            <div class="stat-date">
+                <i class="fas fa-mobile-alt"></i> M-Pesa transactions
             </div>
         </div>
     </div>
 
-    <!-- 2-Column Professional Layout -->
-    <div class="two-column-layout">
-        <!-- LEFT COLUMN -->
-        <div class="left-column">
-            <!-- Transaction Trend Chart -->
-            <div class="card mb-4">
-                <div class="card-header-custom">
-                    <i class="fas fa-chart-line me-2" style="color: var(--primary-color);"></i>
-                    M-Pesa Transaction Trend
-                </div>
-                <div class="card-body">
-                    <div class="chart-container">
-                        <canvas id="transactionTrendChart"></canvas>
-                    </div>
-                </div>
+    <!-- Account Balances - 3 Column Grid -->
+    <div class="accounts-grid">
+        <!-- M-Pesa Accounts -->
+        <div class="account-card">
+            <div class="account-header">
+                <i class="fas fa-mobile-alt text-primary"></i>
+                <h3>M-Pesa Balances</h3>
+                <span class="badge-count ms-auto">{{ total_mpesa_accounts }} accounts</span>
             </div>
-
-            <!-- Expense Distribution Chart -->
-            <div class="card mb-4">
-                <div class="card-header-custom">
-                    <i class="fas fa-chart-pie me-2" style="color: var(--primary-color);"></i>
-                    Expense Distribution
+            <div class="account-body">
+                <div class="balance-row">
+                    <span class="balance-label">M-Pesa Float</span>
+                    <span class="balance-value">KES {{ latest_mpesa_float|floatformat:0|intcomma }}</span>
                 </div>
-                <div class="card-body">
-                    <div class="chart-container" style="height: 350px;">
-                        <canvas id="expenseChart"></canvas>
-                    </div>
+                <div class="balance-row">
+                    <span class="balance-label">M-Pesa Cash</span>
+                    <span class="balance-value">KES {{ latest_mpesa_cash|floatformat:0|intcomma }}</span>
+                </div>
+                <div class="balance-row">
+                    <span class="balance-label">Total M-Pesa</span>
+                    <span class="balance-value success">KES {{ latest_mpesa_float|add:latest_mpesa_cash|floatformat:0|intcomma }}</span>
+                </div>
+                <div class="mt-2 text-muted text-center small">
+                    <i class="fas fa-calendar-alt"></i> As of {{ latest_report_date|date:"M d, Y"|default:"No reports" }}
                 </div>
             </div>
         </div>
 
-        <!-- RIGHT COLUMN -->
-        <div class="right-column">
-            <!-- Shop Performance Table -->
-            <div class="card mb-4">
-                <div class="card-header-custom">
-                    <i class="fas fa-store me-2" style="color: var(--primary-color);"></i>
-                    Shop Performance Breakdown
-                </div>
-                <div class="card-body">
-                    {% if shop_stats %}
-                    <div class="table-responsive">
-                        <table class="table table-hover">
-                            <thead>
-                                <tr>
-                                    <th>Shop Branch</th>
-                                    <th>Reports</th>
-                                    <th>Transactions</th>
-                                    <th>Avg Daily</th>
-                                    <th>Expenses (KES)</th>
-                                    <th>Performance</th>
-                                </thead>
-                                <tbody>
-                                    {% for stat in shop_stats %}
-                                    <tr>
-                                        <td>
-                                            <strong>{{ stat.shop.name }}</strong><br>
-                                            <small class="text-muted">{{ stat.shop.location }}</small>
-                                        </td>
-                                        <td class="text-center">{{ stat.report_count|intcomma }}</td>
-                                        <td class="text-end fw-bold text-success">{{ stat.total_transactions|floatformat:0|intcomma }}</td>
-                                        <td class="text-end">{{ stat.avg_transactions|floatformat:0|intcomma }}</td>
-                                        <td class="text-end text-warning fw-bold">KES {{ stat.total_expenses|floatformat:0|intcomma }}</td>
-                                        <td>
-                                            {% if stat.total_transactions >= 1000 %}
-                                                <span class="badge-excellent">
-                                                    <i class="fas fa-chart-line me-1"></i>Excellent
-                                                </span>
-                                            {% elif stat.total_transactions >= 500 %}
-                                                <span class="badge-good">
-                                                    <i class="fas fa-chart-line me-1"></i>Good
-                                                </span>
-                                            {% elif stat.total_transactions >= 100 %}
-                                                <span class="badge-fair">
-                                                    <i class="fas fa-chart-line me-1"></i>Fair
-                                                </span>
-                                            {% else %}
-                                                <span class="badge-poor">
-                                                    <i class="fas fa-chart-line me-1"></i>Poor
-                                                </span>
-                                            {% endif %}
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                    {% else %}
-                        <div class="text-center py-5">
-                            <i class="fas fa-chart-bar fa-3x text-muted mb-3"></i>
-                            <p class="text-muted">No statistics available for the selected period.</p>
-                        </div>
-                    {% endif %}
+        <!-- Cash Balance -->
+        <div class="account-card">
+            <div class="account-header">
+                <i class="fas fa-money-bill-wave text-warning"></i>
+                <h3>Cash Balance</h3>
+            </div>
+            <div class="account-body text-center">
+                <div class="stat-value" style="font-size: 2.5rem;">KES {{ latest_cash_balance|floatformat:0|intcomma }}</div>
+                <div class="stat-label">Physical Cash from M-Pesa</div>
+                <div class="mt-2 text-muted small">
+                    <i class="fas fa-calendar-alt"></i> As of {{ latest_report_date|date:"M d, Y"|default:"No reports" }}
                 </div>
             </div>
+        </div>
 
-            <!-- Insights & Recommendations -->
-            <div class="card">
-                <div class="card-header-custom">
-                    <i class="fas fa-lightbulb me-2" style="color: var(--primary-color);"></i>
-                    Insights & Recommendations
+        <!-- Bank Balances -->
+        <div class="account-card">
+            <div class="account-header">
+                <i class="fas fa-university text-primary"></i>
+                <h3>Bank Balances</h3>
+            </div>
+            <div class="account-body">
+                <div class="balance-row">
+                    <span class="balance-label">Latest Bank Total</span>
+                    <span class="balance-value">KES {{ latest_bank_total|floatformat:0|intcomma }}</span>
                 </div>
-                <div class="card-body">
-                    <div class="alert alert-success">
-                        <i class="fas fa-trophy me-2"></i>
-                        <strong>Top Performer:</strong>
-                        {% if shop_stats %}
-                            {% with top_shop=shop_stats|dictsortreversed:"total_transactions"|first %}
-                                {{ top_shop.shop.name }} with {{ top_shop.total_transactions|floatformat:0|intcomma }} transactions
-                            {% endwith %}
-                        {% else %}
-                            No data available
-                        {% endif %}
-                    </div>
-                    
-                    <div class="alert alert-warning">
-                        <i class="fas fa-chart-line me-2"></i>
-                        <strong>Performance Insight:</strong>
-                        {% if avg_transactions < 100 %}
-                            Transaction volume is low. Focus on increasing customer engagement.
-                        {% elif avg_transactions < 500 %}
-                            Good transaction volume. Consider expanding services.
-                        {% else %}
-                            Excellent transaction volume! Maintain current performance.
-                        {% endif %}
-                    </div>
-                    
-                    <div class="alert alert-info">
-                        <i class="fas fa-chart-pie me-2"></i>
-                        <strong>Expense Analysis:</strong>
-                        {% if total_expenses > 50000 %}
-                            Expenses are high (KES {{ total_expenses|floatformat:0|intcomma }}). Review operational costs.
-                        {% else %}
-                            Expense management is optimal at KES {{ total_expenses|floatformat:0|intcomma }}.
-                        {% endif %}
-                    </div>
-                    
-                    <div class="mt-4 pt-2">
-                        <h6 class="fw-bold mb-3">
-                            <i class="fas fa-chart-simple me-2"></i>Key Metrics Summary
-                        </h6>
-                        <div class="row">
-                            <div class="col-6 mb-2">
-                                <small class="text-muted">Total Shops:</small>
-                                <div class="fw-bold">{{ shop_stats|length }}</div>
-                            </div>
-                            <div class="col-6 mb-2">
-                                <small class="text-muted">Total Reports:</small>
-                                <div class="fw-bold">{{ total_reports|floatformat:0 }}</div>
-                            </div>
-                            <div class="col-6 mb-2">
-                                <small class="text-muted">Avg Transactions/Report:</small>
-                                <div class="fw-bold">
-                                    {% if total_reports > 0 %}
-                                        {{ total_transactions|floatformat:0|intcomma }}
-                                    {% else %}
-                                        0
-                                    {% endif %}
-                                </div>
-                            </div>
-                            <div class="col-6 mb-2">
-                                <small class="text-muted">Avg Expenses/Report:</small>
-                                <div class="fw-bold">
-                                    {% if total_reports > 0 %}
-                                        KES {% widthratio total_expenses total_reports 1|intcomma %}
-                                    {% else %}
-                                        KES 0
-                                    {% endif %}
-                                </div>
-                            </div>
+                <div class="balance-row">
+                    <span class="balance-label">Current Bank Total</span>
+                    <span class="balance-value success">KES {{ current_bank_balance|floatformat:0|intcomma }}</span>
+                </div>
+                <div class="mt-2 text-muted text-center small">
+                    <i class="fas fa-calendar-alt"></i> Latest as of {{ latest_report_date|date:"M d, Y"|default:"No reports" }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Period Summary -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-header">
+                <div class="stat-icon primary"><i class="fas fa-chart-line"></i></div>
+            </div>
+            <div class="stat-value">KES {{ total_revenue|floatformat:0|intcomma }}</div>
+            <div class="stat-label">Period Revenue</div>
+            <div class="stat-date">
+                <i class="fas fa-calendar-alt"></i> {{ date_range|title }}
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-header">
+                <div class="stat-icon danger"><i class="fas fa-receipt"></i></div>
+            </div>
+            <div class="stat-value">KES {{ total_monthly_expenses|floatformat:0|intcomma }}</div>
+            <div class="stat-label">Monthly Expenses</div>
+            <div class="stat-date">
+                <i class="fas fa-calendar-alt"></i> Current Month
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-header">
+                <div class="stat-icon info"><i class="fas fa-chart-line"></i></div>
+            </div>
+            <div class="stat-value">{{ total_transactions|intcomma }}</div>
+            <div class="stat-label">Total Transactions</div>
+            <div class="stat-date">
+                <i class="fas fa-calendar-alt"></i> {{ date_range|title }}
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-header">
+                <div class="stat-icon success"><i class="fas fa-check-circle"></i></div>
+            </div>
+            <div class="stat-value">{{ finalized_reports|intcomma }} / {{ total_reports|intcomma }}</div>
+            <div class="stat-label">Reports Finalized</div>
+            <div class="progress-container mt-2">
+                <div class="progress-bar success" style="width: {{ finalization_rate|floatformat:0 }}%"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Shop Performance Table -->
+    <div class="section-card">
+        <div class="section-header">
+            <h2><i class="fas fa-chart-bar"></i> Branch Performance</h2>
+            <span class="badge-count">{{ shop_performance|length }} Branches</span>
+        </div>
+        <div class="section-body">
+            <div class="data-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Branch</th>
+                            <th>Location</th>
+                            <th class="text-end">Latest Revenue</th>
+                            <th class="text-end">Latest Expenses</th>
+                            <th class="text-end">Closing Balance</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for shop in shop_performance %}
+                        <tr>
+                            <td><strong>{{ shop.name }}</strong></div>
+                            <td>{{ shop.location }}</div>
+                            <td class="text-end">KES {{ shop.total_revenue|default:0|floatformat:0|intcomma }}</div>
+                            <td class="text-end">KES {{ shop.total_expenses|default:0|floatformat:0|intcomma }}</div>
+                            <td class="text-end"><strong>KES {{ shop.total_closing|default:0|floatformat:0|intcomma }}</strong></div>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="5" class="text-center py-4">No data available</div></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Expense Analysis & Bank Breakdown -->
+    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem; margin-bottom: 1.5rem;">
+        <!-- Top Expense Categories -->
+        <div class="section-card">
+            <div class="section-header">
+                <h2><i class="fas fa-tags"></i> Top Expense Categories</h2>
+                <span class="badge-count">{{ total_expense_count }} entries</span>
+            </div>
+            <div class="section-body">
+                {% for expense in expense_by_category %}
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span>{{ expense.expense_category|default:"Uncategorized" }}</span>
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="progress-container" style="width: 150px;">
+                            <div class="progress-bar warning" style="width: {% widthratio expense.total total_monthly_expenses 100 %}%"></div>
                         </div>
+                        <strong class="text-danger">KES {{ expense.total|floatformat:0|intcomma }}</strong>
                     </div>
                 </div>
+                {% empty %}
+                <p class="text-muted text-center py-3">No expense data available</p>
+                {% endfor %}
+            </div>
+        </div>
+
+<!-- Bank Breakdown - Updated to show latest report bank balances -->
+<div class="section-card">
+    <div class="section-header">
+        <h2><i class="fas fa-university"></i> Bank Accounts Summary</h2>
+        <span class="badge-count">As of {{ latest_report_date|date:"M d, Y"|default:"No reports" }}</span>
+    </div>
+    <div class="section-body">
+        <div class="data-table">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Bank Name</th>
+                        <th>Account Name</th>
+                        <th>Account Number</th>
+                        <th class="text-end">Balance</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for bank in latest_bank_breakdown %}
+                    <tr>
+                        <td>{{ bank.bank_account__bank_name }}</div>
+                        <td>{{ bank.bank_account__account_name }}</div>
+                        <td>{{ bank.bank_account__account_number }}</div>
+                        <td class="text-end"><strong>KES {{ bank.balance|floatformat:0|intcomma }}</strong></div>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="4" class="text-center py-3">
+                            <i class="fas fa-info-circle"></i> No bank balances recorded for the latest report
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr class="table-active">
+                        <th colspan="3">TOTAL BANK BALANCE</th>
+                        <th class="text-end">KES {{ latest_bank_total|floatformat:0|intcomma }}</th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+        {% if not latest_bank_breakdown %}
+        <div class="alert alert-info mt-3 mb-0">
+            <i class="fas fa-info-circle me-2"></i>
+            Bank balances are recorded in daily reports. Create a report with bank balances to see them here.
+        </div>
+        {% endif %}
+    </div>
+</div>
+    </div>
+
+    <!-- Daily Trend -->
+    <div class="section-card">
+        <div class="section-header">
+            <h2><i class="fas fa-chart-line"></i> Daily Trend</h2>
+            <span class="badge-count">Last 30 Days</span>
+        </div>
+        <div class="section-body">
+            <div class="data-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th class="text-end">Revenue</th>
+                            <th class="text-end">Expenses</th>
+                            <th class="text-end">Net</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for day in daily_trend %}
+                        <tr>
+                            <td>{{ day.report_date|date:"M d, Y" }}</div>
+                            <td class="text-end">KES {{ day.revenue|floatformat:0|intcomma }}</div>
+                            <td class="text-end">KES {{ day.expenses|floatformat:0|intcomma }}</div>
+                            <td class="text-end {% if day.revenue > day.expenses %}text-success{% else %}text-danger{% endif %}">
+                                KES {{ day.revenue|add:day.expenses|floatformat:0|intcomma }}
+                            </div>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="text-center py-4">No data available</div></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Report Status Footer -->
+    <div class="section-card">
+        <div class="section-header">
+            <h2><i class="fas fa-file-alt"></i> Report Status</h2>
+        </div>
+        <div class="section-body">
+            <div class="row">
+                <div class="col-md-4 text-center">
+                    <div class="stat-value" style="font-size: 1.5rem;">{{ total_reports|intcomma }}</div>
+                    <div class="stat-label">Total Reports</div>
+                </div>
+                <div class="col-md-4 text-center">
+                    <div class="stat-value text-success" style="font-size: 1.5rem;">{{ finalized_reports|intcomma }}</div>
+                    <div class="stat-label">Finalized</div>
+                </div>
+                <div class="col-md-4 text-center">
+                    <div class="stat-value text-warning" style="font-size: 1.5rem;">{{ pending_reports|intcomma }}</div>
+                    <div class="stat-label">Pending</div>
+                </div>
+            </div>
+            <div class="progress-container mt-3">
+                <div class="progress-bar success" style="width: {{ finalization_rate|floatformat:0 }}%"></div>
+            </div>
+            <div class="text-center mt-2">
+                <small class="text-muted">{{ finalization_rate|floatformat:1 }}% of reports have been finalized</small>
             </div>
         </div>
     </div>
 </div>
-{% endblock %}
-
-{% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
-$(document).ready(function() {
-    // Transaction Trend Chart
-    function loadTransactionTrend() {
-        var startDate = $('#start_date').val();
-        var endDate = $('#end_date').val();
-        
-        $.ajax({
-            url: '{% url "shops:weekly_transactions_data" %}',
-            method: 'GET',
-            data: {
-                start_date: startDate,
-                end_date: endDate
-            },
-            success: function(response) {
-                if (response.success) {
-                    var ctx = document.getElementById('transactionTrendChart').getContext('2d');
-                    
-                    if (window.transactionChart) {
-                        window.transactionChart.destroy();
-                    }
-                    
-                    window.transactionChart = new Chart(ctx, {
-                        type: 'line',
-                        data: {
-                            labels: response.days,
-                            datasets: [{
-                                label: 'Daily M-Pesa Transactions',
-                                data: response.transactions,
-                                borderColor: '#059669',
-                                backgroundColor: 'rgba(5, 150, 105, 0.05)',
-                                borderWidth: 3,
-                                fill: true,
-                                tension: 0.4,
-                                pointBackgroundColor: '#059669',
-                                pointBorderColor: '#ffffff',
-                                pointBorderWidth: 2,
-                                pointRadius: 5,
-                                pointHoverRadius: 7
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: {
-                                legend: {
-                                    position: 'top',
-                                    labels: {
-                                        usePointStyle: true,
-                                        boxWidth: 10
-                                    }
-                                },
-                                tooltip: {
-                                    backgroundColor: 'rgba(0,0,0,0.8)',
-                                    padding: 12,
-                                    callbacks: {
-                                        label: function(context) {
-                                            return context.parsed.y.toLocaleString() + ' transactions';
-                                        }
-                                    }
-                                }
-                            },
-                            scales: {
-                                y: {
-                                    beginAtZero: true,
-                                    grid: {
-                                        color: 'rgba(0,0,0,0.05)'
-                                    },
-                                    ticks: {
-                                        stepSize: 1,
-                                        callback: function(value) {
-                                            return value.toLocaleString();
-                                        }
-                                    }
-                                },
-                                x: {
-                                    grid: {
-                                        display: false
-                                    }
-                                }
-                            }
-                        }
-                    });
-                }
-            },
-            error: function(xhr, status, error) {
-                console.error('Error loading transaction data:', error);
-            }
-        });
-    }
-    
-    // Expense Distribution Chart
-    function loadExpenseDistribution() {
-        var startDate = $('#start_date').val();
-        var endDate = $('#end_date').val();
-        
-        $.ajax({
-            url: '{% url "shops:expense_distribution" %}',
-            method: 'GET',
-            data: {
-                start_date: startDate,
-                end_date: endDate
-            },
-            success: function(response) {
-                if (response.success) {
-                    var ctx = document.getElementById('expenseChart').getContext('2d');
-                    
-                    if (window.expenseChart) {
-                        window.expenseChart.destroy();
-                    }
-                    
-                    window.expenseChart = new Chart(ctx, {
-                        type: 'pie',
-                        data: {
-                            labels: response.categories,
-                            datasets: [{
-                                data: response.amounts,
-                                backgroundColor: [
-                                    '#059669',
-                                    '#10b981',
-                                    '#34d399',
-                                    '#f59e0b',
-                                    '#ef4444',
-                                    '#3b82f6',
-                                    '#8b5cf6',
-                                    '#ec489a'
-                                ],
-                                borderWidth: 0,
-                                hoverOffset: 10
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: {
-                                legend: {
-                                    position: 'bottom',
-                                    labels: {
-                                        padding: 15,
-                                        usePointStyle: true,
-                                        font: {
-                                            size: 11
-                                        }
-                                    }
-                                },
-                                tooltip: {
-                                    backgroundColor: 'rgba(0,0,0,0.8)',
-                                    padding: 12,
-                                    callbacks: {
-                                        label: function(context) {
-                                            var label = context.label || '';
-                                            var value = context.parsed || 0;
-                                            var total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                            var percentage = ((value / total) * 100).toFixed(1);
-                                            return `${label}: KES ${value.toLocaleString()} (${percentage}%)`;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    });
-                }
-            },
-            error: function(xhr, status, error) {
-                console.error('Error loading expense data:', error);
-            }
-        });
-    }
-    
-    // Load charts on page load
-    loadTransactionTrend();
-    loadExpenseDistribution();
-    
-    // Reload charts when date range changes
-    $('#filterForm').on('submit', function(e) {
-        e.preventDefault();
-        loadTransactionTrend();
-        loadExpenseDistribution();
-        
-        // Submit the form to update other data
-        $.ajax({
-            url: window.location.pathname,
-            method: 'GET',
-            data: $(this).serialize(),
-            success: function() {
-                location.reload();
-            }
-        });
-    });
-});
-</script>
 {% endblock %}

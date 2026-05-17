@@ -1,0 +1,169 @@
+{% extends 'finance/base.html' %}
+{% load static %}
+
+{% block title %}Money Transfers{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-exchange-alt me-2"></i>Money Transfers</h2>
+        <a href="{% url 'finance:money_transfer_create' %}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> New Transfer
+        </a>
+    </div>
+    
+    <!-- Filters -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Status</label>
+                    <select name="status" class="form-select">
+                        <option value="">All</option>
+                        {% for code, label in status_choices %}
+                        <option value="{{ code }}" {% if request.GET.status == code %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">From Account</label>
+                    <select name="from_account" class="form-select">
+                        <option value="">All</option>
+                        {% for code, label in account_choices %}
+                        <option value="{{ code }}" {% if request.GET.from_account == code %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">To Account</label>
+                    <select name="to_account" class="form-select">
+                        <option value="">All</option>
+                        {% for code, label in account_choices %}
+                        <option value="{{ code }}" {% if request.GET.to_account == code %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Search</label>
+                    <input type="text" name="search" class="form-control" value="{{ request.GET.search }}" placeholder="Reference, description...">
+                </div>
+                <div class="col-12">
+                    <button type="submit" class="btn btn-primary">Filter</button>
+                    <a href="{% url 'finance:money_transfer_list' %}" class="btn btn-secondary">Clear</a>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Transfers Table -->
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Reference</th>
+                            <th>From</th>
+                            <th>→</th>
+                            <th>To</th>
+                            <th>Amount</th>
+                            <th>Description</th>
+                            <th>Status</th>
+                            <th>Date</th>
+                            <th>By</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for transfer in transfers %}
+                        <tr>
+                            <td><code>{{ transfer.transfer_reference }}</code></td>
+                            <td>
+                                {% if transfer.from_account == 'cash' %}💰 Cash
+                                {% elif transfer.from_account == 'bank' %}🏦 Bank
+                                {% elif transfer.from_account == 'mpesa' %}📱 M-Pesa
+                                {% endif %}
+                            </td>
+                            <td><i class="fas fa-arrow-right"></i></td>
+                            <td>
+                                {% if transfer.to_account == 'cash' %}💰 Cash
+                                {% elif transfer.to_account == 'bank' %}🏦 Bank
+                                {% elif transfer.to_account == 'mpesa' %}📱 M-Pesa
+                                {% endif %}
+                            </td>
+                            <td class="fw-bold">KES {{ transfer.amount|floatformat:2 }}</td>
+                            <td>{{ transfer.description|truncatechars:30 }}</td>
+                            <td>
+                                {% if transfer.status == 'completed' %}
+                                    <span class="badge bg-success">Completed</span>
+                                {% elif transfer.status == 'pending' %}
+                                    <span class="badge bg-warning">Pending</span>
+                                {% elif transfer.status == 'failed' %}
+                                    <span class="badge bg-danger">Failed</span>
+                                {% elif transfer.status == 'cancelled' %}
+                                    <span class="badge bg-secondary">Cancelled</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ transfer.created_at|date:"Y-m-d H:i" }}</td>
+                            <td>{{ transfer.requested_by.username }}</td>
+                            <td>
+                                <a href="{% url 'finance:money_transfer_detail' transfer.id %}" class="btn btn-sm btn-outline-info">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                {% if transfer.status == 'pending' %}
+                                <a href="{% url 'finance:money_transfer_cancel' transfer.id %}" class="btn btn-sm btn-outline-danger">
+                                    <i class="fas fa-times"></i>
+                                </a>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="10" class="text-center py-4">
+                                <i class="fas fa-exchange-alt fa-3x text-muted mb-3"></i>
+                                <p>No money transfers found</p>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Pagination -->
+    {% if transfers.has_other_pages %}
+    <nav class="mt-4">
+        <ul class="pagination justify-content-center">
+            {% if transfers.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?page=1{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                    <i class="fas fa-angle-double-left"></i>
+                </a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?page={{ transfers.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                    <i class="fas fa-angle-left"></i>
+                </a>
+            </li>
+            {% endif %}
+            
+            <li class="page-item active"><span class="page-link">{{ transfers.number }}</span></li>
+            
+            {% if transfers.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ transfers.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                    <i class="fas fa-angle-right"></i>
+                </a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?page={{ transfers.paginator.num_pages }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                    <i class="fas fa-angle-double-right"></i>
+                </a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+{% endblock %}

@@ -4,29 +4,29 @@
 {% block title %}Products{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <div>
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    <div class="d-flex flex-wrap gap-2">
         <a href="{% url 'inventory:product_add' %}" class="btn btn-primary">
-            <i class="fas fa-plus me-2"></i>Add New Product
+            <i class="fas fa-plus me-2"></i>Add New SKU
         </a>
 
         <a href="{% url 'inventory:product_restock' %}" class="btn btn-primary">
-            <i class="fas fa-plus me-2"></i>Restock Product
+            <i class="fas fa-boxes me-2"></i>Restock Product
         </a>
         
-        <a href="{% url 'inventory:product_bulk_add' %}" class="btn btn-success">
-            <i class="fas fa-copy me-2"></i>Bulk Add Products
+        <a href="{% url 'inventory:product_bulk_add_units' %}" class="btn btn-success">
+            <i class="fas fa-copy me-2"></i>Bulk Add Units
         </a>
 
-        <a href="{% url 'inventory:product_bulk_edit' %}" class="btn btn-success">
-            <i class="fas fa-edit me-2"></i>Bulk Edit Products
+        <a href="{% url 'inventory:product_bulk_edit' %}" class="btn btn-info">
+            <i class="fas fa-edit me-2"></i>Bulk Edit Prices
         </a>
 
         <a href="{% url 'inventory:return_product' %}" class="btn btn-warning">
             <i class="fas fa-undo-alt me-2"></i>Return Product
         </a>
 
-        <button type="button" class="btn btn-warning me-2" onclick="goToTransferPage()">
+        <button type="button" class="btn btn-secondary" onclick="goToTransferPage()">
             <i class="fas fa-exchange-alt me-2"></i>Transfer Products
         </button>
 
@@ -34,51 +34,37 @@
             <i class="fas fa-skull-crossbones me-2"></i>Record Losses
         </button>
 
-        <a href="{% url 'inventory:stolen_products_list' %}" class="btn btn-danger position-relative">
-            <i class="alert-link"></i>Stolen Items Page
-             <span class="badge bg-light text-danger ms-1" id="stolenCount">0</span>
+        <a href="{% url 'inventory:stolen_units_list' %}" class="btn btn-danger position-relative">
+            <i class="fas fa-shield-alt me-2"></i>Stolen/Lost Items
+            <span class="badge bg-light text-danger ms-1" id="stolenCount">0</span>
         </a>
-
     </div>
 </div>
 
 
-<!-- Filters - Compact 2 Rows -->
+<!-- Filters -->
 <div class="card mb-4">
     <div class="card-body py-2">
         <form method="get">
-            <!-- Row 1: Filters -->
             <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
                 <select name="category" class="form-select form-select-sm" style="width: auto; min-width: 130px;">
-                    <option value="">Category</option>
+                    <option value="">All Categories</option>
                     {% for cat in categories %}
                     <option value="{{ cat.id }}" {% if request.GET.category == cat.id|stringformat:"s" %}selected{% endif %}>
-                        {{ cat.name }}
+                        {{ cat.name }} ({{ cat.get_item_type_display }})
                     </option>
                     {% endfor %}
                 </select>
                 
-                <select name="status" class="form-select form-select-sm" style="width: auto; min-width: 120px;">
-                    <option value="">Status</option>
-                    <option value="available" {% if request.GET.status == 'available' %}selected{% endif %}>Available</option>
-                    <option value="sold" {% if request.GET.status == 'sold' %}selected{% endif %}>Sold</option>
-                    <option value="lowstock" {% if request.GET.status == 'lowstock' %}selected{% endif %}>Low Stock</option>
-                    <option value="outofstock" {% if request.GET.status == 'outofstock' %}selected{% endif %}>Out of Stock</option>
-                    <option value="stolen" {% if request.GET.status == 'stolen' %}selected{% endif %}>Stolen/Lost</option>
-                </select>
+                <input type="text" name="brand" class="form-control form-control-sm" 
+                       value="{{ request.GET.brand }}" placeholder="Brand" style="width: 100px;">
                 
-                <select name="loss_type" class="form-select form-select-sm" style="width: auto; min-width: 120px;">
-                    <option value="">Loss Type</option>
-                    <option value="stolen" {% if request.GET.loss_type == 'stolen' %}selected{% endif %}>Stolen</option>
-                    <option value="lost" {% if request.GET.loss_type == 'lost' %}selected{% endif %}>Lost</option>
-                    <option value="damaged_total" {% if request.GET.loss_type == 'damaged_total' %}selected{% endif %}>Damaged</option>
-                </select>
+                <input type="text" name="search" class="form-control form-control-sm" 
+                       value="{{ request.GET.search }}" placeholder="SKU/Name..." style="width: 150px;">
                 
-
-                <!-- NEW: Owner Filter -->
                 <select name="owner" class="form-select form-select-sm" style="width: auto; min-width: 120px;">
                     <option value="">All Owners</option>
-                    <option value="none" {% if request.GET.owner == 'none' %}selected{% endif %}>MAIN STORE</option>
+                    <option value="none" {% if request.GET.owner == 'none' %}selected{% endif %}>FIELDMAX (No Owner)</option>
                     {% for user in users %}
                     <option value="{{ user.id }}" {% if request.GET.owner == user.id|stringformat:"s" %}selected{% endif %}>
                         {{ user.get_full_name|default:user.username }}
@@ -86,12 +72,6 @@
                     {% endfor %}
                     <option value="me" {% if request.GET.owner == 'me' %}selected{% endif %}>Me ({{ request.user.username }})</option>
                 </select>
-
-                <input type="text" name="brand" class="form-control form-control-sm" 
-                       value="{{ request.GET.brand }}" placeholder="Brand" style="width: 100px;">
-                
-                <input type="text" name="search" class="form-control form-control-sm" 
-                       value="{{ request.GET.search }}" placeholder="Search..." style="width: 150px;">
                 
                 <button type="submit" class="btn btn-primary btn-sm">
                     <i class="fas fa-search"></i> Filter
@@ -102,11 +82,10 @@
                 </a>
             </div>
             
-            <!-- Row 2: Quick Search -->
             <div class="d-flex gap-2 align-items-center">
                 <span class="badge bg-info text-white">Quick Find:</span>
                 <input type="text" id="quickSearch" class="form-control form-control-sm flex-grow-1" 
-                       placeholder="Enter product code, SKU, serial number, or IMEI...">
+                       placeholder="Enter SKU code, product name, brand, or model...">
                 <button type="button" class="btn btn-warning btn-sm" id="searchSingleBtn">
                     <i class="fas fa-bolt me-1"></i>Search
                 </button>
@@ -123,113 +102,74 @@
             <table class="table table-bordered table-hover">
                 <thead>
                     <tr>
-                        <!-- A - CHECKBOX - Purple -->
-                        <th width="30" class="bg-purple text-white text-center" style="border: 2px solid #4a2c8a;">
+                        <th width="30" class="bg-purple text-white text-center">
                             <input type="checkbox" id="selectAllProducts" class="form-check-input bg-white">
                         </th>
-                        
-                        <!-- B - PRODUCT NAME & PRODUCT CODE - Blue -->
-                        <th width="20%" class="bg-primary text-white" style="border: 2px solid #0d47a1;">
-                            Product Name<br><small class="text-white-50">Product Code</small>
+                        <th width="20%" class="bg-primary text-white">
+                            SKU & Name<br><small class="text-white-50">SKU Code / Product Name</small>
                         </th>
-                        
-                        <!-- C - PRODUCT BRAND & PRODUCT MODEL - Cyan -->
-                        <th width="12%" class="bg-info text-white" style="border: 2px solid #0097a7;">
-                            Brand<br><small class="text-white-50">Model</small>
+                        <th width="12%" class="bg-info text-white">
+                            Brand & Model<br><small class="text-white-50">Brand / Model</small>
                         </th>
-                        
-                        <!-- D - CATEGORY - Teal -->
-                        <th width="10%" class="bg-teal text-white" style="border: 2px solid #00695c;">
+                        <th width="10%" class="bg-teal text-white">
                             Category
                         </th>
-                        
-                        <!-- E - COST KSH - Orange -->
-                        <th width="8%" class="bg-warning text-dark text-end" style="border: 2px solid #e65100;">
-                            Cost (KSH)
+                        <th width="8%" class="bg-warning text-dark text-end">
+                            Cost (KES)
                         </th>
-                        
-                        <!-- F - SELL KSH - Green -->
-                        <th width="8%" class="bg-success text-white text-end" style="border: 2px solid #1b5e20;">
-                            Sell (KSH)
+                        <th width="8%" class="bg-success text-white text-end">
+                            Sell (KES)
                         </th>
-                        
-                        <!-- G - BEST KSH - Gold -->
-                        <th width="8%" class="bg-gold text-dark text-end" style="border: 2px solid #b8860b;">
-                            Best (KSH)
+                        <th width="8%" class="bg-gold text-dark text-end">
+                            Best (KES)
                         </th>
-                        
-                        <!-- H - SERIAL NUMBER / IMEI NUMBER - Indigo -->
-                        <th width="12%" class="bg-indigo text-white" style="border: 2px solid #311b92;">
-                            Serial/IMEI<br><small class="text-white-50">Identifier</small>
-                        </th>
-                        
-                        <!-- I - BARCODE - Secondary -->
-                        <th width="8%" class="bg-secondary text-white" style="border: 2px solid #424242;">
-                            Barcode
-                        </th>
-                        
-                        <!-- J - STOCK - Dark -->
-                        <th width="5%" class="bg-dark text-white text-center" style="border: 2px solid #000000;">
+                        <th width="5%" class="bg-dark text-white text-center">
                             Stock
                         </th>
-                        
-                        <!-- K - STATUS - Red -->
-                        <th width="8%" class="bg-danger text-white" style="border: 2px solid #b71c1c;">
+                        <th width="8%" class="bg-danger text-white">
                             Status
                         </th>
-                        
-                        <!-- L - OWNER - Pink -->
-                        <th width="8%" class="bg-pink text-white" style="border: 2px solid #880e4f;">
+                        <th width="8%" class="bg-pink text-white">
                             Owner
                         </th>
-                        
-                        <!-- M - ACTIONS - Navy -->
-                        <th width="10%" class="bg-navy text-white text-center" style="border: 2px solid #0a192f;">
+                        <th width="10%" class="bg-navy text-white text-center">
                             Actions
                         </th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for product in products %}
-                    <tr class="{% if product.is_stolen_or_lost %}table-danger{% endif %}" style="border-bottom: 1px solid #dee2e6;">
-                        <!-- A - CHECKBOX -->
-                        <td class="text-center align-middle" style="border-right: 1px solid #dee2e6;">
+                    <tr class="{% if product.is_stolen_or_lost %}table-danger{% endif %}">
+                        <td class="text-center align-middle">
                             <input type="checkbox" class="product-checkbox form-check-input" 
                                    data-id="{{ product.id }}"
-                                   data-sku="{{ product.sku_value }}"
+                                   data-sku="{{ product.sku_code }}"
                                    data-name="{{ product.name }}"
-                                   data-owner="{{ product.owner.id }}"
-                                   {% if not product.sku_value or product.status != 'available' or product.is_stolen_or_lost %}disabled{% endif %}
-                                   {% if product.owner != request.user and not can_transfer_any %}disabled{% endif %}>
+                                   data-owner="{{ product.created_by.id|default:'' }}"
+                                   {% if product.is_stolen_or_lost %}disabled{% endif %}
+                                   {% if product.created_by_id != request.user.id and not can_transfer_any %}disabled{% endif %}>
                         </td>
                         
-                        <!-- B - PRODUCT NAME & PRODUCT CODE -->
-                        <td style="border-right: 1px solid #dee2e6;">
+                        <td>
                             <div class="fw-bold">
                                 <a href="{% url 'inventory:product_detail' product.id %}" class="text-decoration-none">
-                                    {{ product.name|default:"-" }}
+                                    <code>{{ product.sku_code }}</code>
                                     {% if product.is_stolen_or_lost %}
                                         <i class="fas fa-skull-crossbones text-danger ms-1" title="Stolen/Lost"></i>
                                     {% endif %}
                                 </a>
                             </div>
                             <div class="mt-1">
-                                <code class="small text-muted">{{ product.product_code|default:"-" }}</code>
+                                <small>{{ product.name|default:"-"|truncatechars:40 }}</small>
                             </div>
                         </td>
                         
-                        <!-- C - PRODUCT BRAND & PRODUCT MODEL -->
-                        <td style="border-right: 1px solid #dee2e6;">
-                            <div>
-                                <span class="badge bg-secondary">{{ product.brand|default:"-" }}</span>
-                            </div>
-                            <div class="mt-1">
-                                <span class="badge bg-info">{{ product.model|default:"-" }}</span>
-                            </div>
+                        <td>
+                            <div><span class="badge bg-secondary">{{ product.brand|default:"-" }}</span></div>
+                            <div class="mt-1"><span class="badge bg-info">{{ product.model|default:"-" }}</span></div>
                         </td>
                         
-                        <!-- D - CATEGORY -->
-                        <td style="border-right: 1px solid #dee2e6;">
+                        <td>
                             {% if product.category.is_single_item %}
                                 <span class="badge bg-info">📱 {{ product.category.name }}</span>
                             {% else %}
@@ -237,121 +177,72 @@
                             {% endif %}
                         </td>
                         
-                        <!-- E - COST KSH -->
-                        <td class="text-end align-middle" style="border-right: 1px solid #dee2e6;">
-                            {% if product.buying_price %}
-                                KSH {{ product.buying_price|floatformat:0 }}
-                            {% else %}
-                                -
-                            {% endif %}
+                        <td class="text-end align-middle">
+                            KES {{ product.buying_price|floatformat:0 }}
                         </td>
                         
-                        <!-- F - SELL KSH -->
-                        <td class="text-end align-middle fw-bold text-success" style="border-right: 1px solid #dee2e6;">
-                            {% if product.selling_price %}
-                                KSH {{ product.selling_price|floatformat:0 }}
-                            {% else %}
-                                -
-                            {% endif %}
+                        <td class="text-end align-middle fw-bold text-success">
+                            KES {{ product.selling_price|floatformat:0 }}
                         </td>
                         
-                        <!-- G - BEST KSH -->
-                        <td class="text-end align-middle" style="border-right: 1px solid #dee2e6;">
+                        <td class="text-end align-middle">
                             {% if product.best_price %}
-                                KSH {{ product.best_price|floatformat:0 }}
+                                KES {{ product.best_price|floatformat:0 }}
                             {% else %}
                                 -
                             {% endif %}
                         </td>
                         
-                        <!-- H - SERIAL NUMBER / IMEI NUMBER -->
-                        <td style="border-right: 1px solid #dee2e6;">
-                            {% if product.imei_number %}
-                                <span class="badge bg-primary" title="IMEI Number">
-                                    <i class="fas fa-qrcode"></i> {{ product.imei_number }}
-                                </span>
-                            {% elif product.serial_number %}
-                                <span class="badge bg-secondary" title="Serial Number">
-                                    <i class="fas fa-hashtag"></i> {{ product.serial_number|truncatechars:15 }}
-                                </span>
-                            {% elif product.sku_value %}
-                                <span class="badge bg-secondary" title="Legacy SKU">
-                                    SKU: {{ product.sku_value|truncatechars:12 }}
-                                </span>
-                            {% else %}
-                                <span class="text-muted">-</span>
-                            {% endif %}
-                        </td>
-                        
-                        <!-- I - BARCODE -->
-                        <td style="border-right: 1px solid #dee2e6;">
-                            {% if product.barcode %}
-                                <code class="small">{{ product.barcode|truncatechars:10 }}</code>
-                            {% else %}
-                                -
-                            {% endif %}
-                        </td>
-                        
-                        <!-- J - STOCK -->
-                        <td class="text-center align-middle" style="border-right: 1px solid #dee2e6;">
+                        <td class="text-center align-middle">
                             {% if product.category.is_single_item %}
-                                {% if product.quantity > 0 and product.status == 'available' %}
-                                    <span class="badge bg-success">✓ In Stock</span>
-                                {% elif product.is_stolen_or_lost %}
-                                    <span class="badge bg-danger">💀 Stolen</span>
+                                {% if product.available_quantity > 0 %}
+                                    <span class="badge bg-success">{{ product.available_quantity }} unit(s)</span>
                                 {% else %}
-                                    <span class="badge bg-secondary">SOLD</span>
+                                    <span class="badge bg-secondary">0 units</span>
                                 {% endif %}
                             {% else %}
-                                <span class="fw-bold">{{ product.quantity }}</span>
-                                {% if product.quantity <= product.reorder_level and product.quantity > 0 %}
+                                <span class="fw-bold">{{ product.bulk_quantity }}</span>
+                                {% if product.bulk_quantity <= product.reorder_level and product.bulk_quantity > 0 %}
                                     <span class="badge bg-warning text-dark ms-1">Reorder</span>
-                                {% elif product.quantity == 0 %}
+                                {% elif product.bulk_quantity == 0 %}
                                     <span class="badge bg-danger ms-1">Out</span>
                                 {% endif %}
                             {% endif %}
                         </td>
                         
-                        <!-- K - STATUS -->
-                        <td style="border-right: 1px solid #dee2e6;">
+                        <td>
                             {% if product.is_stolen_or_lost %}
                                 <span class="badge bg-danger w-100">
                                     <i class="fas fa-skull-crossbones"></i> 
                                     {{ product.get_loss_type_display|default:"Stolen/Lost" }}
                                 </span>
-                            {% elif product.status == 'available' %}
-                                <span class="badge bg-success w-100">✓ Available</span>
-                            {% elif product.status == 'sold' %}
-                                <span class="badge bg-secondary w-100">Sold Out</span>
-                            {% elif product.status == 'lowstock' %}
-                                <span class="badge bg-warning text-dark w-100">⚠️ Low Stock</span>
-                            {% elif product.status == 'outofstock' %}
-                                <span class="badge bg-danger w-100">❌ Out of Stock</span>
-                            {% elif product.status == 'reserved' %}
-                                <span class="badge bg-info w-100">⏳ Reserved</span>
-                            {% elif product.status == 'damaged' %}
-                                <span class="badge bg-dark w-100">⚠️ Damaged</span>
-                            {% elif product.status == 'writeoff' %}
-                                <span class="badge bg-secondary w-100">📝 Written Off</span>
-                            {% elif product.status == 'recalled' %}
-                                <span class="badge bg-danger w-100">🔙 Recalled</span>
+                            {% elif product.category.is_single_item %}
+                                {% if product.available_quantity > 0 %}
+                                    <span class="badge bg-success w-100">✓ Available</span>
+                                {% else %}
+                                    <span class="badge bg-secondary w-100">Sold Out</span>
+                                {% endif %}
                             {% else %}
-                                <span class="badge bg-secondary w-100">{{ product.get_status_display }}</span>
+                                {% if product.bulk_quantity == 0 %}
+                                    <span class="badge bg-danger w-100">❌ Out of Stock</span>
+                                {% elif product.bulk_quantity <= product.reorder_level %}
+                                    <span class="badge bg-warning text-dark w-100">⚠️ Low Stock</span>
+                                {% else %}
+                                    <span class="badge bg-success w-100">✓ Available</span>
+                                {% endif %}
                             {% endif %}
                         </td>
                         
-                        <!-- L - OWNER -->
-                        <td class="text-center align-middle" style="border-right: 1px solid #dee2e6;">
-                            <span class="badge {% if product.owner == request.user %}bg-success{% else %}bg-info{% endif %} w-100">
-                                {% if product.owner %}
-                                    {{ product.owner.username }}
+                        <td class="text-center align-middle">
+                            <span class="badge {% if product.created_by == request.user %}bg-success{% else %}bg-info{% endif %} w-100">
+                                {% if product.created_by %}
+                                    {{ product.created_by.username }}
                                 {% else %}
                                     FIELDMAX
                                 {% endif %}
                             </span>
                         </td>
                         
-                        <!-- M - ACTIONS -->
                         <td class="text-center align-middle">
                             <div class="btn-group btn-group-sm" role="group">
                                 <a href="{% url 'inventory:product_detail' product.id %}" class="btn btn-outline-info" title="View">
@@ -361,7 +252,12 @@
                                     <i class="fas fa-edit"></i>
                                 </a>
                                 
-                                <!-- Report Issue Dropdown -->
+                                {% if product.category.is_bulk_item %}
+                                <a href="{% url 'inventory:product_restock' %}?sku={{ product.sku_code }}" class="btn btn-outline-success" title="Restock">
+                                    <i class="fas fa-boxes"></i>
+                                </a>
+                                {% endif %}
+                                
                                 <div class="btn-group btn-group-sm" role="group">
                                     <button type="button" class="btn btn-outline-danger dropdown-toggle" 
                                             data-bs-toggle="dropdown" title="Report Issue">
@@ -401,21 +297,16 @@
                                         {% endif %}
                                     </ul>
                                 </div>
-                                
-                                <a href="{% url 'inventory:product_delete' product.id %}" class="btn btn-outline-danger" title="Delete" 
-                                   onclick="return confirm('Are you sure you want to delete this product?')">
-                                    <i class="fas fa-trash"></i>
-                                </a>
                             </div>
                         </td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="13" class="text-center py-4">
+                        <td colspan="11" class="text-center py-4">
                             <i class="fas fa-box-open fa-3x text-muted mb-3"></i>
                             <p class="text-muted">No products found</p>
                             <a href="{% url 'inventory:product_add' %}" class="btn btn-primary btn-sm">
-                                <i class="fas fa-plus"></i> Add your first product
+                                <i class="fas fa-plus"></i> Add your first product SKU
                             </a>
                         </td>
                     </tr>
@@ -424,7 +315,6 @@
             </table>
         </div>
 
-        
         <!-- Selected Products Bar -->
         <div id="selectedProductsBar" class="selected-bar mt-3" style="display: none;">
             <div class="d-flex justify-content-between align-items-center p-2 bg-light rounded">
@@ -433,12 +323,15 @@
                     {% if can_transfer_any %}
                     <span class="text-info ms-2">(Authorized: can select any product)</span>
                     {% else %}
-                    <span class="text-muted ms-2">(Only products you own)</span>
+                    <span class="text-muted ms-2">(Only products you created)</span>
                     {% endif %}
                 </div>
                 <div>
                     <button type="button" class="btn btn-sm btn-warning" onclick="goToTransferPage()">
                         <i class="fas fa-exchange-alt me-1"></i>Transfer Selected
+                    </button>
+                    <button type="button" class="btn btn-sm btn-danger" onclick="goToRecordLossesPage()">
+                        <i class="fas fa-skull-crossbones me-1"></i>Record as Loss
                     </button>
                     <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearSelections()">
                         <i class="fas fa-times me-1"></i>Clear
@@ -447,8 +340,7 @@
             </div>
         </div>
     </div>
-</div>     
-
+</div>
 
 <!-- Pagination -->
 {% if products.has_other_pages %}
@@ -524,101 +416,52 @@
         vertical-align: middle;
     }
 
-/* Custom Header Colors */
-.bg-purple {
-    background-color: #6f42c1 !important;
-}
-.bg-teal {
-    background-color: #20c997 !important;
-}
-.bg-gold {
-    background-color: #ffc107 !important;
-}
-.bg-indigo {
-    background-color: #6610f2 !important;
-}
-.bg-pink {
-    background-color: #d63384 !important;
-}
-.bg-navy {
-    background-color: #001f3f !important;
-}
-.bg-dark-blue {
-    background-color: #1a2a3a !important;
-}
+    /* Custom Header Colors */
+    .bg-purple { background-color: #6f42c1 !important; }
+    .bg-teal { background-color: #20c997 !important; }
+    .bg-gold { background-color: #ffc107 !important; }
+    .bg-indigo { background-color: #6610f2 !important; }
+    .bg-pink { background-color: #d63384 !important; }
+    .bg-navy { background-color: #001f3f !important; }
 
-/* Responsive Filters */
-@media (max-width: 768px) {
-    .d-flex.flex-wrap {
-        flex-direction: column;
-        align-items: stretch !important;
+    @media (max-width: 768px) {
+        .d-flex.flex-wrap {
+            flex-direction: column;
+            align-items: stretch !important;
+        }
+        .d-flex.flex-wrap select,
+        .d-flex.flex-wrap input,
+        .d-flex.flex-wrap button,
+        .d-flex.flex-wrap a {
+            width: 100% !important;
+            margin-bottom: 5px;
+        }
+        .vr { display: none; }
     }
-    
-    .d-flex.flex-wrap select,
-    .d-flex.flex-wrap input,
-    .d-flex.flex-wrap button,
-    .d-flex.flex-wrap a {
-        width: 100% !important;
-        margin-bottom: 5px;
+
+    .form-select-sm, .form-control-sm {
+        font-size: 0.8rem;
+        padding: 0.35rem 0.5rem;
     }
-    
-    .vr {
-        display: none;
+
+    .table thead th {
+        font-weight: 600;
+        font-size: 0.85rem;
+        padding: 12px 8px;
+        vertical-align: middle;
     }
-}
+    .table thead th small {
+        font-weight: 400;
+        font-size: 0.7rem;
+    }
 
-/* Compact form styles */
-.form-select-sm, .form-control-sm {
-    font-size: 0.8rem;
-    padding: 0.35rem 0.5rem;
-}
-
-/* Header text styling */
-.table thead th {
-    font-weight: 600;
-    font-size: 0.85rem;
-    padding: 12px 8px;
-    vertical-align: middle;
-}
-.table thead th small {
-    font-weight: 400;
-    font-size: 0.7rem;
-}
-
-/* Table border styles */
-.table-bordered {
-    border: 2px solid #dee2e6 !important;
-}
-
-.table-bordered thead th,
-.table-bordered thead td {
-    border-bottom-width: 2px;
-}
-
-.table-bordered tbody tr td {
-    border-right: 1px solid #dee2e6;
-}
-
-.table-bordered tbody tr td:last-child {
-    border-right: none;
-}
-
-/* Row hover effect with border */
-.table-hover tbody tr:hover {
-    background-color: rgba(0, 0, 0, 0.05);
-}
-
-/* Alternate row striping (optional) */
-.table-striped tbody tr:nth-of-type(odd) {
-    background-color: rgba(0, 0, 0, 0.02);
-}
-
-/* Highlight active filter */
-select[name="owner"] option[value="me"]:checked {
-    background-color: #28a745;
-    color: white;
-}
-
+    .table-bordered {
+        border: 2px solid #dee2e6 !important;
+    }
+    .table-bordered thead th,
+    .table-bordered thead td {
+        border-bottom-width: 2px;
+    }
 </style>
 {% endblock %}
 
@@ -627,19 +470,13 @@ select[name="owner"] option[value="me"]:checked {
 document.addEventListener('DOMContentLoaded', function() {
     const canTransferAny = {{ can_transfer_any|yesno:"true,false" }};
     
-    // ============================================
-    // CHECK FOR STOLEN PRODUCTS AND UPDATE BADGE
-    // ============================================
-    function checkStolenProducts() {
+    // Update stolen count badge
+    function updateStolenCount() {
         const stolenRows = document.querySelectorAll('tbody tr.table-danger');
         const stolenCount = stolenRows.length;
-        
-        // Update the badge in the button
         const stolenCountBadge = document.getElementById('stolenCount');
         if (stolenCountBadge) {
             stolenCountBadge.textContent = stolenCount;
-            
-            // Optional: Change badge color based on count
             if (stolenCount > 0) {
                 stolenCountBadge.classList.remove('bg-light', 'text-danger');
                 stolenCountBadge.classList.add('bg-danger', 'text-white');
@@ -649,45 +486,31 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     }
+    updateStolenCount();
     
-    checkStolenProducts();
-    
-    // ============================================
-    // SINGLE PRODUCT SEARCH
-    // ============================================
+    // Quick search
     const quickSearch = document.getElementById('quickSearch');
     const searchBtn = document.getElementById('searchSingleBtn');
     
     function searchSingleProduct() {
         const searchTerm = quickSearch.value.trim();
         if (!searchTerm) {
-            alert('Please enter a product code, SKU, serial number, or IMEI to search.');
+            alert('Please enter a SKU code, product name, brand, or model to search.');
             return;
         }
         window.location.href = `{% url 'inventory:product_list' %}?search=${encodeURIComponent(searchTerm)}`;
     }
     
-    if (searchBtn) {
-        searchBtn.addEventListener('click', searchSingleProduct);
-    }
+    if (searchBtn) searchBtn.addEventListener('click', searchSingleProduct);
+    if (quickSearch) quickSearch.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); searchSingleProduct(); }
+    });
     
-    if (quickSearch) {
-        quickSearch.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                searchSingleProduct();
-            }
-        });
-    }
-    
-    // ============================================
-    // PRODUCT SELECTION FOR TRANSFER
-    // ============================================
+    // Product selection for transfer
     const selectAllCheckbox = document.getElementById('selectAllProducts');
     const productCheckboxes = document.querySelectorAll('.product-checkbox');
     const selectedProductsBar = document.getElementById('selectedProductsBar');
     const selectedCount = document.getElementById('selectedCount');
-    
     let selectedProducts = [];
     
     function loadSelectedProducts() {
@@ -702,35 +525,20 @@ document.addEventListener('DOMContentLoaded', function() {
                     return checkbox !== undefined;
                 });
                 updateSelectedProducts();
-            } catch (e) {
-                console.error('Error loading saved selections:', e);
-            }
+            } catch (e) { console.error('Error loading saved selections:', e); }
         }
     }
     
-    function saveSelectedProducts() {
-        sessionStorage.setItem('selectedProducts', JSON.stringify(selectedProducts));
-    }
+    function saveSelectedProducts() { sessionStorage.setItem('selectedProducts', JSON.stringify(selectedProducts)); }
     
     function updateSelectedProducts() {
         productCheckboxes.forEach(cb => {
-            if (!cb.disabled) {
-                const productId = cb.dataset.id;
-                cb.checked = selectedProducts.some(p => p.id === productId);
-            }
+            if (!cb.disabled) cb.checked = selectedProducts.some(p => p.id === cb.dataset.id);
         });
-        
         const count = selectedProducts.length;
         if (selectedCount) selectedCount.textContent = count;
         if (selectedProductsBar) selectedProductsBar.style.display = count > 0 ? 'block' : 'none';
         saveSelectedProducts();
-    }
-    
-    function addProduct(product) {
-        if (!selectedProducts.some(p => p.id === product.id)) {
-            selectedProducts.push(product);
-            updateSelectedProducts();
-        }
     }
     
     window.clearSelections = function() {
@@ -743,22 +551,14 @@ document.addEventListener('DOMContentLoaded', function() {
     productCheckboxes.forEach(checkbox => {
         checkbox.addEventListener('change', function() {
             if (this.disabled) return;
-            
-            const product = {
-                id: this.dataset.id,
-                sku: this.dataset.sku,
-                name: this.dataset.name
-            };
-            
+            const product = { id: this.dataset.id, sku: this.dataset.sku, name: this.dataset.name };
             if (this.checked) {
-                addProduct(product);
+                if (!selectedProducts.some(p => p.id === product.id)) selectedProducts.push(product);
             } else {
                 const index = selectedProducts.findIndex(p => p.id === product.id);
-                if (index !== -1) {
-                    selectedProducts.splice(index, 1);
-                    updateSelectedProducts();
-                }
+                if (index !== -1) selectedProducts.splice(index, 1);
             }
+            updateSelectedProducts();
         });
     });
     
@@ -768,57 +568,40 @@ document.addEventListener('DOMContentLoaded', function() {
                 productCheckboxes.forEach(cb => {
                     if (!cb.disabled && !cb.checked) {
                         cb.checked = true;
-                        const product = {
-                            id: cb.dataset.id,
-                            sku: cb.dataset.sku,
-                            name: cb.dataset.name
-                        };
-                        if (!selectedProducts.some(p => p.id === product.id)) {
-                            selectedProducts.push(product);
+                        if (!selectedProducts.some(p => p.id === cb.dataset.id)) {
+                            selectedProducts.push({ id: cb.dataset.id, sku: cb.dataset.sku, name: cb.dataset.name });
                         }
                     }
                 });
             } else {
-                productCheckboxes.forEach(cb => {
-                    if (!cb.disabled) {
-                        cb.checked = false;
-                    }
-                });
+                productCheckboxes.forEach(cb => { if (!cb.disabled) cb.checked = false; });
                 selectedProducts = [];
             }
             updateSelectedProducts();
         });
     }
     
-    // ============================================
-    // GO TO TRANSFER PAGE
-    // ============================================
     window.goToTransferPage = function() {
         if (selectedProducts.length === 0) {
             alert('Please select at least one product to transfer.');
             return;
         }
-        
         const skus = selectedProducts.map(p => p.sku).join(',');
         sessionStorage.removeItem('selectedProducts');
         window.location.href = `/inventory/transfer/?skus=${encodeURIComponent(skus)}`;
     };
     
-    loadSelectedProducts();
-    
-    // ============================================
-    // GO TO RECORD LOSSES PAGE
-    // ============================================
     window.goToRecordLossesPage = function() {
         if (selectedProducts.length === 0) {
             alert('Please select at least one product to record as loss.');
             return;
         }
-    
         const skus = selectedProducts.map(p => p.sku).join(',');
         sessionStorage.removeItem('selectedProducts');
         window.location.href = `/inventory/record-losses/?skus=${encodeURIComponent(skus)}`;
     };
+    
+    loadSelectedProducts();
 });
 </script>
 {% endblock %}

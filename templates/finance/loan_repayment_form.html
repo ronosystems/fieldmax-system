@@ -1,0 +1,72 @@
+{% extends 'finance/base.html' %}
+{% load humanize %}
+
+{% block title %}Record Loan Repayment{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0">
+            <i class="fas fa-hand-holding-usd text-warning me-2"></i> Record Loan Repayment
+        </h1>
+        <a href="{% url 'finance:capital_injection_detail' injection.injection_id %}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Back to Details
+        </a>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8 mx-auto">
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-info-circle me-2"></i> Repayment for {{ injection.injection_id }}
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <strong>Loan Information:</strong><br>
+                        Source: {{ injection.source_name }}<br>
+                        Total Amount: <strong>KES {{ injection.amount|floatformat:2|intcomma }}</strong><br>
+                        Monthly Payment: <strong>KES {{ injection.monthly_repayment|floatformat:2|intcomma }}</strong>
+                    </div>
+
+                    <form method="POST">
+                        {% csrf_token %}
+                        
+                        <!-- Amount -->
+                        <div class="mb-3">
+                            <label for="amount" class="form-label">Repayment Amount (KES) *</label>
+                            <input type="number" name="amount" id="amount" class="form-control" 
+                                   step="0.01" min="0" value="{{ injection.monthly_repayment|floatformat:2 }}" required>
+                            <small class="text-muted">Suggested amount: KES {{ injection.monthly_repayment|floatformat:2|intcomma }}</small>
+                        </div>
+
+                        <!-- Payment Reference -->
+                        <div class="mb-3">
+                            <label for="payment_reference" class="form-label">Payment Reference (Optional)</label>
+                            <input type="text" name="payment_reference" id="payment_reference" class="form-control" 
+                                   placeholder="e.g., Transaction ID, Cheque Number">
+                        </div>
+
+                        <!-- Notes -->
+                        <div class="mb-3">
+                            <label for="notes" class="form-label">Notes (Optional)</label>
+                            <textarea name="notes" id="notes" class="form-control" rows="3" 
+                                      placeholder="Any additional information about this repayment..."></textarea>
+                        </div>
+
+                        <hr>
+
+                        <div class="d-flex justify-content-end gap-2">
+                            <a href="{% url 'finance:capital_injection_detail' injection.injection_id %}" class="btn btn-secondary">
+                                <i class="fas fa-times"></i> Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Record Repayment
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

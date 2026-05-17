@@ -9,7 +9,7 @@
     <div class="col-xl-3 col-md-6 mb-4">
         <div class="stat-card" style="border-left: 5px solid #4361ee;">
             <div class="stat-value">{{ total_products|default:"0" }}</div>
-            <div class="stat-label">Total Products</div>
+            <div class="stat-label">Total SKUs</div>
             <i class="fas fa-box stat-icon" style="color: #4361ee;"></i>
         </div>
     </div>
@@ -69,7 +69,7 @@
     <div class="col-lg-6 mb-4">
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <span><i class="fas fa-box me-2"></i>Recent Products</span>
+                <span><i class="fas fa-box me-2"></i>Recent SKUs</span>
                 <a href="{% url 'inventory:product_list' %}" class="btn btn-sm btn-primary">View All</a>
             </div>
             <div class="card-body p-0">
@@ -77,7 +77,7 @@
                     <table class="table table-hover mb-0">
                         <thead>
                             <tr>
-                                <th>Product Code</th>
+                                <th>SKU Code</th>
                                 <th>Name</th>
                                 <th>Price</th>
                                 <th>Stock</th>
@@ -87,51 +87,49 @@
                         <tbody>
                             {% for product in recent_products %}
                             <tr>
-                                <td><span class="badge bg-secondary">{{ product.product_code }}</span></td>
+                                <td><span class="badge bg-secondary">{{ product.sku_code }}</span></td>
                                 <td>
                                     <a href="{% url 'inventory:product_detail' product.id %}" class="text-decoration-none">
                                         {{ product.display_name }}
                                     </a>
-                                </td>
-                                <td>KSH {{ product.selling_price|floatformat:0 }}</td>
-                                <!-- FIXED: Stock Column -->
-                                <td>
+                                 </td>
+                                 <td>KES {{ product.selling_price|floatformat:2 }}</td>
+                                 <td>
                                     {% if product.category.is_single_item %}
-                                        {% if product.quantity > 0 and product.status == 'available' %}
-                                            <span class="badge bg-success">✓ In Stock</span>
+                                        {% if product.available_quantity > 0 %}
+                                            <span class="badge bg-success">{{ product.available_quantity }} unit(s)</span>
                                         {% else %}
-                                            <span class="badge bg-danger">SOLD</span>
+                                            <span class="badge bg-danger">Sold Out</span>
                                         {% endif %}
                                     {% else %}
-                                        <span class="fw-bold">{{ product.quantity }}</span>
-                                        {% if product.quantity <= product.reorder_level %}
+                                        <span class="fw-bold">{{ product.bulk_quantity }}</span>
+                                        {% if product.bulk_quantity <= product.reorder_level and product.bulk_quantity > 0 %}
                                             <span class="badge bg-warning text-dark ms-1">Reorder</span>
                                         {% endif %}
                                     {% endif %}
                                 </td>
-                                <!-- FIXED: Status Column -->
                                 <td>
-                                    {% if product.status == 'available' %}
-                                        <span class="badge bg-success">Available</span>
-                                    {% elif product.status == 'sold' %}
-                                        <span class="badge bg-secondary">Sold Out</span>
-                                    {% elif product.status == 'lowstock' %}
-                                        <span class="badge bg-warning text-dark">Low Stock</span>
-                                    {% elif product.status == 'outofstock' %}
-                                        <span class="badge bg-danger">Out of Stock</span>
-                                    {% elif product.status == 'damaged' %}
-                                        <span class="badge bg-dark">Damaged</span>
-                                    {% elif product.status == 'reserved' %}
-                                        <span class="badge bg-info">Reserved</span>
+                                    {% if product.category.is_single_item %}
+                                        {% if product.available_quantity > 0 %}
+                                            <span class="badge bg-success">Available</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Sold Out</span>
+                                        {% endif %}
                                     {% else %}
-                                        <span class="badge bg-secondary">{{ product.get_status_display }}</span>
+                                        {% if product.bulk_quantity == 0 %}
+                                            <span class="badge bg-danger">Out of Stock</span>
+                                        {% elif product.bulk_quantity <= product.reorder_level %}
+                                            <span class="badge bg-warning text-dark">Low Stock</span>
+                                        {% else %}
+                                            <span class="badge bg-success">Available</span>
+                                        {% endif %}
                                     {% endif %}
                                 </td>
-                            </tr>
+                             </tr>
                             {% empty %}
-                            <tr>
+                             <tr>
                                 <td colspan="5" class="text-center py-4">No products found</td>
-                            </tr>
+                             </tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -151,20 +149,30 @@
                 <div class="table-responsive">
                     <table class="table table-hover mb-0">
                         <thead>
-                            <tr>
+                             <tr>
                                 <th>Product</th>
                                 <th>Type</th>
                                 <th>Quantity</th>
                                 <th>Date</th>
-                            </tr>
+                             </tr>
                         </thead>
                         <tbody>
                             {% for entry in recent_movements %}
-                            <tr>
+                             <tr>
                                 <td>
-                                    <a href="{% url 'inventory:product_detail' entry.product.id %}" class="text-decoration-none">
-                                        {{ entry.product.display_name }}
-                                    </a>
+                                    {% if entry.product_sku %}
+                                        <a href="{% url 'inventory:product_detail' entry.product_sku.id %}" class="text-decoration-none">
+                                            {{ entry.product_sku.display_name }}
+                                        </a>
+                                    {% elif entry.product_unit %}
+                                        <a href="{% url 'inventory:product_detail' entry.product_unit.product.id %}" class="text-decoration-none">
+                                            {{ entry.product_unit.product.display_name }}
+                                        </a>
+                                        <br>
+                                        <small class="text-muted">{{ entry.product_unit.unique_identifier }}</small>
+                                    {% else %}
+                                        -
+                                    {% endif %}
                                 </td>
                                 <td>
                                     {% if entry.entry_type == 'purchase' %}
@@ -175,6 +183,10 @@
                                         <span class="badge bg-warning text-dark">Return</span>
                                     {% elif entry.entry_type == 'adjustment' %}
                                         <span class="badge bg-info">Adjust</span>
+                                    {% elif entry.entry_type == 'damage' %}
+                                        <span class="badge bg-dark">Damage</span>
+                                    {% elif entry.entry_type == 'theft' %}
+                                        <span class="badge bg-danger">Theft</span>
                                     {% else %}
                                         <span class="badge bg-secondary">{{ entry.get_entry_type_display }}</span>
                                     {% endif %}
@@ -187,11 +199,11 @@
                                     {% endif %}
                                 </td>
                                 <td>{{ entry.created_at|timesince }} ago</td>
-                            </tr>
+                             </tr>
                             {% empty %}
-                            <tr>
+                             <tr>
                                 <td colspan="4" class="text-center py-4">No movements found</td>
-                            </tr>
+                             </tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -201,7 +213,7 @@
     </div>
 </div>
 
-<!-- Low Stock Alerts (FIXED with new StockAlert fields) -->
+<!-- Low Stock Alerts -->
 {% if low_stock_alerts %}
 <div class="row">
     <div class="col-12">
@@ -213,7 +225,7 @@
                 <div class="table-responsive">
                     <table class="table table-hover">
                         <thead>
-                            <tr>
+                             <tr>
                                 <th>Product</th>
                                 <th>Alert Type</th>
                                 <th>Severity</th>
@@ -221,24 +233,23 @@
                                 <th>Threshold</th>
                                 <th>Last Alerted</th>
                                 <th>Action</th>
-                            </tr>
+                             </tr>
                         </thead>
                         <tbody>
                             {% for alert in low_stock_alerts %}
-                            <tr>
+                             <tr>
                                 <td>
                                     <a href="{% url 'inventory:product_detail' alert.product.id %}" class="text-decoration-none fw-bold">
                                         {{ alert.product.display_name }}
                                     </a>
                                     <br>
-                                    <small class="text-muted">{{ alert.product.product_code }}</small>
+                                    <small class="text-muted">{{ alert.product.sku_code }}</small>
                                 </td>
                                 <td>
                                     <span class="badge 
                                         {% if alert.alert_type == 'needs_reorder' %}bg-danger
                                         {% elif alert.alert_type == 'lowstock' %}bg-warning text-dark
                                         {% elif alert.alert_type == 'outofstock' %}bg-secondary
-                                        {% elif alert.alert_type == 'damaged' %}bg-dark
                                         {% else %}bg-info{% endif %}">
                                         {{ alert.get_alert_type_display }}
                                     </span>
@@ -268,8 +279,8 @@
                                            class="btn btn-outline-primary" title="View Product">
                                             <i class="fas fa-eye"></i>
                                         </a>
-                                        {% if alert.alert_type != 'outofstock' and alert.alert_type != 'damaged' %}
-                                        <a href="{% url 'inventory:restock_product' alert.id %}" 
+                                        {% if alert.alert_type != 'outofstock' %}
+                                        <a href="{% url 'inventory:restock_alert_combined' alert.id %}" 
                                            class="btn btn-outline-warning" title="Restock">
                                             <i class="fas fa-plus"></i>
                                         </a>
@@ -282,7 +293,7 @@
                                         </button>
                                     </div>
                                 </td>
-                            </tr>
+                             </tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -293,7 +304,7 @@
 </div>
 {% endif %}
 
-<!-- Dismiss Alert Modal (FIXED) -->
+<!-- Dismiss Alert Modal -->
 <div class="modal fade" id="dismissModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -334,7 +345,6 @@
 (function() {
     'use strict';
     
-    // Dismiss Alert Function
     window.dismissAlert = function(alertId) {
         var modal = new bootstrap.Modal(document.getElementById('dismissModal'));
         var form = document.getElementById('dismissForm');
@@ -344,11 +354,10 @@
     };
     
     document.addEventListener('DOMContentLoaded', function() {
-        // Get chart data from data attributes or window variables
         var chartLabels = [];
         var stockInData = [];
         var stockOutData = [];
-        var statusData = [0, 0, 0, 0];
+        var statusData = [0, 0, 0];
         
         {% if chart_labels %}
             chartLabels = {{ chart_labels|safe }};
@@ -362,13 +371,15 @@
             stockOutData = {{ stock_out_data|safe }};
         {% endif %}
         
-        {% if status_counts %}
-            statusData = [
-                {{ status_counts.available|default:0 }},
-                {{ status_counts.sold|default:0 }},
-                {{ status_counts.lowstock|default:0 }},
-                {{ status_counts.outofstock|default:0 }}
-            ];
+        // Status data: Available, Low Stock, Out of Stock
+        {% if available_products %}
+            statusData[0] = {{ available_products }};
+        {% endif %}
+        {% if low_stock_count %}
+            statusData[1] = {{ low_stock_count }};
+        {% endif %}
+        {% if out_of_stock %}
+            statusData[2] = {{ out_of_stock }};
         {% endif %}
         
         // Stock Movement Chart
@@ -428,11 +439,11 @@
             new Chart(ctx2, {
                 type: 'doughnut',
                 data: {
-                    labels: ['Available', 'Sold', 'Low Stock', 'Out of Stock'],
+                    labels: ['Available', 'Low Stock', 'Out of Stock'],
                     datasets: [
                         {
                             data: statusData,
-                            backgroundColor: ['#2ecc71', '#e74c3c', '#f39c12', '#95a5a6'],
+                            backgroundColor: ['#2ecc71', '#f39c12', '#e74c3c'],
                             borderWidth: 0,
                             hoverOffset: 4
                         }

@@ -38,6 +38,9 @@
                         <i class="fas fa-chart-line fa-2x text-white"></i>
                     </div>
                 </div>
+                {% if not is_superuser %}
+                <small class="text-white-50 mt-2 d-block">(This month only)</small>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -53,6 +56,9 @@
                         <i class="fas fa-check-circle fa-2x text-white"></i>
                     </div>
                 </div>
+                {% if not is_superuser %}
+                <small class="text-white-50 mt-2 d-block">(This month only)</small>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -68,21 +74,29 @@
                         <i class="fas fa-clock fa-2x text-dark"></i>
                     </div>
                 </div>
+                {% if not is_superuser %}
+                <small class="text-white-50 mt-2 d-block">(This month only)</small>
+                {% endif %}
             </div>
         </div>
     </div>
     <div class="col-md-3">
-        <div class="card bg-info text-white">
+        <div class="card bg-danger text-white">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <h6 class="text-white-50 mb-2">This Month's Expenses</h6>
+                        <h6 class="text-white-50 mb-2">
+                            {% if is_superuser %}All Users'{% else %}Your{% endif %} Monthly Expenses
+                        </h6>
                         <h2 class="mb-0">KES {{ monthly_expenses|floatformat:0|intcomma }}</h2>
                     </div>
                     <div class="bg-white bg-opacity-25 rounded-circle p-3">
-                        <i class="fas fa-chart-line fa-2x text-white"></i>
+                        <i class="fas fa-receipt fa-2x text-white"></i>
                     </div>
                 </div>
+                {% if not is_superuser %}
+                <small class="text-white-50 mt-2 d-block">(This month only)</small>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -148,48 +162,23 @@
             <table class="table table-bordered table-hover" id="reportsTable">
                 <thead>
                     <tr class="table-light">
-                        <th width="8%" class="bg-primary text-white text-center" style="border: 2px solid #0d47a1;">
-                            Report Date
-                        </th>
-                        <th width="10%" class="bg-info text-white" style="border: 2px solid #0097a7;">
-                            Shop Branch
-                        </th>
-                        <th width="10%" class="bg-teal text-white" style="border: 2px solid #00695c;">
-                            Reported By
-                        </th>
-                        <th width="8%" class="bg-success text-white text-end" style="border: 2px solid #1b5e20;">
-                            Total Sales
-                        </th>
-                        <th width="8%" class="bg-secondary text-white text-end" style="border: 2px solid #424242;">
-                            M-Pesa
-                        </th>
-                        <th width="8%" class="bg-secondary text-white text-end" style="border: 2px solid #424242;">
-                            Airtel
-                        </th>
-                        <th width="8%" class="bg-warning text-dark text-end" style="border: 2px solid #e65100;">
-                            Cash
-                        </th>
-                        <th width="8%" class="bg-primary text-white text-end" style="border: 2px solid #0d47a1;">
-                            Bank
-                        </th>
-                        <th width="8%" class="bg-danger text-white text-end" style="border: 2px solid #b71c1c;">
-                            Expenses
-                        </th>
-                        <th width="8%" class="bg-success text-white text-end" style="border: 2px solid #1b5e20;">
-                            Closing Balance
-                        </th>
-                        <th width="8%" class="bg-info text-white text-center" style="border: 2px solid #0097a7;">
-                            Status
-                        </th>
-                        <th width="8%" class="bg-navy text-white text-center" style="border: 2px solid #0a192f;">
-                            Actions
-                        </th>
+                        <th width="8%" class="bg-primary text-white text-center">Report Date</th>
+                        <th width="10%" class="bg-info text-white">Shop Branch</th>
+                        <th width="10%" class="bg-teal text-white">Reported By</th>
+                        <th width="8%" class="bg-success text-white text-end">M-Pesa Transactions</th>
+                        <th width="8%" class="bg-success text-white text-end">M-Pesa Amount</th>
+                        <th width="8%" class="bg-warning text-dark text-end">Cash Balance</th>
+                        <th width="8%" class="bg-primary text-white text-end">Bank Total</th>
+                        <th width="8%" class="bg-danger text-white text-end">Expenses</th>
+                        <th width="8%" class="bg-success text-white text-end">Closing Balance</th>
+                        <th width="8%" class="bg-info text-white text-center">Status</th>
+                        <th width="8%" class="bg-navy text-white text-center">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for report in reports %}
-                    <tr class="{% if report.submitted_by.is_superuser %}superuser-report{% endif %}">
-                        <td class="text-center align-middle" data-order="{{ report.report_date|date:'Y-m-d' }}">
+                    <tr>
+                        <td class="text-center align-middle">
                             <strong>{{ report.report_date|date:"M d, Y" }}</strong>
                             <br>
                             <small class="text-muted">{{ report.report_date|date:"D" }}</small>
@@ -211,28 +200,25 @@
                                 <i class="fas fa-clock"></i> {{ report.submission_time|date:"H:i" }}
                             </small>
                         </td>
+                        <td class="text-end align-middle">
+                            {{ report.total_mpesa_transactions|default:0|intcomma }}
+                        </td>
                         <td class="text-end align-middle fw-bold text-success">
-                            KES {{ report.shop_sales|floatformat:0|intcomma }}
+                            KES {{ report.total_mpesa_balance|floatformat:2|intcomma }}
                         </td>
                         <td class="text-end align-middle">
-                            KES {{ report.closing_mpesa_float|floatformat:0|intcomma }}
-                        </td>
-                        <td class="text-end align-middle">
-                            KES {{ report.closing_airtel_float|floatformat:0|intcomma }}
-                        </td>
-                        <td class="text-end align-middle">
-                            KES {{ report.closing_mpesa_cash|floatformat:0|intcomma }}
+                            KES {{ report.cash_balance|default:0|floatformat:2|intcomma }}
                         </td>
                         <td class="text-end align-middle">
                             {% with bank_total=report.bank_closings.all|dictsortreversed:"closing_balance"|first %}
-                                KES {{ bank_total.closing_balance|default:0|floatformat:0|intcomma }}
+                                KES {{ bank_total.closing_balance|default:0|floatformat:2|intcomma }}
                             {% endwith %}
                         </td>
                         <td class="text-end align-middle text-danger">
-                            KES {{ report.total_expenses|floatformat:0|intcomma }}
+                            KES {{ report.total_expenses|floatformat:2|intcomma }}
                         </td>
                         <td class="text-end align-middle fw-bold text-primary">
-                            KES {{ report.total_closing_balance|floatformat:0|intcomma }}
+                            KES {{ report.total_closing_balance|floatformat:2|intcomma }}
                         </td>
                         <td class="text-center align-middle">
                             {% if report.is_finalized %}
@@ -263,7 +249,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="12" class="text-center py-5">
+                        <td colspan="11" class="text-center py-5">
                             <i class="fas fa-file-alt fa-4x text-muted mb-3"></i>
                             <p class="text-muted mb-3">No reports found</p>
                             {% if selected_shop or from_date or to_date or finalized_filter %}
@@ -349,25 +335,11 @@
     .table-bordered {
         border: 2px solid #dee2e6 !important;
     }
-    .table-bordered thead th,
-    .table-bordered thead td {
+    .table-bordered thead th {
         border-bottom-width: 2px;
-    }
-    .table-bordered tbody tr td {
-        border-right: 1px solid #dee2e6;
-    }
-    .table-bordered tbody tr td:last-child {
-        border-right: none;
     }
     .table-hover tbody tr:hover {
         background-color: rgba(0, 0, 0, 0.05);
-    }
-    .superuser-report {
-        background-color: rgba(16, 185, 129, 0.08) !important;
-        border-left: 3px solid #10b981;
-    }
-    .superuser-report:hover {
-        background-color: rgba(16, 185, 129, 0.15) !important;
     }
     .badge {
         font-size: 0.75rem;

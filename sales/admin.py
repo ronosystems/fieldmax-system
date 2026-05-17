@@ -1,435 +1,527 @@
-# sales/admin.py
 from django.contrib import admin
 from django.utils.html import format_html
 from django.urls import reverse
-from django.utils import timezone
 from django.db.models import Sum, Count, Q
-from django.contrib import messages
+from django.utils import timezone
+from decimal import Decimal
 from .models import (
-    Sale, SaleItem, SaleCounter, SaleReversal, 
+    Sale, SaleItem, SaleCounter, PaymentRecord, SaleReversal,
     FiscalReceipt, Customer, LoyaltyTransaction, LoyaltySettings
 )
 
-# ============================================
-# SALE COUNTER ADMIN (UPDATED FOR NEW MODEL)
-# ============================================
-@admin.register(SaleCounter)
-class SaleCounterAdmin(admin.ModelAdmin):
-    """
-    Admin for SaleCounter - shows current counter value
-    Sale ID format: SALE-00001, ETR format: 00001
-    """
-    list_display = ['id', 'counter_display', 'last_used']
-    list_display_links = ['id']
-    readonly_fields = ['counter', 'last_used']
-    
-    def counter_display(self, obj):
-        return f"{obj.counter:05d}"
-    counter_display.short_description = "Current Counter"
-    
-    def has_add_permission(self, request):
-        """Prevent manual addition of counter entries"""
-        return False
-    
-    def has_delete_permission(self, request, obj=None):
-        """Prevent deletion of counter entries"""
-        return False
-    
-    def has_change_permission(self, request, obj=None):
-        """Allow viewing but not editing"""
-        return request.user.is_superuser if obj else True
 
-
-# ============================================
-# SALE ITEM INLINE
-# ============================================
 class SaleItemInline(admin.TabularInline):
+    """Inline for sale items"""
     model = SaleItem
     extra = 0
-    readonly_fields = ['product', 'product_code', 'product_name', 'sku_value', 
-                       'quantity', 'unit_price', 'total_price', 'product_age_days']
-    fields = ['product', 'product_code', 'product_name', 'sku_value', 
-              'quantity', 'unit_price', 'total_price', 'product_age_days']
+    readonly_fields = [
+        'product_code', 'product_name', 'sku_value', 'quantity',
+        'unit_price', 'total_price', 'product_age_days'
+    ]
+    fields = [
+        'product_code', 'product_name', 'quantity',
+        'unit_price', 'total_price'
+    ]
     can_delete = False
+    max_num = 0
     
     def has_add_permission(self, request, obj=None):
         return False
 
 
-# ============================================
-# SALE ADMIN
-# ============================================
+class PaymentRecordInline(admin.TabularInline):
+    """Inline for payment records (split payments)"""
+    model = PaymentRecord
+    extra = 0
+    readonly_fields = [
+        'method', 'amount', 'cash_tendered', 'cash_change',
+        'mpesa_phone', 'mpesa_transaction_id', 'bank_name',
+        'card_last_four', 'points_redeemed', 'created_at'
+    ]
+    fields = ['method', 'amount', 'created_at']
+    can_delete = False
+    max_num = 0
+    
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
 @admin.register(Sale)
 class SaleAdmin(admin.ModelAdmin):
-    list_display = ['sale_id', 'sequence_number_display', 'sale_date', 'seller', 'buyer_name', 'buyer_phone', 
-                    'total_amount', 'payment_method', 'is_credit', 'is_reversed', 
-                    'etr_receipt_number']
-    list_filter = ['payment_method', 'is_credit', 'is_reversed', 'etr_status', 'sale_date']
-    search_fields = ['sale_id', 'sequence_number', 'buyer_name', 'buyer_phone', 'etr_receipt_number']
-    readonly_fields = ['sale_id', 'sequence_number_display', 'created_at_display', 'reversal_info', 'points_summary']
-    inlines = [SaleItemInline]
+    list_display = [
+        'sale_id', 'sale_date_display', 'seller', 'buyer_name',
+        'total_amount_colored', 'payment_method', 'is_credit_badge',
+        'is_reversed_badge', 'etr_status_badge'
+    ]
+    list_filter = [
+        'payment_method', 'is_credit', 'is_reversed', 'etr_status',
+        'sale_date', 'seller'
+    ]
+    search_fields = [
+        'sale_id', 'etr_receipt_number', 'buyer_name', 'buyer_phone',
+        'buyer_id_number', 'seller__username'
+    ]
+    readonly_fields = [
+        'sale_id', 'sequence_number', 'etr_receipt_number',
+        'total_quantity', 'subtotal', 'tax_amount', 'total_amount',
+        'sale_date', 'change_display', 'balance_display', 'points_discount_display'
+    ]
+    list_select_related = ['seller', 'customer']
+    list_per_page = 50
+    inlines = [SaleItemInline, PaymentRecordInline]
+    date_hierarchy = 'sale_date'
     
     fieldsets = (
-        ('Sale Information', {
-            'fields': ('sale_id', 'sequence_number_display', 'sale_date', 'seller')
+        ('Transaction Information', {
+            'fields': (
+                'sale_id', 'sequence_number', 'sale_date',
+                'etr_receipt_number', 'fiscal_receipt_number'
+            )
         }),
-        ('Customer Details', {
-            'fields': ('buyer_name', 'buyer_phone', 'buyer_id_number', 'nok_name', 'nok_phone')
+        ('Seller Information', {
+            'fields': ('seller',)
         }),
-        ('Financial', {
-            'fields': ('subtotal', 'tax_amount', 'total_amount', 'amount_paid', 'payment_method', 'is_credit')
+        ('Customer Information', {
+            'fields': (
+                'buyer_name', 'buyer_phone', 'buyer_id_number',
+                'nok_name', 'nok_phone', 'customer'
+            )
         }),
-        ('Points & Loyalty', {
-            'fields': ('points_summary',),
-            'classes': ('collapse',),
+        ('Financial Summary', {
+            'fields': (
+                'total_quantity', 'subtotal', 'tax_amount',
+                'total_amount', 'amount_paid', 'change_display',
+                'balance_display'
+            )
         }),
-        ('ETR Information', {
-            'fields': ('etr_receipt_number', 'etr_receipt_counter', 'fiscal_receipt_number', 
-                      'etr_status', 'etr_processed_at', 'etr_error_message'),
-            'classes': ('collapse',),
+        ('Payment Details', {
+            'fields': ('payment_method', 'is_split_payment', 'payment_breakdown')
+        }),
+        ('Loyalty Points', {
+            'fields': (
+                'points_redeemed', 'points_discount_display',
+                'original_subtotal', 'points_earned'
+            ),
+            'classes': ('collapse',)
+        }),
+        ('Credit Sale Information', {
+            'fields': ('is_credit', 'credit_sale_id'),
+            'classes': ('collapse',)
+        }),
+        ('ETR Processing', {
+            'fields': ('etr_status', 'etr_processed_at', 'etr_error_message'),
+            'classes': ('collapse',)
         }),
         ('Reversal Information', {
-            'fields': ('reversal_info',),
-            'classes': ('collapse',),
+            'fields': ('is_reversed', 'reversed_at', 'reversed_by', 'reversal_reason'),
+            'classes': ('collapse',)
         }),
-        ('Metadata', {
-            'fields': ('batch_id', 'total_quantity', 'created_at_display'),
-            'classes': ('collapse',),
+        ('Additional Information', {
+            'fields': ('batch_id',),
+            'classes': ('collapse',)
         }),
     )
-    
-    def sequence_number_display(self, obj):
-        if obj.sequence_number:
-            return f"{obj.sequence_number:05d}"
-        return "-"
-    sequence_number_display.short_description = "Sequence #"
-    sequence_number_display.admin_order_field = 'sequence_number'
-    
-    def created_at_display(self, obj):
-        return obj.sale_date
-    created_at_display.short_description = "Created At"
-    
-    def reversal_info(self, obj):
-        if obj.is_reversed:
-            return format_html(
-                '<span style="color: red;">✓ Reversed on {} by {}<br>Reason: {}</span>',
-                obj.reversed_at.strftime('%Y-%m-%d %H:%M') if obj.reversed_at else 'Unknown',
-                obj.reversed_by.username if obj.reversed_by else 'System',
-                obj.reversal_reason or 'No reason provided'
-            )
-        return "Not Reversed"
-    reversal_info.short_description = "Reversal Status"
-    
-    def points_summary(self, obj):
-        points_earned = LoyaltyTransaction.objects.filter(
-            sale=obj, transaction_type='earned'
-        ).aggregate(total=Sum('points'))['total'] or 0
-        
-        points_redeemed = abs(LoyaltyTransaction.objects.filter(
-            sale=obj, transaction_type='redeemed'
-        ).aggregate(total=Sum('points'))['total'] or 0)
-        
-        if points_earned or points_redeemed:
-            return format_html(
-                '<span style="color: green;">✓ Points Earned: {}</span><br>'
-                '<span style="color: orange;">✓ Points Redeemed: {}</span><br>'
-                '<span style="color: blue;">✓ Points Discount: KSH {}</span>',
-                points_earned, points_redeemed, obj.points_discount
-            )
-        return "No points transactions"
-    points_summary.short_description = "Points Summary"
-    
-    actions = ['mark_as_reversed']
-    
-    def mark_as_reversed(self, request, queryset):
-        updated = queryset.update(is_reversed=True, reversed_at=timezone.now())
-        self.message_user(request, f'{updated} sales marked as reversed.')
-    mark_as_reversed.short_description = "Mark selected sales as reversed"
     
     def get_queryset(self, request):
-        return super().get_queryset(request).select_related('seller', 'reversed_by')
+        return super().get_queryset(request).prefetch_related('items', 'payment_records')
+    
+    def sale_date_display(self, obj):
+        return obj.sale_date.strftime('%Y-%m-%d %H:%M')
+    sale_date_display.short_description = 'Sale Date'
+    sale_date_display.admin_order_field = 'sale_date'
+    
+    def total_amount_colored(self, obj):
+        if obj.is_reversed:
+            color = '#999'
+        elif obj.is_credit:
+            color = '#dc3545'
+        else:
+            color = '#28a745'
+        return format_html('<span style="color: {}; font-weight: bold;">KSH {:,.2f}</span>', 
+                          color, obj.total_amount)
+    total_amount_colored.short_description = 'Total Amount'
+    total_amount_colored.admin_order_field = 'total_amount'
+    
+    def change_display(self, obj):
+        if obj.change > 0:
+            return format_html('<span style="color: #28a745;">KSH {:,.2f}</span>', obj.change)
+        return 'KSH 0.00'
+    change_display.short_description = 'Change'
+    
+    def balance_display(self, obj):
+        if obj.balance > 0:
+            return format_html('<span style="color: #dc3545;">KSH {:,.2f}</span>', obj.balance)
+        return 'KSH 0.00'
+    balance_display.short_description = 'Balance Due'
+    
+    def points_discount_display(self, obj):
+        if obj.points_discount > 0:
+            return format_html('<span style="color: #6f42c1;">KSH {:,.2f}</span>', obj.points_discount)
+        return 'KSH 0.00'
+    points_discount_display.short_description = 'Points Discount'
+    
+    def is_credit_badge(self, obj):
+        if obj.is_credit:
+            return format_html('<span style="background-color: #dc3545; color: white; padding: 2px 8px; border-radius: 12px;">Credit</span>')
+        return format_html('<span style="background-color: #28a745; color: white; padding: 2px 8px; border-radius: 12px;">Cash</span>')
+    is_credit_badge.short_description = 'Type'
+    
+    def is_reversed_badge(self, obj):
+        if obj.is_reversed:
+            return format_html('<span style="background-color: #6c757d; color: white; padding: 2px 8px; border-radius: 12px;">Reversed</span>')
+        return format_html('<span style="background-color: #007bff; color: white; padding: 2px 8px; border-radius: 12px;">Active</span>')
+    is_reversed_badge.short_description = 'Status'
+    
+    def etr_status_badge(self, obj):
+        colors = {
+            'pending': '#ffc107',
+            'processed': '#28a745',
+            'failed': '#dc3545'
+        }
+        color = colors.get(obj.etr_status, '#6c757d')
+        return format_html('<span style="background-color: {}; color: white; padding: 2px 8px; border-radius: 12px;">{}</span>', 
+                          color, obj.get_etr_status_display())
+    etr_status_badge.short_description = 'ETR Status'
+    
+    def has_add_permission(self, request):
+        # Disable adding through admin (use POS interface instead)
+        return False
+    
+    def has_delete_permission(self, request, obj=None):
+        return False
+    
+    actions = ['reverse_selected_sales']
+    
+    @admin.action(description='Reverse selected sales')
+    def reverse_selected_sales(self, request, queryset):
+        reversed_count = 0
+        errors = []
+        
+        for sale in queryset:
+            if sale.is_reversed:
+                errors.append(f"Sale {sale.sale_id} is already reversed")
+                continue
+            
+            try:
+                reversal = SaleReversal.objects.create(
+                    sale=sale,
+                    reversed_by=request.user,
+                    reason="Admin reversal from admin panel"
+                )
+                reversal.process_reversal()
+                reversed_count += 1
+            except Exception as e:
+                errors.append(f"Sale {sale.sale_id}: {str(e)}")
+        
+        message = f"Successfully reversed {reversed_count} sale(s)."
+        if errors:
+            message += f" Errors: {'; '.join(errors[:5])}"
+        self.message_user(request, message)
 
 
-# ============================================
-# SALE REVERSAL ADMIN
-# ============================================
+@admin.register(SaleItem)
+class SaleItemAdmin(admin.ModelAdmin):
+    list_display = [
+        'sale_link', 'product_code', 'product_name', 'quantity',
+        'unit_price', 'total_price', 'product_age_days'
+    ]
+    list_filter = ['created_at', 'sale__payment_method']
+    search_fields = [
+        'sale__sale_id', 'product_code', 'product_name',
+        'product__sku_code', 'product__display_name'
+    ]
+    readonly_fields = [
+        'sale', 'product', 'product_code', 'product_name',
+        'sku_value', 'quantity', 'unit_price', 'total_price',
+        'product_unit', 'product_age_days', 'created_at'
+    ]
+    list_select_related = ['sale', 'product']
+    list_per_page = 50
+    
+    def sale_link(self, obj):
+        url = reverse('admin:sales_sale_change', args=[obj.sale.sale_id])
+        return format_html('<a href="{}">{}</a>', url, obj.sale.sale_id)
+    sale_link.short_description = 'Sale'
+    
+    def has_add_permission(self, request):
+        return False
+    
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(PaymentRecord)
+class PaymentRecordAdmin(admin.ModelAdmin):
+    list_display = [
+        'sale_link', 'method', 'amount_display', 'mpesa_transaction_id',
+        'points_redeemed', 'created_at'
+    ]
+    list_filter = ['method', 'created_at']
+    search_fields = [
+        'sale__sale_id', 'mpesa_transaction_id',
+        'mpesa_phone', 'bank_name'
+    ]
+    readonly_fields = [
+        'sale', 'method', 'amount', 'cash_tendered', 'cash_change',
+        'mpesa_phone', 'mpesa_transaction_id', 'mpesa_checkout_request_id',
+        'bank_name', 'card_last_four', 'points_redeemed',
+        'created_at', 'processed_by'
+    ]
+    list_select_related = ['sale', 'processed_by']
+    list_per_page = 50
+    
+    def sale_link(self, obj):
+        url = reverse('admin:sales_sale_change', args=[obj.sale.sale_id])
+        return format_html('<a href="{}">{}</a>', url, obj.sale.sale_id)
+    sale_link.short_description = 'Sale'
+    
+    def amount_display(self, obj):
+        return format_html('KSH {:,.2f}', obj.amount)
+    amount_display.short_description = 'Amount'
+    
+    def has_add_permission(self, request):
+        return False
+    
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(SaleCounter)
+class SaleCounterAdmin(admin.ModelAdmin):
+    list_display = ['id', 'counter_display', 'last_used']
+    readonly_fields = ['counter', 'last_used']
+    
+    def counter_display(self, obj):
+        return f"{obj.counter:05d}"
+    counter_display.short_description = 'Current Counter'
+    
+    def has_add_permission(self, request):
+        return False
+    
+    def has_delete_permission(self, request, obj=None):
+        return False
+    
+    def has_change_permission(self, request, obj=None):
+        # Allow viewing but not editing
+        if obj:
+            return False
+        return super().has_change_permission(request, obj)
+
+
 @admin.register(SaleReversal)
 class SaleReversalAdmin(admin.ModelAdmin):
-    list_display = ['sale_link', 'reversed_at', 'reversed_by', 'items_processed', 
-                    'formatted_amount', 'reason']
+    list_display = [
+        'sale_link', 'reversed_at', 'reversed_by', 'items_processed',
+        'total_amount_reversed_display', 'is_successful_badge'
+    ]
     list_filter = ['reversed_at', 'reversed_by']
-    search_fields = ['sale__sale_id', 'reason', 'reversal_reference']
-    readonly_fields = ['sale', 'reversed_at', 'reversed_by', 'items_processed', 
-                       'total_amount_reversed', 'reversal_reference', 'reason']
-    
-    fieldsets = (
-        ('Reversal Information', {
-            'fields': ('sale_link_detail', 'reversed_at', 'reversed_by', 'reason')
-        }),
-        ('Details', {
-            'fields': ('items_processed', 'total_amount_reversed', 'reversal_reference')
-        }),
-    )
+    search_fields = ['sale__sale_id', 'reversal_reference', 'reason']
+    readonly_fields = [
+        'sale', 'reversed_at', 'reversed_by', 'reason',
+        'items_processed', 'total_amount_reversed', 'reversal_reference'
+    ]
+    list_select_related = ['sale', 'reversed_by']
+    list_per_page = 50
     
     def sale_link(self, obj):
         url = reverse('admin:sales_sale_change', args=[obj.sale.sale_id])
         return format_html('<a href="{}">{}</a>', url, obj.sale.sale_id)
-    sale_link.short_description = "Sale"
+    sale_link.short_description = 'Sale'
     
-    def sale_link_detail(self, obj):
-        url = reverse('admin:sales_sale_change', args=[obj.sale.sale_id])
-        return format_html('<a href="{}" target="_blank">{}</a>', url, obj.sale.sale_id)
-    sale_link_detail.short_description = "Sale"
+    def total_amount_reversed_display(self, obj):
+        return format_html('KSH {:,.2f}', obj.total_amount_reversed)
+    total_amount_reversed_display.short_description = 'Amount Reversed'
     
-    def formatted_amount(self, obj):
-        return f"KSH {obj.total_amount_reversed:,.0f}"
-    formatted_amount.short_description = "Amount Reversed"
+    def is_successful_badge(self, obj):
+        if obj.is_successful:
+            return format_html('<span style="color: #28a745;">✓ Successful</span>')
+        return format_html('<span style="color: #dc3545;">✗ Failed</span>')
+    is_successful_badge.short_description = 'Status'
     
     def has_add_permission(self, request):
         return False
+    
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
-# ============================================
-# FISCAL RECEIPT ADMIN
-# ============================================
 @admin.register(FiscalReceipt)
 class FiscalReceiptAdmin(admin.ModelAdmin):
-    list_display = ['receipt_number', 'sale_link', 'issued_at']
+    list_display = ['receipt_number', 'sale_link', 'issued_at', 'has_qr_badge']
     list_filter = ['issued_at']
     search_fields = ['receipt_number', 'sale__sale_id']
-    readonly_fields = ['sale', 'receipt_number', 'issued_at', 'qr_code', 'verification_url']
+    readonly_fields = [
+        'sale', 'receipt_number', 'issued_at', 'qr_code',
+        'verification_url', 'receipt_data'
+    ]
+    list_select_related = ['sale']
+    list_per_page = 50
     
     def sale_link(self, obj):
         url = reverse('admin:sales_sale_change', args=[obj.sale.sale_id])
         return format_html('<a href="{}">{}</a>', url, obj.sale.sale_id)
-    sale_link.short_description = "Sale"
+    sale_link.short_description = 'Sale'
+    
+    def has_qr_badge(self, obj):
+        if obj.qr_code:
+            return format_html('<span style="color: #28a745;">✓ Has QR</span>')
+        return format_html('<span style="color: #999;">No QR</span>')
+    has_qr_badge.short_description = 'QR Code'
     
     def has_add_permission(self, request):
         return False
+    
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
-# ============================================
-# CUSTOMER MANAGEMENT ADMIN
-# ============================================
+class LoyaltyTransactionInline(admin.TabularInline):
+    model = LoyaltyTransaction
+    extra = 0
+    readonly_fields = [
+        'points', 'transaction_type', 'description', 'created_at'
+    ]
+    fields = ['transaction_type', 'points', 'description', 'created_at']
+    can_delete = False
+    max_num = 10
+    
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
 @admin.register(Customer)
 class CustomerAdmin(admin.ModelAdmin):
-    list_display = ['full_name', 'phone_number', 'email', 
-                    'points_display', 'total_spent_display', 'total_purchases', 
-                    'last_purchase', 'is_active', 'registered_by']
-    list_filter = ['is_active', 'created_at', 'registered_by']
-    search_fields = ['phone_number', 'full_name', 'email', 'id_number']
-    readonly_fields = ['created_at', 'updated_at', 'points_summary', 
-                       'transaction_history_link', 'purchase_stats', 'registered_by']
-    list_editable = ['is_active']
-    list_per_page = 25
-    date_hierarchy = 'created_at'
+    list_display = [
+        'phone_number', 'full_name', 'points_balance_display',
+        'total_purchases', 'total_spent_display', 'last_purchase_date',
+        'is_active_badge'
+    ]
+    list_filter = ['is_active', 'created_at']
+    search_fields = [
+        'phone_number', 'full_name', 'email', 'id_number'
+    ]
+    readonly_fields = [
+        'points_balance', 'total_points_earned', 'total_points_redeemed',
+        'total_purchases', 'total_spent', 'last_purchase_date',
+        'created_at', 'updated_at'
+    ]
+    list_select_related = ['registered_by']
+    list_per_page = 50
+    inlines = [LoyaltyTransactionInline]
     
     fieldsets = (
         ('Basic Information', {
-            'fields': ('phone_number', 'full_name', 'email', 'id_number')
+            'fields': (
+                'phone_number', 'full_name', 'email', 'id_number'
+            )
         }),
         ('Loyalty Points', {
-            'fields': ('points_balance', 'total_points_earned', 'total_points_redeemed', 
-                      'points_summary'),
+            'fields': (
+                'points_balance', 'total_points_earned', 'total_points_redeemed'
+            )
         }),
-        ('Statistics', {
-            'fields': ('total_purchases', 'total_spent', 'last_purchase_date',
-                      'purchase_stats'),
+        ('Purchase Statistics', {
+            'fields': (
+                'total_purchases', 'total_spent', 'last_purchase_date'
+            )
         }),
-        ('Registration', {
-            'fields': ('registered_by', 'is_active'),
+        ('Registration Information', {
+            'fields': ('registered_by', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
         }),
-        ('Metadata', {
-            'fields': ('created_at', 'updated_at'),
-            'classes': ('collapse',),
-        }),
-        ('Transaction History', {
-            'fields': ('transaction_history_link',),
-            'classes': ('collapse',),
+        ('Status', {
+            'fields': ('is_active',)
         }),
     )
     
-    def points_display(self, obj):
-        return format_html(
-            '<span style="font-weight: bold; color: #28a745;">{} pts</span> '
-            '<span style="color: #6c757d;">(KSH {})</span>',
-            obj.points_balance, obj.points_balance
-        )
-    points_display.short_description = "Points"
+    def points_balance_display(self, obj):
+        points = float(obj.points_balance)
+        if points == int(points):
+            return f"{int(points):,}"
+        return f"{points:,}"
+    points_balance_display.short_description = 'Points Balance'
+    points_balance_display.admin_order_field = 'points_balance'
     
     def total_spent_display(self, obj):
-        return f"KSH {obj.total_spent:,.0f}"
-    total_spent_display.short_description = "Total Spent"
+        return format_html('KSH {:,.2f}', obj.total_spent)
+    total_spent_display.short_description = 'Total Spent'
+    total_spent_display.admin_order_field = 'total_spent'
     
-    def last_purchase(self, obj):
-        if obj.last_purchase_date:
-            return format_html(
-                '<span title="{}">{}</span>',
-                obj.last_purchase_date.strftime('%Y-%m-%d %H:%M'),
-                obj.last_purchase_date.strftime('%Y-%m-%d')
-            )
-        return "Never"
-    last_purchase.short_description = "Last Purchase"
+    def is_active_badge(self, obj):
+        if obj.is_active:
+            return format_html('<span style="color: #28a745;">✓ Active</span>')
+        return format_html('<span style="color: #dc3545;">✗ Inactive</span>')
+    is_active_badge.short_description = 'Status'
     
-    def points_summary(self, obj):
-        return format_html(
-            '<div style="background: #f8f9fa; padding: 10px; border-radius: 5px;">'
-            '<strong>Current Balance:</strong> {} points (KSH {})<br>'
-            '<strong>Total Earned:</strong> {} points<br>'
-            '<strong>Total Redeemed:</strong> {} points<br>'
-            '<strong>Points Value:</strong> KSH {}'
-            '</div>',
-            obj.points_balance, obj.points_balance,
-            obj.total_points_earned,
-            obj.total_points_redeemed,
-            obj.points_balance
-        )
-    points_summary.short_description = "Points Summary"
+    actions = ['activate_customers', 'deactivate_customers', 'add_points_to_customers']
     
-    def purchase_stats(self, obj):
-        avg_spent = obj.total_spent / obj.total_purchases if obj.total_purchases > 0 else 0
-        return format_html(
-            '<div style="background: #f8f9fa; padding: 10px; border-radius: 5px;">'
-            '<strong>Average Purchase:</strong> KSH {:.0f}<br>'
-            '<strong>Lifetime Value:</strong> KSH {:.0f}'
-            '</div>',
-            avg_spent, obj.total_spent
-        )
-    purchase_stats.short_description = "Purchase Statistics"
-    
-    def transaction_history_link(self, obj):
-        url = reverse('admin:sales_loyaltytransaction_changelist') + f'?customer__id__exact={obj.id}'
-        count = LoyaltyTransaction.objects.filter(customer=obj).count()
-        return format_html(
-            '<a href="{}" target="_blank">View {} transactions →</a>',
-            url, count
-        )
-    transaction_history_link.short_description = "Transactions"
-    
-    def save_model(self, request, obj, form, change):
-        if not change:  # New customer being created
-            obj.registered_by = request.user
-        super().save_model(request, obj, form, change)
-    
-    actions = ['activate_customers', 'deactivate_customers', 'reset_points', 'export_customers_csv']
-    
+    @admin.action(description='Activate selected customers')
     def activate_customers(self, request, queryset):
         updated = queryset.update(is_active=True)
-        self.message_user(request, f'{updated} customers activated.')
-    activate_customers.short_description = "Activate selected customers"
+        self.message_user(request, f"{updated} customer(s) activated.")
     
+    @admin.action(description='Deactivate selected customers')
     def deactivate_customers(self, request, queryset):
         updated = queryset.update(is_active=False)
-        self.message_user(request, f'{updated} customers deactivated.')
-    deactivate_customers.short_description = "Deactivate selected customers"
+        self.message_user(request, f"{updated} customer(s) deactivated.")
     
-    def reset_points(self, request, queryset):
+    @admin.action(description='Add points to selected customers')
+    def add_points_to_customers(self, request, queryset):
+        # This would typically show an intermediate form
+        # For simplicity, we'll add 10 points to each
         for customer in queryset:
-            customer.points_balance = 0
-            customer.save()
-        self.message_user(request, f'{queryset.count()} customers points reset to 0.')
-    reset_points.short_description = "Reset points to 0"
-    
-    def export_customers_csv(self, request, queryset):
-        import csv
-        from django.http import HttpResponse
-        
-        response = HttpResponse(content_type='text/csv')
-        response['Content-Disposition'] = 'attachment; filename="customers_export.csv"'
-        
-        writer = csv.writer(response)
-        writer.writerow(['Phone', 'Name', 'Email', 'Points Balance', 
-                        'Total Spent', 'Total Purchases', 'Status', 'Registered Date'])
-        
-        for customer in queryset:
-            writer.writerow([
-                customer.phone_number,
-                customer.full_name,
-                customer.email or '',
-                customer.points_balance,
-                f"{customer.total_spent:.2f}",
-                customer.total_purchases,
-                'Active' if customer.is_active else 'Inactive',
-                customer.created_at.strftime('%Y-%m-%d')
-            ])
-        
-        self.message_user(request, f'Exported {queryset.count()} customers to CSV.')
-        return response
-    export_customers_csv.short_description = "Export selected customers to CSV"
+            customer.add_points(10, description="Admin bonus points")
+        self.message_user(request, f"Added 10 points to {queryset.count()} customer(s).")
 
 
-# ============================================
-# LOYALTY TRANSACTION ADMIN
-# ============================================
 @admin.register(LoyaltyTransaction)
 class LoyaltyTransactionAdmin(admin.ModelAdmin):
-    list_display = ['id', 'customer_link', 'points_display', 'transaction_type_badge', 
-                    'sale_link', 'description', 'created_at']
+    list_display = [
+        'customer_link', 'points_display', 'transaction_type_badge',
+        'sale_link', 'description', 'created_at'
+    ]
     list_filter = ['transaction_type', 'created_at']
-    search_fields = ['customer__phone_number', 'customer__full_name', 'description']
-    readonly_fields = ['customer', 'sale', 'points', 'transaction_type', 
-                      'description', 'created_at', 'created_by']
-    list_per_page = 25
-    date_hierarchy = 'created_at'
-    
-    fieldsets = (
-        ('Transaction Details', {
-            'fields': ('customer', 'sale', 'points_display_detail', 'transaction_type')
-        }),
-        ('Description', {
-            'fields': ('description',)
-        }),
-        ('Metadata', {
-            'fields': ('created_at', 'created_by')
-        }),
-    )
+    search_fields = [
+        'customer__phone_number', 'customer__full_name',
+        'sale__sale_id', 'description'
+    ]
+    readonly_fields = [
+        'customer', 'sale', 'points', 'transaction_type',
+        'description', 'created_at', 'created_by'
+    ]
+    list_select_related = ['customer', 'sale', 'created_by']
+    list_per_page = 50
     
     def customer_link(self, obj):
-        url = reverse('admin:sales_customer_change', args=[obj.customer.id])
-        return format_html('<a href="{}">{}</a>', url, obj.customer.full_name or obj.customer.phone_number)
-    customer_link.short_description = "Customer"
+        url = reverse('admin:sales_customer_change', args=[obj.customer.pk])
+        return format_html('<a href="{}">{}</a>', url, obj.customer.phone_number)
+    customer_link.short_description = 'Customer'
     
     def sale_link(self, obj):
         if obj.sale:
             url = reverse('admin:sales_sale_change', args=[obj.sale.sale_id])
             return format_html('<a href="{}">{}</a>', url, obj.sale.sale_id)
-        return "-"
-    sale_link.short_description = "Sale"
+        return '-'
+    sale_link.short_description = 'Sale'
     
     def points_display(self, obj):
-        color = 'green' if obj.points > 0 else 'orange'
-        sign = '+' if obj.points > 0 else ''
-        return format_html(
-            '<span style="color: {}; font-weight: bold;">{}{}</span>',
-            color, sign, obj.points
-        )
-    points_display.short_description = "Points"
-    
-    def points_display_detail(self, obj):
-        color = 'green' if obj.points > 0 else 'orange'
-        sign = '+' if obj.points > 0 else ''
-        value = obj.points if obj.points > 0 else abs(obj.points)
-        return format_html(
-            '<span style="color: {}; font-size: 16px; font-weight: bold;">{} {} points</span>',
-            color, sign, value
-        )
-    points_display_detail.short_description = "Points"
+        if obj.points > 0:
+            return format_html('<span style="color: #28a745;">+{}</span>', obj.display_points)
+        else:
+            return format_html('<span style="color: #dc3545;">{}</span>', obj.display_points)
+    points_display.short_description = 'Points'
     
     def transaction_type_badge(self, obj):
         colors = {
             'earned': '#28a745',
-            'redeemed': '#ffc107',
+            'redeemed': '#dc3545',
             'expired': '#6c757d',
-            'adjusted': '#17a2b8'
+            'adjusted': '#ffc107'
         }
-        return format_html(
-            '<span style="background-color: {}; color: {}; padding: 3px 8px; '
-            'border-radius: 20px; font-size: 11px;">{}</span>',
-            colors.get(obj.transaction_type, '#6c757d'),
-            'white' if obj.transaction_type in ['earned', 'expired', 'adjusted'] else 'black',
-            obj.get_transaction_type_display()
-        )
-    transaction_type_badge.short_description = "Type"
+        color = colors.get(obj.transaction_type, '#6c757d')
+        return format_html('<span style="background-color: {}; color: white; padding: 2px 8px; border-radius: 12px;">{}</span>', 
+                          color, obj.get_transaction_type_display())
+    transaction_type_badge.short_description = 'Type'
     
     def has_add_permission(self, request):
         return False
@@ -438,35 +530,51 @@ class LoyaltyTransactionAdmin(admin.ModelAdmin):
         return False
 
 
-# ============================================
-# LOYALTY SETTINGS ADMIN
-# ============================================
 @admin.register(LoyaltySettings)
 class LoyaltySettingsAdmin(admin.ModelAdmin):
-    list_display = ['id', 'points_percentage', 'min_purchase_for_points', 
-                   'max_points_per_transaction', 'min_redeem_points', 
-                   'max_redeem_percentage', 'welcome_points']
-    
+    list_display = [
+        'id', 'points_percentage_display', 'min_purchase_for_points',
+        'max_points_per_transaction', 'min_redeem_points',
+        'max_redeem_percentage', 'points_expiry_days'
+    ]
     fieldsets = (
-        ('Points Earning', {
-            'fields': ('min_purchase_for_points', 'points_percentage', 'max_points_per_transaction')
+        ('Point Earning Settings', {
+            'fields': (
+                'min_purchase_for_points', 'points_percentage',
+                'max_points_per_transaction'
+            )
         }),
-        ('Points Redemption', {
-            'fields': ('min_redeem_points', 'max_redeem_percentage')
+        ('Point Redemption Settings', {
+            'fields': (
+                'min_redeem_points', 'max_redeem_percentage'
+            )
         }),
-        ('Points Expiration', {
+        ('Points Expiry', {
             'fields': ('points_expiry_days',)
         }),
-        ('Registration', {
-            'fields': ('welcome_points', 'require_id_for_registration', 'require_email_for_registration')
+        ('Registration Settings', {
+            'fields': (
+                'welcome_points', 'require_id_for_registration',
+                'require_email_for_registration'
+            )
         }),
     )
     
+    def points_percentage_display(self, obj):
+        return f"{obj.points_percentage}% of sale"
+    points_percentage_display.short_description = 'Earning Rate'
+    
     def has_add_permission(self, request):
-        # Prevent creating multiple settings instances
-        if LoyaltySettings.objects.exists():
+        # Prevent creating multiple instances
+        if self.model.objects.exists():
             return False
-        return True
+        return super().has_add_permission(request)
     
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+# Custom admin site configuration
+admin.site.site_header = 'Sales Management System'
+admin.site.site_title = 'Sales Admin'
+admin.site.index_title = 'Welcome to Sales Management'

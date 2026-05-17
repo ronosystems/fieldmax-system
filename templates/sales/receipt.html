@@ -128,11 +128,11 @@
 
         .items-header {
             display: grid;
-            grid-template-columns: 50% 15% 20% 15%;
+            grid-template-columns: 45% 15% 10% 15% 15%;
             background: #969ba0;
             color: rgb(0, 0, 0);
             font-weight: bold;
-            font-size: 12px;
+            font-size: 11px;
             padding: 10px 8px;
             text-transform: uppercase;
         }
@@ -148,8 +148,8 @@
 
         .item-row {
             display: grid;
-            grid-template-columns: 50% 15% 20% 15%;
-            font-size: 12px;
+            grid-template-columns: 45% 15% 10% 15% 15%;
+            font-size: 11px;
             border-bottom: 1px solid #eee;
             padding: 8px 8px;
         }
@@ -170,12 +170,20 @@
 
         .item-description {
             font-weight: 600;
-            font-size: 13px;
+            font-size: 12px;
+        }
+
+        .item-identifier {
+            font-size: 9px;
+            color: #666;
+            display: block;
+            margin-top: 2px;
+            font-family: monospace;
         }
 
         .item-sku {
-            font-size: 10px;
-            color: #000000;
+            font-size: 9px;
+            color: #888;
             display: block;
             margin-top: 2px;
         }
@@ -304,7 +312,7 @@
             font-weight: 500;
         }
 
-        /* Barcode Section - New Styles */
+        /* Barcode Section */
         .barcode-section {
             background: white;
             border: 1px solid #ddd;
@@ -330,13 +338,6 @@
             margin: 10px 0;
         }
 
-        .barcode-image {
-            background: white;
-            padding: 10px;
-            border-radius: 8px;
-            display: inline-block;
-        }
-
         canvas.barcode {
             display: block;
             margin: 0 auto;
@@ -350,36 +351,6 @@
             margin-top: 8px;
             color: #2c3e50;
             font-weight: bold;
-        }
-
-        .barcode-human {
-            font-family: 'Courier New', monospace;
-            font-size: 16px;
-            letter-spacing: 2px;
-            margin-top: 5px;
-            color: #000;
-            font-weight: bold;
-        }
-
-        /* Dual Barcode Layout */
-        .dual-barcode {
-            display: flex;
-            justify-content: space-around;
-            flex-wrap: wrap;
-            gap: 15px;
-        }
-
-        .single-barcode {
-            flex: 1;
-            min-width: 200px;
-            text-align: center;
-        }
-
-        .single-barcode .barcode-label {
-            font-size: 10px;
-            color: #666;
-            margin-bottom: 5px;
-            font-weight: 600;
         }
 
         /* Footer */
@@ -426,7 +397,6 @@
             justify-content: center;
         }
 
-        /* Print Button Styles */
         .print-button {
             flex: 1;
             padding: 12px 20px;
@@ -502,7 +472,6 @@
             }
         }
 
-        /* Responsive */
         @media (max-width: 768px) {
             body {
                 padding: 10px;
@@ -516,24 +485,13 @@
                 margin: 10px;
                 flex-direction: column;
             }
-            
-            .dual-barcode {
-                flex-direction: column;
-                align-items: center;
-            }
-            
-            .single-barcode {
-                width: 100%;
-            }
         }
 
-        /* Focus style for keyboard navigation */
         .print-button:focus {
             outline: 3px solid #ff9800;
             outline-offset: 2px;
         }
 
-        /* Hint text for Enter key */
         .keyboard-hint {
             text-align: center;
             font-size: 11px;
@@ -563,7 +521,7 @@
                     <div>Nairobi, Kenya</div>
                     <div>Tel: +254 722 558 544 | +254 702 444 515</div>
                     <div>Email: fieldmaxsuppliers@gmail.com</div>
-                    <div>PIN: ---------- | VAT: ----------</div>
+                    <div>PIN: P051281520V | VAT: A051281520V</div>
                 </div>
             </div>
 
@@ -571,11 +529,15 @@
             <div class="receipt-info-grid">
                 <div class="info-row">
                     <div><span class="info-label">Receipt No:</span> {{ sale.sale_id }}</div>
-                    <div><span class="info-label">Date:</span> {{ sale.sale_date|date:"Y-m-d" }}</div>
+                    <div><span class="info-label">ETR No:</span> {{ sale.etr_receipt_number|default:sale.sequence_number|default:"N/A" }}</div>
                 </div>
                 <div class="info-row">
+                    <div><span class="info-label">Date:</span> {{ sale.sale_date|date:"Y-m-d" }}</div>
                     <div><span class="info-label">Time:</span> {{ sale.sale_date|date:"H:i:s" }}</div>
-                    <div><span class="info-label">Shop Id:</span> FSL-SHOP001</div>
+                </div>
+                <div class="info-row">
+                    <div><span class="info-label">Sequence:</span> {{ sale.sequence_number|default:"N/A" }}</div>
+                    <div><span class="info-label">Till No:</span> {{ sale.till_number|default:"N/A" }}</div>
                 </div>
             </div>
 
@@ -583,6 +545,7 @@
             <div class="items-table">
                 <div class="items-header">
                     <div>Description</div>
+                    <div>SKU</div>
                     <div>Price</div>
                     <div>Qty</div>
                     <div>Total</div>
@@ -592,9 +555,18 @@
                 <div class="item-row">
                     <div>
                         <span class="item-description">{{ item.product_name }}</span>
-                        <span class="item-sku">
-                            {% if item.sku_value %}: {{ item.sku_value }}{% endif %}
-                        </span>
+                        {% if item.imei_number %}
+                            <span class="item-identifier">IMEI: {{ item.imei_number }}</span>
+                        {% elif item.serial_number %}
+                            <span class="item-identifier">SN: {{ item.serial_number }}</span>
+                        {% elif item.is_single_item %}
+                            <span class="item-identifier">Single Item</span>
+                        {% else %}
+                            <span class="item-identifier">Bulk Item</span>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <span class="item-sku">{{ item.sku_code }}</span>
                     </div>
                     <div>KSH {{ item.unit_price|floatformat:0 }}</div>
                     <div>{{ item.quantity }}</div>
@@ -603,36 +575,30 @@
                 {% endfor %}
             </div>
 
-            <!-- 4. TOTALS SECTION WITH CORRECT VAT CALCULATION -->
-            {% with total_amount=sale.total_amount|floatformat:2 %}
-            {% with vat_amount=total_amount|add:"-0"|floatformat:2 %}
-            
+            <!-- 4. TOTALS SECTION -->
             <div class="totals-card">
                 <div class="total-line">
-                    <span>SUBTOTAL (Excl. VAT):</span>
-                    <span>KSH {% widthratio total_amount 116 100 %}</span>
+                    <span>SUBTOTAL:</span>
+                    <span>KSH {{ sale.subtotal|floatformat:2 }}</span>
                 </div>
 
                 <div class="total-line vat-line">
                     <span>VAT (16%):</span>
-                    <span>KSH {% widthratio total_amount 100 16 %}</span>
+                    <span>KSH {{ vat_amount|floatformat:2 }}</span>
                 </div>
 
                 {% if sale.points_discount and sale.points_discount > 0 %}
                 <div class="total-line" style="color: #e67e22;">
                     <span>Points Discount:</span>
-                    <span>-KSH {{ sale.points_discount|floatformat:2 }}</span>
+                    <span>- KSH {{ sale.points_discount|floatformat:2 }}</span>
                 </div>
                 {% endif %}
 
                 <div class="total-line grand-total">
-                    <span>GRAND TOTAL (Incl. VAT):</span>
-                    <span>KSH {{ total_amount }}</span>
+                    <span>TOTAL:</span>
+                    <span>KSH {{ sale.total_amount|floatformat:2 }}</span>
                 </div>
             </div>
-            
-            {% endwith %}
-            {% endwith %}
 
             <!-- 5. PAYMENT SECTION -->
             <div class="payment-section">
@@ -642,7 +608,7 @@
                 </div>
                 <div class="payment-line">
                     <span>Amount Paid:</span>
-                    <span>KSH {{ sale.amount_paid|floatformat:2 }}</span>
+                    <span>KSH {{ amount_paid|floatformat:2 }}</span>
                 </div>
                 <div class="payment-line">
                     <span>Change:</span>
@@ -650,16 +616,26 @@
                         KSH {{ change|floatformat:2 }}
                     </span>
                 </div>
+                {% if sale.points_redeemed > 0 %}
+                <div class="payment-line">
+                    <span>Points Redeemed:</span>
+                    <span>{{ sale.points_redeemed }} points</span>
+                </div>
+                {% endif %}
             </div>
 
             <!-- 6. CUSTOMER INFORMATION & LOYALTY POINTS SECTION -->
             <div class="customer-loyalty-card">
                 <div class="section-title">CUSTOMER & LOYALTY</div>
                 
-                {% if sale.buyer_name %}
+                {% if sale.buyer_name and sale.buyer_name != "Walk-in Customer" %}
                 <div class="info-row-single-light">
                     <span class="info-label-light">Customer Name:</span>
                     <span class="info-value-light">{{ sale.buyer_name }}</span>
+                </div>
+                <div class="info-row-single-light">
+                    <span class="info-label-light">Phone:</span>
+                    <span class="info-value-light">{{ sale.buyer_phone|default:"-" }}</span>
                 </div>
                 {% else %}
                 <div class="info-row-single-light">
@@ -675,7 +651,11 @@
                 </div>
                 <div class="info-row-single-light">
                     <span class="info-label-light">Points Earned Today:</span>
-                    <span class="info-value-light points-earned">+{{ points_earned_today }}</span>
+                    <span class="info-value-light points-earned">+{{ points_earned_today|default:0 }}</span>
+                </div>
+                <div class="info-row-single-light">
+                    <span class="info-label-light">New Balance:</span>
+                    <span class="info-value-light">{{ customer.points_balance|default:0 }}</span>
                 </div>
                 {% else %}
                 <div class="info-row-single-light">
@@ -684,7 +664,7 @@
                 </div>
                 <div class="info-row-single-light">
                     <span class="info-label-light">Join Program:</span>
-                    <span class="info-value-light">📋Register at customer care desk</span>
+                    <span class="info-value-light">📋 Register at customer care</span>
                 </div>
                 {% endif %}
             </div>
@@ -693,7 +673,9 @@
             <div class="seller-section">
                 <span>Served By:</span>
                 <span>
-                    {% if sale.seller.first_name %}
+                    {% if sale.seller.get_full_name %}
+                        {{ sale.seller.get_full_name }}
+                    {% elif sale.seller.first_name %}
                         {{ sale.seller.first_name }} {{ sale.seller.last_name }}
                     {% else %}
                         {{ sale.seller.username|default:"System" }}
@@ -701,15 +683,15 @@
                 </span>
             </div>
 
-            <!-- 8. BARCODE SECTION - AT THE BOTTOM BEFORE END OF FISCAL -->
+            <!-- 8. BARCODE SECTION -->
             <div class="barcode-section">
                 <div class="barcode-title">SCAN FOR RETURNS & TRACKING</div>
                 
-                <!-- Single Code 128 Barcode (Best for alphanumeric) -->
                 <div class="single-barcode">
                     <div class="barcode-wrapper">
                         <canvas id="barcode128" class="barcode" width="250" height="60"></canvas>
                     </div>
+                    <div class="barcode-number">{{ sale.sale_id }}</div>
                 </div>
             </div>
 
@@ -719,6 +701,7 @@
                 <div class="thank-you">THANK YOU FOR SHOPPING WITH US</div>
                 <div class="footer-divider-dashed"></div>
                 <div class="small mt-1">ETR Compliant | Valid without signature</div>
+                <div class="small">Goods sold cannot be exchanged or refunded</div>
                 <div class="fiscal-footer" style="margin-top: 8px;">
                     ****----END OF FISCAL RECEIPT----****
                 </div>
@@ -752,20 +735,18 @@
         
         // Function to generate barcode
         function generateBarcode() {
-            // Generate Code 128 Barcode (Best for alphanumeric)
             try {
                 JsBarcode("#barcode128", saleId, {
                     format: "CODE128",
                     width: 1.5,
                     height: 50,
-                    displayValue: true,
-                    fontSize: 12,
-                    margin: 5,
+                    displayValue: false,
+                    margin: 0,
                     background: "#ffffff",
                     lineColor: "#000000"
                 });
             } catch(e) {
-                console.error("Code 128 barcode error:", e);
+                console.error("Barcode error:", e);
                 var canvas = document.getElementById('barcode128');
                 if (canvas) {
                     canvas.style.display = 'none';
@@ -775,34 +756,27 @@
         
         // Function to close window safely
         function closeWindow() {
-            // Try to close the window
             if (window.opener) {
-                // If opened from another window, just close
                 window.close();
             } else {
-                // If not, try to close anyway
                 window.close();
             }
         }
         
         // Handle Enter key to close window
         function handleKeyPress(event) {
-            // Check if Enter key is pressed (key code 13)
             if (event.key === 'Enter' || event.keyCode === 13) {
                 event.preventDefault();
-                console.log('Enter key pressed - closing window');
                 closeWindow();
             }
             
-            // Optional: Escape key also closes (Ctrl+Shift+E for safety)
             if (event.key === 'Escape' || event.keyCode === 27) {
                 event.preventDefault();
-                console.log('Escape key pressed - closing window');
                 closeWindow();
             }
         }
         
-        // Wait for DOM to load then generate barcode and setup keyboard listener
+        // Setup
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', function() {
                 generateBarcode();
@@ -814,13 +788,9 @@
         }
         
         function setupKeyboardListener() {
-            // Add keyboard event listener for Enter key
             document.addEventListener('keydown', handleKeyPress);
-            
-            // Also focus on the close button for visual feedback
             const closeBtn = document.getElementById('closeBtn');
             if (closeBtn) {
-                // Don't auto-focus, but add a visual indicator
                 closeBtn.setAttribute('title', 'Press Enter to close');
             }
         }
@@ -838,7 +808,6 @@
             }
         });
 
-        // Auto-focus print button for keyboard users
         document.addEventListener('DOMContentLoaded', function() {
             const printBtn = document.getElementById('printBtn');
             if (printBtn) {
@@ -850,24 +819,20 @@
                 });
             }
             
-            // Auto-print if coming from sale completion
             if (window.opener && window.location.search.includes('auto_print=true')) {
                 setTimeout(function() {
                     window.print();
                 }, 500);
             }
             
-            // Show a small notification about Enter key
             console.log('💡 Tip: Press Enter key to close this window');
         });
         
-        // Handle print completion
         window.onafterprint = function() {
-            // Optional: Close after print (uncomment if desired)
+            // Optional: Close after print
             // setTimeout(function() { closeWindow(); }, 1000);
         };
         
-        // Clean up event listener when page unloads
         window.addEventListener('beforeunload', function() {
             document.removeEventListener('keydown', handleKeyPress);
         });

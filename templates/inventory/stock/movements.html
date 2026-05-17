@@ -4,20 +4,135 @@
 {% block title %}Stock Movements{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2><i class="fas fa-exchange-alt me-2"></i>Stock Movements</h2>
-    <div>
-        <span class="text-muted">Total Entries: {{ entries.paginator.count }}</span>
-    </div>
+<style>
+    /* Custom Header Colors matching Products page */
+    .bg-purple { background-color: #6f42c1 !important; }
+    .bg-teal { background-color: #20c997 !important; }
+    .bg-gold { background-color: #ffc107 !important; }
+    .bg-indigo { background-color: #6610f2 !important; }
+    .bg-pink { background-color: #d63384 !important; }
+    .bg-navy { background-color: #001f3f !important; }
+    .bg-orange { background-color: #fd7e14 !important; }
+    .bg-cyan { background-color: #0dcaf0 !important; }
+    
+    .sku-badge {
+        font-family: monospace;
+        font-size: 12px;
+        font-weight: 600;
+        background: #eef2ff;
+        color: #4f46e5;
+        padding: 2px 8px;
+        border-radius: 4px;
+        display: inline-block;
+    }
+    
+    .identifier-badge {
+        font-family: monospace;
+        font-size: 11px;
+        background: #f3f4f6;
+        color: #6b7280;
+        padding: 2px 6px;
+        border-radius: 4px;
+        margin-top: 2px;
+        display: inline-block;
+    }
+    
+    .reference-code {
+        font-family: monospace;
+        font-size: 11px;
+        background: #f8f9fa;
+        padding: 2px 6px;
+        border-radius: 4px;
+        word-break: break-all;
+        max-width: 200px;
+    }
+    
+    .product-cell {
+        max-width: 250px;
+    }
+    
+    .reference-cell {
+        max-width: 220px;
+    }
+    
+    .table > :not(caption) > * > * {
+        vertical-align: middle;
+    }
+    
+    /* Table header styles matching Products page */
+    .table thead th {
+        font-weight: 600;
+        font-size: 0.85rem;
+        padding: 12px 8px;
+        vertical-align: middle;
+        border-bottom-width: 2px;
+    }
+    .table thead th small {
+        font-weight: 400;
+        font-size: 0.7rem;
+    }
+    
+    .table-bordered {
+        border: 2px solid #dee2e6 !important;
+    }
+    .table-bordered thead th,
+    .table-bordered thead td {
+        border-bottom-width: 2px;
+    }
+    
+    /* Card styles */
+    .filter-card {
+        border: none;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+    
+    .table-card {
+        border: none;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        overflow: hidden;
+    }
+    
+    @media (max-width: 768px) {
+        .d-flex.flex-wrap {
+            flex-direction: column;
+            align-items: stretch !important;
+        }
+        .d-flex.flex-wrap select,
+        .d-flex.flex-wrap input,
+        .d-flex.flex-wrap button,
+        .d-flex.flex-wrap a {
+            width: 100% !important;
+            margin-bottom: 5px;
+        }
+    }
+</style>
+
+
+<!-- Action Buttons Row -->
+<div class="d-flex flex-wrap gap-2 mb-4">
+    <a href="{% url 'inventory:product_list' %}" class="btn btn-primary">
+        <i class="fas fa-boxes me-2"></i>Back to Products
+    </a>
+    <a href="{% url 'inventory:stock_alerts' %}" class="btn btn-warning">
+        <i class="fas fa-bell me-2"></i>Stock Alerts
+    </a>
+    <button type="button" class="btn btn-info" onclick="window.print()">
+        <i class="fas fa-print me-2"></i>Print Report
+    </button>
+    <a href="#" class="btn btn-warning">
+        <span class="badge bg-secondary">Total Entries: {{ entries.paginator.count }}</span>
+    </a>
+
 </div>
 
-<!-- Filters -->
-<div class="card mb-4">
-    <div class="card-body">
-        <form method="get" class="row g-3">
-            <div class="col-md-3">
-                <label class="form-label">Entry Type</label>
-                <select name="type" class="form-select">
+<!-- Filters Card -->
+<div class="card filter-card mb-4">
+    <div class="card-body py-3">
+        <form method="get">
+            <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+                <select name="type" class="form-select form-select-sm" style="width: auto; min-width: 130px;">
                     <option value="">All Types</option>
                     {% for type_code, type_name in entry_types %}
                     <option value="{{ type_code }}" {% if request.GET.type == type_code %}selected{% endif %}>
@@ -25,98 +140,215 @@
                     </option>
                     {% endfor %}
                 </select>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">Date From</label>
-                <input type="date" name="date_from" class="form-control" value="{{ request.GET.date_from }}">
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">Date To</label>
-                <input type="date" name="date_to" class="form-control" value="{{ request.GET.date_to }}">
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">Search</label>
-                <input type="text" name="search" class="form-control" value="{{ request.GET.search }}" placeholder="Reference or notes...">
-            </div>
-            <div class="col-12 d-flex justify-content-end">
-                <button type="submit" class="btn btn-primary me-2">
-                    <i class="fas fa-filter"></i> Filter
+                
+                <input type="date" name="date_from" class="form-control form-control-sm" 
+                       value="{{ request.GET.date_from }}" placeholder="Date From" style="width: 130px;">
+                
+                <input type="date" name="date_to" class="form-control form-control-sm" 
+                       value="{{ request.GET.date_to }}" placeholder="Date To" style="width: 130px;">
+                
+                <input type="text" name="search" class="form-control form-control-sm" 
+                       value="{{ request.GET.search }}" placeholder="SKU, IMEI, Reference..." style="width: 180px;">
+                
+                <button type="submit" class="btn btn-primary btn-sm">
+                    <i class="fas fa-search"></i> Filter
                 </button>
-                <a href="{% url 'inventory:stock_movements' %}" class="btn btn-secondary">
-                    <i class="fas fa-times"></i> Clear
+                
+                <a href="{% url 'inventory:stock_movements' %}" class="btn btn-secondary btn-sm">
+                    <i class="fas fa-undo"></i> Clear
                 </a>
+            </div>
+            
+            <div class="d-flex gap-2 align-items-center">
+                <span class="badge bg-info text-white">Quick Find:</span>
+                <input type="text" id="quickSearch" class="form-control form-control-sm flex-grow-1" 
+                       placeholder="Enter SKU code, IMEI, Serial, or Reference...">
+                <button type="button" class="btn btn-warning btn-sm" id="searchQuickBtn">
+                    <i class="fas fa-bolt me-1"></i>Search
+                </button>
             </div>
         </form>
     </div>
 </div>
 
 <!-- Stock Movements Table -->
-<div class="card">
-    <div class="card-body">
+<div class="card table-card">
+    <div class="card-body p-0">
         <div class="table-responsive">
-            <table class="table table-hover">
+            <table class="table table-bordered table-hover mb-0">
                 <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Product</th>
-                        <th>Type</th>
-                        <th>Quantity</th>
-                        <th>Unit Price</th>
-                        <th>Total</th>
-                        <th>Reference</th>
-                        <th>Created By</th>
-                        <th>Date</th>
-                        <th>Actions</th>
+                    <tr class="bg-light">
+                        <th width="5%" class="bg-purple text-white text-center">
+                            <i class="fas fa-hashtag"></i> ID
+                        </th>
+                        <th width="20%" class="bg-primary text-white">
+                            Product<br><small class="text-white-50">Product Name / Identifier</small>
+                        </th>
+                        <th width="10%" class="bg-info text-white">
+                            SKU<br><small class="text-white-50">SKU Code</small>
+                        </th>
+                        <th width="10%" class="bg-warning text-dark">
+                            Type<br><small class="text-dark-50">Transaction Type</small>
+                        </th>
+                        <th width="8%" class="bg-teal text-white text-center">
+                            Quantity<br><small class="text-white-50">+/-</small>
+                        </th>
+                        <th width="10%" class="bg-gold text-dark text-end">
+                            Unit Price<br><small class="text-dark-50">KES</small>
+                        </th>
+                        <th width="10%" class="bg-success text-white text-end">
+                            Total<br><small class="text-white-50">KES</small>
+                        </th>
+                        <th width="15%" class="bg-cyan text-dark">
+                            Reference<br><small class="text-dark-50">Invoice/Order #</small>
+                        </th>
+                        <th width="8%" class="bg-pink text-white">
+                            Created By<br><small class="text-white-50">User</small>
+                        </th>
+                        <th width="12%" class="bg-navy text-white">
+                            Date<br><small class="text-white-50">Date & Time</small>
+                        </th>
+                        <th width="5%" class="bg-danger text-white text-center">
+                            Actions<br><small class="text-white-50">Reverse</small>
+                        </th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for entry in entries %}
                     <tr>
-                        <td><span class="badge bg-secondary">#{{ entry.id }}</span></td>
-                        <td>
-                            <a href="{% url 'inventory:product_detail' entry.product.id %}" class="text-decoration-none">
-                                {{ entry.product.display_name }}
-                            </a>
+                        <td class="text-center align-middle">
+                            <span class="badge bg-secondary">#{{ entry.id }}</span>
                         </td>
-                        <td>
+                        
+                        <!-- Product Column with Identifier -->
+                        <td class="align-middle product-cell">
+                            {% if entry.product_sku %}
+                                <!-- Bulk Item -->
+                                <div class="fw-bold">
+                                    <a href="{% url 'inventory:product_detail' entry.product_sku.id %}" class="text-decoration-none">
+                                        {{ entry.product_sku.name|truncatechars:35 }}
+                                    </a>
+                                </div>
+                                {% if entry.product_sku.brand %}
+                                    <small class="text-muted">{{ entry.product_sku.brand }} {{ entry.product_sku.model }}</small>
+                                {% endif %}
+                            {% elif entry.product_unit %}
+                                <!-- Single Item with IMEI/Serial -->
+                                <div class="fw-bold">
+                                    <a href="{% url 'inventory:product_detail' entry.product_unit.product.id %}" class="text-decoration-none">
+                                        {{ entry.product_unit.product.name|truncatechars:30 }}
+                                    </a>
+                                </div>
+                                <span class="identifier-badge">
+                                    {% if entry.product_unit.imei_number %}
+                                        <i class="fas fa-microchip"></i> IMEI: {{ entry.product_unit.imei_number }}
+                                    {% elif entry.product_unit.serial_number %}
+                                        <i class="fas fa-barcode"></i> SN: {{ entry.product_unit.serial_number }}
+                                    {% else %}
+                                        <i class="fas fa-box"></i> Unit Item
+                                    {% endif %}
+                                </span>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        
+                        <!-- SKU Column -->
+                        <td class="align-middle">
+                            {% if entry.product_sku %}
+                                <span class="sku-badge">{{ entry.product_sku.sku_code }}</span>
+                            {% elif entry.product_unit %}
+                                <span class="sku-badge">{{ entry.product_unit.product.sku_code }}</span>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        
+                        <!-- Type Column -->
+                        <td class="align-middle">
                             {% if entry.entry_type == 'purchase' %}
-                                <span class="badge bg-success">Purchase</span>
+                                <span class="badge bg-success"><i class="fas fa-shopping-cart"></i> Purchase</span>
                             {% elif entry.entry_type == 'sale' %}
-                                <span class="badge bg-danger">Sale</span>
+                                <span class="badge bg-danger"><i class="fas fa-tag"></i> Sale</span>
                             {% elif entry.entry_type == 'reversal' %}
-                                <span class="badge bg-warning text-dark">Return</span>
+                                <span class="badge bg-warning text-dark"><i class="fas fa-undo"></i> Return</span>
+                            {% elif entry.entry_type == 'adjustment' %}
+                                <span class="badge bg-info"><i class="fas fa-sliders-h"></i> Adjustment</span>
+                            {% elif entry.entry_type == 'damage' %}
+                                <span class="badge bg-dark"><i class="fas fa-hammer"></i> Damage</span>
+                            {% elif entry.entry_type == 'theft' %}
+                                <span class="badge bg-danger"><i class="fas fa-skull-crossbones"></i> Theft</span>
                             {% else %}
-                                <span class="badge bg-info">Adjustment</span>
+                                <span class="badge bg-secondary">{{ entry.get_entry_type_display }}</span>
                             {% endif %}
                         </td>
-                        <td>
+                        
+                        <!-- Quantity Column -->
+                        <td class="text-center align-middle">
                             {% if entry.quantity > 0 %}
-                                <span class="text-success fw-bold">+{{ entry.quantity }}</span>
+                                <span class="badge bg-success">+{{ entry.quantity }}</span>
                             {% else %}
-                                <span class="text-danger fw-bold">{{ entry.quantity }}</span>
+                                <span class="badge bg-danger">{{ entry.quantity }}</span>
                             {% endif %}
                         </td>
-                        <td>KSH {{ entry.unit_price|floatformat:0 }}</td>
-                        <td>KSH {{ entry.total_amount|floatformat:0 }}</td>
-                        <td><small>{{ entry.reference_id|default:"-" }}</small></td>
-                        <td>{{ entry.created_by.username|default:"System" }}</td>
-                        <td>{{ entry.created_at|date:"Y-m-d H:i" }}</td>
-                        <td>
-                            <button type="button" class="btn btn-sm btn-warning" title="Reverse Entry"
+                        
+                        <td class="text-end align-middle">
+                            KES {{ entry.unit_price|floatformat:2 }}
+                        </td>
+                        
+                        <td class="text-end align-middle fw-bold">
+                            KES {{ entry.total_amount|floatformat:2 }}
+                        </td>
+                        
+                        <!-- Reference Column -->
+                        <td class="align-middle reference-cell">
+                            <code class="reference-code">{{ entry.reference_id|default:"-"|truncatechars:35 }}</code>
+                            {% if entry.notes %}
+                                <br><small class="text-muted"><i class="fas fa-sticky-note"></i> {{ entry.notes|truncatechars:30 }}</small>
+                            {% endif %}
+                        </td>
+                        
+                        <td class="align-middle">
+                            <span class="badge bg-secondary">{{ entry.created_by.username|default:"System" }}</span>
+                        </td>
+                        
+                        <td class="align-middle">
+                            <small>{{ entry.created_at|date:"Y-m-d H:i" }}</small>
+                        </td>
+                        
+                        <!-- Actions Column -->
+                        <td class="text-center align-middle">
+                            {% if entry.entry_type != 'reversal' %}
+                            <button type="button" class="btn btn-sm btn-outline-danger" title="Reverse Entry"
                                     onclick="reverseEntry({{ entry.id }})">
                                 <i class="fas fa-undo"></i>
                             </button>
+                            {% else %}
+                            <button type="button" class="btn btn-sm btn-secondary" disabled title="Already a reversal">
+                                <i class="fas fa-ban"></i>
+                            </button>
+                            {% endif %}
                         </td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="10" class="text-center py-4">
-                            <i class="fas fa-exchange-alt fa-3x text-muted mb-3"></i>
-                            <p class="text-muted">No stock movements found</p>
+                        <td colspan="11" class="text-center py-5">
+                            <i class="fas fa-exchange-alt fa-4x text-muted mb-3"></i>
+                            <p class="text-muted mb-0">No stock movements found</p>
+                            <small class="text-muted">Try adjusting your filters</small>
                         </td>
                     </tr>
                     {% endfor %}
                 </tbody>
+                <tfoot class="table-light">
+                    <tr class="fw-bold">
+                        <td colspan="4" class="text-end"><i class="fas fa-chart-line me-1"></i>Totals:</td>
+                        <td class="text-center text-success">+{{ total_in|default:0 }}</td>
+                        <td class="text-center text-danger">-{{ total_out|default:0 }}</td>
+                        <td class="text-end text-primary">KES {{ net_total|default:0|floatformat:2 }}</td>
+                        <td colspan="4"></td>
+                    </tr>
+                </tfoot>
             </table>
         </div>
     </div>
@@ -129,7 +361,12 @@
         {% if entries.has_previous %}
         <li class="page-item">
             <a class="page-link" href="?page={{ entries.previous_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
-                Previous
+                <i class="fas fa-chevron-left"></i> Previous
+            </a>
+        </li>
+        <li class="page-item">
+            <a class="page-link" href="?page=1{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                <i class="fas fa-angle-double-left"></i> First
             </a>
         </li>
         {% endif %}
@@ -148,50 +385,97 @@
         
         {% if entries.has_next %}
         <li class="page-item">
+            <a class="page-link" href="?page={{ entries.paginator.num_pages }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
+                Last <i class="fas fa-angle-double-right"></i>
+            </a>
+        </li>
+        <li class="page-item">
             <a class="page-link" href="?page={{ entries.next_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">
-                Next
+                Next <i class="fas fa-chevron-right"></i>
             </a>
         </li>
         {% endif %}
     </ul>
+    <div class="text-center text-muted small mt-2">
+        <i class="fas fa-info-circle me-1"></i>
+        Showing {{ entries.start_index }} to {{ entries.end_index }} of {{ entries.paginator.count }} entries
+    </div>
 </nav>
 {% endif %}
 
 <!-- Reverse Entry Modal -->
 <div class="modal fade" id="reverseModal" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
-            <div class="modal-header bg-warning">
-                <h5 class="modal-title"><i class="fas fa-undo me-2"></i>Reverse Entry</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="fas fa-undo me-2"></i>Reverse Stock Entry</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>Warning:</strong> This action will create a reversal entry.
+                </div>
                 <p>Are you sure you want to reverse this stock entry?</p>
-                <p class="text-warning"><i class="fas fa-info-circle me-2"></i>A reversal entry will be created with opposite quantity.</p>
+                <ul class="mb-0">
+                    <li><i class="fas fa-undo text-warning me-2"></i>A reversal entry will be created with opposite quantity</li>
+                    <li><i class="fas fa-chart-line text-success me-2"></i>Stock quantities will be restored to previous levels</li>
+                    <li><i class="fas fa-ban text-danger me-2"></i>This action cannot be undone</li>
+                </ul>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <a href="#" id="confirmReverseBtn" class="btn btn-warning">Reverse Entry</a>
+                <a href="#" id="confirmReverseBtn" class="btn btn-danger">
+                    <i class="fas fa-undo me-1"></i>Confirm Reverse
+                </a>
             </div>
         </div>
     </div>
 </div>
-{% endblock %}  <!-- THIS WAS MISSING - Added at line 153 -->
 
-{% block extra_js %}
 <script>
 (function() {
     'use strict';
     
-    function reverseEntry(entryId) {
-        var modal = new bootstrap.Modal(document.getElementById('reverseModal'));
+    window.reverseEntry = function(entryId) {
+        var modalEl = document.getElementById('reverseModal');
+        if (!modalEl) return;
+        
+        var modal = new bootstrap.Modal(modalEl);
         var confirmBtn = document.getElementById('confirmReverseBtn');
         var reverseUrl = "{% url 'inventory:reverse_entry' 0 %}".replace('0', entryId);
         confirmBtn.setAttribute('href', reverseUrl);
         modal.show();
+    };
+    
+    // Auto-submit form on filter change
+    const typeSelect = document.querySelector('select[name="type"]');
+    if (typeSelect) {
+        typeSelect.addEventListener('change', function() {
+            this.form.submit();
+        });
     }
     
-    window.reverseEntry = reverseEntry;
+    // Quick search functionality
+    const quickSearch = document.getElementById('quickSearch');
+    const searchBtn = document.getElementById('searchQuickBtn');
+    
+    function performQuickSearch() {
+        const searchTerm = quickSearch.value.trim();
+        if (!searchTerm) {
+            alert('Please enter a SKU code, IMEI, Serial, or Reference to search.');
+            return;
+        }
+        window.location.href = `{% url 'inventory:stock_movements' %}?search=${encodeURIComponent(searchTerm)}`;
+    }
+    
+    if (searchBtn) searchBtn.addEventListener('click', performQuickSearch);
+    if (quickSearch) quickSearch.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            performQuickSearch();
+        }
+    });
 })();
 </script>
 {% endblock %}

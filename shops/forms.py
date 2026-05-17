@@ -1,12 +1,16 @@
-# shops/forms.py - Improved version with a few enhancements
-
+# shops/forms.py
 from django import forms
 from django.forms import inlineformset_factory
-from .models import (
-    ShopBranch, BankAccount, MpesaAccount, DailyShopReport, 
-    BankClosingBalance, ShopExpense, MpesaDailySummary, DynamicChoice
-)
+from django.contrib.auth.models import User
 from decimal import Decimal
+from .models import (
+    ShopBranch, MpesaAccount, MpesaDailyBalance, BankAccount, BankDailyBalance,
+    CashAccount, CashDailyBalance, ShopExpense, DailyShopReport, 
+    DailyMpesaAccountReport, ShopConfiguration, DynamicChoice, BankClosingBalance
+)
+
+
+# ==================== DYNAMIC CHOICES FORM ====================
 
 class DynamicChoiceForm(forms.ModelForm):
     class Meta:
@@ -14,22 +18,105 @@ class DynamicChoiceForm(forms.ModelForm):
         fields = ['choice_type', 'value']
         widgets = {
             'choice_type': forms.Select(attrs={'class': 'form-control'}),
-            'value': forms.TextInput(attrs={'class': 'form-control'}),
+            'value': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Enter choice value'}),
         }
+
+
+# ==================== SHOP BRANCH FORMS ====================
 
 class ShopBranchForm(forms.ModelForm):
     class Meta:
         model = ShopBranch
         fields = ['name', 'code', 'location', 'manager', 'phone', 'email', 'is_active']
         widgets = {
-            'name': forms.TextInput(attrs={'class': 'form-control'}),
-            'code': forms.TextInput(attrs={'class': 'form-control'}),
-            'location': forms.TextInput(attrs={'class': 'form-control'}),
-            'manager': forms.TextInput(attrs={'class': 'form-control'}),
-            'phone': forms.TextInput(attrs={'class': 'form-control'}),
-            'email': forms.EmailInput(attrs={'class': 'form-control'}),
+            'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Branch name'}),
+            'code': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Branch code'}),
+            'location': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Physical location'}),
+            'manager': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Manager name'}),
+            'phone': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Phone number'}),
+            'email': forms.EmailInput(attrs={'class': 'form-control', 'placeholder': 'Email address'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
+
+
+# ==================== MPESA ACCOUNT FORMS ====================
+
+class MpesaAccountForm(forms.ModelForm):
+    class Meta:
+        model = MpesaAccount
+        fields = [
+            'shop', 'account_type', 'account_name', 'account_number', 
+            'store_number', 'assigned_user', 'business_hours_start', 'business_hours_end'
+        ]
+        widgets = {
+            'shop': forms.Select(attrs={'class': 'form-control', 'required': True}),
+            'account_type': forms.Select(attrs={'class': 'form-control', 'required': True}),
+            'account_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g., Main Till', 'required': True}),
+            'account_number': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g., 123456', 'required': True}),
+            'store_number': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g., STORE001', 'required': True}),
+            'assigned_user': forms.Select(attrs={'class': 'form-control'}),
+            'business_hours_start': forms.TimeInput(attrs={'class': 'form-control', 'type': 'time'}),
+            'business_hours_end': forms.TimeInput(attrs={'class': 'form-control', 'type': 'time'}),
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['shop'].queryset = ShopBranch.objects.filter(is_active=True)
+        self.fields['assigned_user'].required = False
+        self.fields['assigned_user'].empty_label = "-- Select User (Optional) --"
+        self.fields['business_hours_start'].required = False
+        self.fields['business_hours_end'].required = False
+        self.fields['store_number'].required = True
+        
+        # If editing an existing account, filter assigned_user by the shop
+        if self.instance and self.instance.pk and self.instance.shop:
+            self.fields['assigned_user'].queryset = User.objects.filter(
+                is_active=True,
+                staff_profile__assigned_shop=self.instance.shop
+            )
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        shop = cleaned_data.get('shop')
+        
+        # When shop is selected, update the assigned_user queryset dynamically
+        if shop and not self.instance.pk:
+            self.fields['assigned_user'].queryset = User.objects.filter(
+                is_active=True,
+                staff_profile__assigned_shop=shop
+            )
+        
+        return cleaned_data
+
+
+class MpesaDailyBalanceForm(forms.ModelForm):
+    class Meta:
+        model = MpesaDailyBalance
+        fields = [
+            'opening_mpesa_float', 'opening_airtel_float', 'opening_cash',
+            'closing_mpesa_float', 'closing_airtel_float', 'closing_cash',
+            'total_deposits', 'total_withdrawals', 'transaction_count', 'notes'
+        ]
+        widgets = {
+            'opening_mpesa_float': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '0.00'}),
+            'opening_airtel_float': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '0.00'}),
+            'opening_cash': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '0.00'}),
+            'closing_mpesa_float': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '0.00'}),
+            'closing_airtel_float': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '0.00'}),
+            'closing_cash': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '0.00'}),
+            'total_deposits': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '0.00'}),
+            'total_withdrawals': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '0.00'}),
+            'transaction_count': forms.NumberInput(attrs={'class': 'form-control', 'min': 0}),
+            'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields:
+            self.fields[field].required = False
+
+
+# ==================== BANK ACCOUNT FORMS ====================
 
 class BankAccountForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
@@ -52,114 +139,192 @@ class BankAccountForm(forms.ModelForm):
         fields = ['shop', 'bank_name', 'account_name', 'account_number', 'opening_balance', 'is_active']
         widgets = {
             'shop': forms.Select(attrs={'class': 'form-control'}),
-            'account_name': forms.TextInput(attrs={'class': 'form-control'}),
-            'account_number': forms.TextInput(attrs={'class': 'form-control'}),
+            'account_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Account holder name'}),
+            'account_number': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Account number'}),
             'opening_balance': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
 
-class MpesaAccountForm(forms.ModelForm):
+
+class BankDailyBalanceForm(forms.ModelForm):
+    class Meta:
+        model = BankDailyBalance
+        fields = ['opening_balance', 'closing_balance', 'total_deposits', 'total_withdrawals', 'transaction_count', 'notes']
+        widgets = {
+            'opening_balance': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '0.00'}),
+            'closing_balance': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '0.00'}),
+            'total_deposits': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '0.00'}),
+            'total_withdrawals': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '0.00'}),
+            'transaction_count': forms.NumberInput(attrs={'class': 'form-control', 'min': 0}),
+            'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
+        }
+    
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Get dynamic M-Pesa account types from database
-        account_type_choices = DynamicChoice.objects.filter(choice_type='mpesa_account_type', is_active=True)
-        if account_type_choices.exists():
-            self.fields['account_type'] = forms.ChoiceField(
-                choices=[('', '---------')] + [(c.value, c.value) for c in account_type_choices],
-                widget=forms.Select(attrs={'class': 'form-control'})
-            )
-        else:
-            self.fields['account_type'] = forms.CharField(
-                max_length=50,
-                widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g., Till, Paybill, Agent'})
-            )
-    
+        for field in self.fields:
+            self.fields[field].required = False
+
+
+# ==================== CASH ACCOUNT FORMS ====================
+
+class CashAccountForm(forms.ModelForm):
     class Meta:
-        model = MpesaAccount
-        fields = ['shop', 'account_name', 'account_number', 'account_type', 'phone_number', 'is_active']
+        model = CashAccount
+        fields = ['shop', 'account_name', 'currency', 'opening_balance', 'is_active']
         widgets = {
             'shop': forms.Select(attrs={'class': 'form-control'}),
-            'account_name': forms.TextInput(attrs={'class': 'form-control'}),
-            'account_number': forms.TextInput(attrs={'class': 'form-control'}),
-            'phone_number': forms.TextInput(attrs={'class': 'form-control', 'placeholder': '0712345678'}),
+            'account_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g., Main Cash, Petty Cash'}),
+            'currency': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'KES'}),
+            'opening_balance': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
-
-class DailyShopReportForm(forms.ModelForm):
-    class Meta:
-        model = DailyShopReport
-        fields = ['shop', 'report_date', 'closing_mpesa_float', 'closing_mpesa_cash', 'closing_airtel_float', 'shop_sales', 'notes']
-        widgets = {
-            'shop': forms.Select(attrs={'class': 'form-control'}),
-            'report_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
-            'closing_mpesa_float': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '0.00'}),
-            'closing_airtel_float': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '0.00'}), 
-            'closing_mpesa_cash': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '0.00'}),
-            'shop_sales': forms.NumberInput(attrs={'class': 'form-control', 'step': '1', 'placeholder': 'Number of transactions (e.g., 50)'}),
-            'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'Any additional notes...'}),
-        }
-        labels = {
-            'closing_mpesa_float': 'Closing M-Pesa Float (KES)',
-            'closing_mpesa_cash': 'Closing M-Pesa Cash (KES)',
-            'closing_airtel_float': 'Closing Airtel Float (KES)',
-            'shop_sales': 'Total M-Pesa Transactions (Count)',
-        }
-    
-    def clean_shop_sales(self):
-        shop_sales = self.cleaned_data.get('shop_sales')
-        if shop_sales is not None:
-            # Ensure it's a whole number (transaction count)
-            if shop_sales < 0:
-                raise forms.ValidationError("Transaction count cannot be negative.")
-            if shop_sales > 10000:
-                raise forms.ValidationError("Transaction count seems too high. Please verify.")
-        return shop_sales
-    
-    def clean(self):
-        cleaned_data = super().clean()
-        # Optional: Add validation to ensure at least one balance is entered
-        mpesa_float = cleaned_data.get('closing_mpesa_float', 0) or 0
-        mpesa_cash = cleaned_data.get('closing_mpesa_cash', 0) or 0
-        airtel_float = cleaned_data.get('closing_airtel_float', 0) or 0
-        
-        # You can add a warning if all balances are zero
-        if mpesa_float == 0 and mpesa_cash == 0 and airtel_float == 0:
-            # This is just a warning, not an error - so don't raise ValidationError
-            # You could add a message to forms using add_error if needed
-            pass
-        
-        return cleaned_data
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['shop'].queryset = ShopBranch.objects.filter(is_active=True)
-        self.fields['closing_mpesa_float'].required = False
-        self.fields['closing_mpesa_cash'].required = False
-        self.fields['closing_airtel_float'].required = False  # Make sure this is optional too
-        self.fields['shop_sales'].required = False
-        
-        # Add help texts for clarity
-        self.fields['closing_mpesa_float'].help_text = "M-Pesa float balance at closing time"
-        self.fields['closing_mpesa_cash'].help_text = "Physical cash from M-Pesa cash-out"
-        self.fields['closing_airtel_float'].help_text = "Airtel Money float balance at closing time"
-        self.fields['shop_sales'].help_text = "Total number of M-Pesa transactions today"
+        self.fields['currency'].initial = 'KES'
+        self.fields['currency'].required = False
 
-class ShopExpenseForm(forms.ModelForm):
+
+class CashDailyBalanceForm(forms.ModelForm):
     class Meta:
-        model = ShopExpense
-        fields = ['description', 'amount'] 
+        model = CashDailyBalance
+        fields = ['opening_balance', 'closing_balance', 'cash_in', 'cash_out', 'transaction_count', 'notes']
         widgets = {
-            'description': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Description of expense'}),
-            'amount': forms.NumberInput(attrs={'class': 'form-control expense-amount', 'step': '0.01', 'placeholder': '0.00'}),
+            'opening_balance': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '0.00'}),
+            'closing_balance': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '0.00'}),
+            'cash_in': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '0.00'}),
+            'cash_out': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '0.00'}),
+            'transaction_count': forms.NumberInput(attrs={'class': 'form-control', 'min': 0}),
+            'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
         }
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Make fields optional
+        for field in self.fields:
+            self.fields[field].required = False
+
+
+# ==================== SHOP EXPENSE FORM ====================
+
+class ShopExpenseForm(forms.ModelForm):
+    class Meta:
+        model = ShopExpense
+        fields = ['expense_category', 'description', 'amount', 'payment_method', 'mpesa_account', 'bank_account', 'cash_account', 'receipt_number']
+        widgets = {
+            'expense_category': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Category'}),
+            'description': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Description of expense'}),
+            'amount': forms.NumberInput(attrs={'class': 'form-control expense-amount', 'step': '0.01', 'placeholder': '0.00'}),
+            'payment_method': forms.Select(attrs={'class': 'form-control', 'onchange': 'togglePaymentFields(this)'}),
+            'mpesa_account': forms.Select(attrs={'class': 'form-control mpesa-select'}),
+            'bank_account': forms.Select(attrs={'class': 'form-control bank-select'}),
+            'cash_account': forms.Select(attrs={'class': 'form-control cash-select'}),
+            'receipt_number': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Receipt number'}),
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['expense_category'].required = False
+        self.fields['mpesa_account'].required = False
+        self.fields['bank_account'].required = False
+        self.fields['cash_account'].required = False
+        self.fields['receipt_number'].required = False
+        
+        # Set empty labels
+        self.fields['mpesa_account'].empty_label = "-- Select M-Pesa Account --"
+        self.fields['bank_account'].empty_label = "-- Select Bank Account --"
+        self.fields['cash_account'].empty_label = "-- Select Cash Account --"
+
+
+# ==================== DAILY SHOP REPORT FORM ====================
+
+class DailyShopReportForm(forms.ModelForm):
+    class Meta:
+        model = DailyShopReport
+        fields = ['shop', 'report_date', 'total_mpesa_transactions', 'total_mpesa_amount', 'notes']
+        widgets = {
+            'shop': forms.Select(attrs={'class': 'form-control'}),
+            'report_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'total_mpesa_transactions': forms.NumberInput(attrs={'class': 'form-control', 'min': 0, 'placeholder': 'Number of transactions'}),
+            'total_mpesa_amount': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '0.00'}),
+            'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'Any additional notes...'}),
+        }
+    
+    def clean_total_mpesa_transactions(self):
+        value = self.cleaned_data.get('total_mpesa_transactions')
+        if value and value < 0:
+            raise forms.ValidationError("Transaction count cannot be negative.")
+        return value
+    
+    def clean_total_mpesa_amount(self):
+        value = self.cleaned_data.get('total_mpesa_amount')
+        if value and value < 0:
+            raise forms.ValidationError("Amount cannot be negative.")
+        return value
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['shop'].queryset = ShopBranch.objects.filter(is_active=True)
+        self.fields['total_mpesa_transactions'].required = False
+        self.fields['total_mpesa_amount'].required = False
+        self.fields['notes'].required = False
+        
+        # Set help texts
+        self.fields['total_mpesa_transactions'].help_text = "Total number of M-Pesa transactions today"
+        self.fields['total_mpesa_amount'].help_text = "Total amount of M-Pesa transactions today"
+
+
+# ==================== DAILY MPESA ACCOUNT REPORT FORM ====================
+
+class DailyMpesaAccountReportForm(forms.ModelForm):
+    class Meta:
+        model = DailyMpesaAccountReport
+        fields = ['mpesa_account', 'closing_mpesa_float', 'closing_airtel_float', 'closing_cash', 'transaction_count', 'total_amount', 'notes']
+        widgets = {
+            'mpesa_account': forms.Select(attrs={'class': 'form-control mpesa-select'}),
+            'closing_mpesa_float': forms.NumberInput(attrs={'class': 'form-control mpesa-balance', 'step': '0.01', 'placeholder': '0.00'}),
+            'closing_airtel_float': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '0.00'}),
+            'closing_cash': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '0.00'}),
+            'transaction_count': forms.NumberInput(attrs={'class': 'form-control', 'min': 0}),
+            'total_amount': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '0.00'}),
+            'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['mpesa_account'].queryset = MpesaAccount.objects.filter(is_active=True)
+        self.fields['closing_mpesa_float'].required = False
+        self.fields['closing_airtel_float'].required = False
+        self.fields['closing_cash'].required = False
+        self.fields['transaction_count'].required = False
+        self.fields['total_amount'].required = False
+        self.fields['notes'].required = False
+
+
+# ==================== SHOP CONFIGURATION FORM ====================
+
+class ShopConfigurationForm(forms.ModelForm):
+    class Meta:
+        model = ShopConfiguration
+        fields = ['shop', 'config_type', 'config_key', 'config_value', 'description']
+        widgets = {
+            'shop': forms.Select(attrs={'class': 'form-control'}),
+            'config_type': forms.Select(attrs={'class': 'form-control'}),
+            'config_key': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Configuration key'}),
+            'config_value': forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'Configuration value'}),
+            'description': forms.Textarea(attrs={'class': 'form-control', 'rows': 2, 'placeholder': 'Description'}),
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['shop'].queryset = ShopBranch.objects.filter(is_active=True)
         self.fields['description'].required = False
-        self.fields['amount'].required = False
+
+
+# ==================== LEGACY/COMPATIBILITY FORMS ====================
 
 class BankClosingBalanceForm(forms.ModelForm):
+    """Legacy form for bank closing balances"""
     class Meta:
         model = BankClosingBalance
         fields = ['bank_account', 'closing_balance']
@@ -170,44 +335,79 @@ class BankClosingBalanceForm(forms.ModelForm):
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Make bank account fields optional
         self.fields['bank_account'].required = False
         self.fields['closing_balance'].required = False
         self.fields['bank_account'].empty_label = "-- Select Bank Account --"
 
-class MpesaDailySummaryForm(forms.ModelForm):
-    class Meta:
-        model = MpesaDailySummary
-        fields = ['opening_float', 'opening_cash', 'expected_float', 'expected_cash', 'notes']
-        widgets = {
-            'opening_float': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '0.00'}),
-            'opening_cash': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '0.00'}),
-            'expected_float': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '0.00'}),
-            'expected_cash': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '0.00'}),
-            'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'Reconciliation notes...'}),
-        }
 
-# FormSets remain the same - they look good
+# ==================== FORMSETS ====================
+
+# Bank Closing FormSet (for dynamic bank entries in daily report)
 BankClosingFormSet = inlineformset_factory(
-    DailyShopReport, 
+    DailyShopReport,
     BankClosingBalance,
     form=BankClosingBalanceForm,
     fields=['bank_account', 'closing_balance'],
-    extra=1, 
+    extra=1,
     can_delete=True,
     can_delete_extra=True,
     min_num=0,
     validate_min=False
 )
 
+# Expense FormSet (for dynamic expense entries in daily report)
 ExpenseFormSet = inlineformset_factory(
-    DailyShopReport, 
+    DailyShopReport,
     ShopExpense,
     form=ShopExpenseForm,
-    fields=['description', 'amount'],
-    extra=1, 
+    fields=['expense_category', 'description', 'amount', 'payment_method'],
+    extra=1,
     can_delete=True,
     can_delete_extra=True,
     min_num=0,
     validate_min=False
 )
+
+# M-Pesa Account Report FormSet (for dynamic M-Pesa account entries in daily report)
+MpesaAccountReportFormSet = inlineformset_factory(
+    DailyShopReport,
+    DailyMpesaAccountReport,
+    form=DailyMpesaAccountReportForm,
+    fields=['mpesa_account', 'closing_mpesa_float', 'closing_airtel_float', 'closing_cash', 'notes'],
+    extra=1,
+    can_delete=True,
+    can_delete_extra=True,
+    min_num=0,
+    validate_min=False
+)
+
+
+# ==================== HELPER FUNCTIONS ====================
+
+def get_payment_method_choices():
+    """Get payment method choices from dynamic choices"""
+    payment_methods = DynamicChoice.objects.filter(choice_type='payment_method', is_active=True)
+    if payment_methods.exists():
+        return [(c.value, c.value) for c in payment_methods]
+    return [
+        ('cash', 'Cash'),
+        ('mpesa', 'M-Pesa'),
+        ('bank', 'Bank Transfer'),
+        ('cheque', 'Cheque'),
+    ]
+
+
+def get_expense_category_choices():
+    """Get expense category choices from dynamic choices"""
+    categories = DynamicChoice.objects.filter(choice_type='expense_category', is_active=True)
+    if categories.exists():
+        return [(c.value, c.value) for c in categories]
+    return [
+        ('utilities', 'Utilities'),
+        ('rent', 'Rent'),
+        ('salaries', 'Salaries'),
+        ('supplies', 'Office Supplies'),
+        ('maintenance', 'Maintenance'),
+        ('transport', 'Transport'),
+        ('other', 'Other'),
+    ]

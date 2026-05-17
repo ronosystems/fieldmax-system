@@ -1165,10 +1165,9 @@ def prepare_dashboard_messages(request, dashboard_name=None):
 
 
 
-
-#==========================================
+# ==========================================
 # ADMIN DASHBOARD - COMPREHENSIVE STATISTICS
-#==========================================
+# ==========================================
 @login_required
 @dashboard_for_role('Administrator')
 def admin_dashboard(request):
@@ -1177,7 +1176,7 @@ def admin_dashboard(request):
     from inventory.models import Product, Category, StockAlert, ReturnRequest
     from sales.models import Sale, SaleItem
     from credit.models import CreditTransaction, CreditCustomer, CreditCompany
-    from django.db.models import Sum, Count, Q, F, Avg, DecimalField
+    from django.db.models import Sum, Count, Q, F, Avg, DecimalField, Case, When, Value, IntegerField
     from django.utils import timezone
     from datetime import timedelta
     from decimal import Decimal
@@ -1261,25 +1260,50 @@ def admin_dashboard(request):
     total_categories = Category.objects.count()
     
     # ============================================
-    # PRODUCT STATS
+    # PRODUCT STATS (FIXED FOR NEW MODEL)
     # ============================================
     # Total items count (sum of all product quantities)
     total_item_count = Product.objects.aggregate(
-        total=Sum('quantity')
+        total=Sum(
+            Case(
+                When(category__item_type='single', then='total_quantity'),
+                When(category__item_type='bulk', then='bulk_quantity'),
+                default=Value(0),
+                output_field=IntegerField()
+            )
+        )
     )['total'] or 0
     
     # Total inventory value (selling price × quantity)
     total_inventory_value = Product.objects.filter(
         is_active=True
     ).aggregate(
-        total_value=Sum(F('selling_price') * F('quantity'), output_field=DecimalField())
+        total_value=Sum(
+            Case(
+                When(category__item_type='single', 
+                     then=F('selling_price') * F('total_quantity')),
+                When(category__item_type='bulk', 
+                     then=F('selling_price') * F('bulk_quantity')),
+                default=Value(Decimal('0')),
+                output_field=DecimalField()
+            )
+        )
     )['total_value'] or Decimal('0')
     
     # Total inventory cost (buying price × quantity)
     total_inventory_cost = Product.objects.filter(
         is_active=True
     ).aggregate(
-        total_cost=Sum(F('buying_price') * F('quantity'), output_field=DecimalField())
+        total_cost=Sum(
+            Case(
+                When(category__item_type='single', 
+                     then=F('buying_price') * F('total_quantity')),
+                When(category__item_type='bulk', 
+                     then=F('buying_price') * F('bulk_quantity')),
+                default=Value(Decimal('0')),
+                output_field=DecimalField()
+            )
+        )
     )['total_cost'] or Decimal('0')
     
     # Calculate potential profit
@@ -1299,7 +1323,8 @@ def admin_dashboard(request):
     
     # Products with zero stock
     zero_stock_products = Product.objects.filter(
-        quantity=0
+        Q(category__item_type='single', total_quantity=0) |
+        Q(category__item_type='bulk', bulk_quantity=0)
     ).count()
     
     # Active products vs inactive
@@ -1362,11 +1387,11 @@ def admin_dashboard(request):
     
     # Damaged returns loss value
     damaged_loss = all_returns.filter(status='damaged_loss').aggregate(
-        total=Sum('loss_amount')
+        total=Sum('refund_amount')
     )['total'] or 0
     
     # ============================================
-    # CREDIT STATS (UPDATED WITH PENDING VALUE LOGIC)
+    # CREDIT STATS
     # ============================================
     # Total credit value (all transactions)
     total_credit = CreditTransaction.objects.aggregate(
@@ -1419,17 +1444,17 @@ def admin_dashboard(request):
     ).count()
     
     # ============================================
-    # INVENTORY STATS
+    # INVENTORY STATS (FIXED FOR NEW MODEL)
     # ============================================
     low_stock_products = Product.objects.filter(
-        Q(category__item_type='bulk') & 
-        Q(quantity__gt=0) & 
-        Q(quantity__lte=F('reorder_level'))
+        category__item_type='bulk',
+        bulk_quantity__gt=0,
+        bulk_quantity__lte=F('reorder_level')
     ).count()
     
     out_of_stock = Product.objects.filter(
-        Q(category__item_type='bulk', quantity=0) |
-        Q(category__item_type='single', status='sold')
+        Q(category__item_type='bulk', bulk_quantity=0) |
+        Q(category__item_type='single', available_quantity=0)
     ).count()
     
     # Stock alerts
@@ -1597,7 +1622,7 @@ def admin_dashboard(request):
         'damaged_returns': damaged_returns,
         'damaged_loss': damaged_loss,
         
-        # Credit Stats (UPDATED)
+        # Credit Stats
         'total_credit': total_credit,
         'total_pending_credit_value': total_pending_credit_value,
         'total_paid_credit_value': total_paid_credit_value,
@@ -1644,8 +1669,6 @@ def admin_dashboard(request):
 
 
 
-
-
 # ============================================
 # STORE MANAGER DASHBOARD - FIXED WITH STOCK ALERTS
 # ============================================
@@ -1653,12 +1676,13 @@ def admin_dashboard(request):
 @dashboard_for_role('Store Manager', 'Inventory Manager')
 def store_manager_dashboard(request):
     """Dashboard for store manager"""
-    from inventory.models import Product, Category, StockAlert, StockEntry
+    from inventory.models import Product, Category, StockAlert, StockEntry, ProductUnit
     from sales.models import SaleItem
-    from django.db.models import Sum, Count, Q, F
+    from django.db.models import Sum, Count, Q, F, Case, When, Value, IntegerField, DecimalField
     from django.contrib import messages
     from django.utils import timezone
     from datetime import timedelta
+    from decimal import Decimal
     
     prepare_dashboard_messages(request, 'Store Manager')
 
@@ -1671,65 +1695,95 @@ def store_manager_dashboard(request):
     total_products = Product.objects.count()
     total_categories = Category.objects.count()
     
-    # Stock value calculation
-    products = Product.objects.all()
-    total_stock_value = 0
+    # Stock value calculation - using current_stock property
+    products = Product.objects.filter(is_active=True).select_related('category')
+    total_stock_value = Decimal('0.00')
     for product in products:
-        if hasattr(product, 'buying_price') and product.buying_price and product.quantity:
-            total_stock_value += product.buying_price * product.quantity
+        if product.category.is_bulk_item:
+            stock = product.bulk_quantity
+        else:
+            stock = product.available_quantity
+        if product.buying_price:
+            total_stock_value += product.buying_price * stock
     
     # ============================================
     # STOCK ALERTS - USING STOCKALERT MODEL
     # ============================================
-    # Get active alerts that are not dismissed
+    # Get active alerts that are not dismissed (only bulk items)
     active_alerts = StockAlert.objects.filter(
         is_active=True,
-        is_dismissed=False
-    ).select_related('product').order_by(
+        is_dismissed=False,
+        product__category__item_type='bulk'  # Only bulk items have stock alerts
+    ).select_related('product', 'product__category').order_by(
         '-severity',  # Critical first
         '-last_alerted'
     )
     
-    # Count alerts by type for the badge
+    # Count alerts by type
     low_stock_alerts_count = active_alerts.filter(alert_type='lowstock').count()
     needs_reorder_count = active_alerts.filter(alert_type='needs_reorder').count()
     out_of_stock_count = active_alerts.filter(alert_type='outofstock').count()
-    damaged_count = active_alerts.filter(alert_type='damaged').count()
     
-    # Get low stock alerts for display (limit to 10)
-    low_stock_alerts = active_alerts[:10]
+    # Get low stock alerts for display (limit to 3)
+    low_stock_alerts = active_alerts[:3]
     
     # ============================================
-    # PRODUCT STATUS COUNTS (using actual status field)
+    # PRODUCT STATUS (using new model fields)
     # ============================================
-    available_products = Product.objects.filter(status='available').count()
-    low_stock_products = Product.objects.filter(status='lowstock').count()
-    out_of_stock = Product.objects.filter(status='outofstock').count()
-    sold_products = Product.objects.filter(status='sold').count()
-    damaged_products = Product.objects.filter(status='damaged').count()
-    reserved_products = Product.objects.filter(status='reserved').count()
+    # For bulk items: check bulk_quantity vs reorder_level
+    bulk_products = Product.objects.filter(category__item_type='bulk', is_active=True)
+    available_bulk = bulk_products.filter(bulk_quantity__gt=0).count()
+    low_stock_bulk = bulk_products.filter(
+        bulk_quantity__gt=0,
+        bulk_quantity__lte=F('reorder_level')
+    ).count()
+    out_of_stock_bulk = bulk_products.filter(bulk_quantity=0).count()
     
-    # Alternative low stock count using quantity threshold
-    low_stock_by_quantity = Product.objects.filter(
-        quantity__gt=0,
-        quantity__lte=F('reorder_level')
+    # For single items: check available_quantity
+    single_products = Product.objects.filter(category__item_type='single', is_active=True)
+    available_single = single_products.filter(available_quantity__gt=0).count()
+    out_of_stock_single = single_products.filter(available_quantity=0).count()
+    
+    # Total counts
+    available_products = available_bulk + available_single
+    low_stock_products = low_stock_bulk  # Single items don't have low stock alerts
+    out_of_stock = out_of_stock_bulk + out_of_stock_single
+    
+    # Stolen/Lost units (from ProductUnit, not Product SKU)
+    stolen_units_count = ProductUnit.objects.filter(status='stolen').count()
+    lost_units_count = ProductUnit.objects.filter(status='lost').count()
+    stolen_lost_count = stolen_units_count + lost_units_count
+    
+    # Damaged units (from ProductUnit)
+    damaged_units_count = ProductUnit.objects.filter(status='damaged').count()
+    
+    # Overstock (products with bulk_quantity > 100)
+    overstock = Product.objects.filter(
+        category__item_type='bulk',
+        bulk_quantity__gt=100
     ).count()
     
     # ============================================
     # RECENT STOCK MOVEMENTS
     # ============================================
     recent_movements = StockEntry.objects.select_related(
-        'product', 'created_by'
-    ).order_by('-created_at')[:10]
+        'product_sku', 'product_unit', 'created_by'
+    ).order_by('-created_at')[:3]
     
     # ============================================
     # CATEGORY-WISE STOCK
     # ============================================
     stock_by_category = []
-    for category in Category.objects.all():
-        category_products = category.products.all()
-        product_count = category_products.count()
-        total_stock = category_products.aggregate(Sum('quantity'))['quantity__sum'] or 0
+    for category in Category.objects.filter(is_active=True):
+        cat_products = category.products.filter(is_active=True)
+        product_count = cat_products.count()
+        
+        # Calculate total stock based on category type
+        if category.is_bulk_item:
+            total_stock = cat_products.aggregate(total=Sum('bulk_quantity'))['total'] or 0
+        else:
+            total_stock = cat_products.aggregate(total=Sum('available_quantity'))['total'] or 0
+        
         stock_by_category.append({
             'name': category.name,
             'product_count': product_count,
@@ -1739,7 +1793,7 @@ def store_manager_dashboard(request):
     stock_by_category = sorted(stock_by_category, key=lambda x: x['total_stock'], reverse=True)[:10]
     
     # ============================================
-    # TOP SELLING PRODUCTS
+    # TOP SELLING PRODUCTS (using SKU code)
     # ============================================
     try:
         top_selling = SaleItem.objects.values(
@@ -1747,7 +1801,7 @@ def store_manager_dashboard(request):
         ).annotate(
             total_sold=Sum('quantity'),
             total_revenue=Sum('total_price')
-        ).order_by('-total_sold')[:10]
+        ).order_by('-total_sold')[:3]
     except:
         top_selling = []
     
@@ -1755,7 +1809,7 @@ def store_manager_dashboard(request):
     # RECENT PRODUCTS & NEW THIS WEEK
     # ============================================
     new_products_week = Product.objects.filter(created_at__date__gte=week_ago).count()
-    recent_products = Product.objects.select_related('category').order_by('-created_at')[:10]
+    recent_products = Product.objects.select_related('category').order_by('-created_at')[:3]
     
     # ============================================
     # PENDING RETURNS
@@ -1764,7 +1818,7 @@ def store_manager_dashboard(request):
         from inventory.models import ReturnRequest
         pending_returns = ReturnRequest.objects.filter(
             status__in=['submitted', 'verified']
-        ).order_by('-requested_at')[:8]
+        ).select_related('product', 'requested_by').order_by('-requested_at')[:3]
         pending_returns_count = ReturnRequest.objects.filter(
             status__in=['submitted', 'verified']
         ).count()
@@ -1774,33 +1828,27 @@ def store_manager_dashboard(request):
         pending_returns_count = 0
         verified_returns_count = 0
     
-    # ============================================
-    # OVERSTOCK (products with quantity > 100)
-    # ============================================
-    overstock = Product.objects.filter(quantity__gt=100).count()
-    
     context = {
         # Basic counts
         'total_products': total_products,
         'total_categories': total_categories,
         'total_stock_value': total_stock_value,
         
-        # Stock alerts - FIXED: These are what the template expects
-        'low_stock_alerts': low_stock_alerts,  # This will now show actual alerts
+        # Stock alerts
+        'low_stock_alerts': low_stock_alerts,
         'low_stock_alerts_count': low_stock_alerts_count,
         'needs_reorder_count': needs_reorder_count,
         'out_of_stock_count': out_of_stock_count,
-        'damaged_count': damaged_count,
         
         # Product status counts
         'low_stock_products': low_stock_products,
         'out_of_stock': out_of_stock,
         'available_products': available_products,
-        'sold_products': sold_products,
-        'damaged_products': damaged_products,
-        'reserved_products': reserved_products,
+        'stolen_lost_count': stolen_lost_count,
+        'stolen_units_count': stolen_units_count,
+        'lost_units_count': lost_units_count,
+        'damaged_units_count': damaged_units_count,
         'overstock': overstock,
-        'low_stock_by_quantity': low_stock_by_quantity,
         
         # Recent data
         'recent_movements': recent_movements,
@@ -1821,8 +1869,6 @@ def store_manager_dashboard(request):
     }
     
     return render(request, 'staff/dashboards/store_manager_dashboard.html', context)
-
-
 
 
 
@@ -1884,7 +1930,7 @@ def sales_agent_dashboard(request):
     # Recent Sales
     recent_sales = Sale.objects.filter(
         seller=request.user
-    ).order_by('-sale_date')[:10]
+    ).order_by('-sale_date')[:5]
     
     # Top Products I Sold
     top_products = SaleItem.objects.filter(
@@ -2832,7 +2878,6 @@ def sales_manager_dashboard(request):
 
 
 
-
 # ============================================
 # CASHIER DASHBOARD
 # ============================================
@@ -2840,10 +2885,12 @@ def sales_manager_dashboard(request):
 @dashboard_for_role('Cashier')
 def cashier_dashboard(request):
     """Dashboard for cashier desk"""
-    from sales.models import Sale
+    from sales.models import Sale, SaleItem
     from django.db.models import F, Count, Sum, Q
     from staff.models import Staff
     from shops.models import ShopBranch
+    from inventory.models import Product, ProductUnit
+    from decimal import Decimal
 
     prepare_dashboard_messages(request, 'Cashier')
     
@@ -2876,9 +2923,12 @@ def cashier_dashboard(request):
         except Exception as e:
             logger.error(f"Error getting fallback shop: {str(e)}")
     
-    # Today's Transactions
+    # ============================================
+    # TODAY'S TRANSACTIONS
+    # ============================================
     today_transactions = Sale.objects.filter(
-        sale_date__date=today
+        sale_date__date=today,
+        is_reversed=False  # Exclude reversed sales
     ).aggregate(
         count=Count('sale_id'),
         cash_total=Sum('total_amount', filter=Q(payment_method='Cash')),
@@ -2887,27 +2937,69 @@ def cashier_dashboard(request):
         points_total=Sum('total_amount', filter=Q(payment_method='Points'))
     )
     
-    # Recent Transactions
+    # Initialize None values to 0
+    for key in today_transactions:
+        if today_transactions[key] is None:
+            today_transactions[key] = Decimal('0')
+    
+    # ============================================
+    # RECENT TRANSACTIONS
+    # ============================================
     recent_transactions = Sale.objects.filter(
-        sale_date__date=today
-    ).order_by('-sale_date')[:20]
+        sale_date__date=today,
+        is_reversed=False
+    ).select_related('seller').order_by('-sale_date')[:20]
+    
+    # ============================================
+    # TOP SELLING PRODUCTS TODAY (Optional - for cashier insights)
+    # ============================================
+    top_products_today = SaleItem.objects.filter(
+        sale__sale_date__date=today,
+        sale__is_reversed=False
+    ).values(
+        'product_name', 'product_code'
+    ).annotate(
+        total_quantity=Sum('quantity'),
+        total_revenue=Sum('total_price')
+    ).order_by('-total_quantity')[:5]
+    
+    # ============================================
+    # CASHIER PERFORMANCE TODAY
+    # ============================================
+    cashier_sales = Sale.objects.filter(
+        sale_date__date=today,
+        seller=request.user,
+        is_reversed=False
+    )
+    
+    cashier_stats = {
+        'sales_count': cashier_sales.count(),
+        'total_amount': cashier_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0'),
+        'items_sold': SaleItem.objects.filter(sale__in=cashier_sales).aggregate(total=Sum('quantity'))['total'] or 0
+    }
     
     context = {
-        # Add cart data to context
+        # Cart data
         'cart': cart,
         'subtotal': subtotal,
         'cart_count': len(cart),
         
-        # Add shop to context
+        # Shop info
         'current_shop': current_shop,
         
-        # Keep existing context
+        # Transaction stats
         'today_transactions': today_transactions,
         'recent_transactions': recent_transactions,
+        
+        # Additional cashier insights
+        'top_products_today': top_products_today,
+        'cashier_stats': cashier_stats,
+        
+        # Today's date
+        'today': today,
     }
+    
     return render(request, 'staff/dashboards/cashier_dashboard.html', context)
-
-
 
 
 
@@ -3781,14 +3873,12 @@ def security_dashboard(request):
 # ============================================
 # M-PESA AGENT DASHBOARD
 # ============================================
-# ============================================
-# M-PESA AGENT DASHBOARD
-# ============================================
+
 @login_required
 @dashboard_for_role('M-Pesa Agent')
 def mpesa_agent_dashboard(request):
     """Dashboard for M-Pesa Agent - role-based view"""
-    from shops.models import DailyShopReport, ShopBranch
+    from shops.models import DailyShopReport, ShopBranch, MpesaAccount
     from django.db.models import Sum
     from django.utils import timezone
     from datetime import timedelta
@@ -3812,23 +3902,24 @@ def mpesa_agent_dashboard(request):
     total_shops = 0
     reports_today = 0
     total_transactions_today = 0
+    total_mpesa_balance = 0
     
     # For superusers - show ALL data across ALL shops
     if request.user.is_superuser:
         # Get all reports (no shop filter)
         all_reports = DailyShopReport.objects.all()
         
-        # Weekly transactions (all shops)
+        # Weekly transactions (all shops) - FIXED: use total_mpesa_amount instead of shop_sales
         weekly_transactions = all_reports.filter(
             report_date__gte=week_ago,
             report_date__lte=today
-        ).aggregate(total=Sum('shop_sales'))['total'] or 0
+        ).aggregate(total=Sum('total_mpesa_amount'))['total'] or 0
         
-        # Monthly transactions (all shops)
+        # Monthly transactions (all shops) - FIXED: use total_mpesa_amount instead of shop_sales
         monthly_transactions = all_reports.filter(
             report_date__gte=month_ago,
             report_date__lte=today
-        ).aggregate(total=Sum('shop_sales'))['total'] or 0
+        ).aggregate(total=Sum('total_mpesa_amount'))['total'] or 0
         
         # Monthly expenses (all shops)
         monthly_expenses = all_reports.filter(
@@ -3844,36 +3935,52 @@ def mpesa_agent_dashboard(request):
         reports_today = DailyShopReport.objects.filter(report_date=today).count()
         total_transactions_today = DailyShopReport.objects.filter(
             report_date=today
-        ).aggregate(total=Sum('shop_sales'))['total'] or 0
+        ).aggregate(total=Sum('total_mpesa_amount'))['total'] or 0
+        
+        # Total M-Pesa balance across all accounts
+        total_mpesa_balance = MpesaAccount.objects.filter(
+            is_active=True, 
+            status='active'
+        ).aggregate(total=Sum('current_balance'))['total'] or 0
         
     else:
         # For regular users - show only their assigned shop data
         if assigned_shop:
             reports = DailyShopReport.objects.filter(shop=assigned_shop)
             
-            # Weekly transactions
+            # Weekly transactions - FIXED: use total_mpesa_amount instead of shop_sales
             weekly_transactions = reports.filter(
                 report_date__gte=week_ago,
-                report_date__lte=today,
-                submitted_by=request.user
-            ).aggregate(total=Sum('shop_sales'))['total'] or 0
+                report_date__lte=today
+            ).aggregate(total=Sum('total_mpesa_amount'))['total'] or 0
             
-            # Monthly transactions
+            # Monthly transactions - FIXED: use total_mpesa_amount instead of shop_sales
             monthly_transactions = reports.filter(
                 report_date__gte=month_ago,
-                report_date__lte=today,
-                submitted_by=request.user
-            ).aggregate(total=Sum('shop_sales'))['total'] or 0
+                report_date__lte=today
+            ).aggregate(total=Sum('total_mpesa_amount'))['total'] or 0
             
             # Monthly expenses
             monthly_expenses = reports.filter(
                 report_date__gte=month_ago,
-                report_date__lte=today,
-                submitted_by=request.user
+                report_date__lte=today
             ).aggregate(total=Sum('total_expenses'))['total'] or 0
             
             # Total reports
-            total_reports = reports.filter(submitted_by=request.user).count()
+            total_reports = reports.count()
+            
+            # Today's reports
+            reports_today = reports.filter(report_date=today).count()
+            total_transactions_today = reports.filter(
+                report_date=today
+            ).aggregate(total=Sum('total_mpesa_amount'))['total'] or 0
+            
+            # Total M-Pesa balance for assigned shop
+            total_mpesa_balance = MpesaAccount.objects.filter(
+                shop=assigned_shop,
+                is_active=True, 
+                status='active'
+            ).aggregate(total=Sum('current_balance'))['total'] or 0
     
     context = {
         # Common data
@@ -3883,6 +3990,7 @@ def mpesa_agent_dashboard(request):
         'monthly_transactions': int(monthly_transactions),
         'monthly_expenses': float(monthly_expenses),
         'total_reports': total_reports,
+        'total_mpesa_balance': total_mpesa_balance,
         
         # Superuser specific data
         'total_shops': total_shops,
@@ -3891,7 +3999,6 @@ def mpesa_agent_dashboard(request):
     }
     
     return render(request, 'staff/dashboards/mpesa_agent_dashboard.html', context)
-
 
 
 
@@ -3937,7 +4044,170 @@ def cleaner_dashboard(request):
 
 
 
-
+@login_required
+def notifications_page(request):
+    """Display all notifications for the user - WITHOUT SALES/PURCHASES"""
+    
+    # Get current time for time calculations
+    now = timezone.now()
+    last_24h = now - timedelta(hours=24)
+    last_week = now - timedelta(days=7)
+    
+    # ============================================
+    # STOCK ALERTS
+    # ============================================
+    stock_alerts = StockAlert.objects.filter(
+        is_active=True,
+        is_dismissed=False
+    ).select_related('product').order_by('-severity', '-created_at')
+    
+    # Count alerts by severity
+    critical_alerts = stock_alerts.filter(severity__in=['critical', 'danger']).count()
+    warning_alerts = stock_alerts.filter(severity='warning').count()
+    info_alerts = stock_alerts.filter(severity='info').count()
+    
+    # ============================================
+    # RETURN REQUESTS (for managers/staff)
+    # ============================================
+    if request.user.is_staff or request.user.is_superuser:
+        pending_returns = ReturnRequest.objects.filter(
+            status='submitted'
+        ).select_related('product', 'requested_by').order_by('-requested_at')
+        
+        verified_returns = ReturnRequest.objects.filter(
+            status='verified'
+        ).select_related('product', 'requested_by', 'verified_by').order_by('-verified_at')
+    else:
+        # Regular users see their own returns
+        pending_returns = ReturnRequest.objects.filter(
+            requested_by=request.user,
+            status='submitted'
+        ).order_by('-requested_at')
+        
+        verified_returns = ReturnRequest.objects.filter(
+            requested_by=request.user,
+            status='verified'
+        ).order_by('-requested_at')
+    
+    # ============================================
+    # REMOVED: RECENT ACTIVITY (Sales & Purchases)
+    # COMMENTED OUT - NO LONGER SHOWING SALES/PURCHASES
+    # ============================================
+    # from inventory.models import StockEntry
+    # recent_activity = StockEntry.objects.select_related(
+    #     'product_sku', 'product_unit', 'created_by'
+    # ).filter(
+    #     created_at__gte=last_week
+    # ).order_by('-created_at')[:20]
+    
+    # ============================================
+    # LOW STOCK PRODUCTS - FIXED
+    # ============================================
+    from django.db.models import Q
+    
+    # For bulk items: check bulk_quantity
+    bulk_low_stock = Product.objects.filter(
+        category__item_type='bulk',
+        is_active=True,
+        is_discontinued=False,
+        bulk_quantity__lte=F('reorder_level'),
+        bulk_quantity__gt=0
+    )
+    
+    # For single items: check available_quantity
+    single_low_stock = Product.objects.filter(
+        category__item_type='single',
+        is_active=True,
+        is_discontinued=False,
+        available_quantity__lte=F('reorder_level'),
+        available_quantity__gt=0
+    )
+    
+    # Combine both
+    low_stock_products = (bulk_low_stock | single_low_stock).select_related('category')[:10]
+    
+    # ============================================
+    # OUT OF STOCK PRODUCTS - FIXED
+    # ============================================
+    bulk_out_of_stock = Product.objects.filter(
+        category__item_type='bulk',
+        is_active=True,
+        bulk_quantity=0
+    )
+    
+    single_out_of_stock = Product.objects.filter(
+        category__item_type='single',
+        is_active=True,
+        available_quantity=0
+    )
+    
+    out_of_stock_products = (bulk_out_of_stock | single_out_of_stock).select_related('category')[:10]
+    
+    # ============================================
+    # STAFF NOTIFICATIONS (for superusers/staff)
+    # ============================================
+    from .models import Staff, StaffApplication
+    
+    pending_verifications = []
+    pending_applications = []
+    
+    if request.user.is_superuser or request.user.is_staff:
+        # Pending staff verifications
+        pending_verifications = Staff.objects.filter(
+            verification_submitted_at__isnull=False,
+            is_identity_verified=False
+        ).select_related('user')[:10]
+        
+        # Pending staff applications
+        pending_applications = StaffApplication.objects.filter(
+            status='pending'
+        ).order_by('-application_date')[:10]
+    
+    # ============================================
+    # CREDIT TRANSACTIONS ALERTS (for managers)
+    # ============================================
+    credit_transactions_pending = []
+    if hasattr(request.user, 'credit_transactions'):
+        from credit.models import CreditTransaction
+        credit_transactions_pending = CreditTransaction.objects.filter(
+            Q(payment_status='pending_payment') | Q(commission_status='pending')
+        ).select_related('product', 'customer')[:10]
+    
+    # ============================================
+    # NOTIFICATION COUNTS BY TYPE
+    # ============================================
+    notification_counts = {
+        'total': stock_alerts.count() + pending_returns.count(),
+        'stock_alerts': stock_alerts.count(),
+        'critical_alerts': critical_alerts,
+        'warning_alerts': warning_alerts,
+        'info_alerts': info_alerts,
+        'pending_returns': pending_returns.count(),
+        'verified_returns': verified_returns.count(),
+        'low_stock': low_stock_products.count(),
+        'out_of_stock': out_of_stock_products.count(),
+        'pending_verifications': pending_verifications.count(),
+        'pending_applications': pending_applications.count(),
+        'credit_pending': credit_transactions_pending.count(),
+    }
+    
+    context = {
+        'stock_alerts': stock_alerts,
+        'pending_returns': pending_returns,
+        'verified_returns': verified_returns,
+        # 'recent_activity': recent_activity,  # REMOVED - No longer passing sales/purchases
+        'low_stock_products': low_stock_products,
+        'out_of_stock_products': out_of_stock_products,
+        'pending_verifications': pending_verifications,
+        'pending_applications': pending_applications,
+        'credit_transactions_pending': credit_transactions_pending,
+        'notification_counts': notification_counts,
+        'now': now,
+        'last_24h': last_24h,
+        'last_week': last_week,
+    }
+    
+    return render(request, 'staff/notifications_page.html', context)
 
 
 
@@ -4371,14 +4641,6 @@ def application_form(request):
     return render(request, 'staff/apply.html', context)
 
 
-
-
-
-
-
-# ====================================
-# APPLICATION SUCCESS VIEW
-# ====================================
 def application_success(request):
     """Application success page"""
     return render(request, 'staff/success.html')
@@ -4426,10 +4688,6 @@ def application_list(request):
     }
     return render(request, 'staff/list.html', context)
 
-
-# ====================================
-# DETAIL VIEW
-# ====================================
 @login_required
 def application_detail(request, pk):
     """View application details"""
@@ -4440,10 +4698,6 @@ def application_detail(request, pk):
     }
     return render(request, 'staff/detail.html', context)
 
-
-# ====================================
-# EDIT VIEW
-# ====================================
 @login_required
 def application_edit(request, pk):
     """Edit application details"""
@@ -4486,10 +4740,6 @@ def application_edit(request, pk):
     }
     return render(request, 'staff/edit.html', context)
 
-
-# ====================================
-# DELETE VIEW
-# ====================================
 @login_required
 def application_delete(request, pk):
     """Delete an application"""
@@ -4509,9 +4759,6 @@ def application_delete(request, pk):
         'application': application,
     }
     return render(request, 'staff/delete.html', context)
-
-
-
 
 @login_required
 def application_approve(request, pk):
@@ -4687,10 +4934,6 @@ def application_approve(request, pk):
     }
     return render(request, 'staff/approve.html', context)
 
-
-
-
-
 @staff_member_required
 def application_revert_to_pending(request, pk):
     """Revert an approved application back to pending status and delete associated user account"""
@@ -4799,59 +5042,6 @@ def application_revert_to_pending(request, pk):
     
     return redirect('staff:application_list')
 
-
-#def send_revert_notification(application, user_deleted, username):
-#    """Send notification email when application is reverted"""
-#    try:
-#        subject = f'FieldMax - Your Staff Application Status Update'
-        
-#        context = {
-#            'name': application.full_name(),
-#            'application_id': application.id,
-#            'position': application.get_position_display(),
-#            'user_deleted': user_deleted,
-#            'username': username,
-#            'reverted_date': timezone.now().strftime('%Y-%m-%d %H:%M'),
-#            'support_email': settings.DEFAULT_FROM_EMAIL,
-#        }
-#        
-#        html_message = render_to_string('staff/email/revert_notification.html', context)
-#        plain_message = f"""
-#        Dear {application.full_name()},
-#        
-#        Your staff application (#{application.id}) status has been updated.
-#        
-#        Status: PENDING (Reverted from Approved)
-#        Position: {application.get_position_display()}
-#        Date: {timezone.now().strftime('%Y-%m-%d %H:%M')}
-#        
-#        {'Your user account access has been removed.' if user_deleted else ''}
-#        
-#        If you have any questions, please contact the HR department.
-#        
-#        Regards,
-#        FieldMax HR Team
-#        """
-#        
-#        send_mail(
-#            subject,
-#            plain_message,
-#            settings.DEFAULT_FROM_EMAIL,
-#            [application.email],
-#            html_message=html_message,
-#            fail_silently=True,
-#        )
-        
-#    except Exception as e:
-#        logger.error(f"Failed to send revert notification email to {application.email}: {str(e)}")
-
-
-
-
-
-# ====================================
-# REJECT VIEW
-# ====================================
 @login_required
 def application_reject(request, pk):
     """Reject an application"""
@@ -4870,35 +5060,6 @@ def application_reject(request, pk):
             application.review_notes = reason
             application.save()
             
-
-
-
-
-
-
-
-            # ============================================
-            # SEND ADMIN NOTIFICATION
-            # ============================================
-            """
-            try:
-                from utils.notifications import AdminNotifier
-                # Notify admin about rejection
-                AdminNotifier.notify_application_processed(
-                    application=application,
-                    action='rejected',
-                    processed_by=request.user
-                )
-                logger.info(f"Admin notification sent for rejected application #{application.id}")
-            except ImportError:
-                logger.warning("AdminNotifier not available - skipping notification")
-            except Exception as e:
-                logger.error(f"Failed to send admin notification: {str(e)}")
-            """
-
-
-
-
             
             messages.success(
                 request, 
@@ -4916,17 +5077,6 @@ def application_reject(request, pk):
     }
     return render(request, 'staff/reject.html', context)
 
-
-
-
-
-
-
-
-
-# ====================================
-# DOCUMENTS VIEW
-# ====================================
 @login_required
 def view_documents(request, pk):
     """View all application documents"""
@@ -4989,140 +5139,6 @@ def password_change(request):
     }
     return render(request, 'staff/password_change.html', context)
 
-
-
-
-
-
-
-
-
-
-
-
-@login_required
-def notifications_page(request):
-    """Display all notifications for the user"""
-    
-    # Get current time for time calculations
-    now = timezone.now()
-    last_24h = now - timedelta(hours=24)
-    last_week = now - timedelta(days=7)
-    
-    # ============================================
-    # STOCK ALERTS
-    # ============================================
-    stock_alerts = StockAlert.objects.filter(
-        is_active=True,
-        is_dismissed=False
-    ).select_related('product').order_by('-severity', '-created_at')
-    
-    # Count alerts by severity
-    critical_alerts = stock_alerts.filter(severity__in=['critical', 'danger']).count()
-    warning_alerts = stock_alerts.filter(severity='warning').count()
-    info_alerts = stock_alerts.filter(severity='info').count()
-    
-    # ============================================
-    # RETURN REQUESTS (for managers/staff)
-    # ============================================
-    if request.user.is_staff or request.user.is_superuser:
-        pending_returns = ReturnRequest.objects.filter(
-            status='submitted'
-        ).select_related('product', 'requested_by').order_by('-requested_at')
-        
-        verified_returns = ReturnRequest.objects.filter(
-            status='verified'
-        ).select_related('product', 'requested_by', 'verified_by').order_by('-verified_at')
-    else:
-        # Regular users see their own returns
-        pending_returns = ReturnRequest.objects.filter(
-            requested_by=request.user,
-            status='submitted'
-        ).order_by('-requested_at')
-        
-        verified_returns = ReturnRequest.objects.filter(
-            requested_by=request.user,
-            status='verified'
-        ).order_by('-requested_at')
-    
-    # ============================================
-    # RECENT ACTIVITY
-    # ============================================
-    from inventory.models import StockEntry
-    
-    recent_activity = StockEntry.objects.select_related(
-        'product', 'created_by'
-    ).filter(
-        created_at__gte=last_week
-    ).order_by('-created_at')[:20]
-    
-    # ============================================
-    # LOW STOCK PRODUCTS
-    # ============================================
-    low_stock_products = Product.objects.filter(
-        Q(category__item_type='bulk', quantity__lte=5, quantity__gt=0) |
-        Q(status='lowstock')
-    ).select_related('category')[:10]
-    
-    # ============================================
-    # STAFF NOTIFICATIONS (for superusers/staff)
-    # ============================================
-    from .models import Staff, StaffApplication
-    
-    pending_verifications = []
-    pending_applications = []
-    
-    if request.user.is_superuser or request.user.is_staff:
-        # Pending staff verifications
-        pending_verifications = Staff.objects.filter(
-            verification_submitted_at__isnull=False,
-            is_identity_verified=False
-        ).select_related('user')[:10]
-        
-        # Pending staff applications - FIXED: Use correct field names
-        pending_applications = StaffApplication.objects.filter(
-            status='pending'
-        ).order_by('-application_date')[:10]  # Using application_date field
-    
-    # ============================================
-    # NOTIFICATION COUNTS BY TYPE
-    # ============================================
-    notification_counts = {
-        'total': stock_alerts.count() + pending_returns.count(),
-        'stock_alerts': stock_alerts.count(),
-        'critical_alerts': critical_alerts,
-        'warning_alerts': warning_alerts,
-        'info_alerts': info_alerts,
-        'pending_returns': pending_returns.count(),
-        'verified_returns': verified_returns.count(),
-        'low_stock': low_stock_products.count(),
-        'pending_verifications': pending_verifications.count(),
-        'pending_applications': pending_applications.count(),
-    }
-    
-    context = {
-        'stock_alerts': stock_alerts,
-        'pending_returns': pending_returns,
-        'verified_returns': verified_returns,
-        'recent_activity': recent_activity,
-        'low_stock_products': low_stock_products,
-        'pending_verifications': pending_verifications,
-        'pending_applications': pending_applications,
-        'notification_counts': notification_counts,
-        'now': now,
-        'last_24h': last_24h,
-        'last_week': last_week,
-    }
-    
-    return render(request, 'staff/notifications_page.html', context)
-
-
-
-
-
-
-
-
 # ============================================
 # ENSURE WORKER THREAD STARTS ON RENDER
 # ============================================
@@ -5175,9 +5191,6 @@ def diagnostic_email(request):
         'test_id': test_id,
         'sendgrid_key_exists': bool(settings.SENDGRID_API_KEY),
     })
-
-
-
 
 @login_required
 @user_passes_test(lambda u: u.is_superuser)
@@ -5277,10 +5290,6 @@ def user_edit(request, pk):
     }
     return render(request, 'staff/users/edit.html', context)
 
-
-
-
-
 @login_required
 @user_passes_test(lambda u: u.is_superuser)
 def user_deactivate(request, pk):
@@ -5306,7 +5315,6 @@ def user_deactivate(request, pk):
     
     return redirect('staff:user_detail', pk=pk)
 
-
 @login_required
 @user_passes_test(lambda u: u.is_superuser)
 def user_activate(request, pk):
@@ -5331,7 +5339,6 @@ def user_activate(request, pk):
     messages.success(request, f"User {user_to_activate.username} has been activated successfully.")
     
     return redirect('staff:user_detail', pk=pk)
-
 
 @login_required
 @user_passes_test(lambda u: u.is_superuser)
@@ -5369,7 +5376,6 @@ def user_delete(request, pk):
     
     return redirect('staff:user_list')
 
-
 # Optional: AJAX endpoints for smoother UX
 @login_required
 @user_passes_test(lambda u: u.is_superuser)
@@ -5402,7 +5408,6 @@ def user_toggle_status(request, pk):
         
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
-
 
 @login_required
 @user_passes_test(lambda u: u.is_superuser)
@@ -5440,8 +5445,6 @@ def user_delete_ajax(request, pk):
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
 
-
-
 @login_required
 @user_passes_test(lambda u: u.is_superuser)
 def user_delete_confirm(request, pk):
@@ -5457,7 +5460,6 @@ def user_delete_confirm(request, pk):
         'user': user_to_delete,
     }
     return render(request, 'staff/users/delete_confirm.html', context)
-
 
 @login_required
 @user_passes_test(lambda u: u.is_superuser)
@@ -5479,7 +5481,6 @@ def user_deactivate_confirm(request, pk):
         'user': user_to_deactivate,
     }
     return render(request, 'staff/users/deactivate_confirm.html', context)
-
 
 @login_required
 @user_passes_test(lambda u: u.is_superuser)
@@ -5543,7 +5544,6 @@ def user_lock_confirm(request, pk):  # Changed from user_id to pk
     
     return render(request, 'staff/users/lock_confirm.html', context)  # Changed template name
 
-
 @login_required
 @user_passes_test(is_superuser)
 def user_lock_process(request, pk):  # Changed from user_id to pk
@@ -5565,7 +5565,6 @@ def user_lock_process(request, pk):  # Changed from user_id to pk
     
     messages.success(request, f"User {target_user.username} has been locked successfully.")
     return redirect('staff:user_detail', pk=pk)  # Changed to pk
-
 
 @login_required
 @user_passes_test(is_superuser)
@@ -5590,7 +5589,6 @@ def user_unlock_confirm(request, pk):  # Changed from user_id to pk
     }
     
     return render(request, 'staff/users/unlock_confirm.html', context)  # Changed template name
-
 
 @login_required
 @user_passes_test(is_superuser)
@@ -5720,7 +5718,9 @@ def user_unsuspend_process(request, pk):  # Changed from user_id to pk
 
 
 
-
+# ============================================
+# POWERED BY PAGE
+# ============================================
 def powered_by_page(request):
     """Page showing information about FieldMax"""
     return render(request, 'staff/powered_by.html')

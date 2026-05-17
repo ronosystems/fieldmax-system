@@ -68,6 +68,8 @@ urlpatterns = [
     path('income/<str:transaction_id>/', views.income_detail, name='income_detail'),
     path('expenses/', views.financial_expenses, name='financial_expenses'),
     path('expenses/<str:transaction_id>/', views.expenses_detail, name='expenses_detail'),
+    path('sales-income/', views.sales_income_page, name='sales_income'),
+    path('inventory-expenses/', views.inventory_expenses_page, name='inventory_expenses'),
     
     # ============================================
     # FINANCE ACCOUNTS
@@ -84,6 +86,11 @@ urlpatterns = [
     path('credit-company-payment/<int:company_id>/', views.credit_company_payment, name='credit_company_payment'),
 
     # ============================================
+    # STOCK PURCHASE EXPENSES
+    # ============================================
+    path('stock-purchases/', views.stock_purchase_expenses, name='stock_purchase_expenses'),
+
+    # ============================================
     # M-PESA PAYMENTS
     # ============================================
     path('mpesa/stk-push/', views.stk_push_only, name='stk_push_only'),
@@ -92,4 +99,20 @@ urlpatterns = [
     path('mpesa-callback/', views.mpesa_callback, name='mpesa_callback'),
     path('mpesa-status/<str:checkout_request_id>/', views.mpesa_status_check, name='mpesa_status_check'),
     path('webhook/kopokopo/', kopokopo_webhook, name='kopokopo_webhook'),
+
+    #==============================================
+    # MONEY TRANSFERS
+    #==============================================
+    path('transfers/', views.money_transfer_list, name='money_transfer_list'),
+    path('transfers/create/', views.money_transfer_create, name='money_transfer_create'),
+    path('transfers/<int:pk>/', views.money_transfer_detail, name='money_transfer_detail'),
+    path('transfers/<int:pk>/cancel/', views.money_transfer_cancel, name='money_transfer_cancel'),
+
+    #==============================================
+    # CAPITAL INJECTIONS & LOAN REPAYMENTS
+    #==============================================
+    path('capital-injections/', views.capital_injection_list, name='capital_injection_list'),
+    path('capital-injections/create/', views.capital_injection_create, name='capital_injection_create'),
+    path('capital-injections/<str:injection_id>/', views.capital_injection_detail, name='capital_injection_detail'),
+    path('capital-injections/<str:injection_id>/repay/', views.loan_repayment_create, name='loan_repayment_create'),
 ]

@@ -11,8 +11,10 @@ urlpatterns = [
     
     # Products
     path('products/', views.product_list, name='product_list'),
+    path('units/', views.product_units_list, name='product_units_list'),
     path('products/add/', views.product_add, name='product_add'),
-    path('products/bulk-add/', views.product_bulk_add, name='product_bulk_add'),
+    path('products/bulk-add/', views.product_bulk_add_units, name='product_bulk_add_units'),
+    path('products/bulk-add/<str:sku_code>/', views.product_bulk_add_units, name='product_bulk_add_units_with_sku'),
     path('products/<int:pk>/', views.product_detail, name='product_detail'),
     path('products/<int:pk>/edit/', views.product_edit, name='product_edit'),
     path('products/<int:pk>/delete/', views.product_delete, name='product_delete'),
@@ -23,6 +25,7 @@ urlpatterns = [
     # API endpoints for bulk add
     path('api/search-models/', views.search_existing_models, name='search_existing_models'),
     path('api/get-product-details/<int:product_id>/', views.get_product_details, name='get_product_details'),
+    path('api/search-products/', views.search_products_for_price_check, name='search_products_price_check'),
 
     # Bulk Edit Products by Model
     path('bulk-edit/', views.product_bulk_edit, name='product_bulk_edit'),
@@ -102,26 +105,51 @@ urlpatterns = [
     
     path('product/<int:product_id>/mark-damaged/', 
          views.mark_product_damaged, 
-         name='mark_damaged'),
-    
-    path('product/<int:product_id>/recover/', 
-         views.recover_stolen_product, 
-         name='recover_product'),
-    
+         name='mark_damaged'), 
+
     path('product/<int:product_id>/file-insurance/', 
-         views.file_insurance_claim, 
+         views.file_unit_insurance_claim, 
          name='file_insurance'),
     
     path('stolen-products/', 
-         views.stolen_products_list, 
-         name='stolen_products_list'),
+         views.stolen_units_list, 
+         name='stolen_units_list'),
     
     path('stolen-products/report/', 
-         views.stolen_products_report, 
-         name='stolen_products_report'),
+         views.stolen_units_report, 
+         name='stolen_units_report'),
     
     # Bulk operation for multiple stolen items
     path('bulk-report-stolen/', 
-         views.bulk_report_stolen, 
-         name='bulk_report_stolen'),
+         views.bulk_report_stolen_units, 
+         name='bulk_report_stolen_units'),
+
+    # ============================================
+    # UNIT-LEVEL ACTION URLs (for individual units)
+    # ============================================
+    path('unit/<int:unit_id>/mark-damaged/', 
+         views.mark_unit_damaged, 
+         name='mark_unit_damaged'),
+    
+    path('unit/<int:unit_id>/report-stolen/', 
+         views.report_unit_stolen, 
+         name='report_unit_stolen'),
+    
+    path('unit/<int:unit_id>/report-lost/', 
+         views.report_unit_lost, 
+         name='report_unit_lost'),
+    
+    path('unit/<int:unit_id>/recover/', 
+         views.recover_unit, 
+         name='recover_unit'),
+    
+    path('unit/<int:unit_id>/file-insurance/', 
+         views.file_unit_insurance_claim, 
+         name='file_unit_insurance_claim'),
+    
+    # Units list view
+    path('units/', 
+         views.product_units_list, 
+         name='product_units_list'),
+
 ]

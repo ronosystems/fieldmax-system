@@ -2,6 +2,7 @@
 from django.contrib import admin
 from django import forms
 from django.contrib.auth import get_user_model
+from .models import UserProfile 
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
 from django.contrib import messages
@@ -11,7 +12,10 @@ from .models import StaffApplication, Staff, OTPVerification, UserProfile, UserS
 from .utils.user_status import UserStatusManager
 from shops.models import ShopBranch
 
+
+
 User = get_user_model()
+
 
 
 # ============================================
@@ -232,13 +236,69 @@ class UserStatusInline(admin.StackedInline):
     readonly_fields = ('locked_at', 'suspended_at', 'deactivated_at', 'created_at', 'updated_at')
 
 
+
+
+
+# Then add this form class
+class CustomUserChangeForm(forms.ModelForm):
+    is_ceo = forms.BooleanField(
+        label='CEO status',
+        help_text='Designates whether the user is the CEO/Company Owner.',
+        required=False,
+    )
+    
+    class Meta:
+        model = User
+        fields = '__all__'
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk:
+            # Get or create profile
+            profile, created = UserProfile.objects.get_or_create(user=self.instance)
+            self.initial['is_ceo'] = profile.is_ceo
+    
+    def save(self, commit=True):
+        user = super().save(commit=commit)
+        
+        # Save CEO status to profile
+        profile, created = UserProfile.objects.get_or_create(user=user)
+        profile.is_ceo = self.cleaned_data.get('is_ceo', False)
+        
+        if commit:
+            profile.save()
+        
+        return user
+    
+
+
 class CustomUserAdmin(BaseUserAdmin):
+    form = CustomUserChangeForm 
     inlines = [UserStatusInline]
-    list_display = ('username', 'email', 'first_name', 'last_name', 'is_staff', 'is_active')
-    list_filter = ('is_active', 'is_staff', 'is_superuser')
+    
+    # Remove profile__is_ceo from fieldsets - use 'is_ceo' instead
+    fieldsets = (
+        (None, {'fields': ('username', 'password')}),
+        ('Personal info', {'fields': ('first_name', 'last_name', 'email')}),
+        ('Permissions', {
+            'fields': ('is_active', 'is_staff', 'is_superuser', 'is_ceo', 'groups', 'user_permissions'),
+            'classes': ('wide',),
+        }),
+        ('Important dates', {'fields': ('last_login', 'date_joined')}),
+    )
+    
+    list_display = ('username', 'email', 'first_name', 'last_name', 'is_staff', 'is_superuser', 'get_is_ceo', 'is_active')
+    list_filter = ('is_active', 'is_staff', 'is_superuser', 'profile__is_ceo')
     
     actions = ['lock_users', 'unlock_users', 'suspend_users', 'unsuspend_users', 'deactivate_users', 'activate_users']
-    
+
+    def get_is_ceo(self, obj):
+        """Display CEO status from profile"""
+        return obj.profile.is_ceo if hasattr(obj, 'profile') else False
+    get_is_ceo.boolean = True
+    get_is_ceo.short_description = 'CEO Status'
+    get_is_ceo.admin_order_field = 'profile__is_ceo'
+
     def lock_users(self, request, queryset):
         count = 0
         for user in queryset:
@@ -286,6 +346,8 @@ class CustomUserAdmin(BaseUserAdmin):
             count += 1
         self.message_user(request, f'{count} user(s) activated.', messages.SUCCESS)
     activate_users.short_description = "Activate selected users"
+
+
 
 
 # ============================================

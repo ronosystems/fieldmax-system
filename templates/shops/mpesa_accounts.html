@@ -1,386 +1,234 @@
-{% extends 'shops/base.html' %}
+{% extends "shops/base.html" %}
+{% load static %}
 {% load humanize %}
 
-{% block title %}M-Pesa Accounts{% endblock %}
-
-{% block extra_css %}
-<style>
-    .account-type {
-        padding: 4px 10px;
-        border-radius: 20px;
-        font-size: 0.7rem;
-        font-weight: 600;
-        display: inline-block;
-    }
-    
-    .account-type-till {
-        background: #dbeafe;
-        color: #1e40af;
-    }
-    
-    .account-type-paybill {
-        background: #dcfce7;
-        color: #166534;
-    }
-    
-    .account-type-agent {
-        background: #fed7aa;
-        color: #92400e;
-    }
-    
-    .account-type-business {
-        background: #e0e7ff;
-        color: #3730a3;
-    }
-    
-    .phone-number {
-        font-family: monospace;
-        font-weight: 600;
-    }
-    
-    .table-actions {
-        white-space: nowrap;
-    }
-    
-    .badge-active {
-        background-color: #10b981;
-        color: white;
-        padding: 4px 10px;
-        border-radius: 20px;
-        font-size: 0.7rem;
-        font-weight: 500;
-    }
-    
-    .badge-inactive {
-        background-color: #6b7280;
-        color: white;
-        padding: 4px 10px;
-        border-radius: 20px;
-        font-size: 0.7rem;
-        font-weight: 500;
-    }
-    
-    .table-hover tbody tr:hover {
-        background-color: var(--light-bg);
-    }
-    
-    .stat-card {
-        background: var(--card-bg);
-        border: 1px solid var(--border-color);
-        border-radius: 15px;
-        padding: 20px;
-        margin-bottom: 20px;
-        transition: transform 0.3s ease;
-    }
-    
-    .stat-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
-    }
-    
-    .stat-card h3 {
-        font-size: 2rem;
-        font-weight: bold;
-        margin-bottom: 5px;
-        color: var(--primary-color);
-    }
-    
-    .stat-label {
-        font-size: 0.85rem;
-        text-transform: uppercase;
-        color: var(--text-secondary);
-    }
-</style>
-{% endblock %}
+{% block title %}M-Pesa Accounts - FieldMax{% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-    <div class="row mb-4">
-        <div class="col-md-8">
-            <h2>
-                <i class="fas fa-mobile-alt me-2"></i>M-Pesa Accounts
-            </h2>
-            <p class="text-muted">Manage M-Pesa business accounts for all shop branches</p>
-        </div>
-        <div class="col-md-4 text-end">
-            <a href="{% url 'shops:add_mpesa_account' %}" class="btn btn-primary">
-                <i class="fas fa-plus-circle me-2"></i>Add M-Pesa Account
-            </a>
-        </div>
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 mb-0">
+            <i class="fas fa-mobile-alt text-primary"></i> M-Pesa Till Management
+        </h1>
+        <a href="{% url 'shops:add_mpesa_account' %}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Add M-Pesa Till
+        </a>
     </div>
 
-    <!-- Statistics Summary -->
-    <div class="row mb-4">
-        <div class="col-md-3">
-            <div class="stat-card text-center">
-                <i class="fas fa-mobile-alt fa-2x mb-2" style="color: var(--primary-color);"></i>
-                <h3>{{ accounts|length }}</h3>
-                <div class="stat-label">Total Accounts</div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="stat-card text-center">
-                <i class="fas fa-check-circle fa-2x mb-2" style="color: #10b981;"></i>
-                <h3>{{ accounts|dictsort:"is_active"|slice:":-1"|length }}</h3>
-                <div class="stat-label">Active Accounts</div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="stat-card text-center">
-                <i class="fas fa-store fa-2x mb-2" style="color: #f59e0b;"></i>
-                <h3>{{ shops|length }}</h3>
-                <div class="stat-label">Shop Branches</div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="stat-card text-center">
-                <i class="fas fa-chart-line fa-2x mb-2" style="color: #3b82f6;"></i>
-                <h3 id="uniqueTypesCount">0</h3>
-                <div class="stat-label">Account Types</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Filter Section -->
+    <!-- Filter Bar -->
     <div class="card mb-4">
-        <div class="card-header">
-            <h5 class="mb-0">
-                <i class="fas fa-filter me-2"></i>Filter M-Pesa Accounts
-            </h5>
-        </div>
         <div class="card-body">
-            <div class="row">
-                <div class="col-md-4">
-                    <label class="form-label">Filter by Shop</label>
-                    <select id="shopFilter" class="form-select">
-                        <option value="all">All Shops</option>
+            <form method="GET" class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Shop Branch</label>
+                    <select name="shop" class="form-select">
+                        <option value="">All Shops</option>
                         {% for shop in shops %}
-                            <option value="{{ shop.id }}">{{ shop.name }}</option>
+                        <option value="{{ shop.id }}" {% if selected_shop|stringformat:"s" == shop.id|stringformat:"s" %}selected{% endif %}>
+                            {{ shop.name }}
+                        </option>
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-md-4">
-                    <label class="form-label">Filter by Account Type</label>
-                    <select id="typeFilter" class="form-select">
-                        <option value="all">All Types</option>
-                        <option value="Till">Till Number</option>
-                        <option value="Paybill">Paybill Number</option>
-                        <option value="Agent">Agent Line</option>
-                        <option value="Business">Business Account</option>
+                <div class="col-md-2">
+                    <label class="form-label">Account Type</label>
+                    <select name="account_type" class="form-select">
+                        <option value="">All Types</option>
+                        <option value="till" {% if selected_account_type == 'till' %}selected{% endif %}>Till Number</option>
+                        <option value="paybill" {% if selected_account_type == 'paybill' %}selected{% endif %}>Paybill Number</option>
+                        <option value="agent" {% if selected_account_type == 'agent' %}selected{% endif %}>Agent Number</option>
+                        <option value="merchant" {% if selected_account_type == 'merchant' %}selected{% endif %}>Merchant Account</option>
                     </select>
                 </div>
-                <div class="col-md-4">
-                    <label class="form-label">Filter by Status</label>
-                    <select id="statusFilter" class="form-select">
-                        <option value="all">All</option>
-                        <option value="active">Active Only</option>
-                        <option value="inactive">Inactive Only</option>
+                <div class="col-md-2">
+                    <label class="form-label">Status</label>
+                    <select name="status" class="form-select">
+                        <option value="">All</option>
+                        <option value="active" {% if selected_status == 'active' %}selected{% endif %}>Active</option>
+                        <option value="inactive" {% if selected_status == 'inactive' %}selected{% endif %}>Inactive</option>
+                        <option value="suspended" {% if selected_status == 'suspended' %}selected{% endif %}>Suspended</option>
                     </select>
                 </div>
-            </div>
+                <div class="col-md-3">
+                    <label class="form-label">Search</label>
+                    <input type="text" name="search" class="form-control" placeholder="Account name, till number..." value="{{ search }}">
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-search"></i> Filter
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 
     <!-- M-Pesa Accounts Table -->
-    {% if accounts %}
     <div class="card">
-        <div class="card-header">
-            <h5 class="mb-0">M-Pesa Accounts List</h5>
-        </div>
         <div class="card-body">
             <div class="table-responsive">
-                <table class="table table-hover" id="mpesaAccountsTable">
+                <table class="table table-hover">
                     <thead>
                         <tr>
-                            <th>Shop Branch</th>
                             <th>Account Name</th>
-                            <th>Account Number</th>
+                            <th>Shop</th>
                             <th>Account Type</th>
-                            <th>Phone Number</th>
+                            <th>Till Number</th>
+                            <th>Store Number</th>
+                            <th>Assigned User</th>
                             <th>Status</th>
-                            <th>Created Date</th>
                             <th>Actions</th>
-                        </thead>
-                        <tbody>
-                            {% for account in accounts %}
-                            <tr class="account-item" 
-                                data-shop-id="{{ account.shop.id }}" 
-                                data-account-type="{{ account.account_type }}"
-                                data-status="{% if account.is_active %}active{% else %}inactive{% endif %}">
-                                <td>
-                                    <strong>{{ account.shop.name }}</strong><br>
-                                    <small class="text-muted">{{ account.shop.code }}</small>
-                                </td>
-                                <td>{{ account.account_name }}</td>
-                                <td>
-                                    <span class="phone-number">{{ account.account_number }}</span>
-                                </td>
-                                <td>
-                                    <span class="account-type account-type-{{ account.account_type|lower }}">
-                                        {{ account.account_type }}
-                                    </span>
-                                </td>
-                                <td>{{ account.phone_number }}</td>
-                                <td>
-                                    {% if account.is_active %}
-                                        <span class="badge-active">
-                                            <i class="fas fa-check-circle me-1"></i>Active
-                                        </span>
-                                    {% else %}
-                                        <span class="badge-inactive">
-                                            <i class="fas fa-times-circle me-1"></i>Inactive
-                                        </span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    <small>{{ account.created_date|date:"M d, Y" }}</small>
-                                </td>
-                                <td class="table-actions">
-                                    <a href="{% url 'shops:edit_mpesa_account' account.id %}" class="btn btn-sm btn-outline-primary" title="Edit">
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for account in accounts %}
+                        <tr>
+                            <td>
+                                <a href="{% url 'shops:mpesa_accounts_detail' account.id %}">
+                                    <strong>{{ account.account_name }}</strong>
+                                </a>
+                            </td>
+                            <td>{{ account.shop.name }}</td>
+                            <td>
+                                <span class="badge bg-info">
+                                    {{ account.get_account_type_display }}
+                                </span>
+                            </td>
+                            <td>{{ account.account_number }}</td>
+                            <td>{{ account.store_number|default:"-" }}</td>
+                            <td>
+                                {% if account.assigned_user %}
+                                    {{ account.assigned_user.get_full_name|default:account.assigned_user.username }}
+                                {% else %}
+                                    <span class="text-muted">Unassigned</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="badge bg-{% if account.status == 'active' %}success{% elif account.status == 'suspended' %}warning{% else %}secondary{% endif %}">
+                                    {{ account.get_status_display }}
+                                </span>
+                            </td>
+                            <td>
+                                <div class="btn-group">
+                                    <a href="{% url 'shops:mpesa_accounts_detail' account.id %}" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    <a href="{% url 'shops:edit_mpesa_account' account.id %}" class="btn btn-sm btn-outline-secondary">
                                         <i class="fas fa-edit"></i>
                                     </a>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
+                                    <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteModal{{ account.id }}">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+
+                        <!-- Delete Confirmation Modal -->
+                        <div class="modal fade" id="deleteModal{{ account.id }}" tabindex="-1">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">Confirm Delete</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        Are you sure you want to deactivate M-Pesa account <strong>{{ account.account_name }}</strong>?
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                        <form method="POST" action="{% url 'shops:delete_mpesa_account' account.id %}" style="display: inline;">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-danger">Deactivate</button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% empty %}
+                        <tr>
+                            <td colspan="9" class="text-center py-4">
+                                <i class="fas fa-inbox fa-2x text-muted"></i>
+                                <p class="mt-2">No M-Pesa accounts found</p>
+                                <a href="{% url 'shops:add_mpesa_account' %}" class="btn btn-primary btn-sm">
+                                    Add First M-Pesa Account
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Pagination -->
+            {% if accounts.has_other_pages %}
+            <nav aria-label="Page navigation" class="mt-4">
+                <ul class="pagination justify-content-center">
+                    {% if accounts.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ accounts.previous_page_number }}&shop={{ selected_shop }}&account_type={{ selected_account_type }}&status={{ selected_status }}&search={{ search }}">
+                            Previous
+                        </a>
+                    </li>
+                    {% endif %}
+                    
+                    {% for num in accounts.paginator.page_range %}
+                    <li class="page-item {% if accounts.number == num %}active{% endif %}">
+                        <a class="page-link" href="?page={{ num }}&shop={{ selected_shop }}&account_type={{ selected_account_type }}&status={{ selected_status }}&search={{ search }}">
+                            {{ num }}
+                        </a>
+                    </li>
+                    {% endfor %}
+                    
+                    {% if accounts.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ accounts.next_page_number }}&shop={{ selected_shop }}&account_type={{ selected_account_type }}&status={{ selected_status }}&search={{ search }}">
+                            Next
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Statistics Summary Card -->
+<div class="row mt-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <h6 class="card-title">Total Accounts</h6>
+                <h2 class="mb-0">{{ total_accounts|default:0 }}</h2>
+                <small>Active: {{ active_accounts|default:0 }}</small>
             </div>
         </div>
     </div>
-    
-    {% else %}
-    <div class="card">
-        <div class="card-body text-center py-5">
-            <i class="fas fa-mobile-alt fa-3x text-muted mb-3"></i>
-            <p class="text-muted">No M-Pesa accounts added yet.</p>
-            <a href="{% url 'shops:add_mpesa_account' %}" class="btn btn-primary">
-                <i class="fas fa-plus-circle me-2"></i>Add Your First M-Pesa Account
-            </a>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <h6 class="card-title">Total Balance</h6>
+                <h2 class="mb-0">KES {{ total_balance|floatformat:0|intcomma }}</h2>
+                <small>Across all accounts</small>
+            </div>
         </div>
     </div>
-    {% endif %}
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <h6 class="card-title">Till Accounts</h6>
+                <h2 class="mb-0">{{ till_count|default:0 }}</h2>
+                <small>Active till numbers</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body">
+                <h6 class="card-title">Paybill Accounts</h6>
+                <h2 class="mb-0">{{ paybill_count|default:0 }}</h2>
+                <small>Active paybill numbers</small>
+            </div>
+        </div>
+    </div>
 </div>
-{% endblock %}
-
-{% block extra_js %}
-<script>
-$(document).ready(function() {
-    // Initialize DataTable
-    var table = $('#mpesaAccountsTable').DataTable({
-        "pageLength": 25,
-        "language": {
-            "search": "Search Accounts:",
-            "lengthMenu": "Show _MENU_ accounts",
-            "info": "Showing _START_ to _END_ of _TOTAL_ accounts",
-            "infoEmpty": "Showing 0 to 0 of 0 accounts",
-            "infoFiltered": "(filtered from _MAX_ total accounts)",
-            "emptyTable": "No M-Pesa accounts found",
-            "zeroRecords": "No matching accounts found"
-        },
-        "order": [[0, "asc"]],
-        "columnDefs": [
-            { "orderable": true, "targets": [0, 1, 2, 3, 4, 5, 6] },
-            { "orderable": false, "targets": [7] }
-        ]
-    });
-    
-    // Function to update unique types count
-    function updateUniqueTypesCount() {
-        var visibleRows = $('.account-item:visible');
-        var uniqueTypes = new Set();
-        
-        visibleRows.each(function() {
-            var type = $(this).data('account-type');
-            if (type) {
-                uniqueTypes.add(type);
-            }
-        });
-        
-        $('#uniqueTypesCount').text(uniqueTypes.size);
-    }
-    
-    // Shop filter
-    $('#shopFilter').change(function() {
-        var shopId = $(this).val();
-        
-        $('.account-item').each(function() {
-            var itemShopId = $(this).data('shop-id');
-            if (shopId === 'all' || itemShopId == shopId) {
-                $(this).show();
-            } else {
-                $(this).hide();
-            }
-        });
-        
-        table.draw();
-        updateUniqueTypesCount();
-    });
-    
-    // Account type filter
-    $('#typeFilter').change(function() {
-        var type = $(this).val();
-        
-        $('.account-item').each(function() {
-            var itemType = $(this).data('account-type');
-            if (type === 'all' || itemType === type) {
-                var shopId = $('#shopFilter').val();
-                var itemShopId = $(this).data('shop-id');
-                if (shopId === 'all' || itemShopId == shopId) {
-                    $(this).show();
-                } else {
-                    $(this).hide();
-                }
-            } else {
-                $(this).hide();
-            }
-        });
-        
-        table.draw();
-        updateUniqueTypesCount();
-    });
-    
-    // Status filter
-    $('#statusFilter').change(function() {
-        var status = $(this).val();
-        
-        $('.account-item').each(function() {
-            var itemStatus = $(this).data('status');
-            if (status === 'all' || itemStatus === status) {
-                var shopId = $('#shopFilter').val();
-                var type = $('#typeFilter').val();
-                var itemShopId = $(this).data('shop-id');
-                var itemType = $(this).data('account-type');
-                
-                var shopMatch = (shopId === 'all' || itemShopId == shopId);
-                var typeMatch = (type === 'all' || itemType === type);
-                
-                if (shopMatch && typeMatch) {
-                    $(this).show();
-                } else {
-                    $(this).hide();
-                }
-            } else {
-                $(this).hide();
-            }
-        });
-        
-        table.draw();
-        updateUniqueTypesCount();
-    });
-    
-    // Reset filters button
-    $('#resetFilters').click(function() {
-        $('#shopFilter').val('all');
-        $('#typeFilter').val('all');
-        $('#statusFilter').val('all');
-        $('.account-item').show();
-        table.search('').columns().search('').draw();
-        updateUniqueTypesCount();
-    });
-    
-    // Initial unique types count
-    updateUniqueTypesCount();
-});
-</script>
 {% endblock %}

@@ -1,5 +1,3 @@
-# staff/models.py
-
 from django.contrib.auth import get_user_model
 from django.db import models
 from django.utils import timezone
@@ -213,7 +211,7 @@ class OTPVerification(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()
     is_used = models.BooleanField(default=False)
-    purpose = models.CharField(max_length=50, default='dashboard_access')  # dashboard_access, approval, etc.
+    purpose = models.CharField(max_length=50, default='dashboard_access')
     
     class Meta:
         ordering = ['-created_at']
@@ -222,38 +220,25 @@ class OTPVerification(models.Model):
         return f"{self.user.username} - {self.otp_code} - {'Used' if self.is_used else 'Active'}"
     
     def is_valid(self):
-        """Check if OTP is still valid (not expired and not used)"""
         return not self.is_used and timezone.now() <= self.expires_at
     
     @classmethod
     def generate_otp(cls, user, purpose='dashboard_access', expiry_minutes=5):
-        """Generate a new OTP for user"""
-        # Generate 6-digit OTP
         otp_code = ''.join(random.choices(string.digits, k=6))
-        
-        # Set expiry time
         expires_at = timezone.now() + timedelta(minutes=expiry_minutes)
         
-        # Invalidate previous unused OTPs for this user and purpose
-        cls.objects.filter(
-            user=user, 
-            purpose=purpose, 
-            is_used=False
-        ).update(is_used=True)
+        cls.objects.filter(user=user, purpose=purpose, is_used=False).update(is_used=True)
         
-        # Create new OTP
         otp = cls.objects.create(
             user=user,
             otp_code=otp_code,
             expires_at=expires_at,
             purpose=purpose
         )
-        
         return otp
     
     @classmethod
     def verify_otp(cls, user, otp_code, purpose='dashboard_access'):
-        """Verify OTP code for user"""
         try:
             otp = cls.objects.filter(
                 user=user,
@@ -273,7 +258,7 @@ class OTPVerification(models.Model):
 
 
 # ============================================
-# User Profile Model
+# User Profile Model - UPDATED with verification fields
 # ============================================
 class UserProfile(models.Model):
     """Extended profile for User to track password change"""
@@ -281,9 +266,26 @@ class UserProfile(models.Model):
     password_changed = models.BooleanField(default=False)
     first_login = models.BooleanField(default=True)
     last_password_change = models.DateTimeField(null=True, blank=True)
+    is_ceo = models.BooleanField(default=False, help_text='CEO/Company Owner status')
+    is_verified = models.BooleanField(default=False, help_text='User identity verified')
+    verified_at = models.DateTimeField(null=True, blank=True)
+    verified_by = models.ForeignKey(
+        User, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='verified_users'
+    )
     
     def __str__(self):
         return f"{self.user.username}'s profile"
+    
+    def mark_as_verified(self, verified_by=None):
+        """Mark user as verified"""
+        self.is_verified = True
+        self.verified_at = timezone.now()
+        self.verified_by = verified_by
+        self.save()
 
 
 # ============================================
@@ -348,7 +350,6 @@ class UserStatus(models.Model):
     
     @property
     def can_login(self):
-        """Check if user can login"""
         if not self.user.is_active:
             return False, 'deactivated', 'Your account has been deactivated.'
         if self.is_locked:
@@ -359,20 +360,34 @@ class UserStatus(models.Model):
 
 
 # ============================================
-# Signals
+# Signals - UPDATED with auto-verify for superuser
 # ============================================
 
 @receiver(post_save, sender=User)
 def create_user_profile(sender, instance, created, **kwargs):
     """Create UserProfile when User is created"""
     if created:
-        UserProfile.objects.create(user=instance)
+        profile = UserProfile.objects.create(user=instance)
+        
+        # Auto-verify superusers
+        if instance.is_superuser:
+            profile.is_verified = True
+            profile.verified_at = timezone.now()
+            profile.verified_by = instance
+            profile.save()
+            print(f"✅ Superuser {instance.username} auto-verified")
 
 @receiver(post_save, sender=User)
 def save_user_profile(sender, instance, **kwargs):
     """Save UserProfile when User is saved"""
     if not hasattr(instance, 'profile'):
-        UserProfile.objects.create(user=instance)
+        profile = UserProfile.objects.create(user=instance)
+        # Auto-verify superusers
+        if instance.is_superuser:
+            profile.is_verified = True
+            profile.verified_at = timezone.now()
+            profile.verified_by = instance
+            profile.save()
     else:
         instance.profile.save()
 
@@ -383,7 +398,7 @@ def create_staff_profile_for_staff_users(sender, instance, created, **kwargs):
         if not hasattr(instance, 'staff_profile'):
             Staff.objects.create(
                 user=instance,
-                position='sales_agent',  # Default position
+                position='sales_agent',
             )
 
 
@@ -418,12 +433,12 @@ def create_groups_on_migration(sender, **kwargs):
 
 
 # ====================================================
-# Auto-create default admin user [DEVELOPER/SUPERUSER]
+# Auto-create default admin user with ALL permissions
 # ====================================================
 
 @receiver(post_migrate)
 def create_default_admin(sender, **kwargs):
-    """Create default admin user if none exists"""
+    """Create default admin user with full permissions and verification"""
     if sender.name == 'staff':
         if not User.objects.filter(is_superuser=True).exists():
             admin = User.objects.create_superuser(
@@ -433,11 +448,54 @@ def create_default_admin(sender, **kwargs):
                 first_name='ELKANA',
                 last_name='KIPRONO'
             )
+            
+            # Set all required flags on User model
+            admin.is_superuser = True
+            admin.is_staff = True
+            admin.is_active = True
+            admin.save()
+            
+            # Create and verify Staff profile
+            staff_profile, _ = Staff.objects.get_or_create(
+                user=admin,
+                defaults={
+                    'position': 'administrator',
+                    'is_identity_verified': True,
+                    'verified_at': timezone.now(),
+                    'verified_by': admin
+                }
+            )
+            if not staff_profile.is_identity_verified:
+                staff_profile.is_identity_verified = True
+                staff_profile.verified_at = timezone.now()
+                staff_profile.verified_by = admin
+                staff_profile.save()
+            
+            # Set CEO and Verified status in UserProfile
+            if hasattr(admin, 'profile'):
+                admin.profile.is_ceo = True
+                admin.profile.is_verified = True
+                admin.profile.verified_at = timezone.now()
+                admin.profile.verified_by = admin
+                admin.profile.password_changed = True
+                admin.profile.first_login = False
+                admin.profile.save()
+            
             # Assign to Administrator group
             admin_group, _ = Group.objects.get_or_create(name='Administrator')
             admin.groups.add(admin_group)
+            
             print("\n" + "=" * 60)
-            print("✅ Default admin user created!")
+            print("✅ Default admin user created with FULL VERIFICATION!")
+            print("=" * 60)
             print(f"   Username: RONOSYSTEMS")
             print(f"   Password: Kiprono@1997")
+            print(f"   " + "-" * 40)
+            print(f"   ✓ is_superuser: True")
+            print(f"   ✓ is_staff: True")
+            print(f"   ✓ is_active: True")
+            print(f"   ✓ is_ceo: True")
+            print(f"   ✓ is_verified (Profile): True")
+            print(f"   ✓ is_identity_verified (Staff): True")
+            print(f"   ✓ Group: Administrator")
             print("=" * 60 + "\n")
