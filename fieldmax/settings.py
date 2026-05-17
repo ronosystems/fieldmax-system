@@ -82,7 +82,7 @@ INSTALLED_APPS = [
     'website',
     'inventory',
     'sales',
-    'finance',
+    'finance.apps.FinanceConfig',
     'staff',
     'credit',
     'shops',

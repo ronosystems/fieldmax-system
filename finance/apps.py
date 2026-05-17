@@ -6,4 +6,7 @@ class FinanceConfig(AppConfig):
     name = 'finance'
     
     def ready(self):
-        import finance.signals
+        try:
+            import finance.signals
+        except ImportError:
+            pass  # signals.py doesn't exist yet

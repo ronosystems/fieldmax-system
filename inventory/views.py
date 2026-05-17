@@ -1888,10 +1888,18 @@ def get_product_details(request, product_id):
     except Product.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Product not found'}, status=404)
 
+
+
+
 @login_required
 def product_edit(request, pk):
     """Edit existing product SKU"""
     product = get_object_or_404(Product, pk=pk)
+    
+    # Store old category before any changes
+    old_category = product.category
+    old_buying_price = product.buying_price
+    old_selling_price = product.selling_price
     
     if request.method == 'POST':
         try:
@@ -1957,6 +1965,12 @@ def product_edit(request, pk):
                 messages.error(request, 'Buying and selling prices must be greater than zero.')
                 return redirect('inventory:product_edit', pk=product.pk)
             
+            # ============================================
+            # CHECK WHAT CHANGED
+            # ============================================
+            price_changed = (old_buying_price != buying_price) or (old_selling_price != selling_price)
+            category_changed = (old_category.id != category.id)
+            
             # Update product
             product.name = name
             product.category = category
@@ -1997,13 +2011,101 @@ def product_edit(request, pk):
             product.last_modified_by = request.user
             product.save()
             
-            messages.success(request, f'Product "{product.name}" updated successfully.')
+            # ============================================
+            # HANDLE PRICE CHANGES
+            # ============================================
+            if price_changed:
+                logger.info(f"Price changed for {product.sku_code}: OLD (BP:{old_buying_price}, SP:{old_selling_price}) → NEW (BP:{buying_price}, SP:{selling_price})")
+                
+                # CRITICAL: Update existing stock entries with new prices
+                from django.db import models
+                
+                updated_entries = StockEntry.objects.filter(
+                    models.Q(product_sku=product) | models.Q(product_unit__product=product)
+                ).update(
+                    unit_price=buying_price,
+                    total_amount=models.F('quantity') * buying_price
+                )
+                
+                logger.info(f"✅ Updated {updated_entries} stock entries with new buying price: {buying_price}")
+                
+                # Update unit prices for all product units (single items)
+                if category.is_single_item:
+                    updated_buying = product.units.filter(unit_buying_price__isnull=True).update(
+                        unit_buying_price=buying_price
+                    )
+                    updated_selling = product.units.filter(unit_selling_price__isnull=True).update(
+                        unit_selling_price=selling_price
+                    )
+                    
+                    if updated_buying > 0 or updated_selling > 0:
+                        logger.info(f"Updated {updated_buying} units buying price, {updated_selling} units selling price for {product.sku_code}")
+                    
+                    messages.info(
+                        request, 
+                        f'⚠️ Prices updated from KES {old_selling_price:,.2f} to KES {selling_price:,.2f}. '
+                        f'Updated {updated_entries} stock entries and {updated_buying + updated_selling} units.'
+                    )
+                
+                # For bulk items, create a note about price change
+                elif category.is_bulk_item:
+                    StockEntry.objects.create(
+                        product_sku=product,
+                        quantity=0,
+                        entry_type='adjustment',
+                        unit_price=buying_price,
+                        total_amount=0,
+                        reference_id=f"PRICE-CHANGE-{timezone.now().strftime('%Y%m%d%H%M%S')}",
+                        notes=f"Price updated: Buying {old_buying_price}→{buying_price}, Selling {old_selling_price}→{selling_price}. Updated {updated_entries} existing entries.",
+                        created_by=request.user
+                    )
+                    
+                    messages.info(
+                        request, 
+                        f'⚠️ Prices updated from KES {old_selling_price:,.2f} to KES {selling_price:,.2f}. '
+                        f'Updated {updated_entries} stock entries to buying price KES {buying_price:,.2f}'
+                    )
+            
+            # ============================================
+            # HANDLE CATEGORY CHANGES
+            # ============================================
+            if category_changed:
+                logger.warning(f"Category changed for {product.sku_code}: {old_category.name} → {category.name}")
+                
+                # If changing from single to bulk or vice versa, need special handling
+                if old_category.is_single_item and category.is_bulk_item:
+                    # Converting from single to bulk - aggregate all units into bulk quantity
+                    total_units = product.units.count()
+                    available_units = product.units.filter(status='available').count()
+                    
+                    if total_units > 0:
+                        product.bulk_quantity = available_units
+                        product.save(update_fields=['bulk_quantity'])
+                        
+                        # Mark all available units as archived/transferred
+                        product.units.filter(status='available').update(status='archived')
+                        
+                        messages.warning(request, f'⚠️ Category changed from Single to Bulk. {available_units} units converted to bulk stock.')
+                    
+                elif old_category.is_bulk_item and category.is_single_item:
+                    # Converting from bulk to single - warn that this is not recommended
+                    messages.warning(request, '⚠️ Converting a bulk item to single item. You will need to add individual units manually.')
+                
+                messages.info(request, f'Category changed from {old_category.name} to {category.name}. Stock quantities recalculated.')
+            
+            # ============================================
+            # RECALCULATE ALL QUANTITIES (CRITICAL!)
+            # ============================================
+            product.update_quantities()
+            
+            messages.success(request, f'✅ Product "{product.name}" updated successfully.')
             return redirect('inventory:product_detail', pk=product.pk)
             
         except Category.DoesNotExist:
             messages.error(request, 'Selected category does not exist.')
             return redirect('inventory:product_edit', pk=product.pk)
         except Exception as e:
+            logger.error(f"Error updating product: {str(e)}")
             messages.error(request, f'Error updating product: {str(e)}')
             return redirect('inventory:product_edit', pk=product.pk)
     
@@ -2011,12 +2113,24 @@ def product_edit(request, pk):
     categories = Category.objects.filter(is_active=True)
     suppliers = Supplier.objects.filter(is_active=True)
     
+    # Prepare specifications for template
+    ram = product.specifications.get('ram', '') if product.specifications else ''
+    storage = product.specifications.get('storage', '') if product.specifications else ''
+    color = product.specifications.get('color', '') if product.specifications else ''
+    bulk_serial_number = product.bulk_serial_number or ''
+    
     context = {
         'product': product,
         'categories': categories,
         'suppliers': suppliers,
+        'ram': ram,
+        'storage': storage,
+        'color': color,
+        'bulk_serial_number': bulk_serial_number,
     }
     return render(request, 'inventory/products/edit.html', context)
+
+
 
 @login_required
 def product_delete(request, pk):

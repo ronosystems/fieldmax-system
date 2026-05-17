@@ -3684,7 +3684,7 @@ def money_transfer_cancel(request, pk):
 
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
-from django.db.models import Sum, Count, Q
+from django.db.models import Sum, Count, Q, F, DecimalField, ExpressionWrapper
 from django.utils import timezone
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -3769,9 +3769,9 @@ def sales_income_page(request):
     # ============================================
     # USE STOCKENTRY FOR CONSISTENT DATA (matches Inventory Expenses)
     # ============================================
-    from inventory.models import StockEntry
+    from inventory.models import StockEntry, ProductUnit
     from decimal import Decimal
-    from django.db.models import Sum
+    from django.db.models import Sum, F
     
     # Get sales from StockEntry
     period_sales_entries = StockEntry.objects.filter(
@@ -3784,7 +3784,9 @@ def sales_income_page(request):
     # Calculate total sales revenue (VOGS)
     period_total_income = abs(period_sales_entries.aggregate(total=Sum('total_amount'))['total'] or Decimal('0'))
     
-    # Calculate COGS from the same sales entries using product buying price
+    # ============================================
+    # FIXED: Calculate COGS using CORRECTED buying prices
+    # ============================================
     period_cogs = Decimal('0')
     period_total_quantity = 0
     
@@ -3793,9 +3795,12 @@ def sales_income_page(request):
         period_total_quantity += qty
         
         if entry.product_sku:
+            # For bulk items - use product's current buying price (CORRECTED)
             period_cogs += qty * (entry.product_sku.buying_price or Decimal('0'))
         elif entry.product_unit:
-            period_cogs += qty * (entry.product_unit.product.buying_price or Decimal('0'))
+            # For single items - use unit's buying price or product's buying price
+            buying_price = entry.product_unit.unit_buying_price or entry.product_unit.product.buying_price or Decimal('0')
+            period_cogs += qty * buying_price
     
     period_profit = period_total_income - period_cogs
     period_margin = (period_profit / period_total_income * 100) if period_total_income > 0 else 0
@@ -3819,7 +3824,8 @@ def sales_income_page(request):
         if entry.product_sku:
             prev_cogs += qty * (entry.product_sku.buying_price or Decimal('0'))
         elif entry.product_unit:
-            prev_cogs += qty * (entry.product_unit.product.buying_price or Decimal('0'))
+            buying_price = entry.product_unit.unit_buying_price or entry.product_unit.product.buying_price or Decimal('0')
+            prev_cogs += qty * buying_price
     
     prev_profit = prev_total_income - prev_cogs
     prev_margin = (prev_profit / prev_total_income * 100) if prev_total_income > 0 else 0
@@ -3878,7 +3884,8 @@ def sales_income_page(request):
             if entry.product_sku:
                 day_cogs += qty * (entry.product_sku.buying_price or Decimal('0'))
             elif entry.product_unit:
-                day_cogs += qty * (entry.product_unit.product.buying_price or Decimal('0'))
+                buying_price = entry.product_unit.unit_buying_price or entry.product_unit.product.buying_price or Decimal('0')
+                day_cogs += qty * buying_price
         
         day_profit = day_income - day_cogs
         
@@ -3943,6 +3950,9 @@ def sales_income_page(request):
     }
     
     return render(request, 'finance/sales_income.html', context)
+
+
+
 
 
 @login_required
@@ -4016,11 +4026,11 @@ def inventory_expenses_page(request):
         previous_end = end_date - timedelta(days=days_diff)
     
     # ============================================
-    # CALCULATIONS FROM INVENTORY
+    # CALCULATIONS FROM INVENTORY WITH CORRECTED PRICES
     # ============================================
     active_products = Product.objects.filter(is_active=True, is_discontinued=False)
     
-    # CURRENT VALUES (what you have now)
+    # CURRENT VALUES (what you have now) - USING CORRECTED PRODUCT PRICES
     current_cost_value = Decimal('0')
     current_retail_value = Decimal('0')
     total_units = 0
@@ -4033,6 +4043,7 @@ def inventory_expenses_page(request):
             stock = product.bulk_quantity or 0
         
         total_units += stock
+        # THESE NOW USE THE CORRECTED PRICES (from inventory)
         current_cost_value += stock * (product.buying_price or Decimal('0'))
         current_retail_value += stock * (product.selling_price or Decimal('0'))
         
@@ -4047,11 +4058,13 @@ def inventory_expenses_page(request):
                 'category': product.category.name
             })
     
-    # TOTAL VALUES (all time purchases)
+    # ============================================
+    # FIXED: TOTAL PURCHASES - Use CORRECTED unit_price from StockEntry
+    # ============================================
     total_purchases_cost = StockEntry.objects.filter(
         entry_type='purchase',
         quantity__gt=0
-    ).aggregate(total=Sum('total_amount'))['total'] or Decimal('0')
+    ).aggregate(total=Sum(F('quantity') * F('unit_price')))['total'] or Decimal('0')
     
     # Calculate average markup
     if current_cost_value > 0:
@@ -4060,9 +4073,10 @@ def inventory_expenses_page(request):
     else:
         total_retail_value = total_purchases_cost * Decimal('2.5')
     
-    # Calculate COGS and VOGS
+    # Calculate COGS (Cost of Goods Sold - what has been sold)
     cogs = total_purchases_cost - current_cost_value
     
+    # Calculate VOGS (Value of Goods Sold - revenue from sold items)
     total_sales_value = StockEntry.objects.filter(
         entry_type='sale',
         quantity__lt=0
@@ -4082,7 +4096,7 @@ def inventory_expenses_page(request):
     low_stock_products = low_stock_products[:5]
     
     # ============================================
-    # PERIOD PURCHASES
+    # PERIOD PURCHASES (from PurchaseTransaction)
     # ============================================
     period_purchases = PurchaseTransaction.objects.filter(
         transaction_type__in=['cogs', 'stock'],
@@ -4153,12 +4167,14 @@ def inventory_expenses_page(request):
     # Get account balances
     purchase_account = PurchaseAccount.get_or_create_account()
     income_account = IncomeAccount.get_or_create_account()
+    profit_account = ProfitAccount.get_or_create_account()
     
     context = {
         'title': 'Inventory Expenses Report',
         # Account balances
         'purchase_account': purchase_account,
         'income_account': income_account,
+        'profit_account': profit_account,
         # TOTAL VALUES
         'total_purchases': total_purchases_cost,
         'total_retail_value': total_retail_value,
@@ -4199,22 +4215,28 @@ def inventory_expenses_page(request):
 
 
 
-
-
 from .models import CapitalInjection, CapitalInjectionRepayment, CapitalAccount
 
 @login_required
 def capital_injection_list(request):
     """List all capital injections"""
     from decimal import Decimal
-    from django.db.models import Sum
+    from django.db.models import Sum, F
     from sales.models import Sale
+    from inventory.models import StockEntry
     
     injections = CapitalInjection.objects.all().order_by('-transaction_date')
     capital_account = CapitalAccount.get_or_create_account()
-    capital_account.refresh_from_db()
     
-    # Calculate sales revenue - DIRECTLY FROM SALES MODEL (not IncomeTransaction)
+    # ============================================
+    # FIXED: Calculate Inventory Purchases from StockEntry with corrected prices
+    # ============================================
+    total_inventory_purchases = StockEntry.objects.filter(
+        entry_type='purchase',
+        quantity__gt=0
+    ).aggregate(total=Sum(F('quantity') * F('unit_price')))['total'] or Decimal('0')
+    
+    # Calculate sales revenue
     total_sales_revenue = Sale.objects.filter(
         is_reversed=False
     ).aggregate(total=Sum('total_amount'))['total'] or Decimal('0')
@@ -4235,18 +4257,32 @@ def capital_injection_list(request):
             total_repaid_amount += repaid
             total_loan_balance += injection.remaining_balance
     
+    # Calculate Net Capital Position
+    total_capital_injected = injections.filter(status='completed').aggregate(
+        total=Sum('amount')
+    )['total'] or Decimal('0')
+    
+    net_capital = total_capital_injected - total_inventory_purchases - total_repaid_amount + total_sales_revenue
+    
+    # Update capital account
+    capital_account.total_capital_injected = total_capital_injected
+    capital_account.total_purchases = total_inventory_purchases
+    capital_account.total_sales_revenue = total_sales_revenue
+    capital_account.total_loan_repayments = total_repaid_amount
+    capital_account.net_capital = net_capital
+    capital_account.save()
+    
     context = {
         'injections': injections,
         'capital_account': capital_account,
-        'total_sales_revenue': total_sales_revenue,  # Now gets from Sale model
+        'total_sales_revenue': total_sales_revenue,
         'total_loan_amount': total_loan_amount,
         'total_repaid_amount': total_repaid_amount,
         'total_loan_balance': total_loan_balance,
+        'total_inventory_purchases': total_inventory_purchases,  # Add this
         'title': 'Capital Account'
     }
     return render(request, 'finance/capital_injections.html', context)
-
-    
 
 
 @login_required
