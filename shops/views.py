@@ -300,6 +300,14 @@ def shop_statistics(request):
         latest_report_date = None
     
     # ============================================
+    # CURRENT BANK BALANCE (from BankAccount model)
+    # ============================================
+    bank_accounts = BankAccount.objects.filter(is_active=True)
+    if shop_id != 'all':
+        bank_accounts = bank_accounts.filter(shop_id=shop_id)
+    current_bank_balance = bank_accounts.aggregate(total=Sum('current_balance'))['total'] or 0
+    
+    # ============================================
     # SHOP BRANCHES
     # ============================================
     shops = ShopBranch.objects.filter(is_active=True)
@@ -320,7 +328,7 @@ def shop_statistics(request):
     )['total'] or Decimal('0.00')
     
     # Total Transactions Count for period
-    total_transactions = reports.aggregate(
+    total_transactions_count = reports.aggregate(
         total=Sum('total_mpesa_transactions')
     )['total'] or 0
     
@@ -359,7 +367,7 @@ def shop_statistics(request):
     total_expense_count = monthly_expenses.count()
     
     # ============================================
-    # DAILY TREND (Last 30 days)
+    # DAILY TREND (Last 30 days) - FIXED with net position
     # ============================================
     daily_trend = []
     for i in range(30):
@@ -369,8 +377,9 @@ def shop_statistics(request):
         day_expenses = day_reports.aggregate(total=Sum('total_expenses'))['total'] or 0
         daily_trend.append({
             'report_date': date,
-            'revenue': day_revenue,
+            'transactions': day_revenue,  # Changed from 'revenue' to 'transactions'
             'expenses': day_expenses,
+            'net': day_revenue - day_expenses,  # Added net position
         })
     daily_trend.reverse()
     
@@ -387,10 +396,12 @@ def shop_statistics(request):
             shop_revenue = latest_shop_report.total_mpesa_amount or 0
             shop_expenses = latest_shop_report.total_expenses or 0
             shop_closing = latest_shop_report.total_closing_balance or 0
+            shop_transactions = latest_shop_report.total_mpesa_transactions or 0
         else:
             shop_revenue = 0
             shop_expenses = 0
             shop_closing = 0
+            shop_transactions = 0
         
         shop_performance.append({
             'id': shop.id,
@@ -401,6 +412,7 @@ def shop_statistics(request):
             'total_revenue': shop_revenue,
             'total_expenses': shop_expenses,
             'total_closing': shop_closing,
+            'total_transactions': shop_transactions,  # Added transactions
         })
     
     shop_performance.sort(key=lambda x: x['total_revenue'], reverse=True)
@@ -414,7 +426,7 @@ def shop_statistics(request):
     finalization_rate = (finalized_reports / total_reports * 100) if total_reports > 0 else 0
     
     # ============================================
-    # CONTEXT
+    # CONTEXT - FIXED with all required variables
     # ============================================
     context = {
         # Shop info
@@ -430,20 +442,27 @@ def shop_statistics(request):
         'latest_mpesa_float': latest_mpesa_float,
         'latest_mpesa_cash': latest_mpesa_cash,
         'latest_bank_total': latest_bank_total,
-        'latest_bank_breakdown': latest_bank_breakdown,  # Add this
+        'latest_bank_breakdown': latest_bank_breakdown,
         'latest_cash_balance': latest_cash_balance,
         'latest_closing_balance': latest_closing_balance,
         'latest_revenue': latest_revenue,
         'latest_expenses': latest_expenses,
         'latest_transactions': latest_transactions,
-        
+        'current_bank_balance': current_bank_balance,  # Added
+         # Use correct field names from DailyShopReport
+        'latest_mpesa_amount': latest_report.total_mpesa_amount if latest_report else 0,
+        'latest_mpesa_transactions': latest_report.total_mpesa_transactions if latest_report else 0,
+        'total_mpesa_amount': total_revenue,  # total_mpesa_amount from period reports
+        'total_mpesa_transactions': total_transactions_count,  # total transactions from period
+
         # M-Pesa account stats
         'total_mpesa_accounts': total_mpesa_accounts,
         
-        # Period aggregates
+        # Period aggregates - FIXED variable names
         'total_revenue': total_revenue,
         'total_expenses': total_expenses,
-        'total_transactions': total_transactions,
+        'total_transactions': total_transactions_count,  # Changed from total_transactions
+        'total_transaction': total_revenue,  # Added for template compatibility
         
         # Monthly expenses
         'total_monthly_expenses': total_monthly_expenses,
@@ -452,7 +471,8 @@ def shop_statistics(request):
         
         # Trends
         'daily_trend': daily_trend,
-        
+
+
         # Shop performance
         'shop_performance': shop_performance,
         
@@ -465,6 +485,7 @@ def shop_statistics(request):
     
     return render(request, 'shops/statistics.html', context)
 
+    
 
 @login_required
 def shop_detail_statistics(request, shop_id):
