@@ -54,7 +54,7 @@
         box-shadow: #00080e 2px 2px 0px, #00080e 4px 4px 0px;
     }
     .btn-add:hover {
-        background: hsl(231, 98%, 50%);
+        background: #059669;
     }
     .btn-add i {
         margin-right: 5px;
@@ -368,10 +368,10 @@
                             <div class="row">
                                 <div class="col-12 col-md-8 mb-2">
                                     <label class="form-label">Select M-Pesa Account</label>
-                                    <select name="mpesa_account_{{ forloop.counter0 }}" class="form-control mpesa-select">
+                                    <select name="mpesa_account_{{ forloop.counter0 }}" class="form-control mpesa-select" onchange="updateAvailableOptions()">
                                         <option value="">-- Select M-Pesa Account --</option>
                                         {% for account in available_mpesa_accounts %}
-                                        <option value="{{ account.id }}" {% if report.mpesa_account.id == account.id %}selected{% endif %}>
+                                        <option value="{{ account.id }}" {% if report.mpesa_account_id == account.id %}selected{% endif %}>
                                             {{ account.account_name }} - {{ account.account_number }} ({{ account.get_account_type_display }})
                                         </option>
                                         {% endfor %}
@@ -379,7 +379,7 @@
                                 </div>
                                 <div class="col-8 col-md-3 mb-2">
                                     <label class="form-label">Closing Balance (KES)</label>
-                                    <input type="number" name="closing_balance_{{ forloop.counter0 }}" class="form-control mpesa-balance" step="0.01" value="{{ report.closing_balance|default:0 }}" placeholder="0.00">
+                                    <input type="number" name="closing_balance_{{ forloop.counter0 }}" class="form-control mpesa-balance" step="0.01" value="{{ report.closing_mpesa_float|default:0 }}" placeholder="0.00" oninput="calculateTotals()">
                                 </div>
                                 <div class="col-4 col-md-1 mb-2">
                                     <label class="form-label d-none d-md-block">&nbsp;</label>
@@ -417,10 +417,10 @@
                             <div class="row">
                                 <div class="col-12 col-md-8 mb-2">
                                     <label class="form-label">Select Bank Account</label>
-                                    <select name="bank_account_{{ forloop.counter0 }}" class="form-control bank-select">
+                                    <select name="bank_account_{{ forloop.counter0 }}" class="form-control bank-select" onchange="updateBankOptions()">
                                         <option value="">-- Select Bank Account --</option>
                                         {% for bank in available_banks %}
-                                        <option value="{{ bank.id }}" {% if closing.bank_account.id == bank.id %}selected{% endif %}>
+                                        <option value="{{ bank.id }}" {% if closing.bank_account_id == bank.id %}selected{% endif %}>
                                             {{ bank.bank_name }} - {{ bank.account_name }} ({{ bank.account_number }})
                                         </option>
                                         {% endfor %}
@@ -428,7 +428,7 @@
                                 </div>
                                 <div class="col-8 col-md-3 mb-2">
                                     <label class="form-label">Closing Balance (KES)</label>
-                                    <input type="number" name="bank_closing_balance_{{ forloop.counter0 }}" class="form-control bank-balance" step="0.01" value="{{ closing.closing_balance }}" placeholder="0.00">
+                                    <input type="number" name="bank_closing_balance_{{ forloop.counter0 }}" class="form-control bank-balance" step="0.01" value="{{ closing.closing_balance|default:0 }}" placeholder="0.00" oninput="calculateTotals()">
                                 </div>
                                 <div class="col-4 col-md-1 mb-2">
                                     <label class="form-label d-none d-md-block">&nbsp;</label>
@@ -474,7 +474,7 @@
                                 </div>
                                 <div class="col-8 col-md-3 mb-2">
                                     <label class="form-label">Amount (KES)</label>
-                                    <input type="number" name="expense_amount_{{ forloop.counter0 }}" class="form-control expense-amount" step="0.01" value="{{ expense.amount }}" placeholder="0.00">
+                                    <input type="number" name="expense_amount_{{ forloop.counter0 }}" class="form-control expense-amount" step="0.01" value="{{ expense.amount }}" placeholder="0.00" oninput="calculateTotals()">
                                 </div>
                                 <div class="col-4 col-md-1 mb-2">
                                     <label class="form-label d-none d-md-block">&nbsp;</label>

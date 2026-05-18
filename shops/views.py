@@ -73,7 +73,6 @@ def get_user_assigned_shop(request):
     return None
 
 
-
 @login_required
 def get_shop_users(request, shop_id):
     """AJAX endpoint to get users assigned to a specific shop"""
@@ -95,9 +94,6 @@ def get_shop_users(request, shop_id):
         return JsonResponse({'success': True, 'users': users_data})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
-
-
-
 
 
 @login_required
@@ -188,7 +184,6 @@ def shop_dashboard(request):
         'total_cash_balance': total_cash_balance,
     }
     return render(request, 'shops/dashboard.html', context)
-
 
 
 @login_required
@@ -471,9 +466,6 @@ def shop_statistics(request):
     return render(request, 'shops/statistics.html', context)
 
 
-
-
-
 @login_required
 def shop_detail_statistics(request, shop_id):
     """Detailed statistics for a specific shop"""
@@ -636,7 +628,6 @@ def shop_detail_statistics(request, shop_id):
 
 
 # ==================== DAILY SHOP REPORT VIEWS ====================
-# shops/views.py - Complete create and edit views
 
 @login_required
 @user_passes_test(is_staff_or_admin)
@@ -1081,9 +1072,6 @@ def edit_daily_report(request, report_id):
     return render(request, 'shops/report_form.html', context)
 
 
-
-# shops/views.py - Corrected report_detail view
-
 @login_required
 def report_detail(request, report_id):
     """View detailed report"""
@@ -1262,11 +1250,6 @@ def reports_list(request):
     return render(request, 'shops/reports_list.html', context)
 
 
-
-
-
-
-
 @login_required
 @user_passes_test(is_staff_or_admin)
 def finalize_report(request, report_id):
@@ -1305,10 +1288,6 @@ def unfinalize_report(request, report_id):
         messages.success(request, f'Report for {report.report_date} has been reverted to draft.')
     
     return redirect('shops:report_detail', report_id=report.id)
-
-
-
-
 
 
 @login_required
@@ -1506,8 +1485,6 @@ def shop_branches(request):
 
 # ==================== MPESA ACCOUNT MANAGEMENT ====================
 
-# In shops/views.py - Update mpesa_accounts view
-
 @login_required
 @user_passes_test(is_superuser)
 def mpesa_accounts(request):
@@ -1566,7 +1543,6 @@ def mpesa_accounts(request):
     return render(request, 'shops/mpesa_accounts.html', context)
 
 
-
 @login_required
 def mpesa_accounts_detail(request, account_id):
     """View M-Pesa account details"""
@@ -1576,7 +1552,6 @@ def mpesa_accounts_detail(request, account_id):
         'account': account,
     }
     return render(request, 'shops/mpesa_account_detail.html', context)
-
 
 
 @login_required
@@ -1625,7 +1600,6 @@ def edit_mpesa_account(request, account_id):
     return render(request, 'shops/mpesa_account_form.html', context)
 
 
-
 @login_required
 @user_passes_test(is_superuser)
 def delete_mpesa_account(request, account_id):
@@ -1640,6 +1614,9 @@ def delete_mpesa_account(request, account_id):
         return redirect('shops:mpesa_accounts')
     
     return redirect('shops:mpesa_accounts')
+
+
+
 
 
 # ==================== BANK ACCOUNT MANAGEMENT ====================
@@ -1705,6 +1682,11 @@ def edit_bank_account(request, account_id):
     return render(request, 'shops/bank_account_form.html', context)
 
 
+
+
+
+
+
 # ==================== CASH ACCOUNT MANAGEMENT ====================
 
 @login_required
@@ -1766,6 +1748,10 @@ def edit_cash_account(request, account_id):
         'title': 'Edit Cash Account',
     }
     return render(request, 'shops/cash_account_form.html', context)
+
+
+
+
 
 
 # ==================== AJAX ENDPOINTS ====================
@@ -1862,6 +1848,10 @@ def get_previous_closing_balance(request):
         return JsonResponse({'success': False, 'error': str(e)})
 
 
+
+
+
+
 # ==================== EXPORT VIEWS ====================
 
 @login_required
@@ -1906,6 +1896,11 @@ def export_reports_csv(request):
         ])
     
     return response
+
+
+
+
+
 
 
 # ==================== DYNAMIC CHOICES MANAGEMENT ====================
