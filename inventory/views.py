@@ -140,208 +140,105 @@ def export_statistics(request):
 
 @login_required
 def store_statistics(request):
-    """Store statistics dashboard"""
+    """Store statistics dashboard - CORRECTED FOR YOUR MODEL STRUCTURE"""
     
-    from django.db.models import Sum, Q, F
     from django.core.paginator import Paginator
     from decimal import Decimal
-    from .models import Product, ProductUnit, Supplier, StockAlert, ReturnRequest, StockEntry
+    from .models import Product, ProductUnit, Supplier, StockAlert, ReturnRequest, StockEntry, Category
     
     # ============================================
     # PRODUCT COUNTS
     # ============================================
-    total_products = Product.objects.filter(is_active=True).count()
+    # Active products (not discontinued)
+    total_products = Product.objects.filter(is_active=True, is_discontinued=False).count()
+    total_categories = Category.objects.filter(is_active=True).count()
     
     # ============================================
-    # INVENTORY ITEMS COUNT
+    # CURRENT STOCK - Using the current_stock property
     # ============================================
+    all_active_products = Product.objects.filter(is_active=True, is_discontinued=False)
     
-    # TOTAL ITEMS (All items ever purchased)
-    # Single items: count all ProductUnit records
-    total_items_single = ProductUnit.objects.count()
+    total_items_in_stock = 0
+    total_retail_value = Decimal('0.00')
+    total_cost_value = Decimal('0.00')
     
-    # Bulk items: sum of ALL positive stock entries (purchases only)
-    total_items_bulk = StockEntry.objects.filter(
-        product_sku__category__item_type='bulk',
-        quantity__gt=0  # Only purchase entries
-    ).aggregate(total=Sum('quantity'))['total'] or 0
+    # Also track breakdown counts
+    available_single = 0
+    available_bulk = 0
+    sold_items = 0
+    damaged_items = 0
+    stolen_items = 0
+    lost_items = 0
+    reserved_items = 0
     
-    total_items = total_items_single + total_items_bulk
+    for product in all_active_products:
+        # Use the current_stock property (already handles single vs bulk correctly)
+        stock = product.current_stock
+        total_items_in_stock += stock
+        
+        # Add retail value (selling price * stock)
+        total_retail_value += product.selling_price * stock
+        
+        # Add cost value (buying price * stock)
+        total_cost_value += product.buying_price * stock
+        
+        # Track counts by category type
+        if product.category.is_single_item:
+            available_single += product.available_quantity
+        else:
+            available_bulk += product.bulk_quantity
     
-    # AVAILABLE ITEMS (Current stock)
-    # Single items: count available status
-    available_single = ProductUnit.objects.filter(status='available').count()
-    
-    # Bulk items: sum of bulk_quantity from Product (current stock)
-    available_bulk = Product.objects.filter(
-        category__item_type='bulk',
-        is_active=True
-    ).aggregate(total=Sum('bulk_quantity'))['total'] or 0
-    
-    available_items = available_single + available_bulk
-    
-    # SOLD ITEMS (Single items only)
+    # ============================================
+    # SOLD ITEMS (from ProductUnit)
+    # ============================================
     sold_items = ProductUnit.objects.filter(status='sold').count()
+    sold_items_value = ProductUnit.objects.filter(
+        status='sold'
+    ).aggregate(total=Sum('sold_at_price'))['total'] or Decimal('0.00')
     
+    # ============================================
     # DAMAGED ITEMS
+    # ============================================
     damaged_single = ProductUnit.objects.filter(status='damaged').count()
     damaged_bulk = Product.objects.filter(
         category__item_type='bulk'
     ).aggregate(total=Sum('damaged_quantity'))['total'] or 0
     damaged_items = damaged_single + damaged_bulk
     
+    damaged_items_cost = ProductUnit.objects.filter(
+        status='damaged'
+    ).aggregate(total=Sum('unit_buying_price'))['total'] or Decimal('0.00')
+    # Add bulk damaged cost (estimated)
+    damaged_items_cost += damaged_bulk * (Product.objects.filter(category__item_type='bulk').first().buying_price if damaged_bulk > 0 else 0)
+    
+    # ============================================
     # STOLEN & LOST ITEMS
+    # ============================================
     stolen_items = ProductUnit.objects.filter(status='stolen').count()
     lost_items = ProductUnit.objects.filter(status='lost').count()
     
+    stolen_items_cost = ProductUnit.objects.filter(
+        status='stolen'
+    ).aggregate(total=Sum('unit_buying_price'))['total'] or Decimal('0.00')
+    
+    lost_items_cost = ProductUnit.objects.filter(
+        status='lost'
+    ).aggregate(total=Sum('unit_buying_price'))['total'] or Decimal('0.00')
+    
+    # ============================================
     # RESERVED ITEMS
+    # ============================================
     reserved_single = ProductUnit.objects.filter(status='reserved').count()
     reserved_bulk = Product.objects.filter(
         category__item_type='bulk'
     ).aggregate(total=Sum('reserved_quantity'))['total'] or 0
     reserved_items = reserved_single + reserved_bulk
     
+    # ============================================
     # RETURNED UNITS
+    # ============================================
     returned_units = ProductUnit.objects.filter(status='returned').count()
     written_off_items = ProductUnit.objects.filter(status='writeoff').count()
-    
-    # ============================================
-    # VALUE CALCULATIONS - TOTAL ITEMS (Historical)
-    # ============================================
-    
-    # TOTAL ITEMS VALUE (All items ever purchased)
-    # Single items: sum of unit_selling_price for ALL units
-    total_items_value_single = ProductUnit.objects.aggregate(
-        total=Sum(F('unit_selling_price'))
-    )['total'] or Decimal('0.00')
-    
-    # Bulk items: sum of (selling_price * quantity) from ALL purchase stock entries
-    total_items_value_bulk = Decimal('0.00')
-    bulk_purchase_entries = StockEntry.objects.filter(
-        product_sku__category__item_type='bulk',
-        quantity__gt=0
-    ).select_related('product_sku')
-    
-    for entry in bulk_purchase_entries:
-        if entry.product_sku and entry.product_sku.selling_price:
-            total_items_value_bulk += entry.product_sku.selling_price * entry.quantity
-    
-    total_items_value = total_items_value_single + total_items_value_bulk
-    
-    # TOTAL ITEMS COST
-    total_items_cost_single = ProductUnit.objects.aggregate(
-        total=Sum(F('unit_buying_price'))
-    )['total'] or Decimal('0.00')
-    
-    total_items_cost_bulk = Decimal('0.00')
-    for entry in bulk_purchase_entries:
-        if entry.product_sku and entry.product_sku.buying_price:
-            total_items_cost_bulk += entry.product_sku.buying_price * entry.quantity
-    
-    total_items_cost = total_items_cost_single + total_items_cost_bulk
-    
-    # ============================================
-    # VALUE CALCULATIONS - AVAILABLE ITEMS ONLY (Current Stock)
-    # ============================================
-    
-    # AVAILABLE ITEMS VALUE (Only items currently in stock)
-    available_value_single = ProductUnit.objects.filter(
-        status='available'
-    ).aggregate(
-        total=Sum(F('unit_selling_price'))
-    )['total'] or Decimal('0.00')
-    
-    available_value_bulk = Product.objects.filter(
-        category__item_type='bulk',
-        is_active=True,
-        bulk_quantity__gt=0
-    ).aggregate(
-        total=Sum(F('selling_price') * F('bulk_quantity'))
-    )['total'] or Decimal('0.00')
-    
-    available_items_value = available_value_single + available_value_bulk
-    
-    # AVAILABLE ITEMS COST
-    available_cost_single = ProductUnit.objects.filter(
-        status='available'
-    ).aggregate(
-        total=Sum(F('unit_buying_price'))
-    )['total'] or Decimal('0.00')
-    
-    available_cost_bulk = Product.objects.filter(
-        category__item_type='bulk',
-        is_active=True,
-        bulk_quantity__gt=0
-    ).aggregate(
-        total=Sum(F('buying_price') * F('bulk_quantity'))
-    )['total'] or Decimal('0.00')
-    
-    available_items_cost = available_cost_single + available_cost_bulk
-    
-    # ============================================
-    # TOTAL PRODUCTS VALUE & COST (Current stock value)
-    # ============================================
-    
-    # This should equal available_items_value and available_items_cost
-    total_products_value = available_items_value
-    total_products_cost = available_items_cost
-    
-    # ============================================
-    # LOSS CALCULATIONS
-    # ============================================
-    damaged_items_cost = ProductUnit.objects.filter(
-        status='damaged'
-    ).aggregate(
-        total=Sum(F('unit_buying_price'))
-    )['total'] or Decimal('0.00')
-    
-    stolen_items_cost = ProductUnit.objects.filter(
-        status='stolen'
-    ).aggregate(
-        total=Sum(F('unit_buying_price'))
-    )['total'] or Decimal('0.00')
-    
-    lost_items_cost = ProductUnit.objects.filter(
-        status='lost'
-    ).aggregate(
-        total=Sum(F('unit_buying_price'))
-    )['total'] or Decimal('0.00')
-    
-    # ============================================
-    # SOLD ITEMS VALUE (Revenue from single items)
-    # ============================================
-    sold_items_value = ProductUnit.objects.filter(
-        status='sold'
-    ).aggregate(
-        total=Sum('sold_at_price')
-    )['total'] or Decimal('0.00')
-    
-    # ============================================
-    # DEBUG OUTPUT
-    # ============================================
-    print(f"=== INVENTORY STATISTICS DEBUG ===")
-    print(f"Total Active Products: {total_products}")
-    print(f"---")
-    print(f"Single Items - Total Units (all time): {total_items_single}")
-    print(f"Single Items - Total Value: {total_items_value_single}")
-    print(f"Single Items - Total Cost: {total_items_cost_single}")
-    print(f"Single Items - Available Units: {available_single}")
-    print(f"Single Items - Available Value: {available_value_single}")
-    print(f"Single Items - Available Cost: {available_cost_single}")
-    print(f"---")
-    print(f"Bulk Items - Total Units (from purchases): {total_items_bulk}")
-    print(f"Bulk Items - Total Value: {total_items_value_bulk}")
-    print(f"Bulk Items - Total Cost: {total_items_cost_bulk}")
-    print(f"Bulk Items - Available Units (current): {available_bulk}")
-    print(f"Bulk Items - Available Value: {available_value_bulk}")
-    print(f"Bulk Items - Available Cost: {available_cost_bulk}")
-    print(f"---")
-    print(f"TOTAL (Historical) - Items: {total_items}, Value: {total_items_value}, Cost: {total_items_cost}")
-    print(f"AVAILABLE (Current) - Items: {available_items}, Value: {available_items_value}, Cost: {available_items_cost}")
-    print(f"Difference (Sold/Used/Lost) - Items: {total_items - available_items}")
-    print(f"Difference in Value: {total_items_value - available_items_value}")
-    print(f"Difference in Cost: {total_items_cost - available_items_cost}")
-    print(f"==================================")
     
     # ============================================
     # RETURN REQUESTS
@@ -351,15 +248,6 @@ def store_statistics(request):
     returned_items_value = all_returns.aggregate(
         total=Sum('refund_amount')
     )['total'] or Decimal('0.00')
-    
-    returned_items_cost = Decimal('0.00')
-    for return_req in all_returns.select_related('product', 'product_unit'):
-        if return_req.product_unit and return_req.product_unit.unit_buying_price:
-            returned_items_cost += return_req.product_unit.unit_buying_price * (return_req.quantity or 1)
-        elif return_req.product and return_req.product.buying_price:
-            returned_items_cost += return_req.product.buying_price * (return_req.quantity or 1)
-        else:
-            returned_items_cost += return_req.refund_amount * Decimal('0.7')
     
     damaged_returns = ReturnRequest.objects.filter(status='damaged_loss')
     damaged_returns_count = damaged_returns.count()
@@ -391,7 +279,7 @@ def store_statistics(request):
     # ============================================
     from django.contrib.auth.models import Group
     
-    store_manager_group = Group.objects.filter(name='store_manager').first()
+    store_manager_group = Group.objects.filter(name='Store Manager').first()
     if store_manager_group:
         store_managers_count = store_manager_group.user_set.count()
         active_managers_count = store_manager_group.user_set.filter(is_active=True).count()
@@ -406,12 +294,9 @@ def store_statistics(request):
     # RECENT ITEMS
     # ============================================
     recent_products = Product.objects.select_related('category').filter(
-        is_active=True
+        is_active=True,
+        is_discontinued=False
     ).order_by('-created_at')[:5]
-    
-    recent_units = ProductUnit.objects.select_related(
-        'product', 'created_by'
-    ).order_by('-created_at')[:10]
     
     recent_returns = ReturnRequest.objects.select_related(
         'requested_by', 'product', 'product_unit'
@@ -455,23 +340,43 @@ def store_statistics(request):
     total_alerts = alerts_queryset.count()
     
     # ============================================
+    # DEBUG OUTPUT - VERIFY CALCULATIONS
+    # ============================================
+    print(f"\n{'='*60}")
+    print(f"STORE STATISTICS - CORRECTED CALCULATIONS")
+    print(f"{'='*60}")
+    print(f"Total Products (SKUs): {total_products}")
+    print(f"Total Categories: {total_categories}")
+    print(f"\n--- CURRENT STOCK ---")
+    print(f"Single Items Available: {available_single}")
+    print(f"Bulk Items Available: {available_bulk}")
+    print(f"Total Items in Stock: {total_items_in_stock}")
+    print(f"\n--- RETAIL VALUE ---")
+    print(f"Retail Value: KES {total_retail_value:,.2f}")
+    print(f"\n--- COST VALUE ---")
+    print(f"Cost Value: KES {total_cost_value:,.2f}")
+    print(f"\n--- PROFIT ---")
+    print(f"Potential Profit: KES {total_retail_value - total_cost_value:,.2f}")
+    print(f"{'='*60}\n")
+    
+    # ============================================
     # CONTEXT
     # ============================================
     context = {
         # Products
         'total_products': total_products,
-        'total_products_value': total_products_value,
-        'total_products_cost': total_products_cost,
+        'total_categories': total_categories,
         
-        # Items totals (Historical)
-        'total_items': total_items,
-        'total_items_value': total_items_value,
-        'total_items_cost': total_items_cost,
+        # CURRENT STOCK
+        'available_items': total_items_in_stock,
+        'available_items_value': total_retail_value,
+        'available_items_cost': total_cost_value,
+        'available_profit': total_retail_value - total_cost_value,
         
-        # Available (Current Stock)
-        'available_items': available_items,
-        'available_items_value': available_items_value,
-        'available_items_cost': available_items_cost,
+        # For template compatibility
+        'total_items': total_items_in_stock,
+        'total_items_value': total_retail_value,
+        'total_items_cost': total_cost_value,
         
         # Sold
         'sold_items': sold_items,
@@ -495,16 +400,12 @@ def store_statistics(request):
         # Return Requests
         'returned_items': returned_items,
         'returned_items_value': returned_items_value,
-        'returned_items_cost': returned_items_cost,
-        
         'damaged_returns_count': damaged_returns_count,
         'damaged_returns_value': damaged_returns_value,
         'damaged_returns_cost': damaged_returns_cost,
-        
         'pending_returns_count': pending_returns_count,
         'pending_verification_count': pending_verification_count,
         'pending_approval_count': pending_approval_count,
-        
         'approved_returns_count': approved_returns_count,
         'processed_returns_count': processed_returns_count,
         'rejected_returns_count': rejected_returns_count,
@@ -517,7 +418,6 @@ def store_statistics(request):
         
         # Recent Items
         'recent_products': recent_products,
-        'recent_units': recent_units,
         'recent_returns': recent_returns,
         'recent_suppliers': supplier_list,
         
@@ -529,7 +429,6 @@ def store_statistics(request):
     }
     
     return render(request, 'inventory/statistics.html', context)
-
 
 @login_required
 def inventory_report(request):
