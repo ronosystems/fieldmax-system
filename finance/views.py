@@ -4229,22 +4229,42 @@ def capital_injection_list(request):
     capital_account = CapitalAccount.get_or_create_account()
     
     # ============================================
-    # FIXED: Calculate Inventory Purchases from StockEntry with corrected prices
+    # Calculate Inventory Purchases from StockEntry with corrected prices
     # ============================================
     total_inventory_purchases = StockEntry.objects.filter(
         entry_type='purchase',
         quantity__gt=0
     ).aggregate(total=Sum(F('quantity') * F('unit_price')))['total'] or Decimal('0')
     
+    # ============================================
+    # Calculate Cost of Goods Sold (COGS) - what has been sold
+    # ============================================
+    cogs = Decimal('0')
+    sales_entries = StockEntry.objects.filter(
+        entry_type='sale',
+        quantity__lt=0
+    )
+    for entry in sales_entries:
+        qty = abs(entry.quantity)
+        if entry.product_sku:
+            cogs += qty * (entry.product_sku.buying_price or Decimal('0'))
+        elif entry.product_unit:
+            buying_price = entry.product_unit.unit_buying_price or entry.product_unit.product.buying_price or Decimal('0')
+            cogs += qty * buying_price
+    
     # Calculate sales revenue
     total_sales_revenue = Sale.objects.filter(
         is_reversed=False
     ).aggregate(total=Sum('total_amount'))['total'] or Decimal('0')
     
+    # Calculate total profit
+    total_profit = total_sales_revenue - cogs
+    
     # Calculate loan totals
     total_loan_amount = Decimal('0')
     total_repaid_amount = Decimal('0')
     total_loan_balance = Decimal('0')
+    total_loan_borrowed = Decimal('0')
     
     for injection in injections:
         if injection.is_loan:
@@ -4253,7 +4273,7 @@ def capital_injection_list(request):
             injection.total_repaid = repaid
             injection.remaining_balance = injection.amount - repaid
             
-            total_loan_amount += injection.amount
+            total_loan_borrowed += injection.amount
             total_repaid_amount += repaid
             total_loan_balance += injection.remaining_balance
     
@@ -4279,11 +4299,13 @@ def capital_injection_list(request):
         'total_loan_amount': total_loan_amount,
         'total_repaid_amount': total_repaid_amount,
         'total_loan_balance': total_loan_balance,
-        'total_inventory_purchases': total_inventory_purchases,  # Add this
+        'total_loan_borrowed': total_loan_borrowed,  # Add this
+        'total_inventory_purchases': total_inventory_purchases,
+        'total_cost': cogs,  # Add this for COGS card
+        'total_profit': total_profit,  # Add this for Total Profit card
         'title': 'Capital Account'
     }
     return render(request, 'finance/capital_injections.html', context)
-
 
 @login_required
 def capital_injection_create(request):
