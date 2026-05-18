@@ -1153,6 +1153,7 @@ def reports_list(request):
     from django.core.paginator import Paginator
     from decimal import Decimal
     from django.utils import timezone
+    from shops.models import DailyShopReport, ShopBranch, BankClosingBalance
     
     # Get current date range for monthly calculations
     today = timezone.now().date()
@@ -1160,19 +1161,15 @@ def reports_list(request):
     
     # Filter reports based on user permissions
     if request.user.is_superuser:
-        # Superusers see ALL reports
         reports = DailyShopReport.objects.all().order_by('-report_date')
-        # Superusers see ALL monthly expenses across all shops
         monthly_expenses = DailyShopReport.objects.filter(
             report_date__gte=first_day_of_month,
             report_date__lte=today
         ).aggregate(total=Sum('total_expenses'))['total'] or Decimal('0.00')
     else:
-        # Regular users only see THEIR OWN reports
         reports = DailyShopReport.objects.filter(
             submitted_by=request.user
         ).order_by('-report_date')
-        # Regular users only see THEIR OWN monthly expenses
         monthly_expenses = DailyShopReport.objects.filter(
             submitted_by=request.user,
             report_date__gte=first_day_of_month,
@@ -1182,14 +1179,13 @@ def reports_list(request):
     # Store original queryset for stats (before pagination)
     all_reports = reports
     
-    # Filter by shop (only for superusers or if user has access to that shop)
+    # Filter by shop
     shop_id = request.GET.get('shop')
     if shop_id:
         if request.user.is_superuser:
             reports = reports.filter(shop_id=shop_id)
             all_reports = all_reports.filter(shop_id=shop_id)
         else:
-            # Regular users can only filter by shops they've submitted reports for
             user_shops = reports.values_list('shop_id', flat=True).distinct()
             if int(shop_id) in user_shops:
                 reports = reports.filter(shop_id=shop_id)
@@ -1215,22 +1211,35 @@ def reports_list(request):
         reports = reports.filter(is_finalized=False)
         all_reports = all_reports.filter(is_finalized=False)
     
-    # Calculate statistics from the filtered queryset
+    # Calculate statistics
     finalized_count = all_reports.filter(is_finalized=True).count()
     draft_count = all_reports.filter(is_finalized=False).count()
     total_sales_value = all_reports.aggregate(total=Sum('total_mpesa_amount'))['total'] or 0
     total_expenses_value = all_reports.aggregate(total=Sum('total_expenses'))['total'] or 0
     
-    # Pagination
-    paginator = Paginator(reports, 20)
+    # ============================================
+    # FIXED: Calculate bank total for each report using BankClosingBalance
+    # Use 'daily_report' as the foreign key field name
+    # ============================================
+    reports_list = []
+    for report in reports:
+        # Calculate bank total from related bank closing balances
+        bank_total = BankClosingBalance.objects.filter(
+            daily_report=report,  # Changed from 'report' to 'daily_report'
+            is_active=True
+        ).aggregate(total=Sum('closing_balance'))['total'] or 0
+        report.bank_total = bank_total
+        reports_list.append(report)
+    
+    # Pagination on the list
+    paginator = Paginator(reports_list, 20)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
     
-    # For shop filter dropdown - show only relevant shops
+    # For shop filter dropdown
     if request.user.is_superuser:
         shops = ShopBranch.objects.filter(is_active=True)
     else:
-        # Regular users see only shops they've submitted reports for
         user_shop_ids = DailyShopReport.objects.filter(
             submitted_by=request.user
         ).values_list('shop_id', flat=True).distinct()
@@ -1248,7 +1257,7 @@ def reports_list(request):
         'total_sales_value': total_sales_value,
         'total_expenses_value': total_expenses_value,
         'monthly_expenses': monthly_expenses,
-        'is_superuser': request.user.is_superuser,  # Pass this to template
+        'is_superuser': request.user.is_superuser,
     }
     return render(request, 'shops/reports_list.html', context)
 
