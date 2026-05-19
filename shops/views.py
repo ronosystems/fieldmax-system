@@ -1271,29 +1271,7 @@ def reports_list(request):
     return render(request, 'shops/reports_list.html', context)
 
 
-@login_required
-@user_passes_test(is_staff_or_admin)
-def finalize_report(request, report_id):
-    """Finalize a report"""
-    report = get_object_or_404(DailyShopReport, id=report_id)
-    
-    if not request.user.is_superuser and report.submitted_by != request.user:
-        messages.error(request, 'You can only finalize your own reports.')
-        return redirect('shops:reports_list')
-    
-    if request.method == 'POST':
-        report.is_finalized = True
-        report.finalized_by = request.user
-        report.finalized_at = timezone.now()
-        report.save()
-        messages.success(request, f'Report for {report.report_date} has been finalized!')
-    
-    return redirect('shops:report_detail', report_id=report.id)
 
-
-@login_required
-@user_passes_test(is_superuser)
-def unfinalize_report(request, report_id):
     """Revert a finalized report back to draft"""
     report = get_object_or_404(DailyShopReport, id=report_id)
     
@@ -1308,6 +1286,59 @@ def unfinalize_report(request, report_id):
         report.save()
         messages.success(request, f'Report for {report.report_date} has been reverted to draft.')
     
+    return redirect('shops:report_detail', report_id=report.id)
+
+
+
+@login_required
+@user_passes_test(is_staff_or_admin)
+def finalize_report(request, report_id):
+    """Finalize a report and redirect back to the referring page"""
+    report = get_object_or_404(DailyShopReport, id=report_id)
+    
+    if not request.user.is_superuser and report.submitted_by != request.user:
+        messages.error(request, 'You can only finalize your own reports.')
+        return redirect('shops:reports_list')
+    
+    if request.method == 'POST':
+        report.is_finalized = True
+        report.finalized_by = request.user
+        report.finalized_at = timezone.now()
+        report.save()
+        messages.success(request, f'Report for {report.report_date} has been finalized!')
+    
+    # Try to go back to the referring page
+    referer = request.META.get('HTTP_REFERER')
+    if referer:
+        return redirect(referer)
+    
+    # Default to detail page
+    return redirect('shops:report_detail', report_id=report.id)
+
+
+@login_required
+@user_passes_test(is_superuser)
+def unfinalize_report(request, report_id):
+    """Revert a finalized report back to draft and redirect back to the referring page"""
+    report = get_object_or_404(DailyShopReport, id=report_id)
+    
+    if not report.is_finalized:
+        messages.warning(request, 'This report is already in draft status.')
+        return redirect('shops:report_detail', report_id=report.id)
+    
+    if request.method == 'POST':
+        report.is_finalized = False
+        report.finalized_by = None
+        report.finalized_at = None
+        report.save()
+        messages.success(request, f'Report for {report.report_date} has been reverted to draft.')
+    
+    # Try to go back to the referring page
+    referer = request.META.get('HTTP_REFERER')
+    if referer:
+        return redirect(referer)
+    
+    # Default to detail page
     return redirect('shops:report_detail', report_id=report.id)
 
 

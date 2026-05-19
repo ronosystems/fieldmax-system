@@ -3,6 +3,84 @@
 
 {% block title %}All Shop Reports{% endblock %}
 
+{% block extra_css %}
+<style>
+    .bg-teal { background-color: #20c997 !important; }
+    .bg-navy { background-color: #001f3f !important; }
+    .text-white-50 { color: rgba(255, 255, 255, 0.8); }
+    .table-bordered { border: 2px solid #dee2e6 !important; }
+    .table-bordered thead th { border-bottom-width: 2px; }
+    .table-hover tbody tr:hover { background-color: rgba(0, 0, 0, 0.05); }
+    .badge { font-size: 0.75rem; padding: 0.25rem 0.5rem; }
+    .table th, .table td { vertical-align: middle; }
+    
+    /* Action Buttons Styling */
+    .action-buttons {
+        display: flex;
+        gap: 0.5rem;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    
+    .action-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.4rem 0.8rem;
+        border-radius: 6px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        text-decoration: none;
+        transition: all 0.2s;
+        border: none;
+        cursor: pointer;
+    }
+    
+    .action-btn i {
+        font-size: 0.8rem;
+    }
+    
+    .action-btn:hover {
+        transform: translateY(-1px);
+        filter: brightness(0.95);
+    }
+    
+    .btn-view {
+        background: #0ea5e9;
+        color: white;
+    }
+    .btn-view:hover { background: #0284c7; color: white; }
+    
+    .btn-edit {
+        background: #f59e0b;
+        color: white;
+    }
+    .btn-edit:hover { background: #d97706; color: white; }
+    
+    .btn-finalize {
+        background: #10b981;
+        color: white;
+    }
+    .btn-finalize:hover { background: #059669; color: white; }
+    
+    .btn-revert {
+        background: #f59e0b;
+        color: white;
+    }
+    .btn-revert:hover { background: #d97706; color: white; }
+    
+    @media print {
+        .btn, .card-header, .filter-section, .pagination, .breadcrumb {
+            display: none !important;
+        }
+        .card {
+            border: none !important;
+            box-shadow: none !important;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
@@ -165,14 +243,14 @@
                         <th width="8%" class="bg-primary text-white text-center">Report Date</th>
                         <th width="10%" class="bg-info text-white">Shop Branch</th>
                         <th width="10%" class="bg-teal text-white">Reported By</th>
-                        <th width="8%" class="bg-success text-white text-end">M-Pesa Transactions</th>
+                        <th width="8%" class="bg-success text-white text-end">M-Pesa Trans</th>
                         <th width="8%" class="bg-success text-white text-end">M-Pesa Amount</th>
                         <th width="8%" class="bg-warning text-dark text-end">Cash Balance</th>
                         <th width="8%" class="bg-primary text-white text-end">Bank Total</th>
                         <th width="8%" class="bg-danger text-white text-end">Expenses</th>
                         <th width="8%" class="bg-success text-white text-end">Closing Balance</th>
                         <th width="8%" class="bg-info text-white text-center">Status</th>
-                        <th width="8%" class="bg-navy text-white text-center">Actions</th>
+                        <th width="12%" class="bg-navy text-white text-center">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -230,18 +308,37 @@
                             {% endif %}
                         </td>
                         <td class="text-center align-middle">
-                            <div class="btn-group btn-group-sm" role="group">
-                                <a href="{% url 'shops:report_detail' report.id %}" class="btn btn-outline-info" title="View Report">
-                                    <i class="fas fa-eye"></i>
+                            <div class="action-buttons">
+                                <!-- View Button -->
+                                <a href="{% url 'shops:report_detail' report.id %}" class="action-btn btn-view" title="View Report">
+                                    <i class="fas fa-eye"></i> View
                                 </a>
+                                
                                 {% if not report.is_finalized %}
-                                <a href="{% url 'shops:edit_report' report.id %}" class="btn btn-outline-warning" title="Edit">
-                                    <i class="fas fa-edit"></i>
-                                </a>
+                                    <!-- Edit Button -->
+                                    <a href="{% url 'shops:edit_report' report.id %}" class="action-btn btn-edit" title="Edit Report">
+                                        <i class="fas fa-edit"></i> Edit
+                                    </a>
+                                    {% if request.user.is_superuser %}
+                                        <!-- Finalize Button -->
+                                        <form method="post" action="{% url 'shops:finalize_report' report.id %}" class="d-inline" onsubmit="return confirm('Finalize this report? This action cannot be undone.');">
+                                            {% csrf_token %}
+                                            <button type="submit" class="action-btn btn-finalize" title="Finalize Report">
+                                                <i class="fas fa-lock"></i> Finalize
+                                            </button>
+                                        </form>
+                                    {% endif %}
+                                {% else %}
+                                    {% if request.user.is_superuser %}
+                                        <!-- Revert Button -->
+                                        <form method="post" action="{% url 'shops:unfinalize_report' report.id %}" class="d-inline" onsubmit="return confirm('Revert to draft? This will allow editing.');">
+                                            {% csrf_token %}
+                                            <button type="submit" class="action-btn btn-revert" title="Revert to Draft">
+                                                <i class="fas fa-undo"></i> Revert
+                                            </button>
+                                        </form>
+                                    {% endif %}
                                 {% endif %}
-                                <a href="{% url 'shops:report_detail' report.id %}?print=1" class="btn btn-outline-secondary" title="Print" target="_blank">
-                                    <i class="fas fa-print"></i>
-                                </a>
                             </div>
                         </td>
                     </tr>
@@ -319,44 +416,6 @@
         {% endif %}
     </div>
 </div>
-
-<style>
-    .bg-teal {
-        background-color: #20c997 !important;
-    }
-    .bg-navy {
-        background-color: #001f3f !important;
-    }
-    .text-white-50 {
-        color: rgba(255, 255, 255, 0.8);
-    }
-    .table-bordered {
-        border: 2px solid #dee2e6 !important;
-    }
-    .table-bordered thead th {
-        border-bottom-width: 2px;
-    }
-    .table-hover tbody tr:hover {
-        background-color: rgba(0, 0, 0, 0.05);
-    }
-    .badge {
-        font-size: 0.75rem;
-        padding: 0.25rem 0.5rem;
-    }
-    .table th, .table td {
-        vertical-align: middle;
-    }
-    
-    @media print {
-        .btn, .card-header, .filter-section, .pagination, .breadcrumb {
-            display: none !important;
-        }
-        .card {
-            border: none !important;
-            box-shadow: none !important;
-        }
-    }
-</style>
 {% endblock %}
 
 {% block extra_js %}
