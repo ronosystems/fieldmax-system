@@ -4216,6 +4216,7 @@ def inventory_expenses_page(request):
 
 
 from .models import CapitalInjection, CapitalInjectionRepayment, CapitalAccount
+from inventory.models import Product, StockEntry
 
 @login_required
 def capital_injection_list(request):
@@ -4223,7 +4224,7 @@ def capital_injection_list(request):
     from decimal import Decimal
     from django.db.models import Sum, F
     from sales.models import Sale
-    from inventory.models import StockEntry
+    from inventory.models import StockEntry, Product
     
     injections = CapitalInjection.objects.all().order_by('-transaction_date')
     capital_account = CapitalAccount.get_or_create_account()
@@ -4260,7 +4261,52 @@ def capital_injection_list(request):
     # Calculate total profit
     total_profit = total_sales_revenue - cogs
     
-    # Calculate loan totals
+    # ============================================
+    # FIXED: Calculate Total Inventory Value (ALL stock at selling price)
+    # ============================================
+    total_inventory_value = Decimal('0')
+    active_products = Product.objects.filter(is_active=True, is_discontinued=False)
+    
+    for product in active_products:
+        selling_price = product.selling_price or Decimal('0')
+        
+        if product.category.is_single_item:
+            total_units = product.total_quantity or 0
+        else:
+            # Total purchased (all time)
+            total_units = StockEntry.objects.filter(
+                product_sku=product,
+                entry_type='purchase',
+                quantity__gt=0
+            ).aggregate(total=Sum('quantity'))['total'] or 0
+        
+        total_inventory_value += total_units * selling_price
+    
+    # ============================================
+    # FIXED: Calculate Available values using formulas
+    # ============================================
+    # Available Inventory Purchases = Total Purchases - COGS
+    available_inventory_purchases = total_inventory_purchases - cogs
+    
+    # Available Inventory Value = Total Value - (Revenue from sold items)
+    # OR calculate directly: (Total Value - (COGS × Average Markup))
+    # Simple formula: Available Value = Total Value - (Sales Revenue - Profit)
+    # But better: Calculate from available stock directly
+    available_inventory_value = Decimal('0')
+    
+    for product in active_products:
+        selling_price = product.selling_price or Decimal('0')
+        
+        if product.category.is_single_item:
+            available_units = product.available_quantity or 0
+        else:
+            available_units = product.bulk_quantity or 0
+        
+        available_inventory_value += available_units * selling_price
+    
+    # ============================================
+    # Calculate Loan Totals
+    # ============================================
     total_loan_amount = Decimal('0')
     total_repaid_amount = Decimal('0')
     total_loan_balance = Decimal('0')
@@ -4268,7 +4314,6 @@ def capital_injection_list(request):
     
     for injection in injections:
         if injection.is_loan:
-            # Calculate repaid amount for this loan
             repaid = injection.repayments.aggregate(total=Sum('amount'))['total'] or Decimal('0')
             injection.total_repaid = repaid
             injection.remaining_balance = injection.amount - repaid
@@ -4276,6 +4321,7 @@ def capital_injection_list(request):
             total_loan_borrowed += injection.amount
             total_repaid_amount += repaid
             total_loan_balance += injection.remaining_balance
+            total_loan_amount += injection.amount
     
     # Calculate Net Capital Position
     total_capital_injected = injections.filter(status='completed').aggregate(
@@ -4295,14 +4341,24 @@ def capital_injection_list(request):
     context = {
         'injections': injections,
         'capital_account': capital_account,
-        'total_sales_revenue': total_sales_revenue,
+        
+        # Loan related
         'total_loan_amount': total_loan_amount,
         'total_repaid_amount': total_repaid_amount,
         'total_loan_balance': total_loan_balance,
-        'total_loan_borrowed': total_loan_borrowed,  # Add this
-        'total_inventory_purchases': total_inventory_purchases,
-        'total_cost': cogs,  # Add this for COGS card
-        'total_profit': total_profit,  # Add this for Total Profit card
+        'total_loan_borrowed': total_loan_borrowed,
+        
+        # Sales & Profit
+        'total_sales_revenue': total_sales_revenue,
+        'total_cost': cogs,
+        'total_profit': total_profit,
+        
+        # Inventory - CORRECTED VALUES
+        'total_inventory_purchases': total_inventory_purchases,      # 300
+        'available_inventory_purchases': available_inventory_purchases,  # 300 - 80 = 220
+        'total_inventory_value': total_inventory_value,              # 600
+        'available_inventory_value': available_inventory_value,      # Should be calculated from available stock
+        
         'title': 'Capital Account'
     }
     return render(request, 'finance/capital_injections.html', context)
