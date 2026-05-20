@@ -742,8 +742,8 @@ def create_daily_report(request):
                     # Save the main report
                     report = form.save(commit=False)
                     report.submitted_by = request.user
-                    report.total_expenses = 0
-                    report.total_closing_balance = 0
+                    report.total_expenses = Decimal('0')
+                    report.total_closing_balance = Decimal('0')
                     
                     # Get cash value from POST data and save it
                     cash_balance = request.POST.get('total_cash', 0)
@@ -796,26 +796,33 @@ def create_daily_report(request):
                                 selected_bank_ids.add(bank_id)
                     
                     # ============================================
-                    # PROCESS EXPENSES
+                    # PROCESS EXPENSES - FIXED
                     # ============================================
                     expense_keys = [k for k in request.POST.keys() if k.startswith('expense_type_')]
-                    expense_total = 0
+                    expense_total = Decimal('0')
                     
                     for key in expense_keys:
                         index = key.split('_')[-1]
                         expense_type = request.POST.get(key)
                         description = request.POST.get(f'expense_description_{index}', '')
-                        amount = request.POST.get(f'expense_amount_{index}', 0)
+                        amount_str = request.POST.get(f'expense_amount_{index}', '0')
                         
-                        if expense_type and float(amount) > 0:
+                        # Convert to Decimal safely
+                        try:
+                            amount = Decimal(str(amount_str))
+                        except:
+                            amount = Decimal('0')
+                        
+                        if expense_type and amount > 0:
                             ShopExpense.objects.create(
                                 daily_report=report,
                                 expense_category=expense_type,
                                 description=description,
-                                amount=Decimal(str(amount)),
+                                amount=amount,
                                 payment_method='cash'
                             )
-                            expense_total += float(amount)
+                            expense_total += amount
+                            print(f"Created expense: {expense_type} - KES {amount}")  # Debug print
                     
                     # ============================================
                     # UPDATE REPORT TOTALS
@@ -826,16 +833,19 @@ def create_daily_report(request):
                     # Calculate M-Pesa total
                     mpesa_total = DailyMpesaAccountReport.objects.filter(daily_report=report).aggregate(
                         total=Sum('closing_mpesa_float')
-                    )['total'] or 0
+                    )['total'] or Decimal('0')
                     
                     # Calculate Bank total
                     bank_total = BankClosingBalance.objects.filter(daily_report=report).aggregate(
                         total=Sum('closing_balance')
-                    )['total'] or 0
+                    )['total'] or Decimal('0')
                     
                     # Calculate total closing balance (M-Pesa + Cash + Bank)
-                    report.total_closing_balance = float(mpesa_total) + float(report.cash_balance) + float(bank_total)
+                    report.total_closing_balance = mpesa_total + report.cash_balance + bank_total
                     report.save(update_fields=['total_closing_balance'])
+                    
+                    print(f"Expenses saved: {expense_total}")  # Debug print
+                    print(f"Total closing balance: {report.total_closing_balance}")  # Debug print
                     
                     messages.success(
                         request, 
@@ -884,7 +894,7 @@ def create_daily_report(request):
         'mpesa_account_reports': [],
         'bank_closings': [],
         'expenses': [],
-        'total_cash': 0,  # Default cash value for new report
+        'total_cash': 0,
     }
     
     return render(request, 'shops/report_form.html', context)
