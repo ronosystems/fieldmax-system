@@ -1,8 +1,10 @@
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
+from django.db import transaction
 from decimal import Decimal
 import logging
+
 
 logger = logging.getLogger(__name__)
 
@@ -777,6 +779,474 @@ class MoneyTransfer(models.Model):
 
 
 
+
+
+
+# ============================================
+# ADD THESE NEW MODELS HERE
+# ============================================
+# Place this after MoneyTransfer class and before IncomeAccount class
+
+# ============================================
+# SAVINGS ACCOUNT (Only Profits)
+# ============================================
+
+class SavingsAccount(models.Model):
+    """
+    SAVINGS ACCOUNT - ONLY TRACKS PROFITS
+    Profit = Selling Price - Buying Price (COGS)
+    
+    This account ONLY receives profits from sales.
+    Money can be transferred from Savings to Injection when needed.
+    """
+    
+    balance = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal('0.00'))
+    total_profits_earned = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal('0.00'))
+    
+    last_updated = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    
+    class Meta:
+        verbose_name = 'Savings Account'
+        verbose_name_plural = 'Savings Accounts'
+    
+    def __str__(self):
+        return f"Savings Account: KES {self.balance:,.2f} (Total Profits: KES {self.total_profits_earned:,.2f})"
+    
+    @classmethod
+    def get_account(cls):
+        """Get or create the single savings account"""
+        account, created = cls.objects.get_or_create(id=1)
+        if created:
+            account.save()
+        return account
+    
+    def add_profit(self, amount, sale_reference="", user=None):
+        """Add profit to savings account from a sale"""
+        if amount <= 0:
+            return self.balance
+        
+        self.balance += amount
+        self.total_profits_earned += amount
+        self.updated_by = user
+        self.save()
+        
+        SavingsTransaction.objects.create(
+            savings_account=self,
+            amount=amount,
+            transaction_type='profit',
+            sale_reference=sale_reference,
+            description=f"Profit from sale {sale_reference}",
+            created_by=user
+        )
+        
+        logger.info(f"💰 SAVINGS: +{amount} profit from sale {sale_reference}")
+        return self.balance
+    
+    def transfer_to_injection(self, amount, user=None):
+        """Transfer money from Savings to Injection Account"""
+        if amount <= 0:
+            return False, "Amount must be greater than 0"
+        
+        if self.balance < amount:
+            return False, f"Insufficient savings balance. Available: KES {self.balance:,.2f}"
+        
+        with transaction.atomic():
+            self.balance -= amount
+            self.updated_by = user
+            self.save()
+            
+            SavingsTransaction.objects.create(
+                savings_account=self,
+                amount=amount,
+                transaction_type='transfer_out',
+                description=f"Transfer to Injection Account",
+                created_by=user
+            )
+            
+            injection_account = InjectionAccount.get_account()
+            injection_account.receive_from_savings(amount, user)
+            
+        return True, f"Successfully transferred KES {amount:,.2f} from Savings to Injection"
+    
+    @property
+    def available_for_transfer(self):
+        return self.balance
+
+
+class SavingsTransaction(models.Model):
+    """Track all savings account transactions"""
+    
+    TRANSACTION_TYPES = [
+        ('profit', 'Profit Added'),
+        ('transfer_out', 'Transfer to Injection'),
+    ]
+    
+    savings_account = models.ForeignKey(SavingsAccount, on_delete=models.CASCADE, related_name='transactions')
+    amount = models.DecimalField(max_digits=15, decimal_places=2)
+    transaction_type = models.CharField(max_length=20, choices=TRANSACTION_TYPES)
+    sale_reference = models.CharField(max_length=100, blank=True)
+    description = models.TextField(blank=True)
+    transaction_date = models.DateTimeField(default=timezone.now)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-transaction_date']
+    
+    def __str__(self):
+        return f"{self.get_transaction_type_display()}: KES {self.amount}"
+
+
+# ============================================
+# INJECTION ACCOUNT (Money Entry Point)
+# ============================================
+
+class InjectionAccount(models.Model):
+    """
+    INJECTION ACCOUNT - Tracks TOTAL all-time injected money (never decreases)
+    
+    This is a CUMULATIVE account - only increases, never decreases.
+    Shows total capital ever injected into the business.
+    """
+    
+    total_injected_all_time = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal('0.00'))
+    total_from_savings = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal('0.00'))
+    total_external_injection = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal('0.00'))
+    
+    last_updated = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    
+    class Meta:
+        verbose_name = 'Injection Account'
+        verbose_name_plural = 'Injection Accounts'
+    
+    def __str__(self):
+        return f"Injection Account: Total Injected KES {self.total_injected_all_time:,.2f}"
+    
+    @classmethod
+    def get_account(cls):
+        """Get or create the single injection account"""
+        account, created = cls.objects.get_or_create(id=1)
+        if created:
+            account.save()
+        return account
+    
+    @property
+    def balance(self):
+        """For compatibility - returns total injected all time"""
+        return self.total_injected_all_time
+    
+    def receive_from_savings(self, amount, user=None):
+        """Record money transferred from Savings Account"""
+        if amount <= 0:
+            return
+        
+        self.total_injected_all_time += amount
+        self.total_from_savings += amount
+        self.updated_by = user
+        self.save()
+        
+        InjectionTransaction.objects.create(
+            injection_account=self,
+            amount=amount,
+            transaction_type='from_savings',
+            source_detail="Transfer from Savings",
+            created_by=user
+        )
+        
+        logger.info(f"💉 INJECTION: +{amount} from Savings (Total: {self.total_injected_all_time})")
+    
+    def add_external_injection(self, amount, source_type="capital", source_name="", reference="", user=None):
+        """Add external money (capital, loans, investments) - INCREASES total only"""
+        if amount <= 0:
+            return False, "Amount must be greater than 0"
+        
+        self.total_injected_all_time += amount
+        self.total_external_injection += amount
+        self.updated_by = user
+        self.save()
+        
+        InjectionTransaction.objects.create(
+            injection_account=self,
+            amount=amount,
+            transaction_type='external',
+            source_type=source_type,
+            source_name=source_name,
+            source_detail=f"{source_name or source_type}",
+            reference=reference,
+            created_by=user
+        )
+        
+        logger.info(f"💉 INJECTION: +{amount} external (Total: {self.total_injected_all_time})")
+        return True, f"Successfully added KES {amount:,.2f} to Injection Account"
+    
+    def record_transfer_to_net(self, amount, user=None):
+        """RECORD that money was transferred to Net Account - does NOT decrease balance"""
+        if amount <= 0:
+            return False, "Amount must be greater than 0"
+        
+        InjectionTransaction.objects.create(
+            injection_account=self,
+            amount=amount,
+            transaction_type='transfer_to_net',
+            source_detail=f"Transferred to Net Account",
+            created_by=user
+        )
+        
+        logger.info(f"💉 INJECTION: Recorded transfer of {amount} to Net")
+        return True, f"Recorded transfer of KES {amount:,.2f} to Net Account"
+    
+
+    
+
+
+class InjectionTransaction(models.Model):
+    """Track all injection account transactions"""
+    
+    TRANSACTION_TYPES = [
+        ('from_savings', 'From Savings Account'),
+        ('external', 'External Injection'),
+        ('transfer_to_net', 'Transfer to Net Account'),
+    ]
+    
+    injection_account = models.ForeignKey(InjectionAccount, on_delete=models.CASCADE, related_name='transactions')
+    amount = models.DecimalField(max_digits=15, decimal_places=2)
+    transaction_type = models.CharField(max_length=20, choices=TRANSACTION_TYPES)
+    source_type = models.CharField(max_length=30, blank=True)
+    source_name = models.CharField(max_length=200, blank=True)
+    source_detail = models.CharField(max_length=200, blank=True)
+    reference = models.CharField(max_length=100, blank=True)
+    description = models.TextField(blank=True)
+    transaction_date = models.DateTimeField(default=timezone.now)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-transaction_date']
+    
+    def __str__(self):
+        return f"{self.get_transaction_type_display()}: KES {self.amount}"
+
+
+# ============================================
+# NET ACCOUNT (Main Operating Account)
+# ============================================
+
+class NetAccount(models.Model):
+    """
+    NET ACCOUNT - Main operating account
+    
+    DEDUCTIONS (-):
+    - Inventory purchases
+    - Salaries
+    - Rent, bills, operational expenses
+    
+    ADDITIONS (+):
+    - Cost of Goods Sold (buying price of sold items)
+    - Injections from Injection Account
+    """
+    
+    balance = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal('0.00'))
+    
+    # Deductions tracking (Money OUT)
+    total_inventory_purchases = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal('0.00'))
+    total_salaries = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal('0.00'))
+    total_operational_expenses = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal('0.00'))
+    
+    # Additions tracking (Money IN)
+    total_cogs_added = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal('0.00'))
+    total_injections_received = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal('0.00'))
+    
+    last_updated = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    
+    class Meta:
+        verbose_name = 'Net Account'
+        verbose_name_plural = 'Net Accounts'
+    
+    def __str__(self):
+        return f"Net Account Balance: KES {self.balance:,.2f}"
+    
+    @classmethod
+    def get_account(cls):
+        account, created = cls.objects.get_or_create(id=1)
+        if created:
+            account.save()
+        return account
+    
+    # ADDITIONS (+) - Money INTO Net Account
+    
+    def add_cogs(self, amount, sale_reference="", user=None):
+        """ADD COGS (Cost of Goods Sold) - Buying price of sold items"""
+        if amount <= 0:
+            return self.balance
+        
+        self.balance += amount
+        self.total_cogs_added += amount
+        self.updated_by = user
+        self.save()
+        
+        NetTransaction.objects.create(
+            net_account=self,
+            amount=amount,
+            transaction_type='addition',
+            category='cogs',
+            reference=sale_reference,
+            description=f"COGS added from sale {sale_reference}",
+            created_by=user
+        )
+        
+        logger.info(f"📈 NET: +{amount} COGS from sale {sale_reference}")
+        return self.balance
+    
+    def receive_injection(self, amount, user=None):
+        """RECEIVE INJECTION from Injection Account"""
+        if amount <= 0:
+            return self.balance
+        
+        self.balance += amount
+        self.total_injections_received += amount
+        self.updated_by = user
+        self.save()
+        
+        NetTransaction.objects.create(
+            net_account=self,
+            amount=amount,
+            transaction_type='addition',
+            category='injection',
+            reference="Injection Transfer",
+            description=f"Injection received from Injection Account",
+            created_by=user
+        )
+        
+        logger.info(f"📈 NET: +{amount} injection received")
+        return self.balance
+    
+    # DEDUCTIONS (-) - Money OUT of Net Account
+    
+    def deduct_inventory_purchase(self, amount, sku_ref="", user=None):
+        """DEDUCT inventory purchase when buying stock"""
+        if amount <= 0:
+            return self.balance
+        
+        self.balance -= amount
+        self.total_inventory_purchases += amount
+        self.updated_by = user
+        self.save()
+        
+        NetTransaction.objects.create(
+            net_account=self,
+            amount=amount,
+            transaction_type='deduction',
+            category='inventory',
+            reference=sku_ref,
+            description=f"Inventory Purchase: {sku_ref}",
+            created_by=user
+        )
+        
+        logger.info(f"📉 NET: -{amount} inventory purchase")
+        return self.balance
+    
+    def deduct_salary(self, amount, staff_name="", user=None):
+        """DEDUCT salary payment"""
+        if amount <= 0:
+            return self.balance
+        
+        self.balance -= amount
+        self.total_salaries += amount
+        self.updated_by = user
+        self.save()
+        
+        NetTransaction.objects.create(
+            net_account=self,
+            amount=amount,
+            transaction_type='deduction',
+            category='salary',
+            reference=staff_name,
+            description=f"Salary: {staff_name}",
+            created_by=user
+        )
+        
+        logger.info(f"📉 NET: -{amount} salary payment")
+        return self.balance
+    
+    def deduct_operational_expense(self, amount, expense_type="", reference="", user=None):
+        """DEDUCT operational expense (rent, utilities, bills, etc.)"""
+        if amount <= 0:
+            return self.balance
+        
+        self.balance -= amount
+        self.total_operational_expenses += amount
+        self.updated_by = user
+        self.save()
+        
+        NetTransaction.objects.create(
+            net_account=self,
+            amount=amount,
+            transaction_type='deduction',
+            category='operational',
+            reference=reference,
+            description=f"{expense_type}: {reference}" if expense_type else reference,
+            created_by=user
+        )
+        
+        logger.info(f"📉 NET: -{amount} operational expense ({expense_type})")
+        return self.balance
+    
+    @property
+    def total_deductions(self):
+        return self.total_inventory_purchases + self.total_salaries + self.total_operational_expenses
+    
+    @property
+    def total_additions(self):
+        return self.total_cogs_added + self.total_injections_received
+
+
+class NetTransaction(models.Model):
+    """Track all net account transactions"""
+    
+    TRANSACTION_TYPES = [
+        ('addition', 'Addition (+) - Money In'),
+        ('deduction', 'Deduction (-) - Money Out'),
+    ]
+    
+    CATEGORIES = [
+        ('cogs', 'COGS Added (Buying Price)'),
+        ('injection', 'Injection Received'),
+        ('inventory', 'Inventory Purchase'),
+        ('salary', 'Salary Payment'),
+        ('operational', 'Operational Expense'),
+        ('other', 'Other'),
+    ]
+    
+    net_account = models.ForeignKey(NetAccount, on_delete=models.CASCADE, related_name='transactions')
+    amount = models.DecimalField(max_digits=15, decimal_places=2)
+    transaction_type = models.CharField(max_length=20, choices=TRANSACTION_TYPES)
+    category = models.CharField(max_length=20, choices=CATEGORIES)
+    reference = models.CharField(max_length=200, blank=True)
+    description = models.TextField(blank=True)
+    transaction_date = models.DateTimeField(default=timezone.now)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-transaction_date']
+        indexes = [
+            models.Index(fields=['category']),
+            models.Index(fields=['-transaction_date']),
+            models.Index(fields=['transaction_type']),
+        ]
+    
+    def __str__(self):
+        sign = "+" if self.transaction_type == 'addition' else "-"
+        return f"{sign} KES {self.amount} - {self.get_category_display()}"
+
+
+
+
+
+
 # ============================================
 # SALES ACCOUNTING MODELS
 # ============================================
@@ -1070,12 +1540,11 @@ class SaleAccountingHelper:
     def process_sale(sale, user=None):
         """
         Process accounting for a sale:
-        1. Record income (selling price)
-        2. Record purchase cost (buying price)
-        3. Record profit (selling price - buying price)
+        1. Record income (selling price) - CREDIT IncomeAccount
+        2. Record purchase cost (buying price) - DEBIT PurchaseAccount  
+        3. Record profit (selling price - buying price) - CREDIT ProfitAccount
         """
         from decimal import Decimal
-        from .models import IncomeAccount, PurchaseAccount, ProfitAccount
         
         # Get or create accounts
         income_account = IncomeAccount.get_or_create_account()
@@ -1085,18 +1554,17 @@ class SaleAccountingHelper:
         total_income = Decimal('0')
         total_cost = Decimal('0')
         
-        # Get sale items - adjust based on your sale model structure
+        # Get sale items
         if hasattr(sale, 'items'):
             items = sale.items.all()
         elif hasattr(sale, 'sale_items'):
             items = sale.sale_items.all()
         else:
-            # If sale items are stored differently, adjust here
             items = []
         
         for item in items:
-            # Calculate selling price total
-            selling_price = Decimal(str(item.price)) * Decimal(str(item.quantity))
+            # Calculate selling price total - FIXED: use unit_price, not price
+            selling_price = Decimal(str(item.unit_price)) * Decimal(str(item.quantity))
             
             # Get buying price from product
             if hasattr(item, 'product') and item.product:
@@ -1111,32 +1579,32 @@ class SaleAccountingHelper:
         
         # Only record if there are items
         if total_income > 0:
-            # Add total income
+            # Add total income to IncomeAccount
             income_account.add_income(
                 amount=total_income,
                 sale_reference=getattr(sale, 'sale_id', str(sale.id)),
-                user=user
+                user=user or getattr(sale, 'seller', None)
             )
             
-            # Add total purchase cost
+            # Add total purchase cost to PurchaseAccount
             purchase_account.add_purchase_cost(
                 amount=total_cost,
                 product_reference=getattr(sale, 'sale_id', str(sale.id)),
-                user=user
+                user=user or getattr(sale, 'seller', None)
             )
             
-            # Record profit per item or total profit
+            # Record profit
             profit_account.add_profit(
                 amount=total_income - total_cost,
                 sale_reference=getattr(sale, 'sale_id', str(sale.id)),
-                user=user
+                user=user or getattr(sale, 'seller', None)
             )
         
         return {
             'income': total_income,
             'cost': total_cost,
             'profit': total_income - total_cost
-        }
+    }
 
 
 

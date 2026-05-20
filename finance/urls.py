@@ -13,6 +13,7 @@ urlpatterns = [
     # ============================================
     # SALARY MANAGEMENT
     # ============================================
+    path('check-salary-paid/', views.check_salary_paid, name='check_salary_paid'),
     path('salaries/', views.salary_list, name='salary_list'),
     path('salaries/create/', views.salary_create, name='salary_create'),
     path('salaries/<int:pk>/', views.salary_detail, name='salary_detail'),
@@ -115,4 +116,20 @@ urlpatterns = [
     path('capital-injections/create/', views.capital_injection_create, name='capital_injection_create'),
     path('capital-injections/<str:injection_id>/', views.capital_injection_detail, name='capital_injection_detail'),
     path('capital-injections/<str:injection_id>/repay/', views.loan_repayment_create, name='loan_repayment_create'),
+
+    # ============================================
+    # NEW FINANCIAL ACCOUNTS (Savings, Injection, Net)
+    # ============================================
+    path('financial-overview/', views.financial_overview, name='financial_overview'),
+    path('savings-account/', views.savings_account_detail, name='savings_account'),
+    path('injection-account/', views.injection_account_detail, name='injection_account'),
+    path('net-account/', views.net_account_detail, name='net_account'),
+    path('net/add-expense/', views.net_add_expense, name='net_add_expense'),
+
+    # ============================================
+    # ACCOUNTS  ACTIONS
+    # ============================================
+    path('savings/transfer-to-injection/', views.savings_transfer_to_injection, name='savings_transfer_to_injection'),
+    path('injection/add-external/', views.injection_add_external, name='injection_add_external'),
+    path('injection/transfer-to-net/', views.injection_transfer_to_net, name='injection_transfer_to_net'),
 ]

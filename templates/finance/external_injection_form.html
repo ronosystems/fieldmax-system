@@ -1,0 +1,169 @@
+{% extends 'finance/base.html' %}
+{% load humanize %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+            <div class="card shadow">
+                <div class="card-header bg-info text-white">
+                    <h4 class="mb-0">
+                        <i class="fas fa-syringe me-2"></i> {{ title }}
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <div class="mb-3">
+                            <label for="source_type" class="form-label fw-bold">Source Type *</label>
+                            <select name="source_type" id="source_type" class="form-select" required>
+                                <option value="">Select source type...</option>
+                                {% for value, label in source_choices %}
+                                <option value="{{ value }}">{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="source_name" class="form-label fw-bold">Source Name *</label>
+                            <input type="text" 
+                                   name="source_name" 
+                                   id="source_name" 
+                                   class="form-control"
+                                   placeholder="e.g., John Doe, KCB Bank, ABC Investments"
+                                   required>
+                            <small class="text-muted">Name of investor, bank, or source</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="amount" class="form-label fw-bold">Amount (KES) *</label>
+                            <div class="input-group">
+                                <span class="input-group-text">KES</span>
+                                <input type="number" 
+                                       name="amount" 
+                                       id="amount" 
+                                       class="form-control"
+                                       step="0.01"
+                                       min="0.01"
+                                       required
+                                       placeholder="0.00">
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="reference" class="form-label">Reference Number</label>
+                            <input type="text" 
+                                   name="reference" 
+                                   id="reference" 
+                                   class="form-control"
+                                   placeholder="e.g., Transaction ID, Check Number, Loan Ref">
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label for="notes" class="form-label">Notes</label>
+                            <textarea name="notes" 
+                                      id="notes" 
+                                      class="form-control" 
+                                      rows="3"
+                                      placeholder="Additional information about this injection..."></textarea>
+                        </div>
+                        
+                        <!-- Summary Card -->
+                        <div class="card bg-light mb-4">
+                            <div class="card-body">
+                                <h6 class="card-title"><i class="fas fa-info-circle me-2"></i> Injection Summary</h6>
+                                <div class="row">
+                                    <div class="col-6">
+                                        <small>Money goes to:</small>
+                                        <p class="mb-0 fw-bold text-info">Injection Account</p>
+                                    </div>
+                                    <div class="col-6">
+                                        <small>Will be available for:</small>
+                                        <p class="mb-0 fw-bold">Transfer to Net Account</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between">
+                            <a href="{% url 'finance:financial_overview' %}" class="btn btn-secondary">
+                                <i class="fas fa-times me-2"></i> Cancel
+                            </a>
+                            <button type="submit" class="btn btn-info" id="submitBtn">
+                                <i class="fas fa-plus-circle me-2"></i> {{ submit_text|default:"Add Injection" }}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.querySelector('form');
+    const submitBtn = document.getElementById('submitBtn');
+    
+    form.addEventListener('submit', function(e) {
+        const amount = parseFloat(document.getElementById('amount').value) || 0;
+        const sourceType = document.getElementById('source_type').value;
+        const sourceName = document.getElementById('source_name').value;
+        
+        if (amount <= 0) {
+            e.preventDefault();
+            alert('Please enter a valid amount greater than 0.');
+            return false;
+        }
+        
+        if (!sourceType) {
+            e.preventDefault();
+            alert('Please select a source type.');
+            return false;
+        }
+        
+        if (!sourceName.trim()) {
+            e.preventDefault();
+            alert('Please enter the source name.');
+            return false;
+        }
+        
+        if (!confirm(`Confirm injection of KES ${amount.toFixed(2)} from ${sourceName}?`)) {
+            e.preventDefault();
+            return false;
+        }
+        
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Processing...';
+        return true;
+    });
+});
+</script>
+
+<style>
+    .form-control:focus, .form-select:focus {
+        border-color: #0dcaf0;
+        box-shadow: 0 0 0 0.2rem rgba(13, 202, 240, 0.25);
+    }
+    
+    .btn-info {
+        background: linear-gradient(135deg, #0dcaf0 0%, #0b8c9e 100%);
+        border: none;
+        color: white;
+        transition: all 0.3s;
+    }
+    
+    .btn-info:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(13, 202, 240, 0.4);
+    }
+    
+    .btn-info:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+</style>
+{% endblock %}

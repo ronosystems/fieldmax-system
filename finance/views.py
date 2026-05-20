@@ -8,7 +8,6 @@ from django.db.models.functions import Coalesce
 from django.utils import timezone
 from decimal import Decimal
 from django.core.paginator import Paginator
-from django.http import JsonResponse
 from .models import (
     Salary, 
     FinancialTransaction, 
@@ -23,7 +22,6 @@ from sales.models import Sale, SaleItem
 from django.contrib.auth.models import User
 import calendar
 from datetime import datetime, date, timedelta
-from django.db import transaction
 from django.db import models
 import logging
 import time
@@ -34,6 +32,21 @@ from .models import MpesaTransaction, MpesaCallbackLog
 from sales.models import Sale 
 from django.views.decorators.http import require_http_methods
 from .kopokopo_service import stk_push_request, clean_phone_number, check_pending_transaction
+from django.contrib.admin.views.decorators import staff_member_required
+from django.core.paginator import Paginator
+from .models import MoneyTransfer, CashAccount, BankAccount
+from django.contrib.auth.decorators import login_required
+from django.db.models import Sum, Count, Q, F, DecimalField, ExpressionWrapper
+from datetime import datetime, timedelta
+from .models import (
+    IncomeAccount, PurchaseAccount, ProfitAccount, 
+    IncomeTransaction, PurchaseTransaction, ProfitTransaction
+)
+from sales.models import Sale, SaleItem
+from inventory.models import Product, StockEntry
+from .models import CapitalInjection, CapitalInjectionRepayment, CapitalAccount
+from inventory.models import Product, StockEntry
+
 
 
 
@@ -443,19 +456,52 @@ def finance_dashboard(request):
 
 
 
-
-
-
-
-
-
-
-
-    
-
 # ============================================
 # SALARY MANAGEMENT VIEWS
 # ============================================
+
+@login_required
+def check_salary_paid(request):
+    """Check if salary has already been paid for a staff member in a given month/year"""
+    staff_id = request.GET.get('staff_id')
+    month = request.GET.get('month')
+    year = request.GET.get('year')
+    
+    if not all([staff_id, month, year]):
+        return JsonResponse({'error': 'Missing parameters'}, status=400)
+    
+    try:
+        from django.contrib.auth.models import User
+        staff = User.objects.get(id=staff_id)
+        
+        salary = Salary.objects.filter(
+            staff_id=staff_id,
+            month=int(month),
+            year=int(year),
+            status='paid'
+        ).first()
+        
+        if salary:
+            # Get month name
+            month_names = ['', 'January', 'February', 'March', 'April', 'May', 'June', 
+                          'July', 'August', 'September', 'October', 'November', 'December']
+            month_name = month_names[int(month)]
+            
+            return JsonResponse({
+                'paid': True,
+                'staff_name': staff.get_full_name() or staff.username,
+                'month_name': month_name,
+                'paid_date': salary.paid_date.strftime('%Y-%m-%d %H:%M') if salary.paid_date else 'Unknown',
+                'amount': float(salary.total_amount)
+            })
+        else:
+            return JsonResponse({'paid': False})
+            
+    except User.DoesNotExist:
+        return JsonResponse({'paid': False, 'error': 'Staff not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'paid': False, 'error': str(e)}, status=500)
+
 
 @login_required
 def salary_list(request):
@@ -530,10 +576,6 @@ def salary_list(request):
     }
     
     return render(request, 'finance/salary_list.html', context)
-
-
-
-
 
 
 @login_required
@@ -751,10 +793,6 @@ def salary_create(request):
     }
     
     return render(request, 'finance/salary_create.html', context)
-
-
-
-    
 
 
 @login_required
@@ -1474,7 +1512,6 @@ def commission_approve_page(request, pk):
     }
     return render(request, 'finance/commission_approve.html', context)
 
-
 @login_required
 def commission_pay_page(request, pk):
     """Pay an approved commission (status='approved' -> 'paid')"""
@@ -1553,7 +1590,6 @@ def commission_pay_page(request, pk):
     }
     return render(request, 'finance/commission_pay.html', context)
 
-
 @login_required
 def commission_reject_page(request, pk):
     """Reject a pending commission (status='pending' -> 'cancelled')"""
@@ -1602,8 +1638,6 @@ def commission_reject_page(request, pk):
         'commission': commission,
     }
     return render(request, 'finance/commission_reject.html', context)
-
-
 
 
 @login_required
@@ -2065,7 +2099,6 @@ def financial_transactions(request):
     return render(request, 'finance/transactions.html', context)
 
 
-
 # ============================================
 # INCOME AND EXPENSE VIEWS
 # ============================================
@@ -2188,10 +2221,6 @@ def financial_income(request):
     return render(request, 'finance/financial_income.html', context)
 
 
-
-    
-
-
 @login_required
 def financial_expenses(request):
     """List all expense transactions only"""
@@ -2308,10 +2337,6 @@ def financial_expenses(request):
     }
     
     return render(request, 'finance/financial_expenses.html', context)
-
-
-
-
 
 @login_required
 def bank_account(request):
@@ -2465,11 +2490,6 @@ def bank_account(request):
     }
     
     return render(request, 'finance/account_detail.html', context)
-
-
-
-
-
 
 
 @login_required
@@ -2626,9 +2646,6 @@ def cash_account(request):
     
     return render(request, 'finance/account_detail.html', context)
 
-
-
-
 @login_required
 def credit_account(request):
     """Credit account dashboard"""
@@ -2679,7 +2696,6 @@ def credit_account(request):
     }
     
     return render(request, 'finance/account_detail.html', context)
-
 
 @login_required
 def add_account_transaction(request):
@@ -2739,7 +2755,6 @@ def add_account_transaction(request):
         'account_type': request.GET.get('account', ''),
     }
     return render(request, 'finance/add_transaction.html', context)
-
 
 @login_required
 def credit_company_payment(request, company_id):
@@ -2835,11 +2850,6 @@ def credit_company_payments_dashboard(request):
     }
     
     return render(request, 'finance/credit_company_payments.html', context)
-
-
-
-
-
 
 
 @login_required
@@ -3010,11 +3020,6 @@ def expenses_detail(request, transaction_id):
     
     return render(request, 'finance/expenses_detail.html', context)
 
-
-
-
-
-
 @login_required
 def income_detail(request, transaction_id):
     """View detailed income information"""
@@ -3148,11 +3153,6 @@ def income_detail(request, transaction_id):
     
     return render(request, 'finance/income_detail.html', context)
 
-
-
-
-
-
 @login_required
 def stock_purchase_expenses(request):
     """View all stock purchase expenses"""
@@ -3233,16 +3233,10 @@ def stock_purchase_expenses(request):
 
 
 
-
-
-
-
-
 # ============================================
 # M-PESA PAYMENT INTEGRATION - COMPLETE
 # ============================================
 
-# TEMPORARY CART STORAGE FOR M-PESA PAYMENTS
 @login_required
 def store_mpesa_cart(request):
     """Store cart data temporarily while waiting for M-Pesa payment"""
@@ -3268,10 +3262,6 @@ def store_mpesa_cart(request):
         logger.error(f"Error storing cart: {str(e)}")
         return JsonResponse({'success': False, 'error': str(e)})
 
-
-
-
-
 @login_required
 def get_mpesa_cart(request, checkout_id):
     """Retrieve stored cart data after payment confirmation"""
@@ -3295,8 +3285,6 @@ def get_mpesa_cart(request, checkout_id):
         return JsonResponse({'success': False, 'error': str(e)})
 
 
-
-
 async def clear_mpesa_cart_data(checkout_id):
     """Clear cart data after timeout or failure"""
     try:
@@ -3304,10 +3292,6 @@ async def clear_mpesa_cart_data(checkout_id):
         cache.delete(cache_key)
     except Exception as e:
         logger.error(f"Error clearing cart: {str(e)}")
-
-
-
-
 
 @csrf_exempt
 @require_http_methods(["POST"])
@@ -3417,7 +3401,6 @@ def mpesa_status_check(request, checkout_request_id):
         return JsonResponse({'success': False, 'status': 'error', 'error': str(e)})
 
 
-
 def mpesa_transaction_detail(request, reference):
     """Get M-Pesa transaction details by reference"""
     try:
@@ -3440,7 +3423,6 @@ def mpesa_transaction_detail(request, reference):
     except Exception as e:
         logger.error(f"Transaction detail error: {str(e)}")
         return JsonResponse({'status': 'error', 'error': str(e)}, status=500)
-
 
 @csrf_exempt
 def mpesa_callback(request):
@@ -3537,24 +3519,9 @@ def mpesa_callback(request):
 
 
 
-
-
-
-
-
-
-
 # ============================================
 # MONEY TRANSFER VIEWS
 # ============================================
-# finance/views.py
-
-from django.shortcuts import render, get_object_or_404, redirect
-from django.contrib.admin.views.decorators import staff_member_required
-from django.contrib import messages
-from django.core.paginator import Paginator
-from decimal import Decimal
-from .models import MoneyTransfer, CashAccount, BankAccount
 
 @staff_member_required
 def money_transfer_list(request):
@@ -3676,24 +3643,6 @@ def money_transfer_cancel(request, pk):
         return redirect('finance:money_transfer_list')
     
     return render(request, 'finance/money_transfer_cancel.html', {'transfer': transfer})
-
-
-
-
-
-
-from django.shortcuts import render
-from django.contrib.auth.decorators import login_required
-from django.db.models import Sum, Count, Q, F, DecimalField, ExpressionWrapper
-from django.utils import timezone
-from datetime import datetime, timedelta
-from decimal import Decimal
-from .models import (
-    IncomeAccount, PurchaseAccount, ProfitAccount, 
-    IncomeTransaction, PurchaseTransaction, ProfitTransaction
-)
-from sales.models import Sale, SaleItem
-from inventory.models import Product, StockEntry
 
 
 @login_required
@@ -3950,9 +3899,6 @@ def sales_income_page(request):
     }
     
     return render(request, 'finance/sales_income.html', context)
-
-
-
 
 
 @login_required
@@ -4213,11 +4159,6 @@ def inventory_expenses_page(request):
     return render(request, 'finance/inventory_expenses.html', context)
 
 
-
-
-from .models import CapitalInjection, CapitalInjectionRepayment, CapitalAccount
-from inventory.models import Product, StockEntry
-
 @login_required
 def capital_injection_list(request):
     """List all capital injections"""
@@ -4363,9 +4304,12 @@ def capital_injection_list(request):
     }
     return render(request, 'finance/capital_injections.html', context)
 
+
 @login_required
 def capital_injection_create(request):
-    """Create a new capital injection"""
+    """Create a new capital injection - Records in BOTH accounts AND adds to Net"""
+    from .models import InjectionAccount, NetAccount
+    
     if request.method == 'POST':
         source_type = request.POST.get('source_type')
         source_name = request.POST.get('source_name')
@@ -4382,6 +4326,9 @@ def capital_injection_create(request):
         if is_loan and repayment_term > 0:
             monthly_repayment = amount / Decimal(repayment_term)
         
+        # ============================================
+        # 1. Create CapitalInjection (old system)
+        # ============================================
         injection = CapitalInjection.objects.create(
             source_type=source_type,
             source_name=source_name,
@@ -4397,10 +4344,44 @@ def capital_injection_create(request):
             status='completed'
         )
         
-        # Process the injection
+        # Process the injection (creates FinancialTransaction and updates cash/bank)
         injection.process_injection(request.user)
         
-        messages.success(request, f'Capital injection of KES {amount:,.2f} added successfully!')
+        # ============================================
+        # 2. Also add to InjectionAccount (new system)
+        # ============================================
+        try:
+            source_type_map = {
+                'investor': 'investment',
+                'loan': 'loan',
+                'personal': 'capital',
+                'grant': 'grant',
+                'partner': 'partner',
+                'other': 'other',
+            }
+            inj_source_type = source_type_map.get(source_type, 'other')
+            
+            injection_account = InjectionAccount.get_account()
+            injection_account.add_external_injection(
+                amount=amount,
+                source_type=inj_source_type,
+                source_name=source_name,
+                reference=injection.injection_id,
+                user=request.user
+            )
+            logger.info(f"✅ InjectionAccount updated for {injection.injection_id}")
+            
+            # ============================================
+            # 3. Transfer to Net Account (NEW)
+            # ============================================
+            net_account = NetAccount.get_account()
+            net_account.receive_injection(amount, user=request.user)
+            logger.info(f"💰 NET: +{amount} injection received from {source_name}")
+            
+        except Exception as e:
+            logger.error(f"Failed to update InjectionAccount/NetAccount: {str(e)}")
+        
+        messages.success(request, f'Capital injection of KES {amount:,.2f} added successfully to all accounts!')
         return redirect('finance:capital_injection_list')
     
     return render(request, 'finance/capital_injection_form.html')
@@ -4433,6 +4414,7 @@ def capital_injection_detail(request, injection_id):
 
 @login_required
 def loan_repayment_create(request, injection_id):
+
     """Record a loan repayment"""
     injection = get_object_or_404(CapitalInjection, injection_id=injection_id)
     
@@ -4475,3 +4457,485 @@ def loan_repayment_create(request, injection_id):
         'suggested_amount': injection.monthly_repayment
     }
     return render(request, 'finance/loan_repayment_form.html', context)
+
+
+
+
+# ============================================
+# NEW FINANCIAL ACCOUNTS VIEWS
+# ============================================
+
+@login_required
+def financial_overview(request):
+    """Overview page showing all three accounts"""
+    from .models import SavingsAccount, InjectionAccount, NetAccount
+    
+    savings = SavingsAccount.get_account()
+    injection = InjectionAccount.get_account()
+    net = NetAccount.get_account()
+    
+    # Get recent transactions
+    savings_transactions = savings.transactions.all()[:10]
+    injection_transactions = injection.transactions.all()[:10]
+    net_transactions = net.transactions.all()[:10]
+    
+    context = {
+        'savings': savings,
+        'injection': injection,
+        'net': net,
+        'savings_transactions': savings_transactions,
+        'injection_transactions': injection_transactions,
+        'net_transactions': net_transactions,
+    }
+    
+    return render(request, 'finance/financial_overview.html', context)
+
+
+@login_required
+def savings_account_detail(request):
+    """Savings account detail page"""
+    from .models import SavingsAccount
+    
+    savings = SavingsAccount.get_account()
+    transactions = savings.transactions.all().order_by('-transaction_date')
+    
+    # Pagination
+    paginator = Paginator(transactions, 50)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    context = {
+        'account': savings,
+        'transactions': page_obj,
+        'account_type': 'Savings Account',
+        'account_icon': 'fa-piggy-bank',
+        'account_color': 'success',
+        'description': 'Only profits from sales are stored here. Money can be transferred to Injection Account when needed.',
+        'can_transfer': savings.balance > 0,
+    }
+    
+    return render(request, 'finance/account_detail_new.html', context)
+
+
+@login_required
+def injection_account_detail(request):
+    """Injection account detail page"""
+    from .models import InjectionAccount
+    
+    injection = InjectionAccount.get_account()
+    transactions = injection.transactions.all().order_by('-transaction_date')
+    
+    # Pagination
+    paginator = Paginator(transactions, 50)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    context = {
+        'account': injection,
+        'transactions': page_obj,
+        'account_type': 'Injection Account',
+        'account_icon': 'fa-syringe',
+        'account_color': 'info',
+        'description': 'Money enters the business here (from Savings or external sources). Transfer to Net Account for operations.',
+        'can_transfer': injection.balance > 0,
+    }
+    
+    return render(request, 'finance/account_detail_new.html', context)
+
+
+@login_required
+def net_account_detail(request):
+    """Net account detail page"""
+    from .models import NetAccount
+    from django.contrib.auth.models import User
+    from shops.models import ShopBranch
+    from datetime import datetime
+    
+    net = NetAccount.get_account()
+    transactions = net.transactions.all().order_by('-transaction_date')
+    
+    # Get staff list for salary payment
+    staff_list = User.objects.filter(is_active=True)
+    
+    # Get shops list for rent payment
+    try:
+        from shops.models import ShopBranch
+        shop_list = ShopBranch.objects.filter(is_active=True)
+    except:
+        shop_list = []
+    
+    # Year range for salary payment (last 5 years to next 2 years)
+    current_year = datetime.now().year
+    year_range = range(current_year - 5, current_year + 3)
+    
+    # Calculate summary
+    total_additions = net.total_additions
+    total_deductions = net.total_deductions
+    
+    # Pagination
+    paginator = Paginator(transactions, 50)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    context = {
+        'account': net,
+        'transactions': page_obj,
+        'account_type': 'Net Account',
+        'account_icon': 'fa-network-wired',
+        'account_color': 'primary',
+        'description': 'Main operating account. COGS added from sales, expenses deducted.',
+        'total_additions': total_additions,
+        'total_deductions': total_deductions,
+        'additions_breakdown': {
+            'COGS': net.total_cogs_added,
+            'Injections': net.total_injections_received,
+        },
+        'deductions_breakdown': {
+            'Inventory Purchases': net.total_inventory_purchases,
+            'Salaries': net.total_salaries,
+            'Operational Expenses': net.total_operational_expenses,
+        },
+        'staff_list': staff_list,
+        'shop_list': shop_list,
+        'year_range': year_range,
+        'current_year': current_year,
+    }
+    
+    return render(request, 'finance/account_detail_new.html', context)
+
+
+@login_required
+def net_add_expense(request):
+    """Add expense to Net Account (salary, rent, utilities, etc.)"""
+    from .models import NetAccount, Salary, NetTransaction
+    from django.contrib.auth.models import User
+    from shops.models import ShopBranch
+    from datetime import datetime
+    
+    if request.method == 'POST':
+        expense_type = request.POST.get('expense_type')
+        amount = Decimal(request.POST.get('amount', '0'))
+        reference = request.POST.get('reference', '')
+        notes = request.POST.get('notes', '')
+        payment_method = request.POST.get('payment_method', 'bank')
+        
+        if amount <= 0:
+            messages.error(request, 'Amount must be greater than 0')
+            return redirect('finance:net_account')
+        
+        net = NetAccount.get_account()
+        
+        if expense_type == 'salary':
+            staff_id = request.POST.get('staff_id')
+            salary_month = request.POST.get('salary_month')
+            salary_year = request.POST.get('salary_year')
+            
+            if not staff_id:
+                messages.error(request, 'Please select a staff member')
+                return redirect('finance:net_account')
+            
+            if not salary_month or not salary_year:
+                messages.error(request, 'Please select salary month and year')
+                return redirect('finance:net_account')
+            
+            # Get month name for display
+            month_names = ['', 'January', 'February', 'March', 'April', 'May', 'June', 
+                          'July', 'August', 'September', 'October', 'November', 'December']
+            month_name = month_names[int(salary_month)]
+            
+            # Check if salary already exists
+            existing_salary = Salary.objects.filter(
+                staff_id=staff_id,
+                month=int(salary_month),
+                year=int(salary_year)
+            ).first()
+            
+            if existing_salary:
+                staff = User.objects.get(id=staff_id)
+                messages.error(
+                    request, 
+                    f'❌ BLOCKED: Salary for {staff.get_full_name() or staff.username} in '
+                    f'{month_name} {salary_year} already exists!\n'
+                    f'Status: {existing_salary.get_status_display()} | '
+                    f'Amount: KES {existing_salary.total_amount:,.2f}'
+                )
+                return redirect('finance:net_account')
+            
+            try:
+                staff = User.objects.get(id=staff_id)
+                staff_name = staff.get_full_name() or staff.username
+            except:
+                staff_name = request.POST.get('staff_name', 'Unknown')
+            
+            # Create salary record
+            salary = Salary.objects.create(
+                staff_id=staff_id,
+                month=int(salary_month),
+                year=int(salary_year),
+                base_salary=amount,
+                bonus=0,
+                deductions=0,
+                total_amount=amount,
+                status='paid',
+                paid_date=timezone.now(),
+                paid_by=request.user,
+                payment_reference=reference,
+                notes=notes,
+                created_by=request.user
+            )
+            
+            # Create description with month
+            expense_description = f"Salary: {staff_name} - {month_name} {salary_year}"
+            
+            # Update Net Account balance (DO NOT call deduct_salary)
+            net.balance -= amount
+            net.total_salaries += amount
+            net.updated_by = request.user
+            net.save()
+            
+            # Create ONLY ONE NetTransaction
+            NetTransaction.objects.create(
+                net_account=net,
+                amount=amount,
+                transaction_type='deduction',
+                category='salary',
+                reference=reference,
+                description=expense_description,
+                created_by=request.user
+            )
+            
+            messages.success(request, f'✅ Salary of KES {amount:,.2f} for {staff_name} ({month_name} {salary_year}) deducted from Net Account')
+            
+        elif expense_type == 'rent':
+            shop_id = request.POST.get('shop_id')
+            shop_name = ""
+            if shop_id:
+                try:
+                    shop = ShopBranch.objects.get(id=shop_id)
+                    shop_name = shop.name
+                except:
+                    shop_name = "Shop"
+            else:
+                shop_name = request.POST.get('property_name', 'Property')
+            
+            month = request.POST.get('month', '')
+            year = request.POST.get('year', '')
+            period = f"{month} {year}" if month and year else month
+            expense_description = f"Rent: {shop_name} - {period}" if period else f"Rent: {shop_name}"
+            
+            net.deduct_operational_expense(amount=amount, expense_type='Rent', reference=reference, user=request.user)
+            messages.success(request, f'✅ Rent of KES {amount:,.2f} for {shop_name} deducted from Net Account')
+            
+        elif expense_type == 'utility':
+            utility_type = request.POST.get('utility_type', '')
+            meter_number = request.POST.get('meter_number', '')
+            expense_description = f"Utility: {utility_type}" + (f" - {meter_number}" if meter_number else "")
+            net.deduct_operational_expense(amount=amount, expense_type='Utility', reference=reference, user=request.user)
+            messages.success(request, f'✅ {utility_type} expense of KES {amount:,.2f} deducted from Net Account')
+            
+        else:  # other expenses
+            category = request.POST.get('expense_category', '')
+            description = request.POST.get('description', '')
+            expense_description = f"{category}: {description}"
+            net.deduct_operational_expense(amount=amount, expense_type=category, reference=reference, user=request.user)
+            messages.success(request, f'✅ {category} expense of KES {amount:,.2f} deducted from Net Account')
+        
+        # Create financial transaction record
+        from .models import FinancialTransaction
+        FinancialTransaction.objects.create(
+            transaction_type='expense',
+            category='operational',
+            amount=amount,
+            description=expense_description,
+            payment_method=payment_method,
+            payment_reference=reference,
+            recipient_name=staff_name if expense_type == 'salary' else (shop_name if expense_type == 'rent' else category),
+            created_by=request.user,
+            notes=notes
+        )
+        
+        return redirect('finance:net_account')
+    
+    return redirect('finance:net_account')
+
+
+@login_required
+def savings_transfer_to_injection(request):
+    """Transfer money from Savings to Injection Account AND automatically to Net"""
+    from .models import SavingsAccount, InjectionAccount, NetAccount
+    
+    if request.method == 'POST':
+        amount = Decimal(request.POST.get('amount', '0'))
+        reference = request.POST.get('reference', '')
+        notes = request.POST.get('notes', '')
+        
+        if amount <= 0:
+            messages.error(request, 'Amount must be greater than 0')
+            return redirect('finance:savings_transfer_to_injection')
+        
+        savings = SavingsAccount.get_account()
+        success, message = savings.transfer_to_injection(amount, user=request.user)
+        
+        if success:
+            # Also transfer from Injection to Net automatically
+            injection = InjectionAccount.get_account()
+            net = NetAccount.get_account()
+            
+            # Transfer from Injection to Net
+            net.receive_injection(amount, user=request.user)
+            injection.record_transfer_to_net(amount, user=request.user)
+            
+            messages.success(request, f'{message} Also transferred to Net Account automatically.')
+            return redirect('finance:financial_overview')
+        else:
+            messages.error(request, message)
+    
+    savings = SavingsAccount.get_account()
+    
+    context = {
+        'savings_balance': savings.balance,
+        'from_balance': savings.balance, 
+        'from_account': 'Savings Account',
+        'to_account': 'Injection Account (then to Net)',
+        'action_url': 'finance:savings_transfer_to_injection',
+        'title': 'Transfer from Savings to Net (via Injection)',
+    }
+    
+    return render(request, 'finance/transfer_form.html', context)
+
+
+@login_required
+def injection_transfer_to_net(request):
+    """Transfer money from Injection to Net Account"""
+    from .models import InjectionAccount
+    
+    if request.method == 'POST':
+        amount = Decimal(request.POST.get('amount', '0'))
+        reference = request.POST.get('reference', '')
+        notes = request.POST.get('notes', '')
+        
+        if amount <= 0:
+            messages.error(request, 'Amount must be greater than 0')
+            return redirect('finance:injection_transfer_to_net')
+        
+        injection = InjectionAccount.get_account()
+        success, message = injection.transfer_to_net(amount, user=request.user)
+        
+        if success:
+            messages.success(request, message)
+            return redirect('finance:financial_overview')
+        else:
+            messages.error(request, message)
+    
+    injection = InjectionAccount.get_account()
+    
+    context = {
+        'injection_balance': injection.balance,
+        'from_balance': injection.balance,
+        'from_account': 'Injection Account',
+        'to_account': 'Net Account',
+        'action_url': 'finance:injection_transfer_to_net',
+        'title': 'Transfer from Injection to Net',
+    }
+    
+    return render(request, 'finance/transfer_form.html', context)
+
+
+@login_required
+def injection_add_external(request):
+    """Add external injection (capital, loan, investment) - Records in BOTH accounts AND adds to Net"""
+    from .models import InjectionAccount, CapitalInjection, FinancialTransaction, CashAccount, BankAccount, NetAccount
+    from decimal import Decimal
+    
+    if request.method == 'POST':
+        amount = Decimal(request.POST.get('amount', '0'))
+        source_type = request.POST.get('source_type')
+        source_name = request.POST.get('source_name')
+        reference = request.POST.get('reference', '')
+        notes = request.POST.get('notes', '')
+        
+        if amount <= 0:
+            messages.error(request, 'Amount must be greater than 0')
+            return redirect('finance:injection_add_external')
+        
+        if not source_name:
+            source_name = dict(InjectionAccount.SOURCE_CHOICES).get(source_type, source_type)
+        
+        # ============================================
+        # 1. Add to InjectionAccount
+        # ============================================
+        injection_account = InjectionAccount.get_account()
+        success, message = injection_account.add_external_injection(
+            amount=amount,
+            source_type=source_type,
+            source_name=source_name,
+            reference=reference,
+            user=request.user
+        )
+        
+        if not success:
+            messages.error(request, message)
+            return redirect('finance:injection_add_external')
+        
+        # ============================================
+        # 2. Transfer to Net Account (NEW - Auto transfer)
+        # ============================================
+        net_account = NetAccount.get_account()
+        net_account.receive_injection(amount, user=request.user)
+        logger.info(f"💰 NET: +{amount} injection received from {source_name}")
+        
+        # ============================================
+        # 3. Also create CapitalInjection record (for old system)
+        # ============================================
+        try:
+            # Map source_type to CapitalInjection source_type
+            source_type_map = {
+                'capital': 'personal',
+                'loan': 'loan',
+                'investment': 'investor',
+                'grant': 'grant',
+                'partner': 'partner',
+                'other': 'other',
+            }
+            cap_source_type = source_type_map.get(source_type, 'other')
+            
+            # Create CapitalInjection
+            capital_injection = CapitalInjection.objects.create(
+                source_type=cap_source_type,
+                source_name=source_name,
+                amount=amount,
+                payment_method='bank',
+                payment_reference=reference,
+                target_account='bank',
+                is_loan=(source_type == 'loan'),
+                notes=f"Auto-created from external injection. {notes}",
+                created_by=request.user,
+                status='completed'
+            )
+            
+            # Process the capital injection
+            capital_injection.process_injection(user=request.user)
+            
+            logger.info(f"✅ CapitalInjection created: {capital_injection.injection_id} for {amount}")
+            
+        except Exception as e:
+            logger.error(f"Failed to create CapitalInjection: {str(e)}")
+        
+        messages.success(request, f'{message} Added to Net Account automatically.')
+        return redirect('finance:financial_overview')
+    
+    context = {
+        'source_choices': [
+            ('capital', 'Owner Capital'),
+            ('loan', 'Bank Loan'),
+            ('investment', 'Investment'),
+            ('grant', 'Grant'),
+            ('partner', 'Business Partner'),
+            ('other', 'Other Source'),
+        ],
+        'action_url': 'finance:injection_add_external',
+        'title': 'Add External Injection',
+        'submit_text': 'Add Injection',
+    }
+    
+    return render(request, 'finance/external_injection_form.html', context)

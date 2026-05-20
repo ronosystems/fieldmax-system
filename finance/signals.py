@@ -1,4 +1,5 @@
 # finance/signals.py
+from django.db import transaction
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from decimal import Decimal
@@ -11,7 +12,7 @@ from .models import (
     FinancialTransaction, CashAccount, BankAccount, CapitalAccount, 
     CapitalInjection, CapitalInjectionRepayment, StockPurchase, 
     PurchaseAccount, IncomeTransaction, IncomeAccount, ProfitAccount,
-    PurchaseTransaction, ProfitTransaction
+    PurchaseTransaction, ProfitTransaction, NetAccount, SavingsAccount
 )
 from finance import models
 
@@ -19,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 # ============================================
-# SALE ACCOUNTING HELPER (moved here from models)
+# SALE ACCOUNTING HELPER - FIXED VERSION
 # ============================================
 
 class SaleAccountingHelper:
@@ -52,10 +53,10 @@ class SaleAccountingHelper:
             items = []
         
         for item in items:
-            # Calculate selling price total
-            selling_price = Decimal(str(item.price)) * Decimal(str(item.quantity))
+            # FIXED: Use unit_price, not price
+            selling_price = Decimal(str(item.unit_price)) * Decimal(str(item.quantity))
             
-            # Get buying price from product (CORRECTED price)
+            # Get buying price from product
             if hasattr(item, 'product') and item.product:
                 buying_price = Decimal(str(item.product.buying_price)) * Decimal(str(item.quantity))
             else:
@@ -105,7 +106,6 @@ def create_finance_entry_for_company_payment(sender, instance, created, **kwargs
     """Automatically create finance entry when a company payment is recorded"""
     if created:
         try:
-            # Create financial transaction
             FinancialTransaction.objects.create(
                 transaction_type='income',
                 category='credit_reconciliation',
@@ -118,7 +118,6 @@ def create_finance_entry_for_company_payment(sender, instance, created, **kwargs
                 notes=instance.notes
             )
             
-            # Update account balance
             if instance.payment_method == 'cash':
                 cash_account, _ = CashAccount.objects.get_or_create(id=1)
                 cash_account.balance += instance.amount
@@ -135,75 +134,67 @@ def create_finance_entry_for_company_payment(sender, instance, created, **kwargs
 
 
 # ============================================
-# SIGNAL: Sale
+# SIGNAL: Sale (Main Accounting) - FIXED
 # ============================================
 
 @receiver(post_save, sender=Sale)
 def process_sale_accounting(sender, instance, created, **kwargs):
     """
     Process accounting when a sale is completed:
-    1. Create IncomeTransaction for capital tracking
-    2. Process sale accounting (income, cost, profit)
+    Update Net and Savings accounts
     """
-    # Only process when sale is completed and not reversed
+    # Only process when sale is not reversed
     if instance.is_reversed:
         return
     
-    # Check if sale has a status field and it's completed
-    if hasattr(instance, 'status') and instance.status != 'completed':
-        return
-    
     try:
-        # STEP 1: Create IncomeTransaction for capital account (if new sale)
-        if created:
-            income_account = IncomeAccount.get_or_create_account()
-            IncomeTransaction.objects.create(
-                income_account=income_account,
-                amount=instance.total_amount,
-                transaction_type='sale',
-                reference=instance.sale_id,
-                description=f"Sale {instance.sale_id}",
-                transaction_date=instance.sale_date,
-                created_by=instance.seller
-            )
-            logger.info(f"✅ Auto-created IncomeTransaction for sale {instance.sale_id}")
+        net_account = NetAccount.get_account()
+        savings_account = SavingsAccount.get_account()
         
-        # STEP 2: Process sale accounting (Income, COGS, Profit)
-        result = SaleAccountingHelper.process_sale(instance, instance.seller)
-        logger.info(f"Sale {instance.sale_id} accounted: Income={result['income']}, Cost={result['cost']}, Profit={result['profit']}")
+        total_cogs = Decimal('0')
+        total_profit = Decimal('0')
+        
+        for item in instance.items.all():
+            if item.product:
+                buying_price = item.product.buying_price or Decimal('0')
+                cogs_for_item = buying_price * item.quantity
+                profit_for_item = item.total_price - cogs_for_item
+                
+                total_cogs += cogs_for_item
+                total_profit += profit_for_item
+        
+        if total_cogs > 0:
+            net_account.add_cogs(amount=total_cogs, sale_reference=instance.sale_id, user=instance.seller)
+            logger.info(f"📈 NET: Added COGS KES {total_cogs} from sale {instance.sale_id}")
+        
+        if total_profit > 0:
+            savings_account.add_profit(amount=total_profit, sale_reference=instance.sale_id, user=instance.seller)
+            logger.info(f"💰 SAVINGS: Added profit KES {total_profit} from sale {instance.sale_id}")
         
     except Exception as e:
         logger.error(f"Error processing sale accounting for {instance.sale_id}: {str(e)}")
 
 
 # ============================================
-# SIGNAL: StockEntry (when prices are corrected)
+# SIGNAL: StockEntry (Purchase entries only)
 # ============================================
 
 @receiver(post_save, sender=StockEntry)
 def update_purchase_account_on_stock_entry(sender, instance, created, **kwargs):
-    """
-    Update purchase account when stock entry is created or updated
-    IMPORTANT: This ensures finance accounts stay in sync with corrected inventory prices
-    """
-    # Only process purchase entries
+    """Update purchase account when stock entry is created or updated"""
     if instance.entry_type != 'purchase' or instance.quantity <= 0:
         return
     
     try:
         purchase_account = PurchaseAccount.get_or_create_account()
-        
-        # Calculate total cost for this entry (using the current unit_price)
         total_cost = instance.unit_price * instance.quantity
         
-        # Add to purchase account
         purchase_account.add_purchase_cost(
             amount=total_cost,
             product_reference=instance.reference_id or f"SKU:{instance.product_sku.sku_code if instance.product_sku else 'N/A'}",
             user=instance.created_by
         )
         
-        # Also update the total purchases value
         purchase_account.total_purchases = PurchaseTransaction.objects.filter(
             transaction_type='cogs'
         ).aggregate(total=models.Sum('amount'))['total'] or Decimal('0')
@@ -226,7 +217,7 @@ def update_capital_account_on_injection(sender, instance, created, **kwargs):
         try:
             capital_account = CapitalAccount.get_or_create_account()
             capital_account.refresh_from_db()
-            logger.info(f"✅ Capital account updated after injection {instance.injection_id}: Net={capital_account.net_capital}")
+            logger.info(f"✅ Capital account updated after injection {instance.injection_id}")
         except Exception as e:
             logger.error(f"Error updating capital account for injection: {str(e)}")
 
@@ -241,73 +232,31 @@ def update_capital_account_on_repayment(sender, instance, created, **kwargs):
     try:
         capital_account = CapitalAccount.get_or_create_account()
         capital_account.refresh_from_db()
-        logger.info(f"✅ Capital account updated after repayment: Net={capital_account.net_capital}")
+        logger.info(f"✅ Capital account updated after repayment")
     except Exception as e:
         logger.error(f"Error updating capital account for repayment: {str(e)}")
 
-
 # ============================================
-# SIGNAL: Stock Purchase (Finance model)
-# ============================================
-
-@receiver(post_save, sender=StockPurchase)
-def update_capital_on_stock_purchase(sender, instance, created, **kwargs):
-    """Update capital account when stock is purchased"""
-    if created:
-        try:
-            capital_account = CapitalAccount.get_or_create_account()
-            # Refresh from database to get latest values
-            capital_account.refresh_from_db()
-            logger.info(f"💰 Stock purchase recorded: KES {instance.total_amount:,.2f} for {instance.sku_code}")
-        except Exception as e:
-            logger.error(f"Error updating capital for stock purchase: {str(e)}")
-
-
-# ============================================
-# SIGNAL: Income Transaction
+# SIGNAL: AccountTransaction Expense for Net Account
 # ============================================
 
-@receiver(post_save, sender=IncomeTransaction)
-def add_sales_revenue_to_capital(sender, instance, created, **kwargs):
-    """Add sales revenue to capital account when a sale is recorded"""
-    if created and instance.transaction_type == 'sale':
-        try:
-            capital_account = CapitalAccount.get_or_create_account()
-            capital_account.refresh_from_db()
-            logger.info(f"💰 Sales revenue added to capital: KES {instance.amount:,.2f}")
-        except Exception as e:
-            logger.error(f"Error updating capital for income transaction: {str(e)}")
-
-
-# ============================================
-# SIGNAL: Product Price Update (via StockEntry)
-# ============================================
-
-@receiver(post_save, sender=StockEntry)
-def sync_finance_on_price_correction(sender, instance, **kwargs):
-    """
-    CRITICAL: When stock entries are updated with corrected prices,
-    this signal ensures finance accounts are updated accordingly
-    """
-    # Check if this is a price correction (quantity=0 entry)
-    if instance.quantity == 0 and 'PRICE-CHANGE' in (instance.reference_id or ''):
-        try:
-            # This is a price correction record - need to update related finance entries
-            purchase_account = PurchaseAccount.get_or_create_account()
-            
-            # Recalculate total purchases from all stock entries (using corrected prices)
-            from django.db.models import Sum, F
-            total_purchases = StockEntry.objects.filter(
-                entry_type='purchase',
-                quantity__gt=0
-            ).aggregate(total=Sum(F('quantity') * F('unit_price')))['total'] or Decimal('0')
-            
-            # Update purchase account
-            purchase_account.balance = total_purchases
-            purchase_account.total_purchases = total_purchases
-            purchase_account.save()
-            
-            logger.info(f"💰 Purchase account corrected to KES {total_purchases:,.2f} after price update")
-            
-        except Exception as e:
-            logger.error(f"Error syncing finance on price correction: {str(e)}")
+@receiver(post_save, sender='finance.AccountTransaction')
+def process_expense_for_net(sender, instance, created, **kwargs):
+    """When an expense is recorded, deduct from Net Account"""
+    if not created or instance.transaction_type != 'expense':
+        return
+    
+    try:
+        net_account = NetAccount.get_account()
+        expense_type_map = {'cash': 'Cash Expense', 'bank': 'Bank Expense', 'credit': 'Credit Expense'}
+        expense_type = expense_type_map.get(instance.account_type, 'Operational Expense')
+        
+        net_account.deduct_operational_expense(
+            amount=instance.amount,
+            expense_type=expense_type,
+            reference=instance.reference or f"EXP-{instance.id}",
+            user=instance.created_by
+        )
+        logger.info(f"📉 NET: Deducted expense KES {instance.amount} ({expense_type})")
+    except Exception as e:
+        logger.error(f"Failed to process expense for Net: {str(e)}")

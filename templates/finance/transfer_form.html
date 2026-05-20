@@ -1,0 +1,227 @@
+{% extends 'finance/base.html' %}
+{% load humanize %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+            <div class="card shadow">
+                <div class="card-header bg-{{ request.GET.color|default:'primary' }} text-white">
+                    <h4 class="mb-0">
+                        <i class="fas fa-exchange-alt me-2"></i> {{ title }}
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <!-- Transfer Info Alert -->
+                    <div class="alert alert-info mb-4">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Transfer Details:</strong><br>
+                        From: <strong>{{ from_account }}</strong><br>
+                        To: <strong>{{ to_account }}</strong><br>
+                        Available Balance: <strong class="text-success">KES {{ from_balance|floatformat:2|intcomma }}</strong>
+                    </div>
+                    
+                    <!-- Transfer Form -->
+                    <form method="post" id="transferForm">
+                        {% csrf_token %}
+                        
+                        <div class="mb-4">
+                            <label for="amount" class="form-label fw-bold">Transfer Amount (KES)</label>
+                            <div class="input-group input-group-lg">
+                                <span class="input-group-text">KES</span>
+                                <input type="number" 
+                                       name="amount" 
+                                       id="amount" 
+                                       class="form-control form-control-lg"
+                                       step="0.01"
+                                       min="0.01"
+                                       max="{{ from_balance }}"
+                                       required
+                                       placeholder="0.00">
+                            </div>
+                            <small class="text-muted">Maximum: KES {{ from_balance|floatformat:2|intcomma }}</small>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label for="reference" class="form-label">Reference (Optional)</label>
+                            <input type="text" 
+                                   name="reference" 
+                                   id="reference" 
+                                   class="form-control"
+                                   placeholder="e.g., Monthly transfer, Investment, etc.">
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label for="notes" class="form-label">Notes (Optional)</label>
+                            <textarea name="notes" 
+                                      id="notes" 
+                                      class="form-control" 
+                                      rows="3"
+                                      placeholder="Add any additional information about this transfer..."></textarea>
+                        </div>
+                        
+                        <!-- Transfer Summary -->
+                        <div class="card bg-light mb-4">
+                            <div class="card-body">
+                                <h6 class="card-title"><i class="fas fa-calculator me-2"></i> Transfer Summary</h6>
+                                <div class="row">
+                                    <div class="col-6">
+                                        <small>From Account:</small>
+                                        <p class="mb-0 fw-bold">{{ from_account }}</p>
+                                    </div>
+                                    <div class="col-6">
+                                        <small>To Account:</small>
+                                        <p class="mb-0 fw-bold">{{ to_account }}</p>
+                                    </div>
+                                </div>
+                                <hr>
+                                <div class="row">
+                                    <div class="col-6">
+                                        <small>After Transfer (From):</small>
+                                        <p class="mb-0 text-danger" id="newFromBalance">KES 0.00</p>
+                                    </div>
+                                    <div class="col-6">
+                                        <small>To Account New Balance:</small>
+                                        <p class="mb-0 text-success" id="newToBalance">KES 0.00</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Action Buttons -->
+                        <div class="d-flex justify-content-between">
+                            <a href="{% url 'finance:financial_overview' %}" class="btn btn-secondary">
+                                <i class="fas fa-times me-2"></i> Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary" id="submitBtn">
+                                <i class="fas fa-check-circle me-2"></i> Confirm Transfer
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- Additional Info Card -->
+            <div class="card mt-3">
+                <div class="card-body">
+                    <h6><i class="fas fa-question-circle me-2"></i> About This Transfer</h6>
+                    <p class="small text-muted mb-0">
+                        This is an internal transfer between accounts. No income or expense is recorded.
+                        The transaction will be logged in both accounts' transaction histories.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const amountInput = document.getElementById('amount');
+    const submitBtn = document.getElementById('submitBtn');
+    const newFromBalanceSpan = document.getElementById('newFromBalance');
+    const newToBalanceSpan = document.getElementById('newToBalance');
+    
+    // Get current balance from context
+    const fromBalance = {{ from_balance|default:0 }};
+    
+    function updateSummary() {
+        let amount = parseFloat(amountInput.value) || 0;
+        
+        if (amount <= 0) {
+            newFromBalanceSpan.innerHTML = 'KES 0.00';
+            newToBalanceSpan.innerHTML = 'KES 0.00';
+            newFromBalanceSpan.className = 'mb-0 text-danger';
+            newToBalanceSpan.className = 'mb-0 text-success';
+            submitBtn.disabled = true;
+            return;
+        }
+        
+        if (amount > fromBalance) {
+            newFromBalanceSpan.innerHTML = `KES ${(fromBalance - amount).toFixed(2)} (Insufficient!)`;
+            newToBalanceSpan.innerHTML = `KES +${amount.toFixed(2)}`;
+            newFromBalanceSpan.className = 'mb-0 text-danger fw-bold';
+            newToBalanceSpan.className = 'mb-0 text-success';
+            submitBtn.disabled = true;
+        } else {
+            newFromBalanceSpan.innerHTML = `KES ${(fromBalance - amount).toFixed(2)}`;
+            newToBalanceSpan.innerHTML = `KES +${amount.toFixed(2)}`;
+            newFromBalanceSpan.className = 'mb-0 text-danger';
+            newToBalanceSpan.className = 'mb-0 text-success fw-bold';
+            submitBtn.disabled = false;
+        }
+    }
+    
+    amountInput.addEventListener('input', updateSummary);
+    updateSummary();
+    
+    // Set max attribute
+    amountInput.setAttribute('max', fromBalance);
+    
+    // Form validation before submit
+    document.getElementById('transferForm').addEventListener('submit', function(e) {
+        let amount = parseFloat(amountInput.value) || 0;
+        
+        if (amount <= 0) {
+            e.preventDefault();
+            alert('Please enter a valid amount greater than 0.');
+            return false;
+        }
+        
+        if (amount > fromBalance) {
+            e.preventDefault();
+            alert(`Insufficient balance. Available: KES ${fromBalance.toFixed(2)}`);
+            return false;
+        }
+        
+        if (!confirm(`Are you sure you want to transfer KES ${amount.toFixed(2)} from ${from_account} to ${to_account}?`)) {
+            e.preventDefault();
+            return false;
+        }
+        
+        // Disable submit button to prevent double submission
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Processing...';
+        return true;
+    });
+});
+</script>
+
+<style>
+    input:invalid {
+        border-color: #dc3545;
+    }
+    
+    .form-control:focus {
+        border-color: #10b981;
+        box-shadow: 0 0 0 0.2rem rgba(16, 185, 129, 0.25);
+    }
+    
+    .btn-primary {
+        background: linear-gradient(135deg, #10b981 0%, #0d9488 100%);
+        border: none;
+        transition: all 0.3s;
+    }
+    
+    .btn-primary:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(16, 185, 129, 0.4);
+    }
+    
+    .btn-primary:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+    
+    .card {
+        border: none;
+        box-shadow: 0 5px 20px rgba(0, 0, 0, 0.05);
+    }
+    
+    .card-header {
+        border-radius: 15px 15px 0 0 !important;
+    }
+</style>
+{% endblock %}
