@@ -4161,49 +4161,32 @@ def inventory_expenses_page(request):
 
 @login_required
 def capital_injection_list(request):
-    """List all capital injections"""
+    """List all capital injections - FIXED to use correct data"""
     from decimal import Decimal
     from django.db.models import Sum, F
     from sales.models import Sale
     from inventory.models import StockEntry, Product
+    from .models import NetAccount, SavingsAccount, InjectionAccount
     
     injections = CapitalInjection.objects.all().order_by('-transaction_date')
     capital_account = CapitalAccount.get_or_create_account()
     
     # ============================================
-    # Calculate Inventory Purchases from StockEntry with corrected prices
+    # USE NET ACCOUNT AND SAVINGS ACCOUNT FOR ACCURATE DATA
     # ============================================
-    total_inventory_purchases = StockEntry.objects.filter(
-        entry_type='purchase',
-        quantity__gt=0
-    ).aggregate(total=Sum(F('quantity') * F('unit_price')))['total'] or Decimal('0')
+    net = NetAccount.get_account()
+    savings = SavingsAccount.get_account()
+    injection_acct = InjectionAccount.get_account()
+    
+    # CORRECT VALUES from the accounts
+    total_inventory_purchases = net.total_inventory_purchases
+    cogs = net.total_cogs_added
+    total_sales_revenue = cogs + savings.total_profits_earned
+    total_profit = savings.total_profits_earned
+    total_capital_injected = injection_acct.total_injected_all_time
     
     # ============================================
-    # Calculate Cost of Goods Sold (COGS) - what has been sold
-    # ============================================
-    cogs = Decimal('0')
-    sales_entries = StockEntry.objects.filter(
-        entry_type='sale',
-        quantity__lt=0
-    )
-    for entry in sales_entries:
-        qty = abs(entry.quantity)
-        if entry.product_sku:
-            cogs += qty * (entry.product_sku.buying_price or Decimal('0'))
-        elif entry.product_unit:
-            buying_price = entry.product_unit.unit_buying_price or entry.product_unit.product.buying_price or Decimal('0')
-            cogs += qty * buying_price
-    
-    # Calculate sales revenue
-    total_sales_revenue = Sale.objects.filter(
-        is_reversed=False
-    ).aggregate(total=Sum('total_amount'))['total'] or Decimal('0')
-    
-    # Calculate total profit
-    total_profit = total_sales_revenue - cogs
-    
-    # ============================================
-    # FIXED: Calculate Total Inventory Value (ALL stock at selling price)
+    # Calculate Inventory Values
     # ============================================
     total_inventory_value = Decimal('0')
     active_products = Product.objects.filter(is_active=True, is_discontinued=False)
@@ -4214,7 +4197,6 @@ def capital_injection_list(request):
         if product.category.is_single_item:
             total_units = product.total_quantity or 0
         else:
-            # Total purchased (all time)
             total_units = StockEntry.objects.filter(
                 product_sku=product,
                 entry_type='purchase',
@@ -4223,18 +4205,10 @@ def capital_injection_list(request):
         
         total_inventory_value += total_units * selling_price
     
-    # ============================================
-    # FIXED: Calculate Available values using formulas
-    # ============================================
-    # Available Inventory Purchases = Total Purchases - COGS
+    # Available inventory values
     available_inventory_purchases = total_inventory_purchases - cogs
     
-    # Available Inventory Value = Total Value - (Revenue from sold items)
-    # OR calculate directly: (Total Value - (COGS × Average Markup))
-    # Simple formula: Available Value = Total Value - (Sales Revenue - Profit)
-    # But better: Calculate from available stock directly
     available_inventory_value = Decimal('0')
-    
     for product in active_products:
         selling_price = product.selling_price or Decimal('0')
         
@@ -4264,12 +4238,8 @@ def capital_injection_list(request):
             total_loan_balance += injection.remaining_balance
             total_loan_amount += injection.amount
     
-    # Calculate Net Capital Position
-    total_capital_injected = injections.filter(status='completed').aggregate(
-        total=Sum('amount')
-    )['total'] or Decimal('0')
-    
-    net_capital = total_capital_injected - total_inventory_purchases - total_repaid_amount + total_sales_revenue
+    # Calculate Net Capital Position from Net Account
+    net_capital = net.balance
     
     # Update capital account
     capital_account.total_capital_injected = total_capital_injected
@@ -4289,16 +4259,16 @@ def capital_injection_list(request):
         'total_loan_balance': total_loan_balance,
         'total_loan_borrowed': total_loan_borrowed,
         
-        # Sales & Profit
+        # Sales & Profit (CORRECTED)
         'total_sales_revenue': total_sales_revenue,
         'total_cost': cogs,
         'total_profit': total_profit,
         
         # Inventory - CORRECTED VALUES
-        'total_inventory_purchases': total_inventory_purchases,      # 300
-        'available_inventory_purchases': available_inventory_purchases,  # 300 - 80 = 220
-        'total_inventory_value': total_inventory_value,              # 600
-        'available_inventory_value': available_inventory_value,      # Should be calculated from available stock
+        'total_inventory_purchases': total_inventory_purchases,
+        'available_inventory_purchases': available_inventory_purchases,
+        'total_inventory_value': total_inventory_value,
+        'available_inventory_value': available_inventory_value,
         
         'title': 'Capital Account'
     }

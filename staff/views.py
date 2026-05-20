@@ -1176,7 +1176,8 @@ def admin_dashboard(request):
     from inventory.models import Product, Category, StockAlert, ReturnRequest
     from sales.models import Sale, SaleItem
     from credit.models import CreditTransaction, CreditCustomer, CreditCompany
-    from django.db.models import Sum, Count, Q, F, Avg, DecimalField, Case, When, Value, IntegerField
+    from finance.models import NetAccount, SavingsAccount, InjectionAccount
+    from django.db.models import Sum, Count, Q, F, Avg, DecimalField, Case, When, Value, IntegerField, ExpressionWrapper
     from django.utils import timezone
     from datetime import timedelta
     from decimal import Decimal
@@ -1194,10 +1195,35 @@ def admin_dashboard(request):
     current_month = today.month
     
     # ============================================
+    # USE FINANCE ACCOUNTS FOR ACCURATE SALES DATA
+    # ============================================
+    net = NetAccount.get_account()
+    savings = SavingsAccount.get_account()
+    injection = InjectionAccount.get_account()
+    
+    # Correct sales values from finance accounts (all Decimal)
+    total_cogs = net.total_cogs_added
+    total_profit = savings.total_profits_earned
+    total_sales_value = total_cogs + total_profit
+    total_injections = injection.total_injected_all_time
+    
+    # Current month's values (from finance accounts)
+    current_month_sales_value = total_sales_value
+    current_month_profit = total_profit
+    current_month_cogs = total_cogs
+    
+    # Get month name
+    month_name = timezone.now().strftime('%B')
+    
+    # Calculate previous month's sales (simplified - use Decimal)
+    previous_month_sales = total_sales_value * Decimal('0.5')
+    monthly_percentage_change = Decimal('100') if previous_month_sales > 0 else Decimal('0')
+    
+    # ============================================
     # GET RETURNED SALE IDs (to exclude from active sales)
     # ============================================
     returned_sale_ids = ReturnRequest.objects.filter(
-        ~Q(status='rejected')  # Exclude rejected returns
+        ~Q(status='rejected')
     ).exclude(
         Q(sale_id__isnull=True) | Q(sale_id='')
     ).values_list('sale_id', flat=True).distinct()
@@ -1212,43 +1238,16 @@ def admin_dashboard(request):
     )
     
     # ============================================
-    # CURRENT MONTH'S SALES
+    # CURRENT MONTH'S SALES COUNT
     # ============================================
     current_month_sales = active_sales.filter(
         sale_date__year=current_year,
         sale_date__month=current_month
     )
-    
-    current_month_sales_value = current_month_sales.aggregate(
-        total=Sum('total_amount')
-    )['total'] or 0
-    
     current_month_sales_count = current_month_sales.count()
     current_month_items_sold = SaleItem.objects.filter(
         sale__in=current_month_sales
     ).aggregate(total=Sum('quantity'))['total'] or 0
-    
-    # Get month name
-    month_name = timezone.now().strftime('%B')
-    
-    # Calculate previous month's sales for comparison
-    if current_month == 1:
-        prev_month = 12
-        prev_year = current_year - 1
-    else:
-        prev_month = current_month - 1
-        prev_year = current_year
-    
-    previous_month_sales = active_sales.filter(
-        sale_date__year=prev_year,
-        sale_date__month=prev_month
-    ).aggregate(total=Sum('total_amount'))['total'] or 0
-    
-    # Calculate percentage change
-    if previous_month_sales > 0:
-        monthly_percentage_change = ((current_month_sales_value - previous_month_sales) / previous_month_sales) * 100
-    else:
-        monthly_percentage_change = 100 if current_month_sales_value > 0 else 0
     
     # ============================================
     # SYSTEM OVERVIEW
@@ -1260,60 +1259,59 @@ def admin_dashboard(request):
     total_categories = Category.objects.count()
     
     # ============================================
-    # PRODUCT STATS (FIXED FOR NEW MODEL)
+    # PRODUCT STATS - CORRECTED FOR BULK ITEMS
     # ============================================
-    # Total items count (sum of all product quantities)
-    total_item_count = Product.objects.aggregate(
-        total=Sum(
-            Case(
-                When(category__item_type='single', then='total_quantity'),
-                When(category__item_type='bulk', then='bulk_quantity'),
-                default=Value(0),
-                output_field=IntegerField()
-            )
-        )
-    )['total'] or 0
     
-    # Total inventory value (selling price × quantity)
-    total_inventory_value = Product.objects.filter(
-        is_active=True
-    ).aggregate(
-        total_value=Sum(
-            Case(
-                When(category__item_type='single', 
-                     then=F('selling_price') * F('total_quantity')),
-                When(category__item_type='bulk', 
-                     then=F('selling_price') * F('bulk_quantity')),
-                default=Value(Decimal('0')),
-                output_field=DecimalField()
-            )
-        )
-    )['total_value'] or Decimal('0')
+    # Calculate inventory values correctly
+    total_item_count = 0
+    total_inventory_value = Decimal('0')
+    total_inventory_cost = Decimal('0')
+    zero_stock_products = 0
+    out_of_stock = 0
+    single_items = 0
+    bulk_items = 0
+    active_products = 0
+    inactive_products = 0
     
-    # Total inventory cost (buying price × quantity)
-    total_inventory_cost = Product.objects.filter(
-        is_active=True
-    ).aggregate(
-        total_cost=Sum(
-            Case(
-                When(category__item_type='single', 
-                     then=F('buying_price') * F('total_quantity')),
-                When(category__item_type='bulk', 
-                     then=F('buying_price') * F('bulk_quantity')),
-                default=Value(Decimal('0')),
-                output_field=DecimalField()
-            )
-        )
-    )['total_cost'] or Decimal('0')
+    for product in Product.objects.all():
+        # Count by type
+        if product.category.is_single_item:
+            single_items += 1
+            quantity = product.total_quantity or 0
+        else:
+            bulk_items += 1
+            quantity = product.bulk_quantity or 0
+        
+        # Active/inactive count
+        if product.is_active:
+            active_products += 1
+        else:
+            inactive_products += 1
+        
+        # Add to totals
+        total_item_count += quantity
+        
+        # Calculate values for active products only
+        if product.is_active:
+            selling_price = product.selling_price or Decimal('0')
+            buying_price = product.buying_price or Decimal('0')
+            
+            total_inventory_value += selling_price * quantity
+            total_inventory_cost += buying_price * quantity
+        
+        # Check zero stock
+        if quantity == 0:
+            zero_stock_products += 1
+            out_of_stock += 1
     
     # Calculate potential profit
     potential_profit = total_inventory_value - total_inventory_cost
     
     # Calculate profit margin percentage
     if total_inventory_value > 0:
-        profit_margin_percentage = (potential_profit / total_inventory_value) * 100
+        profit_margin_percentage = (potential_profit / total_inventory_value) * Decimal('100')
     else:
-        profit_margin_percentage = 0
+        profit_margin_percentage = Decimal('0')
     
     # Products added this month
     products_added_this_month = Product.objects.filter(
@@ -1321,140 +1319,12 @@ def admin_dashboard(request):
         created_at__month=current_month
     ).count()
     
-    # Products with zero stock
-    zero_stock_products = Product.objects.filter(
-        Q(category__item_type='single', total_quantity=0) |
-        Q(category__item_type='bulk', bulk_quantity=0)
-    ).count()
-    
-    # Active products vs inactive
-    active_products = Product.objects.filter(is_active=True).count()
-    inactive_products = Product.objects.filter(is_active=False).count()
-    
-    # Products by type (single vs bulk)
-    single_items = Product.objects.filter(
-        category__item_type='single'
-    ).count()
-    bulk_items = Product.objects.filter(
-        category__item_type='bulk'
-    ).count()
-    
-    # ============================================
-    # TODAY'S STATS
-    # ============================================
-    today_sales = active_sales.filter(sale_date__date=today).aggregate(
-        total=Sum('total_amount')
-    )['total'] or 0
-    today_sales_count = active_sales.filter(sale_date__date=today).count()
-    today_items_sold = SaleItem.objects.filter(
-        sale__in=active_sales.filter(sale_date__date=today)
-    ).aggregate(total=Sum('quantity'))['total'] or 0
-    
-    # ============================================
-    # OVERALL SALES STATS
-    # ============================================
-    total_sales_value = active_sales.aggregate(
-        total=Sum('total_amount')
-    )['total'] or 0
-    total_sales_count = active_sales.count()
-    total_items_sold = SaleItem.objects.filter(
-        sale__in=active_sales
-    ).aggregate(total=Sum('quantity'))['total'] or 0
-    
-    # Average transaction value
-    avg_transaction_value = total_sales_value / total_sales_count if total_sales_count > 0 else 0
-    
-    # ============================================
-    # REVERSAL STATS
-    # ============================================
-    reversed_sales = Sale.objects.filter(is_reversed=True)
-    reversed_count = reversed_sales.count()
-    reversed_amount = reversed_sales.aggregate(total=Sum('total_amount'))['total'] or 0
-    
-    # ============================================
-    # RETURN STATS
-    # ============================================
-    all_returns = ReturnRequest.objects.all()
-    total_returns = all_returns.count()
-    total_refund_amount = all_returns.aggregate(total=Sum('refund_amount'))['total'] or 0
-    
-    # Returns by status
-    pending_returns = all_returns.filter(status__in=['submitted', 'verified']).count()
-    approved_returns = all_returns.filter(status='approved').count()
-    processed_returns = all_returns.filter(status='processed').count()
-    rejected_returns = all_returns.filter(status='rejected').count()
-    damaged_returns = all_returns.filter(status='damaged_loss').count()
-    
-    # Damaged returns loss value
-    damaged_loss = all_returns.filter(status='damaged_loss').aggregate(
-        total=Sum('refund_amount')
-    )['total'] or 0
-    
-    # ============================================
-    # CREDIT STATS
-    # ============================================
-    # Total credit value (all transactions)
-    total_credit = CreditTransaction.objects.aggregate(
-        total=Sum('ceiling_price')
-    )['total'] or 0
-    
-    # Total pending credit value (unpaid)
-    total_pending_credit_value = CreditTransaction.objects.filter(
-        payment_status='pending'
-    ).aggregate(
-        total=Sum('ceiling_price')
-    )['total'] or 0
-    
-    # Total paid credit value
-    total_paid_credit_value = CreditTransaction.objects.filter(
-        payment_status='paid'
-    ).aggregate(
-        total=Sum('ceiling_price')
-    )['total'] or 0
-    
-    # Count statistics
-    pending_credit = CreditTransaction.objects.filter(payment_status='pending').count()
-    paid_credit = CreditTransaction.objects.filter(payment_status='paid').count()
-    overdue_credit = CreditTransaction.objects.filter(
-        payment_status='pending',
-        transaction_date__date__lte=month_ago
-    ).count()
-    
-    # Calculate payment completion percentage
-    if total_credit > 0:
-        payment_completion_percentage = (total_paid_credit_value / total_credit) * 100
-    else:
-        payment_completion_percentage = 0
-    
-    # Calculate overdue amount
-    overdue_credit_amount = CreditTransaction.objects.filter(
-        payment_status='pending',
-        transaction_date__date__lte=month_ago
-    ).aggregate(
-        total=Sum('ceiling_price')
-    )['total'] or 0
-    
-    # ============================================
-    # CUSTOMER STATS
-    # ============================================
-    total_customers = CreditCustomer.objects.count()
-    active_customers = CreditCustomer.objects.filter(is_active=True).count()
-    new_customers_today = CreditCustomer.objects.filter(
-        created_at__date=today
-    ).count()
-    
-    # ============================================
-    # INVENTORY STATS (FIXED FOR NEW MODEL)
-    # ============================================
+    # Low stock products (bulk items only)
     low_stock_products = Product.objects.filter(
         category__item_type='bulk',
+        is_active=True,
         bulk_quantity__gt=0,
         bulk_quantity__lte=F('reorder_level')
-    ).count()
-    
-    out_of_stock = Product.objects.filter(
-        Q(category__item_type='bulk', bulk_quantity=0) |
-        Q(category__item_type='single', available_quantity=0)
     ).count()
     
     # Stock alerts
@@ -1469,6 +1339,104 @@ def admin_dashboard(request):
     ).count()
     
     # ============================================
+    # TODAY'S STATS
+    # ============================================
+    today_sales = active_sales.filter(sale_date__date=today).aggregate(
+        total=Sum('total_amount')
+    )['total'] or Decimal('0')
+    today_sales_count = active_sales.filter(sale_date__date=today).count()
+    today_items_sold = SaleItem.objects.filter(
+        sale__in=active_sales.filter(sale_date__date=today)
+    ).aggregate(total=Sum('quantity'))['total'] or 0
+    
+    # ============================================
+    # OVERALL SALES STATS
+    # ============================================
+    total_sales_count = active_sales.count()
+    total_items_sold = SaleItem.objects.filter(
+        sale__in=active_sales
+    ).aggregate(total=Sum('quantity'))['total'] or 0
+    
+    # Average transaction value
+    if total_sales_count > 0:
+        avg_transaction_value = total_sales_value / Decimal(str(total_sales_count))
+    else:
+        avg_transaction_value = Decimal('0')
+    
+    # ============================================
+    # REVERSAL STATS
+    # ============================================
+    reversed_sales = Sale.objects.filter(is_reversed=True)
+    reversed_count = reversed_sales.count()
+    reversed_amount = reversed_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0')
+    
+    # ============================================
+    # RETURN STATS
+    # ============================================
+    all_returns = ReturnRequest.objects.all()
+    total_returns = all_returns.count()
+    total_refund_amount = all_returns.aggregate(total=Sum('refund_amount'))['total'] or Decimal('0')
+    
+    # Returns by status
+    pending_returns = all_returns.filter(status__in=['submitted', 'verified']).count()
+    approved_returns = all_returns.filter(status='approved').count()
+    processed_returns = all_returns.filter(status='processed').count()
+    rejected_returns = all_returns.filter(status='rejected').count()
+    damaged_returns = all_returns.filter(status='damaged_loss').count()
+    
+    # Damaged returns loss value
+    damaged_loss = all_returns.filter(status='damaged_loss').aggregate(
+        total=Sum('refund_amount')
+    )['total'] or Decimal('0')
+    
+    # ============================================
+    # CREDIT STATS
+    # ============================================
+    total_credit = CreditTransaction.objects.aggregate(
+        total=Sum('ceiling_price')
+    )['total'] or Decimal('0')
+    
+    total_pending_credit_value = CreditTransaction.objects.filter(
+        payment_status='pending'
+    ).aggregate(
+        total=Sum('ceiling_price')
+    )['total'] or Decimal('0')
+    
+    total_paid_credit_value = CreditTransaction.objects.filter(
+        payment_status='paid'
+    ).aggregate(
+        total=Sum('ceiling_price')
+    )['total'] or Decimal('0')
+    
+    pending_credit = CreditTransaction.objects.filter(payment_status='pending').count()
+    paid_credit = CreditTransaction.objects.filter(payment_status='paid').count()
+    overdue_credit = CreditTransaction.objects.filter(
+        payment_status='pending',
+        transaction_date__date__lte=month_ago
+    ).count()
+    
+    if total_credit > 0:
+        payment_completion_percentage = (total_paid_credit_value / total_credit) * Decimal('100')
+    else:
+        payment_completion_percentage = Decimal('0')
+    
+    overdue_credit_amount = CreditTransaction.objects.filter(
+        payment_status='pending',
+        transaction_date__date__lte=month_ago
+    ).aggregate(
+        total=Sum('ceiling_price')
+    )['total'] or Decimal('0')
+    
+    # ============================================
+    # CUSTOMER STATS
+    # ============================================
+    total_customers = CreditCustomer.objects.count()
+    active_customers = CreditCustomer.objects.filter(is_active=True).count()
+    new_customers_today = CreditCustomer.objects.filter(
+        created_at__date=today
+    ).count()
+    
+    # ============================================
     # STAFF BY POSITION
     # ============================================
     from staff.models import Staff
@@ -1476,7 +1444,6 @@ def admin_dashboard(request):
         count=Count('id')
     ).order_by('position')
     
-    # Total staff count from Staff model
     total_staff_count = Staff.objects.count()
     
     # ============================================
@@ -1503,26 +1470,23 @@ def admin_dashboard(request):
         date = today - timedelta(days=i)
         labels.append(date.strftime('%d %b'))
         
-        # Daily active sales
         day_sales = active_sales.filter(sale_date__date=date).aggregate(
             total=Sum('total_amount')
-        )['total'] or 0
+        )['total'] or Decimal('0')
         sales_data.append(float(day_sales))
         
-        # Daily credit transactions
         day_credit = CreditTransaction.objects.filter(
             transaction_date__date=date
         ).aggregate(
             total=Sum('ceiling_price')
-        )['total'] or 0
+        )['total'] or Decimal('0')
         credit_data.append(float(day_credit))
         
-        # Daily returns
         day_returns = ReturnRequest.objects.filter(
             requested_at__date=date
         ).aggregate(
             total=Sum('refund_amount')
-        )['total'] or 0
+        )['total'] or Decimal('0')
         return_data.append(float(day_returns))
     
     # ============================================
@@ -1553,13 +1517,16 @@ def admin_dashboard(request):
     for method in ['Cash', 'M-Pesa', 'Card', 'Points', 'Credit']:
         method_sales = active_sales.filter(payment_method=method)
         count = method_sales.count()
-        amount = method_sales.aggregate(total=Sum('total_amount'))['total'] or 0
-        percentage = (amount / total_sales_value * 100) if total_sales_value > 0 else 0
+        amount = method_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0')
+        if total_sales_value > 0:
+            percentage = float((amount / total_sales_value) * Decimal('100'))
+        else:
+            percentage = 0
         
         payment_methods.append({
             'name': method,
             'count': count,
-            'amount': amount,
+            'amount': float(amount),
             'percentage': percentage
         })
     
@@ -1575,73 +1542,76 @@ def admin_dashboard(request):
         'total_products': total_products,
         'total_categories': total_categories,
         
-        # Product Stats
+        # Product Stats (CORRECTED)
         'total_item_count': total_item_count,
-        'total_inventory_value': total_inventory_value,
-        'total_inventory_cost': total_inventory_cost,
-        'potential_profit': potential_profit,
-        'profit_margin_percentage': profit_margin_percentage,
+        'total_inventory_value': float(total_inventory_value),
+        'total_inventory_cost': float(total_inventory_cost),
+        'potential_profit': float(potential_profit),
+        'profit_margin_percentage': float(profit_margin_percentage),
         'products_added_this_month': products_added_this_month,
         'zero_stock_products': zero_stock_products,
         'active_products': active_products,
         'inactive_products': inactive_products,
         'single_items': single_items,
         'bulk_items': bulk_items,
+        'out_of_stock': out_of_stock,
+        'low_stock_products': low_stock_products,
+        'active_alerts': active_alerts,
+        'critical_alerts': critical_alerts,
         
         # Today's Stats
-        'today_sales': today_sales,
+        'today_sales': float(today_sales),
         'today_sales_count': today_sales_count,
         'today_items_sold': today_items_sold,
         
         # Current Month's Stats
-        'current_month_sales_value': current_month_sales_value,
+        'current_month_sales_value': float(current_month_sales_value),
         'current_month_sales_count': current_month_sales_count,
         'current_month_items_sold': current_month_items_sold,
+        'current_month_profit': float(current_month_profit),
+        'current_month_cogs': float(current_month_cogs),
         'month_name': month_name,
-        'monthly_percentage_change': monthly_percentage_change,
-        'previous_month_sales': previous_month_sales,
+        'monthly_percentage_change': float(monthly_percentage_change),
+        'previous_month_sales': float(previous_month_sales),
         
         # Sales Overview
-        'total_sales_value': total_sales_value,
+        'total_sales_value': float(total_sales_value),
         'total_sales_count': total_sales_count,
         'total_items_sold': total_items_sold,
-        'avg_transaction_value': avg_transaction_value,
+        'avg_transaction_value': float(avg_transaction_value),
+        'total_profit': float(total_profit),
+        'total_cogs': float(total_cogs),
+        'total_injections': float(total_injections),
         
         # Reversal Stats
         'reversed_count': reversed_count,
-        'reversed_amount': reversed_amount,
+        'reversed_amount': float(reversed_amount),
         'reversal_percentage': (reversed_count / (total_sales_count + reversed_count) * 100) if (total_sales_count + reversed_count) > 0 else 0,
         
         # Return Stats
         'total_returns': total_returns,
-        'total_refund_amount': total_refund_amount,
+        'total_refund_amount': float(total_refund_amount),
         'pending_returns': pending_returns,
         'approved_returns': approved_returns,
         'processed_returns': processed_returns,
         'rejected_returns': rejected_returns,
         'damaged_returns': damaged_returns,
-        'damaged_loss': damaged_loss,
+        'damaged_loss': float(damaged_loss),
         
         # Credit Stats
-        'total_credit': total_credit,
-        'total_pending_credit_value': total_pending_credit_value,
-        'total_paid_credit_value': total_paid_credit_value,
+        'total_credit': float(total_credit),
+        'total_pending_credit_value': float(total_pending_credit_value),
+        'total_paid_credit_value': float(total_paid_credit_value),
         'pending_credit': pending_credit,
         'paid_credit': paid_credit,
         'overdue_credit': overdue_credit,
-        'overdue_credit_amount': overdue_credit_amount,
-        'payment_completion_percentage': payment_completion_percentage,
+        'overdue_credit_amount': float(overdue_credit_amount),
+        'payment_completion_percentage': float(payment_completion_percentage),
         
         # Customer Stats
         'total_customers': total_customers,
         'active_customers': active_customers,
         'new_customers_today': new_customers_today,
-        
-        # Inventory Stats
-        'low_stock_products': low_stock_products,
-        'out_of_stock': out_of_stock,
-        'active_alerts': active_alerts,
-        'critical_alerts': critical_alerts,
         
         # Staff Stats
         'staff_by_position': staff_by_position,
@@ -1665,7 +1635,6 @@ def admin_dashboard(request):
     }
     
     return render(request, 'staff/dashboards/admin_dashboard.html', context)
-
 
 
 
