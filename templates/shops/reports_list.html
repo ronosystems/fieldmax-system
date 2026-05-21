@@ -14,6 +14,21 @@
     .badge { font-size: 0.75rem; padding: 0.25rem 0.5rem; }
     .table th, .table td { vertical-align: middle; }
     
+    /* Status Icon Styles */
+    .status-icon {
+        font-size: 1.5rem;
+        display: inline-block;
+    }
+    .status-ok {
+        color: #10b981;
+    }
+    .status-error {
+        color: #ef4444;
+    }
+    .status-warning {
+        color: #f59e0b;
+    }
+    
     /* Action Buttons Styling */
     .action-buttons {
         display: flex;
@@ -68,6 +83,12 @@
         color: white;
     }
     .btn-revert:hover { background: #d97706; color: white; }
+    
+    /* Tooltip for verification */
+    .verification-tooltip {
+        cursor: help;
+        border-bottom: 1px dotted #999;
+    }
     
     @media print {
         .btn, .card-header, .filter-section, .pagination, .breadcrumb {
@@ -240,19 +261,19 @@
             <table class="table table-bordered table-hover" id="reportsTable">
                 <thead>
                     <tr class="table-light">
-                        <th width="8%" class="bg-primary text-white text-center">Report Date</th>
-                        <th width="10%" class="bg-info text-white">Shop Branch</th>
-                        <th width="10%" class="bg-teal text-white">Reported By</th>
-                        <th width="8%" class="bg-success text-white text-end">M-Pesa Trans</th>
+                        <th width="7%" class="bg-primary text-white text-center">Report Date</th>
+                        <th width="9%" class="bg-info text-white">Shop Branch</th>
+                        <th width="9%" class="bg-teal text-white">Reported By</th>
+                        <th width="7%" class="bg-success text-white text-end">M-Pesa Trans</th>
                         <th width="8%" class="bg-success text-white text-end">M-Pesa Amount</th>
-                        <th width="8%" class="bg-warning text-dark text-end">Cash Balance</th>
-                        <th width="8%" class="bg-primary text-white text-end">Bank Total</th>
-                        <th width="8%" class="bg-danger text-white text-end">Expenses</th>
+                        <th width="7%" class="bg-warning text-dark text-end">Cash Balance</th>
+                        <th width="7%" class="bg-primary text-white text-end">Bank Total</th>
+                        <th width="7%" class="bg-danger text-white text-end">Expenses</th>
                         <th width="8%" class="bg-success text-white text-end">Closing Balance</th>
-                        <th width="8%" class="bg-info text-white text-center">Status</th>
+                        <th width="8%" class="bg-secondary text-white text-center">Verification</th>
+                        <th width="7%" class="bg-info text-white text-center">Status</th>
                         <th width="12%" class="bg-navy text-white text-center">Actions</th>
-                    </tr>
-                </thead>
+                     </thead>
                 <tbody>
                     {% for report in reports %}
                     <tr>
@@ -260,12 +281,12 @@
                             <strong>{{ report.report_date|date:"M d, Y" }}</strong>
                             <br>
                             <small class="text-muted">{{ report.report_date|date:"D" }}</small>
-                        </td>
+                         </td>
                         <td class="align-middle">
                             <strong>{{ report.shop.name }}</strong>
                             <br>
                             <small class="text-muted">{{ report.shop.code }}</small>
-                        </td>
+                         </td>
                         <td class="align-middle">
                             {{ report.submitted_by.get_full_name|default:report.submitted_by.username }}
                             {% if report.submitted_by.is_superuser %}
@@ -277,25 +298,37 @@
                             <small class="text-muted">
                                 <i class="fas fa-clock"></i> {{ report.submission_time|date:"H:i" }}
                             </small>
-                        </td>
+                         </td>
                         <td class="text-end align-middle">
                             {{ report.total_mpesa_transactions|default:0|intcomma }}
-                        </td>
+                         </td>
                         <td class="text-end align-middle fw-bold text-success">
                             KES {{ report.total_mpesa_balance|floatformat:2|intcomma }}
-                        </td>
+                         </td>
                         <td class="text-end align-middle">
                             KES {{ report.cash_balance|default:0|floatformat:2|intcomma }}
-                        </td>
+                         </td>
                         <td class="text-end align-middle">
                             KES {{ report.bank_total|default:0|floatformat:2|intcomma }}
-                        </td>
+                         </td>
                         <td class="text-end align-middle text-danger">
                             KES {{ report.total_expenses|floatformat:2|intcomma }}
-                        </td>
+                         </td>
                         <td class="text-end align-middle fw-bold text-primary">
                             KES {{ report.total_closing_balance|floatformat:2|intcomma }}
-                        </td>
+                         </td>
+                        
+<!-- Verification Column - Using view-calculated attributes -->
+<td class="text-center align-middle">
+    <span class="status-icon status-{{ report.verification_color }}" 
+          title="{{ report.verification_title }}">
+        <i class="{{ report.verification_icon }} fa-lg"></i>
+    </span>
+    <span class="d-block small text-{{ report.verification_color }} mt-1">
+        {{ report.verification_text }}
+    </span>
+</td>
+                        
                         <td class="text-center align-middle">
                             {% if report.is_finalized %}
                                 <span class="badge bg-success w-100">
@@ -306,7 +339,7 @@
                                     <i class="fas fa-edit me-1"></i> PENDING
                                 </span>
                             {% endif %}
-                        </td>
+                         </td>
                         <td class="text-center align-middle">
                             <div class="action-buttons">
                                 <!-- View Button -->
@@ -340,11 +373,11 @@
                                     {% endif %}
                                 {% endif %}
                             </div>
-                        </td>
-                    </tr>
+                         </td>
+                      </tr>
                     {% empty %}
-                    <tr>
-                        <td colspan="11" class="text-center py-5">
+                      <tr>
+                        <td colspan="12" class="text-center py-5">
                             <i class="fas fa-file-alt fa-4x text-muted mb-3"></i>
                             <p class="text-muted mb-3">No reports found</p>
                             {% if selected_shop or from_date or to_date or finalized_filter %}
@@ -355,11 +388,11 @@
                                     <i class="fas fa-plus-circle me-2"></i>Create First Report
                                 </a>
                             {% endif %}
-                        </td>
-                    </tr>
+                         </td>
+                      </tr>
                     {% endfor %}
                 </tbody>
-            </table>
+              </table>
         </div>
         
         <!-- Pagination -->
@@ -434,7 +467,6 @@ $(document).ready(function() {
         var dateParam = $(this).attr('href').split('=')[1];
         var currentUrl = new URL(window.location.href);
         
-        // Clear existing date filters
         currentUrl.searchParams.delete('from_date');
         currentUrl.searchParams.delete('to_date');
         

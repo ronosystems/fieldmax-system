@@ -3885,18 +3885,16 @@ def security_dashboard(request):
 
 
 
-
-
 # ============================================
-# M-PESA AGENT DASHBOARD
+# MPESA DASHBOARD
 # ============================================
 
 @login_required
 @dashboard_for_role('M-Pesa Agent')
 def mpesa_agent_dashboard(request):
     """Dashboard for M-Pesa Agent - role-based view"""
-    from shops.models import DailyShopReport, ShopBranch, MpesaAccount
-    from django.db.models import Sum
+    from shops.models import DailyShopReport, ShopBranch, MpesaAccount, BankClosingBalance
+    from django.db.models import Sum, Q
     from django.utils import timezone
     from datetime import timedelta
     
@@ -3920,19 +3918,21 @@ def mpesa_agent_dashboard(request):
     reports_today = 0
     total_transactions_today = 0
     total_mpesa_balance = 0
+    unverified_reports_count = 0
+    unverified_reports = []
     
-    # For superusers - show ALL data across ALL shops
+    # For SUPERUSERS - show GLOBAL stats AND their own shop's unverified reports
     if request.user.is_superuser:
-        # Get all reports (no shop filter)
+        # GLOBAL STATS (all shops)
         all_reports = DailyShopReport.objects.all()
         
-        # Weekly transactions (all shops) - FIXED: use total_mpesa_amount instead of shop_sales
+        # Weekly transactions (all shops)
         weekly_transactions = all_reports.filter(
             report_date__gte=week_ago,
             report_date__lte=today
         ).aggregate(total=Sum('total_mpesa_amount'))['total'] or 0
         
-        # Monthly transactions (all shops) - FIXED: use total_mpesa_amount instead of shop_sales
+        # Monthly transactions (all shops)
         monthly_transactions = all_reports.filter(
             report_date__gte=month_ago,
             report_date__lte=today
@@ -3960,18 +3960,43 @@ def mpesa_agent_dashboard(request):
             status='active'
         ).aggregate(total=Sum('current_balance'))['total'] or 0
         
+        # Get unverified reports for superuser's ASSIGNED SHOP ONLY (if they have one)
+        if assigned_shop:
+            # Get all reports for this shop
+            shop_reports = DailyShopReport.objects.filter(shop=assigned_shop).order_by('-report_date')
+            
+            # Calculate verification status for each report (same logic as reports_list)
+            for report in shop_reports:
+                # Get previous report for this shop
+                previous_report = DailyShopReport.objects.filter(
+                    shop=assigned_shop,
+                    report_date__lt=report.report_date
+                ).order_by('-report_date').first()
+                
+                if previous_report:
+                    # Expected closing = Previous closing - Today's expenses
+                    expected_closing = previous_report.total_closing_balance - report.total_expenses
+                    difference = report.total_closing_balance - expected_closing
+                    
+                    # Check if unverified (surplus or deficit)
+                    if abs(difference) >= 0.01:  # Not verified if difference > 0.01
+                        unverified_reports.append(report)
+                # First report is considered verified
+            
+            unverified_reports_count = len(unverified_reports)
+            
     else:
-        # For regular users - show only their assigned shop data
+        # REGULAR USER - show only their assigned shop data
         if assigned_shop:
             reports = DailyShopReport.objects.filter(shop=assigned_shop)
             
-            # Weekly transactions - FIXED: use total_mpesa_amount instead of shop_sales
+            # Weekly transactions
             weekly_transactions = reports.filter(
                 report_date__gte=week_ago,
                 report_date__lte=today
             ).aggregate(total=Sum('total_mpesa_amount'))['total'] or 0
             
-            # Monthly transactions - FIXED: use total_mpesa_amount instead of shop_sales
+            # Monthly transactions
             monthly_transactions = reports.filter(
                 report_date__gte=month_ago,
                 report_date__lte=today
@@ -3998,6 +4023,25 @@ def mpesa_agent_dashboard(request):
                 is_active=True, 
                 status='active'
             ).aggregate(total=Sum('current_balance'))['total'] or 0
+            
+            # Calculate unverified reports for regular user's shop
+            shop_reports = reports.order_by('-report_date')
+            for report in shop_reports:
+                # Get previous report for this shop
+                previous_report = DailyShopReport.objects.filter(
+                    shop=assigned_shop,
+                    report_date__lt=report.report_date
+                ).order_by('-report_date').first()
+                
+                if previous_report:
+                    expected_closing = previous_report.total_closing_balance - report.total_expenses
+                    difference = report.total_closing_balance - expected_closing
+                    
+                    if abs(difference) >= 0.01:  # Unverified
+                        unverified_reports.append(report)
+            
+            unverified_reports_count = len(unverified_reports)
+            total_shops = 1  # Regular users only have access to their shop
     
     context = {
         # Common data
@@ -4009,15 +4053,17 @@ def mpesa_agent_dashboard(request):
         'total_reports': total_reports,
         'total_mpesa_balance': total_mpesa_balance,
         
-        # Superuser specific data
+        # Shop stats
         'total_shops': total_shops,
         'reports_today': reports_today,
         'total_transactions_today': int(total_transactions_today),
+        
+        # Unverified reports for THIS USER'S shop only
+        'unverified_reports': unverified_reports[:5],  # Limit to 5 most recent
+        'unverified_reports_count': unverified_reports_count,
     }
     
     return render(request, 'staff/dashboards/mpesa_agent_dashboard.html', context)
-
-
 
 
 

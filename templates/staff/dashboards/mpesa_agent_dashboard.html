@@ -438,6 +438,44 @@
 
 {% block content %}
 <div class="container-fluid">
+<!-- Warning Alert for Unverified Reports - Shows for ALL users (only their shop) -->
+{% if unverified_reports_count > 0 %}
+<div class="warning-alert" style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin-bottom: 20px; border-radius: 8px;">
+    <div class="row align-items-center">
+        <div class="col-md-1 text-center">
+            <div class="warning-icon">
+                <i class="fas fa-exclamation-triangle" style="font-size: 2rem; color: #856404;"></i>
+            </div>
+        </div>
+        <div class="col-md-8">
+            <h4 style="color: #856404; margin-bottom: 10px;">
+                <i class="fas fa-bell me-2"></i>Attention {{ request.user.first_name|default:request.user.username }}!
+            </h4>
+            <p class="mb-0" style="color: #856404;">
+                <strong>You have {{ unverified_reports_count }} unverified report{% if unverified_reports_count > 1 %}s{% endif %} 
+                {% if assigned_shop %}for {{ assigned_shop.name }}{% endif %}.</strong> 
+                The closing balance doesn't match the expected calculation 
+                (Previous Closing - Expenses = Expected Closing).
+            </p>
+            <div class="mt-2">
+                {% for report in unverified_reports %}
+                <span class="badge bg-warning text-dark me-2 mb-1" style="background: #ffc107; color: #856404; padding: 5px 10px;">
+                    {{ report.report_date|date:"M d, Y" }} - 
+                    Balance: KES {{ report.total_closing_balance|floatformat:2|intcomma }}
+                </span>
+                {% endfor %}
+            </div>
+        </div>
+        <div class="col-md-3 text-end">
+            <a href="{% url 'shops:reports_list' %}" class="btn btn-warning" style="background: #ffc107; color: #856404; border: none;">
+                <i class="fas fa-edit me-2"></i>Review & Fix Now
+            </a>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+
     {% if request.user.is_superuser %}
     <!-- ==================== SUPERUSER VIEW ==================== -->
     

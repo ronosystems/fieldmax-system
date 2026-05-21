@@ -170,6 +170,57 @@ def shop_dashboard(request):
         cash_accounts = cash_accounts.filter(shop=assigned_shop)
     total_cash_balance = cash_accounts.aggregate(total=Sum('current_balance'))['total'] or 0
     
+    # ============================================
+    # Calculate Unverified Reports for Warning Card
+    # ============================================
+    unverified_reports = []
+    verified_count = 0
+    unverified_count = 0
+    
+    for report in recent_reports:
+        # Get previous report for this shop
+        previous_report = DailyShopReport.objects.filter(
+            shop=report.shop,
+            report_date__lt=report.report_date
+        ).order_by('-report_date').first()
+        
+        # Calculate verification status
+        if previous_report:
+            # Expected closing = Previous closing - Today's expenses
+            expected_closing = previous_report.total_closing_balance - report.total_expenses
+            difference = report.total_closing_balance - expected_closing
+            
+            # Use small tolerance for floating point comparison
+            if abs(difference) < 0.01:
+                report.verification_status = 'verified'
+                report.verification_icon = 'fas fa-check-circle'
+                report.verification_text = 'Verified'
+                report.verification_color = 'success'
+                verified_count += 1
+            elif difference > 0:
+                report.verification_status = 'surplus'
+                report.verification_icon = 'fas fa-exclamation-triangle'
+                report.verification_text = f'Surplus (+{difference:,.2f})'
+                report.verification_color = 'warning'
+                unverified_reports.append(report)
+                unverified_count += 1
+            else:
+                report.verification_status = 'deficit'
+                report.verification_icon = 'fas fa-times-circle'
+                report.verification_text = f'Deficit ({difference:,.2f})'
+                report.verification_color = 'danger'
+                unverified_reports.append(report)
+                unverified_count += 1
+        else:
+            # First report for this shop
+            report.verification_status = 'first'
+            report.verification_icon = 'fas fa-info-circle'
+            report.verification_text = 'First Report'
+            report.verification_color = 'info'
+    
+    # Get unverified reports for the warning card (only show if there are any)
+    recent_unverified = [r for r in unverified_reports if r.verification_status in ['surplus', 'deficit']][:5]
+    
     context = {
         'shops': shops,
         'today_reports': today_reports,
@@ -182,8 +233,14 @@ def shop_dashboard(request):
         'total_mpesa_balance': total_mpesa_balance,
         'total_bank_balance': total_bank_balance,
         'total_cash_balance': total_cash_balance,
+        # Unverified reports for warning card
+        'unverified_reports_count': unverified_count,
+        'unverified_reports': recent_unverified,
+        'verified_count': verified_count,
     }
     return render(request, 'shops/dashboard.html', context)
+
+
 
 
 @login_required
@@ -1164,7 +1221,6 @@ def report_detail(request, report_id):
     }
     return render(request, 'shops/report_detail.html', context)
 
-
 @login_required
 def reports_list(request):
     """List all reports - filtered by user"""
@@ -1237,17 +1293,59 @@ def reports_list(request):
     total_expenses_value = all_reports.aggregate(total=Sum('total_expenses'))['total'] or 0
     
     # ============================================
-    # FIXED: Calculate bank total for each report using BankClosingBalance
-    # Use 'daily_report' as the foreign key field name
+    # Process each report with verification status
+    # CORRECTED FORMULA: Today's Closing = Yesterday's Closing - Today's Expenses
     # ============================================
     reports_list = []
     for report in reports:
         # Calculate bank total from related bank closing balances
         bank_total = BankClosingBalance.objects.filter(
-            daily_report=report,  # Changed from 'report' to 'daily_report'
+            daily_report=report,
             is_active=True
         ).aggregate(total=Sum('closing_balance'))['total'] or 0
         report.bank_total = bank_total
+        
+        # Get previous report for this shop
+        previous_report = DailyShopReport.objects.filter(
+            shop=report.shop,
+            report_date__lt=report.report_date
+        ).order_by('-report_date').first()
+        
+        # Calculate verification status using CORRECT formula
+        if previous_report:
+            # Expected closing = Previous closing - Today's expenses
+            expected_closing = previous_report.total_closing_balance - report.total_expenses
+            difference = report.total_closing_balance - expected_closing
+            
+            # Use small tolerance for floating point comparison
+            if abs(difference) < 0.01:  # Within 0.01 KES tolerance
+                report.verification_status = 'verified'
+                report.verification_icon = 'fas fa-check-circle'
+                report.verification_text = 'Report Matches'
+                report.verification_color = 'success'
+                report.verification_title = f'✓ Verified: Closing KES {report.total_closing_balance:,.2f} = Previous KES {previous_report.total_closing_balance:,.2f} - Expenses KES {report.total_expenses:,.2f}'
+            elif difference > 0:
+                # Actual closing is HIGHER than expected (Surplus)
+                report.verification_status = 'surplus'
+                report.verification_icon = 'fas fa-exclamation-triangle'
+                report.verification_text = f'Extra By (+{difference:,.2f})'
+                report.verification_color = 'warning'
+                report.verification_title = f'⚠️ Surplus: Closing is KES {difference:,.2f} higher than expected\nExpected: KES {expected_closing:,.2f}\nActual: KES {report.total_closing_balance:,.2f}'
+            else:
+                # Actual closing is LOWER than expected (Deficit)
+                report.verification_status = 'deficit'
+                report.verification_icon = 'fas fa-times-circle'
+                report.verification_text = f'Less By ({difference:,.2f})'
+                report.verification_color = 'danger'
+                report.verification_title = f'❌ Deficit: Closing is KES {abs(difference):,.2f} lower than expected\nExpected: KES {expected_closing:,.2f}\nActual: KES {report.total_closing_balance:,.2f}'
+        else:
+            # First report for this shop
+            report.verification_status = 'first'
+            report.verification_icon = 'fas fa-info-circle'
+            report.verification_text = 'First Report'
+            report.verification_color = 'info'
+            report.verification_title = 'First report - no previous data to compare'
+        
         reports_list.append(report)
     
     # Pagination on the list
@@ -1279,25 +1377,6 @@ def reports_list(request):
         'is_superuser': request.user.is_superuser,
     }
     return render(request, 'shops/reports_list.html', context)
-
-
-
-    """Revert a finalized report back to draft"""
-    report = get_object_or_404(DailyShopReport, id=report_id)
-    
-    if not report.is_finalized:
-        messages.warning(request, 'This report is already in draft status.')
-        return redirect('shops:report_detail', report_id=report.id)
-    
-    if request.method == 'POST':
-        report.is_finalized = False
-        report.finalized_by = None
-        report.finalized_at = None
-        report.save()
-        messages.success(request, f'Report for {report.report_date} has been reverted to draft.')
-    
-    return redirect('shops:report_detail', report_id=report.id)
-
 
 
 @login_required
