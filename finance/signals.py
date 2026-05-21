@@ -141,7 +141,7 @@ def create_finance_entry_for_company_payment(sender, instance, created, **kwargs
 def process_sale_accounting(sender, instance, created, **kwargs):
     """
     Process accounting when a sale is completed:
-    Update Net and Savings accounts
+    Update Net and Savings accounts, and create FinancialTransaction
     """
     # Only process when sale is not reversed
     if instance.is_reversed:
@@ -170,6 +170,26 @@ def process_sale_accounting(sender, instance, created, **kwargs):
         if total_profit > 0:
             savings_account.add_profit(amount=total_profit, sale_reference=instance.sale_id, user=instance.seller)
             logger.info(f"💰 SAVINGS: Added profit KES {total_profit} from sale {instance.sale_id}")
+        
+        # ============================================
+        # CREATE FINANCIAL TRANSACTION FOR THE SALE
+        # ============================================
+        from .models import FinancialTransaction
+        
+        # Create income transaction for the sale
+        FinancialTransaction.objects.create(
+            transaction_type='income',
+            category='other',
+            amount=instance.total_amount,
+            description=f"Sale {instance.sale_id} - {instance.buyer_name or 'Walk-in Customer'}",
+            payment_method=instance.payment_method.lower() if instance.payment_method else 'cash',
+            payment_reference=instance.sale_id,
+            recipient_name=instance.buyer_name or 'Walk-in Customer',
+            transaction_date=instance.sale_date,
+            created_by=instance.seller,
+            notes=f"Items: {instance.items.count()} | Paid via: {instance.payment_method}"
+        )
+        logger.info(f"📝 FINANCIAL TRANSACTION: Created income record for sale {instance.sale_id}")
         
     except Exception as e:
         logger.error(f"Error processing sale accounting for {instance.sale_id}: {str(e)}")

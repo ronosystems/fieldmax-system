@@ -2643,9 +2643,8 @@ def technician_reports(request):
 
 
 
-
 # ============================================
-# SALES MANAGER DASHBOARD - CORRECTED VERSION
+# SALES MANAGER DASHBOARD - COMPLETE CORRECTED VERSION
 # ============================================
 @login_required
 @dashboard_for_role('Sales Manager')
@@ -2653,9 +2652,9 @@ def sales_manager_dashboard(request):
     """Dashboard for sales manager - oversees all sales team"""
     from sales.models import Sale, SaleItem
     from django.contrib.auth import get_user_model
-    from django.db.models import Sum, Count
+    from django.db.models import Sum, Count, Q
     from django.utils import timezone
-    from datetime import timedelta
+    from datetime import datetime, timedelta
     
     User = get_user_model()
 
@@ -2665,7 +2664,13 @@ def sales_manager_dashboard(request):
     week_ago = today - timedelta(days=7)
     month_ago = today - timedelta(days=30)
     
-    # Team Overview - FIXED: Added import for StaffApplication
+    # Create timezone-aware datetime objects for filtering
+    today_start = timezone.make_aware(datetime.combine(today, datetime.min.time()))
+    today_end = timezone.make_aware(datetime.combine(today, datetime.max.time()))
+    week_start = timezone.make_aware(datetime.combine(week_ago, datetime.min.time()))
+    month_start = timezone.make_aware(datetime.combine(month_ago, datetime.min.time()))
+    
+    # Team Overview
     try:
         from staff.models import StaffApplication
         sales_team = StaffApplication.objects.filter(
@@ -2673,112 +2678,142 @@ def sales_manager_dashboard(request):
             position__in=['sales_agent', 'cashier']
         ).count()
     except:
-        # Fallback if StaffApplication doesn't exist
         sales_team = User.objects.filter(
             groups__name__in=['Sales Agent', 'Cashier']
         ).count()
     
-    # Team Performance Today - FIXED: Changed Count('id') to Count('sale_id')
-    team_sales_today = Sale.objects.filter(
-        sale_date__date=today
-    ).aggregate(
+    # Team Performance Today
+    today_sales = Sale.objects.filter(
+        sale_date__range=[today_start, today_end],
+        is_reversed=False
+    )
+    team_sales_today = today_sales.aggregate(
         total=Sum('total_amount'),
-        count=Count('sale_id')  # FIXED: Use sale_id instead of id
+        count=Count('sale_id')
     )
     
     # Team Performance This Week
-    team_sales_week = Sale.objects.filter(
-        sale_date__date__gte=week_ago
-    ).aggregate(
+    week_sales = Sale.objects.filter(
+        sale_date__range=[week_start, today_end],
+        is_reversed=False
+    )
+    team_sales_week = week_sales.aggregate(
         total=Sum('total_amount'),
         count=Count('sale_id')
     )
     
     # Team Performance This Month
-    team_sales_month = Sale.objects.filter(
-        sale_date__date__gte=month_ago
-    ).aggregate(
+    month_sales = Sale.objects.filter(
+        sale_date__range=[month_start, today_end],
+        is_reversed=False
+    )
+    team_sales_month = month_sales.aggregate(
         total=Sum('total_amount'),
         count=Count('sale_id')
     )
     
-    # Sales by team member (today) - FIXED: Use correct field names
-    sales_by_member_today = Sale.objects.filter(
-        sale_date__date=today
-    ).values('seller__username', 'seller__first_name', 'seller__last_name').annotate(
+    # Sales by team member (today)
+    sales_by_member_today = today_sales.values(
+        'seller__username', 
+        'seller__first_name', 
+        'seller__last_name'
+    ).annotate(
         total_sales=Sum('total_amount'),
-        transaction_count=Count('sale_id'),  # FIXED: Use sale_id
+        transaction_count=Count('sale_id'),
         avg_ticket=Sum('total_amount') / Count('sale_id')
     ).order_by('-total_sales')[:10]
     
-    # Sales by team member (this week)
-    sales_by_member_week = Sale.objects.filter(
-        sale_date__date__gte=week_ago
-    ).values('seller__username').annotate(
+    # Convert to list with proper values
+    sales_by_member_today_list = []
+    for member in sales_by_member_today:
+        sales_by_member_today_list.append({
+            'seller__username': member['seller__username'],
+            'seller__first_name': member['seller__first_name'],
+            'seller__last_name': member['seller__last_name'],
+            'total_sales': float(member['total_sales'] or 0),
+            'transaction_count': member['transaction_count'] or 0,
+            'avg_ticket': float(member['avg_ticket'] or 0),
+        })
+    
+    # Sales by team member (this week) - FIXED: Added this
+    sales_by_member_week = week_sales.values(
+        'seller__username', 
+        'seller__first_name', 
+        'seller__last_name'
+    ).annotate(
         total_sales=Sum('total_amount'),
-        transaction_count=Count('sale_id')
+        transaction_count=Count('sale_id'),
+        avg_ticket=Sum('total_amount') / Count('sale_id')
     ).order_by('-total_sales')[:10]
     
+    # Convert to list
+    sales_by_member_week_list = []
+    for member in sales_by_member_week:
+        sales_by_member_week_list.append({
+            'seller__username': member['seller__username'],
+            'seller__first_name': member['seller__first_name'],
+            'seller__last_name': member['seller__last_name'],
+            'total_sales': float(member['total_sales'] or 0),
+            'transaction_count': member['transaction_count'] or 0,
+            'avg_ticket': float(member['avg_ticket'] or 0),
+        })
+    
     # Payment method distribution (today)
-    payment_methods_today = Sale.objects.filter(
-        sale_date__date=today
-    ).values('payment_method').annotate(
+    payment_methods_today = today_sales.values('payment_method').annotate(
         count=Count('sale_id'),
         total=Sum('total_amount')
-    )
+    ).order_by('-total')
     
-    # Top selling products company-wide (today) - FIXED: Use correct field names
+    # Top selling products (today)
     top_products_today = SaleItem.objects.filter(
-        sale__sale_date__date=today
+        sale__in=today_sales
     ).values('product_name', 'product_code').annotate(
         total_qty=Sum('quantity'),
         total_value=Sum('total_price'),
-        transaction_count=Count('sale__sale_id')  # FIXED: Use sale__sale_id
+        transaction_count=Count('sale__sale_id')
     ).order_by('-total_qty')[:10]
     
-    # Top selling products (this week)
+    # Top selling products (this week) - FIXED: Added this
     top_products_week = SaleItem.objects.filter(
-        sale__sale_date__date__gte=week_ago
-    ).values('product_name').annotate(
+        sale__in=week_sales
+    ).values('product_name', 'product_code').annotate(
         total_qty=Sum('quantity'),
-        total_value=Sum('total_price')
+        total_value=Sum('total_price'),
+        transaction_count=Count('sale__sale_id')
     ).order_by('-total_qty')[:10]
     
-    # Recent sales (last 10)
-    recent_sales = Sale.objects.select_related('seller').order_by('-sale_date')[:10]
+    # Recent sales
+    recent_sales = Sale.objects.filter(
+        is_reversed=False
+    ).select_related('seller').order_by('-sale_date')[:10]
     
     # Credit sales today
-    credit_sales_today = Sale.objects.filter(
-        sale_date__date=today,
+    credit_sales_today = today_sales.filter(
         is_credit=True
     ).aggregate(
         count=Count('sale_id'),
         total=Sum('total_amount')
     )
     
-    # Cash sales today
-    cash_sales_today = Sale.objects.filter(
-        sale_date__date=today,
-        is_credit=False
-    ).aggregate(
-        count=Count('sale_id'),
-        total=Sum('total_amount')
-    )
+    # Calculate average ticket
+    avg_ticket_today = team_sales_today['total'] / team_sales_today['count'] if team_sales_today['count'] else 0
     
     # ============================================
-    # HOURLY SALES DATA - FIXED VARIABLE NAMES
+    # HOURLY SALES DATA
     # ============================================
     hourly_labels = []
     hourly_data = []
     
-    # Create hour labels from 7 AM to 10 PM (14 hours)
-    for hour in range(7, 22):  # 7 AM to 9 PM
+    # Create hour labels from 0 to 23
+    for hour in range(24):
+        hour_start = timezone.make_aware(datetime.combine(today, datetime.min.time().replace(hour=hour)))
+        hour_end = timezone.make_aware(datetime.combine(today, datetime.min.time().replace(hour=hour+1))) if hour < 23 else today_end
+        
         hourly_labels.append(f"{hour:02d}:00")
         
-        # Get sales for this hour
         hour_sales = Sale.objects.filter(
-            sale_date__date=today,
-            sale_date__hour=hour
+            sale_date__range=[hour_start, hour_end],
+            is_reversed=False
         ).aggregate(
             total=Sum('total_amount'),
             count=Count('sale_id')
@@ -2786,34 +2821,43 @@ def sales_manager_dashboard(request):
         
         hourly_data.append(float(hour_sales['total'] or 0))
     
-    # Optional: Create hourly_sales list for detailed info (if needed)
+    # Optional: hourly sales with details
     hourly_sales = []
-    for i, hour in enumerate(range(7, 22)):
+    for i, hour in enumerate(range(24)):
         hourly_sales.append({
             'hour': hour,
             'amount': hourly_data[i],
             'count': Sale.objects.filter(
+                sale_date__hour=hour,
                 sale_date__date=today,
-                sale_date__hour=hour
+                is_reversed=False
             ).count(),
-            'percentage': (hourly_data[i] / float(team_sales_today['total'] or 1)) * 100 if team_sales_today['total'] else 0
         })
     
-    # Top performing team member
-    top_performer = sales_by_member_today[0] if sales_by_member_today else None
+    # Top performer
+    top_performer = sales_by_member_today_list[0] if sales_by_member_today_list else None
     
     context = {
         'today': today,
         
         # Team stats
         'sales_team': sales_team,
-        'team_sales_today': team_sales_today,
-        'team_sales_week': team_sales_week,
-        'team_sales_month': team_sales_month,
+        'team_sales_today': {
+            'total': float(team_sales_today['total'] or 0),
+            'count': team_sales_today['count'] or 0,
+        },
+        'team_sales_week': {
+            'total': float(team_sales_week['total'] or 0),
+            'count': team_sales_week['count'] or 0,
+        },
+        'team_sales_month': {
+            'total': float(team_sales_month['total'] or 0),
+            'count': team_sales_month['count'] or 0,
+        },
         
         # Sales by member
-        'sales_by_member_today': sales_by_member_today,
-        'sales_by_member_week': sales_by_member_week,
+        'sales_by_member_today': sales_by_member_today_list,
+        'sales_by_member_week': sales_by_member_week_list,
         
         # Payment methods
         'payment_methods_today': payment_methods_today,
@@ -2826,24 +2870,28 @@ def sales_manager_dashboard(request):
         'recent_sales': recent_sales,
         
         # Credit/Cash stats
-        'credit_sales_today': credit_sales_today,
-        'cash_sales_today': cash_sales_today,
+        'credit_sales_today': {
+            'count': credit_sales_today['count'] or 0,
+            'total': float(credit_sales_today['total'] or 0),
+        },
+        'cash_sales_today': {
+            'count': (team_sales_today['count'] or 0) - (credit_sales_today['count'] or 0),
+            'total': float((team_sales_today['total'] or 0) - (credit_sales_today['total'] or 0)),
+        },
         
-        # Chart data - FIXED: Use correct variable names for template
-        'hourly_labels': hourly_labels,   # ← FIXED: Changed from chart_labels
-        'hourly_data': hourly_data,       # ← FIXED: Changed from chart_data
+        # Chart data
+        'hourly_labels': hourly_labels,
+        'hourly_data': hourly_data,
         'hourly_sales': hourly_sales,
         
         # Top performer
         'top_performer': top_performer,
         
         # Averages
-        'avg_ticket_today': team_sales_today['total'] / team_sales_today['count'] if team_sales_today['count'] else 0,
+        'avg_ticket_today': float(avg_ticket_today),
     }
     
     return render(request, 'staff/dashboards/sales_manager_dashboard.html', context)
-
-    
 
 
 
