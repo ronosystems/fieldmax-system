@@ -14,12 +14,14 @@
         background: var(--card-bg);
         border: 1px solid var(--border-color);
         cursor: pointer;
+        box-shadow: #00080e 2px 2px 0px, #00080e 4px 4px 0px;
     }
     
     .quick-action-btn:hover {
         transform: translateY(-5px);
         box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
         border-color: var(--primary-color);
+        box-shadow: #00080e 2px 2px 0px, #00080e 4px 4px 0px;
     }
     
     .quick-action-icon {
@@ -30,11 +32,14 @@
     
     .report-card {
         transition: all 0.3s ease;
+        cursor: pointer;
+        box-shadow: #00080e 2px 2px 0px, #00080e 4px 4px 0px;
     }
     
     .report-card:hover {
         transform: translateX(5px);
         background: var(--light-bg);
+        box-shadow: #00080e 2px 2px 0px, #00080e 4px 4px 0px;
     }
     
     .shop-badge {
@@ -42,16 +47,19 @@
         border-radius: 20px;
         font-size: 0.8rem;
         font-weight: 500;
+        box-shadow: #00080e 2px 2px 0px, #00080e 4px 4px 0px;
     }
     
     .shop-badge-active {
         background: #10b981;
         color: white;
+        box-shadow: #00080e 2px 2px 0px, #00080e 4px 4px 0px;
     }
     
     .shop-badge-inactive {
         background: #6b7280;
         color: white;
+        box-shadow: #00080e 2px 2px 0px, #00080e 4px 4px 0px;
     }
     
     .trend-up {
@@ -76,24 +84,28 @@
         padding: 25px;
         color: white;
         margin-bottom: 25px;
+        box-shadow: #00080e 2px 2px 0px, #00080e 4px 4px 0px;
     }
     
     .welcome-banner h2 {
         margin-bottom: 5px;
+        box-shadow: #00080e 2px 2px 0px, #00080e 4px 4px 0px;
     }
 
     .stat-icon {
         font-size: 2rem;
-        opacity: 5;
+        opacity: 0.15;
         position: absolute;
         right: 20px;
         bottom: 15px;
-        color: var(--text-light);
+        color: var(--text-primary);
+        box-shadow: #00080e 2px 2px 0px, #00080e 4px 4px 0px;
     }
     
     .welcome-banner p {
-        opacity: 5;
+        opacity: 0.9;
         margin-bottom: 0;
+         box-shadow: #00080e 2px 2px 0px, #00080e 4px 4px 0px;
     }
     
     .stats-row {
@@ -126,6 +138,7 @@
         border-radius: 50%;
         background: var(--primary-color);
         border: 2px solid var(--card-bg);
+        box-shadow: #00080e 2px 2px 0px, #00080e 4px 4px 0px;
     }
     
     .timeline-date {
@@ -165,6 +178,7 @@
         padding: 20px;
         margin-bottom: 20px;
         transition: transform 0.3s ease, box-shadow 0.3s ease;
+        box-shadow: #00080e 2px 2px 0px, #00080e 4px 4px 0px;
     }
     
     .stat-card:hover {
@@ -184,6 +198,59 @@
         text-transform: uppercase;
         letter-spacing: 1px;
         color: var(--text-secondary);
+    }
+    
+    /* Recent Reports Table */
+    .reports-table {
+        margin-bottom: 0;
+    }
+    
+    .reports-table th {
+        font-weight: 600;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--text-secondary);
+        border-bottom: 2px solid var(--border-color);
+    }
+    
+    .reports-table td {
+        vertical-align: middle;
+        padding: 12px 8px;
+        color: var(--text-primary);
+    }
+    
+    .status-badge {
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.7rem;
+        font-weight: 600;
+        display: inline-block;
+    }
+    
+    .status-finalized {
+        background: #10b98120;
+        color: #10b981;
+    }
+    
+    .status-pending {
+        background: #f59e0b20;
+        color: #f59e0b;
+    }
+    
+    .status-draft {
+        background: #6b728020;
+        color: #6b7280;
+    }
+    
+    .view-link {
+        color: var(--primary-color);
+        text-decoration: none;
+        font-weight: 500;
+    }
+    
+    .view-link:hover {
+        text-decoration: underline;
     }
     
     /* Dark mode specific adjustments */
@@ -220,6 +287,12 @@
         
         .quick-action-icon {
             font-size: 1.5rem;
+        }
+        
+        .reports-table th,
+        .reports-table td {
+            padding: 8px 4px;
+            font-size: 0.75rem;
         }
     }
 </style>
@@ -278,10 +351,10 @@
                 </div>
                 <div class="stat-value">
                     {% if total_shops > 0 %}
-                        {{ reports_today|floatformat:0 }}%
+                        {% widthratio reports_today total_shops 100 %}
                     {% else %}
-                        0%
-                    {% endif %}
+                        0
+                    {% endif %}%
                 </div>
                 <div class="stat-label">Report Completion</div>
                 <small class="text-muted">
@@ -345,6 +418,93 @@
         </div>
     </div>
     
+    <!-- Recent Reports Table - NEW SECTION -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-clock me-2"></i>Recent Reports
+                    </h5>
+                    <a href="{% url 'shops:reports_list' %}" class="btn btn-sm btn-outline-primary">
+                        View All <i class="fas fa-arrow-right ms-1"></i>
+                    </a>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table reports-table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Shop</th>
+                                    <th>Submitted By</th>
+                                    <th>Expenses</th>
+                                    <th>Closing Balance</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                 </thead>
+                            <tbody>
+                                {% for report in recent_reports %}
+                                <tr class="report-card" onclick="window.location.href='{% url 'shops:report_detail' report.id %}'">
+                                    <td>
+                                        <strong>{{ report.report_date|date:"M d, Y" }}</strong><br>
+                                        <small class="text-muted">{{ report.report_date|date:"D" }}</small>
+                                    </td>
+                                    <td>
+                                        <i class="fas fa-store text-primary me-1"></i>
+                                        {{ report.shop.name }}
+                                     </td>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center me-2" 
+                                                 style="width: 28px; height: 28px; font-size: 12px;">
+                                                {{ report.submitted_by.username|slice:":1"|upper }}
+                                            </div>
+                                            {{ report.submitted_by.username }}
+                                        </div>
+                                     </td>
+                                    <td>
+                                        <span class="text-warning">KES {{ report.total_expenses|floatformat:0|intcomma }}</span>
+                                     </td>
+                                    <td>
+                                        <span class="fw-bold">KES {{ report.total_closing_balance|floatformat:0|intcomma }}</span>
+                                     </td>
+                                    <td>
+                                        {% if report.is_finalized %}
+                                            <span class="status-badge status-finalized">
+                                                <i class="fas fa-check-circle me-1"></i>Finalized
+                                            </span>
+                                        {% else %}
+                                            <span class="status-badge status-pending">
+                                                <i class="fas fa-clock me-1"></i>Pending
+                                            </span>
+                                        {% endif %}
+                                     </td>
+                                    <td>
+                                        <a href="{% url 'shops:report_detail' report.id %}" class="view-link" onclick="event.stopPropagation()">
+                                            <i class="fas fa-eye me-1"></i>View
+                                        </a>
+                                     </td>
+                                 </tr>
+                                {% empty %}
+                                 <tr>
+                                    <td colspan="8" class="text-center py-5">
+                                        <i class="fas fa-file-alt fa-3x text-muted mb-3"></i>
+                                        <p class="text-muted mb-0">No reports found</p>
+                                        <a href="{% url 'shops:create_report' %}" class="btn btn-sm btn-primary mt-3">
+                                            <i class="fas fa-plus me-1"></i>Create First Report
+                                        </a>
+                                    </td>
+                                 </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
     <!-- Weekly Transactions Chart -->
     <div class="row">
         <div class="col-12">
@@ -369,40 +529,40 @@
     </div>
     
     {% else %}
-<!-- ==================== REGULAR USER VIEW - Only Welcome Banner ==================== -->
-{% load tz %}
-{% now "H" as current_hour %}
-
-<div class="welcome-banner">
-    <div class="row align-items-center">
-        <div class="col-md-12 text-center">
-            <h2>
-                {% if current_hour|add:"0" >= 5 and current_hour|add:"0" < 12 %}
-                    <i class="fas fa-coffee me-2"></i>
-                    Good Morning, {{ request.user.first_name|default:request.user.username }}!
-                {% elif current_hour|add:"0" >= 12 and current_hour|add:"0" < 17 %}
-                    <i class="fas fa-sun me-2"></i>
-                    Good Afternoon, {{ request.user.first_name|default:request.user.username }}!
-                {% elif current_hour|add:"0" >= 17 and current_hour|add:"0" < 20 %}
-                    <i class="fas fa-cloud-sun me-2"></i>
-                    Good Evening, {{ request.user.first_name|default:request.user.username }}!
-                {% elif current_hour|add:"0" >= 20 and current_hour|add:"0" < 24 %}
-                    <i class="fas fa-moon me-2"></i>
-                    Good Evening, {{ request.user.first_name|default:request.user.username }}!
-                {% else %}
-                    <i class="fas fa-star-and-crescent me-2"></i>
-                    Good Night, {{ request.user.first_name|default:request.user.username }}!
-                {% endif %}
-            </h2>
-            <p class="mb-0"></p>
-            <div class="mt-4">
-                <a href="{% url 'shops:reports_list' %}" class="btn btn-outline-light btn-lg">
-                    <i class="fas fa-list me-2"></i>View Reports
-                </a>
+    <!-- ==================== REGULAR USER VIEW - Only Welcome Banner ==================== -->
+    {% load tz %}
+    {% now "H" as current_hour %}
+    
+    <div class="welcome-banner">
+        <div class="row align-items-center">
+            <div class="col-md-12 text-center">
+                <h2>
+                    {% if current_hour|add:"0" >= 5 and current_hour|add:"0" < 12 %}
+                        <i class="fas fa-coffee me-2"></i>
+                        Good Morning, {{ request.user.first_name|default:request.user.username }}!
+                    {% elif current_hour|add:"0" >= 12 and current_hour|add:"0" < 17 %}
+                        <i class="fas fa-sun me-2"></i>
+                        Good Afternoon, {{ request.user.first_name|default:request.user.username }}!
+                    {% elif current_hour|add:"0" >= 17 and current_hour|add:"0" < 20 %}
+                        <i class="fas fa-cloud-sun me-2"></i>
+                        Good Evening, {{ request.user.first_name|default:request.user.username }}!
+                    {% elif current_hour|add:"0" >= 20 and current_hour|add:"0" < 24 %}
+                        <i class="fas fa-moon me-2"></i>
+                        Good Evening, {{ request.user.first_name|default:request.user.username }}!
+                    {% else %}
+                        <i class="fas fa-star-and-crescent me-2"></i>
+                        Good Night, {{ request.user.first_name|default:request.user.username }}!
+                    {% endif %}
+                </h2>
+                <p class="mb-0"></p>
+                <div class="mt-4">
+                    <a href="{% url 'shops:reports_list' %}" class="btn btn-outline-light btn-lg">
+                        <i class="fas fa-list me-2"></i>View Reports
+                    </a>
+                </div>
             </div>
         </div>
     </div>
-</div>
     {% endif %}
 </div>
 {% endblock %}
