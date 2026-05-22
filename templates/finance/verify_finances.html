@@ -1,0 +1,269 @@
+<!-- templates/finance/verify_finances.html -->
+{% extends 'finance/base.html' %}
+{% load humanize %}
+
+{% block content %}
+
+<!-- Add these cards to show account balances -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="stat-card">
+            <div class="stat-icon">
+                <i class="fas fa-network-wired"></i>
+            </div>
+            <div class="stat-value">KES {{ unified.net_balance|floatformat:2|intcomma }}</div>
+            <div class="stat-label">Net Account Balance</div>
+            <small class="text-muted">Available for operations</small>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="stat-card">
+            <div class="stat-icon">
+                <i class="fas fa-piggy-bank"></i>
+            </div>
+            <div class="stat-value">KES {{ unified.savings_balance|floatformat:2|intcomma }}</div>
+            <div class="stat-label">Savings (Profit)</div>
+            <small class="text-muted">Accumulated profits</small>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="stat-card">
+            <div class="stat-icon">
+                <i class="fas fa-boxes"></i>
+            </div>
+            <div class="stat-value">KES {{ unified.inventory_purchases|floatformat:2|intcomma }}</div>
+            <div class="stat-label">Inventory Purchases</div>
+            <small class="text-muted">Assets (not expenses)</small>
+        </div>
+    </div>
+</div>
+
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h2><i class="fas fa-check-double me-2"></i>Financial Data Consistency Check</h2>
+                <a href="{% url 'finance:dashboard' %}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+                </a>
+            </div>
+            <p class="text-muted">Date: {{ today }} | Period: {{ unified.start_date|date:"M d, Y" }} to {{ unified.end_date|date:"M d, Y" }}</p>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0"><i class="fas fa-calculator me-2"></i>Unified Calculator Results</h4>
+                </div>
+                <div class="card-body">
+                    <table class="table table-bordered">
+                        <tbody>
+                            <tr class="table-light">
+                                <th style="width: 50%;">Revenue</th>
+                                <td class="text-end"><strong>KES {{ unified.revenue|floatformat:2|intcomma }}</strong></td>
+                            </tr>
+                            <tr>
+                                <th>COGS (Cost of Goods Sold)</th>
+                                <td class="text-end">KES {{ unified.cogs|floatformat:2|intcomma }}</td>
+                            </tr>
+                            <tr class="table-success">
+                                <th>Gross Profit</th>
+                                <td class="text-end"><strong class="text-success">KES {{ unified.gross_profit|floatformat:2|intcomma }}</strong></td>
+                            </tr>
+                            <tr>
+                                <th>Gross Margin</th>
+                                <td class="text-end">
+                                    {% if unified.revenue > 0 %}
+                                        <strong>{{ unified.gross_margin|floatformat:1 }}%</strong>
+                                        ({{ unified.gross_profit|floatformat:2 }} / {{ unified.revenue|floatformat:2 }})
+                                    {% else %}
+                                        0%
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Salaries</th>
+                                <td class="text-end">KES {{ unified.salaries|floatformat:2|intcomma }}</td>
+                            </tr>
+                            <tr>
+                                <th>Commissions</th>
+                                <td class="text-end">KES {{ unified.commissions|floatformat:2|intcomma }}</td>
+                            </tr>
+                            <tr>
+                                <th>Operational Expenses</th>
+                                <td class="text-end">KES {{ unified.operational_expenses|floatformat:2|intcomma }}</td>
+                            </tr>
+                            <tr class="table-warning">
+                                <th>Total Expenses</th>
+                                <td class="text-end"><strong>KES {{ unified.total_expenses|floatformat:2|intcomma }}</strong></td>
+                            </tr>
+                            <tr class="table-info">
+                                <th>Net Profit</th>
+                                <td class="text-end">
+                                    <strong class="{% if unified.net_profit >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                        KES {{ unified.net_profit|floatformat:2|intcomma }}
+                                    </strong>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Net Margin</th>
+                                <td class="text-end">
+                                    {% if unified.revenue > 0 %}
+                                        <strong>{{ unified.net_margin|floatformat:1 }}%</strong>
+                                    {% else %}
+                                        0%
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h4 class="mb-0"><i class="fas fa-database me-2"></i>Legacy Calculation Results</h4>
+                </div>
+                <div class="card-body">
+                    <table class="table table-bordered">
+                        <tbody>
+                            <tr>
+                                <th style="width: 50%;">Revenue (Old Method)</th>
+                                <td class="text-end">KES {{ old_revenue|floatformat:2|intcomma }}</td>
+                            </tr>
+                            <tr>
+                                <th>COGS (Old Method)</th>
+                                <td class="text-end">KES {{ old_cogs|floatformat:2|intcomma }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    
+                    <div class="alert alert-info mt-3">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Note:</strong> Legacy calculations use direct database sums without filters.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header {% if revenue_match and cogs_match %}bg-success{% else %}bg-danger{% endif %} text-white">
+                    <h4 class="mb-0">
+                        <i class="fas fa-check-circle me-2"></i>
+                        Verification Results
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <table class="table table-bordered">
+                        <tbody>
+                            <tr>
+                                <th style="width: 50%;">Revenue Match</th>
+                                <td>
+                                    {% if revenue_match %}
+                                        <span class="badge bg-success fs-6 p-2">
+                                            <i class="fas fa-check-circle me-1"></i> MATCHES
+                                        </span>
+                                        <span class="text-success ms-2">✓ Unified = Legacy</span>
+                                    {% else %}
+                                        <span class="badge bg-danger fs-6 p-2">
+                                            <i class="fas fa-times-circle me-1"></i> MISMATCH
+                                        </span>
+                                        <span class="text-danger ms-2">
+                                            Difference: KES {{ unified.revenue|add:old_revenue|floatformat:2|intcomma }}
+                                        </span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>COGS Match</th>
+                                <td>
+                                    {% if cogs_match %}
+                                        <span class="badge bg-success fs-6 p-2">
+                                            <i class="fas fa-check-circle me-1"></i> MATCHES
+                                        </span>
+                                        <span class="text-success ms-2">✓ Unified = Legacy</span>
+                                    {% else %}
+                                        <span class="badge bg-danger fs-6 p-2">
+                                            <i class="fas fa-times-circle me-1"></i> MISMATCH
+                                        </span>
+                                        <span class="text-danger ms-2">
+                                            Difference: KES {{ unified.cogs|floatformat:2|intcomma }} vs 
+                                            KES {{ old_cogs|floatformat:2|intcomma }}
+                                        </span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    
+                    {% if not revenue_match or not cogs_match %}
+                    <div class="alert alert-warning mt-3">
+                        <h5><i class="fas fa-exclamation-triangle me-2"></i>Data Inconsistency Detected!</h5>
+                        <p>Please check the following:</p>
+                        <ul>
+                            <li>Ensure all sales are properly recorded with correct total_amount</li>
+                            <li>Check that StockEntry records exist for every sale (entry_type='sale')</li>
+                            <li>Verify that unit_price in StockEntry matches sale item unit_price</li>
+                            <li>Check for missing or incorrect stock entries</li>
+                            <li>Check for sales that might be missing corresponding stock entries</li>
+                        </ul>
+                        <hr>
+                        <p class="mb-0"><strong>Recommended Action:</strong> Run a full stock reconciliation and check for orphaned sales records.</p>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-success mt-3">
+                        <h5><i class="fas fa-check-circle me-2"></i>All Data Consistent!</h5>
+                        <p class="mb-0">Your financial data is consistent across all modules. Revenue and COGS calculations match between unified and legacy methods.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row mt-4">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-secondary text-white">
+                    <h4 class="mb-0"><i class="fas fa-info-circle me-2"></i>Understanding the Results</h4>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h5>Unified Calculator:</h5>
+                            <ul>
+                                <li>Uses StockEntry entries for COGS calculation</li>
+                                <li>Excludes returned/reversed sales</li>
+                                <li>Matches inventory expense calculation</li>
+                                <li>Uses actual unit prices from stock movements</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h5>Legacy Method:</h5>
+                            <ul>
+                                <li>Direct database sums from Sale model</li>
+                                <li>May include returned items</li>
+                                <li>Less accurate for COGS calculation</li>
+                                <li>Used in older reports</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="alert alert-info mt-3">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        <strong>Pro Tip:</strong> The Unified Calculator results should be considered the source of truth for all financial reports going forward.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

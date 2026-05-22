@@ -1,6 +1,7 @@
 # finance/views.py
 from django.core.cache import cache
 from django.shortcuts import render, get_object_or_404, redirect
+from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db.models import Sum, Q, Value, DecimalField
@@ -46,12 +47,67 @@ from sales.models import Sale, SaleItem
 from inventory.models import Product, StockEntry
 from .models import CapitalInjection, CapitalInjectionRepayment, CapitalAccount
 from inventory.models import Product, StockEntry
-
+from .utils import UnifiedFinanceCalculator
 
 
 
 logger = logging.getLogger(__name__)
 
+
+
+
+# ============================================
+#  VERIFY FINANCIAL CONSISTENSY
+# ============================================
+@login_required
+@user_passes_test(lambda u: u.is_superuser)
+def verify_financial_consistency(request):
+    """Admin view to verify financial data consistency across modules"""
+    from finance.utils import UnifiedFinanceCalculator
+    from decimal import Decimal
+    from sales.models import Sale
+    from inventory.models import StockEntry
+    from django.utils import timezone
+    from datetime import timedelta
+    
+    today = timezone.now().date()
+    month_start = today.replace(day=1)
+    
+    # Calculate using unified method
+    unified = UnifiedFinanceCalculator.get_period_data('month')
+    
+    # Calculate percentages in the view (for template compatibility)
+    unified['gross_margin'] = (unified['gross_profit'] / unified['revenue'] * 100) if unified['revenue'] > 0 else 0
+    unified['net_margin'] = (unified['net_profit'] / unified['revenue'] * 100) if unified['revenue'] > 0 else 0
+    
+    # Calculate using old method for comparison
+    # Old revenue calculation
+    old_revenue = Sale.objects.filter(
+        sale_date__date__gte=month_start,
+        is_reversed=False
+    ).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+    
+    # Old COGS calculation
+    old_cogs = Decimal('0.00')
+    stock_entries = StockEntry.objects.filter(
+        entry_type='sale',
+        quantity__lt=0,
+        created_at__date__gte=month_start
+    )
+    for entry in stock_entries:
+        old_cogs += abs(entry.quantity) * entry.unit_price
+    
+    context = {
+        'unified': unified,
+        'old_revenue': old_revenue,
+        'old_cogs': old_cogs,
+        'revenue_match': abs(unified['revenue'] - old_revenue) < Decimal('0.01'),
+        'cogs_match': abs(unified['cogs'] - old_cogs) < Decimal('0.01'),
+        'today': today,
+        'month_start': month_start,
+    }
+    
+    return render(request, 'finance/verify_finances.html', context)
 
 
 # ============================================
@@ -60,13 +116,13 @@ logger = logging.getLogger(__name__)
 
 @login_required
 def finance_dashboard(request):
-    """Finance dashboard overview - Filter by Daily, Weekly, Monthly, Yearly"""
+    """Finance dashboard overview - Using unified calculations"""
+    from finance.utils import UnifiedFinanceCalculator
     from decimal import Decimal
-    from django.db.models import Sum, Q
-    from datetime import datetime, timedelta
-    from .models import NetAccount, SavingsAccount, InjectionAccount, FinancialTransaction
-    from credit.models import CreditTransaction, SellerCommission
+    from django.utils import timezone
+    from datetime import timedelta, datetime
     import calendar
+    from django.db import models
     
     today = timezone.now().date()
     current_year = today.year
@@ -75,92 +131,88 @@ def finance_dashboard(request):
     # Get selected period from request (default to 'month')
     period = request.GET.get('period', 'month')
     
-    # Set date range based on selected period
-    if period == 'day':
-        start_date = today
-        end_date = today
-        period_name = "Today"
-        period_label = today.strftime('%B %d, %Y')
-    elif period == 'week':
-        start_date = today - timedelta(days=7)
-        end_date = today
-        period_name = "This Week"
-        period_label = f"{start_date.strftime('%b %d')} - {end_date.strftime('%b %d, %Y')}"
-    elif period == 'month':
-        start_date = today.replace(day=1)
-        end_date = today
-        period_name = "This Month"
-        period_label = today.strftime('%B %Y')
-    elif period == 'year':
-        start_date = datetime(current_year, 1, 1).date()
-        end_date = today
-        period_name = "This Year"
-        period_label = str(current_year)
-    else:
-        start_date = today.replace(day=1)
-        end_date = today
-        period = 'month'
-        period_name = "This Month"
-        period_label = today.strftime('%B %Y')
+    # Map period to match UnifiedFinanceCalculator
+    period_map = {
+        'day': 'today',
+        'week': 'week', 
+        'month': 'month',
+        'year': 'year'
+    }
+    calc_period = period_map.get(period, 'month')
     
-    start_aware = timezone.make_aware(datetime.combine(start_date, datetime.min.time()))
-    end_aware = timezone.make_aware(datetime.combine(end_date, datetime.max.time()))
+    # Get period data using unified calculator
+    period_data = UnifiedFinanceCalculator.get_period_data(calc_period)
+    
+    # Debug - print to console
+    print(f"Selected Period: {period}")
+    print(f"Start Date: {period_data['start_date']}")
+    print(f"End Date: {period_data['end_date']}")
     
     # ============================================
-    # INCOME FOR SELECTED PERIOD
+    # GET NET ACCOUNT BALANCE
     # ============================================
-    
-    # Sales Income
-    sales_income = Sale.objects.filter(
-        sale_date__range=[start_aware, end_aware],
-        is_reversed=False
-    ).aggregate(total=Sum('total_amount'))['total'] or Decimal('0')
-    
-    # Credit Income
-    credit_income = CreditTransaction.objects.filter(
-        paid_date__range=[start_aware, end_aware],
-        payment_status='paid'
-    ).aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0')
-    
-    total_income = sales_income + credit_income
+    from finance.models import NetAccount
+    net_account = NetAccount.get_account()
+    net_balance = net_account.balance
     
     # ============================================
-    # EXPENSES FOR SELECTED PERIOD
+    # GET EXPENSES FILTERED BY PERIOD
     # ============================================
-    
-    # Salary Expenses
-    salary_expenses = Salary.objects.filter(
-        paid_date__range=[start_aware, end_aware],
-        status='paid'
-    ).aggregate(total=Sum('total_amount'))['total'] or Decimal('0')
-    
-    # Commission Expenses
-    commission_expenses = SellerCommission.objects.filter(
+    from finance.models import Salary
+    salaries_in_period = Salary.objects.filter(
         status='paid',
-        paid_date__range=[start_aware, end_aware]
-    ).aggregate(total=Sum('amount'))['total'] or Decimal('0')
+        paid_date__date__gte=period_data['start_date'],
+        paid_date__date__lte=period_data['end_date']
+    ).aggregate(total=models.Sum('total_amount'))['total'] or Decimal('0')
     
-    total_expenses = salary_expenses + commission_expenses
+    from credit.models import SellerCommission
+    commissions_in_period = SellerCommission.objects.filter(
+        status='paid',
+        paid_date__date__gte=period_data['start_date'],
+        paid_date__date__lte=period_data['end_date']
+    ).aggregate(total=models.Sum('amount'))['total'] or Decimal('0')
+    
+    from finance.models import AccountTransaction
+    operational_expenses = AccountTransaction.objects.filter(
+        transaction_type='expense',
+        account_type__in=['cash', 'bank'],
+        transaction_date__date__gte=period_data['start_date'],
+        transaction_date__date__lte=period_data['end_date']
+    ).exclude(
+        models.Q(description__icontains='stock') |
+        models.Q(description__icontains='inventory') |
+        models.Q(description__icontains='purchase')
+    ).aggregate(total=models.Sum('amount'))['total'] or Decimal('0')
+    
+    total_expenses = salaries_in_period + commissions_in_period + operational_expenses
+    net_profit = period_data['revenue'] - period_data['cogs'] - total_expenses
     
     # ============================================
-    # PROFIT CALCULATION
+    # RECENT TRANSACTIONS - FIXED FILTERING
     # ============================================
-    net_profit = total_income - total_expenses
-    profit_margin = (net_profit / total_income * 100) if total_income > 0 else 0
+    from finance.models import FinancialTransaction
     
-    # ============================================
-    # RECENT TRANSACTIONS (FILTERED BY SELECTED PERIOD)
-    # ============================================
+    # Convert dates to datetime ranges properly
+    start_datetime = datetime.combine(period_data['start_date'], datetime.min.time())
+    end_datetime = datetime.combine(period_data['end_date'], datetime.max.time())
+    
+    # Make timezone aware if needed
+    if timezone.is_naive(start_datetime):
+        start_datetime = timezone.make_aware(start_datetime)
+    if timezone.is_naive(end_datetime):
+        end_datetime = timezone.make_aware(end_datetime)
+    
     recent_transactions = FinancialTransaction.objects.filter(
-        transaction_date__range=[start_aware, end_aware]
+        transaction_date__gte=start_datetime,
+        transaction_date__lte=end_datetime
     ).select_related('created_by').order_by('-transaction_date')[:20]
     
-    # ============================================
-    # CHART DATA (Last 30 days - always shows 30 days)
-    # ============================================
-    thirty_days_ago = today - timedelta(days=30)
-    thirty_days_ago_aware = timezone.make_aware(datetime.combine(thirty_days_ago, datetime.min.time()))
+    print(f"Transactions found: {recent_transactions.count()}")  # Debug
     
+    # ============================================
+    # CHART DATA (Last 30 days)
+    # ============================================
+    thirty_days_ago = today - timedelta(days=29)
     chart_labels = []
     income_data = []
     expense_data = []
@@ -168,39 +220,37 @@ def finance_dashboard(request):
     
     for i in range(30):
         day = thirty_days_ago + timedelta(days=i)
-        day_start = timezone.make_aware(datetime.combine(day, datetime.min.time()))
-        day_end = timezone.make_aware(datetime.combine(day, datetime.max.time()))
-        
-        day_income = Sale.objects.filter(
-            sale_date__range=[day_start, day_end],
-            is_reversed=False
-        ).aggregate(total=Sum('total_amount'))['total'] or 0
-        
-        day_credit = CreditTransaction.objects.filter(
-            paid_date__range=[day_start, day_end],
-            payment_status='paid'
-        ).aggregate(total=Sum('ceiling_price'))['total'] or 0
+        day_revenue = UnifiedFinanceCalculator.calculate_revenue(day, day)
+        day_cogs = UnifiedFinanceCalculator.calculate_cogs(day, day)
         
         day_salaries = Salary.objects.filter(
-            paid_date__range=[day_start, day_end],
-            status='paid'
-        ).aggregate(total=Sum('total_amount'))['total'] or 0
+            status='paid',
+            paid_date__date=day
+        ).aggregate(total=models.Sum('total_amount'))['total'] or Decimal('0')
         
         day_commissions = SellerCommission.objects.filter(
-            paid_date__range=[day_start, day_end],
-            status='paid'
-        ).aggregate(total=Sum('amount'))['total'] or 0
+            status='paid',
+            paid_date__date=day
+        ).aggregate(total=models.Sum('amount'))['total'] or Decimal('0')
         
-        daily_income = day_income + day_credit
-        daily_expense = day_salaries + day_commissions
+        day_operational = AccountTransaction.objects.filter(
+            transaction_type='expense',
+            transaction_date__date=day
+        ).exclude(
+            models.Q(description__icontains='stock') |
+            models.Q(description__icontains='inventory')
+        ).aggregate(total=models.Sum('amount'))['total'] or Decimal('0')
+        
+        day_expenses = day_salaries + day_commissions + day_operational
+        day_profit = day_revenue - day_cogs - day_expenses
         
         chart_labels.append(day.strftime('%d %b'))
-        income_data.append(float(daily_income))
-        expense_data.append(float(daily_expense))
-        profit_data.append(float(daily_income - daily_expense))
+        income_data.append(float(day_revenue))
+        expense_data.append(float(day_expenses))
+        profit_data.append(float(day_profit))
     
     # ============================================
-    # SALARY SUMMARY (for tables)
+    # SALARY SUMMARY (Previous month - STATIC)
     # ============================================
     previous_month = current_month - 1 if current_month > 1 else 12
     previous_year = current_year if current_month > 1 else current_year - 1
@@ -210,81 +260,111 @@ def finance_dashboard(request):
         year=previous_year
     ).select_related('staff')
     
-    salaries_pending = previous_month_salaries.filter(status='pending').aggregate(total=Sum('total_amount'))['total'] or 0
-    salaries_approved = previous_month_salaries.filter(status='approved').aggregate(total=Sum('total_amount'))['total'] or 0
-    salaries_paid = previous_month_salaries.filter(status='paid').aggregate(total=Sum('total_amount'))['total'] or 0
+    salaries_pending = previous_month_salaries.filter(status='pending').aggregate(
+        total=models.Sum('total_amount')
+    )['total'] or Decimal('0')
+    
+    salaries_approved = previous_month_salaries.filter(status='approved').aggregate(
+        total=models.Sum('total_amount')
+    )['total'] or Decimal('0')
+    
+    salaries_paid = previous_month_salaries.filter(status='paid').aggregate(
+        total=models.Sum('total_amount')
+    )['total'] or Decimal('0')
+    
+    previous_month_salaries_paid = salaries_paid
     previous_month_salaries_count = previous_month_salaries.count()
     
-    total_base_salary = previous_month_salaries.aggregate(total=Sum('base_salary'))['total'] or 0
-    total_bonus = previous_month_salaries.aggregate(total=Sum('bonus'))['total'] or 0
-    total_deductions = previous_month_salaries.aggregate(total=Sum('deductions'))['total'] or 0
-    total_salary_amount = previous_month_salaries.aggregate(total=Sum('total_amount'))['total'] or 0
+    total_base_salary = previous_month_salaries.aggregate(
+        total=models.Sum('base_salary')
+    )['total'] or Decimal('0')
+    
+    total_bonus = previous_month_salaries.aggregate(
+        total=models.Sum('bonus')
+    )['total'] or Decimal('0')
+    
+    total_deductions = previous_month_salaries.aggregate(
+        total=models.Sum('deductions')
+    )['total'] or Decimal('0')
+    
+    total_salary_amount = previous_month_salaries.aggregate(
+        total=models.Sum('total_amount')
+    )['total'] or Decimal('0')
     
     # ============================================
-    # COMMISSION SUMMARY
+    # COMMISSION SUMMARY (All time - STATIC)
     # ============================================
-    commissions_pending = SellerCommission.objects.filter(
-        status='pending'
-    ).aggregate(total=Sum('amount'))['total'] or 0
+    from credit.models import SellerCommission
+    
+    commissions_pending = SellerCommission.objects.filter(status='pending').aggregate(
+        total=models.Sum('amount')
+    )['total'] or Decimal('0')
+    
     commissions_pending_count = SellerCommission.objects.filter(status='pending').count()
     
-    commissions_approved = SellerCommission.objects.filter(
-        status='approved'
-    ).aggregate(total=Sum('amount'))['total'] or 0
+    commissions_approved = SellerCommission.objects.filter(status='approved').aggregate(
+        total=models.Sum('amount')
+    )['total'] or Decimal('0')
+    
     commissions_approved_count = SellerCommission.objects.filter(status='approved').count()
     
-    commissions_paid_total = SellerCommission.objects.filter(
-        status='paid'
-    ).aggregate(total=Sum('amount'))['total'] or 0
+    commissions_paid = SellerCommission.objects.filter(status='paid').aggregate(
+        total=models.Sum('amount')
+    )['total'] or Decimal('0')
     
     pending_commissions = SellerCommission.objects.filter(
         status='pending'
     ).select_related('seller', 'transaction')[:10]
     
     total_pending_commissions = commissions_pending
-    sellers_with_pending = SellerCommission.objects.filter(status='pending').values('seller').distinct().count()
     
     # ============================================
-    # EXPENSE DISTRIBUTION
+    # PERIOD LABEL
     # ============================================
-    salary_expenses_total = float(salary_expenses)
-    commission_expenses_total = float(commission_expenses)
-    operational_expenses = 0
-    other_expenses = 0
+    if period == 'day':
+        period_label = period_data['end_date'].strftime('%B %d, %Y')
+        period_name = 'Today'
+    elif period == 'week':
+        period_label = f"{period_data['start_date'].strftime('%b %d')} - {period_data['end_date'].strftime('%b %d, %Y')}"
+        period_name = 'This Week'
+    elif period == 'month':
+        period_label = period_data['end_date'].strftime('%B %Y')
+        period_name = 'This Month'
+    else:
+        period_label = str(period_data['end_date'].year)
+        period_name = 'This Year'
     
     # ============================================
     # CONTEXT
     # ============================================
     context = {
-        # Period Filter
         'selected_period': period,
         'period_name': period_name,
         'period_label': period_label,
         
-        # Period Data (changes based on filter)
-        'total_income': float(total_income),
+        # Period Data - FILTERED
+        'total_income': float(period_data['revenue']),
         'total_expenses': float(total_expenses),
         'net_profit': float(net_profit),
-        'profit_margin': float(profit_margin),
+        'net_balance': float(net_balance),
         
-        # Daily specific (for today's cards)
-        'daily_income': float(sales_income + credit_income),
-        'daily_expenses': float(salary_expenses + commission_expenses),
-        'daily_profit': float(net_profit),
-        
-        # Chart data (always last 30 days)
+        # Chart data
         'chart_labels': chart_labels,
         'income_data': income_data,
         'expense_data': expense_data,
         'profit_data': profit_data,
         
-        # Salaries (static for tables)
+        # Expense distribution
+        'salary_expenses': float(salaries_in_period),
+        'commission_expenses': float(commissions_in_period),
+        'operational_expenses': float(operational_expenses),
+        
+        # Salaries (static)
         'salaries_pending': float(salaries_pending),
         'salaries_approved': float(salaries_approved),
         'salaries_paid': float(salaries_paid),
-        'salaries_paid_count': previous_month_salaries.filter(status='paid').count(),
-        'previous_month_salaries': previous_month_salaries,
         'previous_month_salaries_paid': float(salaries_paid),
+        'previous_month_salaries': previous_month_salaries,
         'previous_month_salaries_count': previous_month_salaries_count,
         'total_base_salary': float(total_base_salary),
         'total_bonus': float(total_bonus),
@@ -292,33 +372,24 @@ def finance_dashboard(request):
         'total_salary_amount': float(total_salary_amount),
         'previous_month': calendar.month_name[previous_month],
         'previous_year': previous_year,
-        'current_month': calendar.month_name[current_month],
-        'current_year': current_year,
         
-        # Commissions
+        # Commissions (static)
         'commissions_pending': float(commissions_pending),
         'commissions_pending_count': commissions_pending_count,
         'commissions_approved': float(commissions_approved),
         'commissions_approved_count': commissions_approved_count,
-        'commissions_paid': float(commissions_paid_total),
-        'sellers_with_pending': sellers_with_pending,
+        'commissions_paid': float(commissions_paid),
         'pending_commissions': pending_commissions,
         'total_pending_commissions': float(total_pending_commissions),
         
-        # Expense distribution
-        'salary_expenses': salary_expenses_total,
-        'commission_expenses': commission_expenses_total,
-        'operational_expenses': operational_expenses,
-        'other_expenses': other_expenses,
-        
-        # Recent transactions (FILTERED by period)
+        # Recent transactions - FILTERED BY PERIOD
         'recent_transactions': recent_transactions,
         
-        # Date info
         'today': today,
     }
     
     return render(request, 'finance/dashboard.html', context)
+
 
 
 # ============================================
@@ -4324,6 +4395,54 @@ def financial_overview(request):
     }
     
     return render(request, 'finance/financial_overview.html', context)
+
+
+@login_required
+def take_profit(request):
+    """One-click profit taking - Move profit from business to owner"""
+    from .models import SavingsAccount
+    from decimal import Decimal
+    
+    if request.method == 'POST':
+        amount_str = request.POST.get('amount', '')
+        notes = request.POST.get('notes', '')
+        
+        if amount_str:
+            try:
+                amount = Decimal(amount_str)
+            except:
+                messages.error(request, 'Invalid amount')
+                return redirect('finance:financial_overview')
+        else:
+            amount = None
+        
+        savings = SavingsAccount.get_account()
+        success, message, taken_amount = savings.take_profit(amount=amount, user=request.user)
+        
+        if success:
+            messages.success(request, f'✅ {message}')
+            
+            # Add note if provided
+            if notes:
+                from .models import SavingsTransaction
+                # Update the last transaction with notes
+                last_transaction = savings.transactions.filter(transaction_type='profit_taken').first()
+                if last_transaction:
+                    last_transaction.description = f"{last_transaction.description}\nNotes: {notes}"
+                    last_transaction.save()
+            
+            # Optional: Send email notification
+            # send_profit_taken_email(request.user, taken_amount)
+            
+        else:
+            messages.error(request, f'❌ {message}')
+        
+        return redirect('finance:financial_overview')
+    
+    return redirect('finance:financial_overview')
+
+
+
 
 
 @login_required

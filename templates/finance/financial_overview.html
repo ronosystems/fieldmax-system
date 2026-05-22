@@ -8,8 +8,15 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2><i class="fas fa-chart-line me-2"></i> Financial Overview</h2>
         <div>
+            <!-- One-Click Profit Taking Button - Only shows when there's profit -->
+            {% if savings.balance > 0 %}
+            <button type="button" class="btn btn-warning me-2" data-bs-toggle="modal" data-bs-target="#takeProfitModal">
+                <i class="fas fa-hand-holding-usd me-2"></i>💰 Take Profit (KES {{ savings.balance|floatformat:2|intcomma }})
+            </button>
+            {% endif %}
+            
             <a href="{% url 'finance:savings_transfer_to_injection' %}" class="btn btn-success me-2">
-                <i class="fas fa-arrow-right"></i>Tranfer Savings To Net
+                <i class="fas fa-arrow-right"></i> Transfer Savings To Net
             </a>
             <a href="{% url 'finance:injection_add_external' %}" class="btn btn-info me-2">
                 <i class="fas fa-plus"></i> Add External Fundings
@@ -63,8 +70,9 @@
                 </div>
                 <div class="card-body text-center">
                     <h2 class="text-success">KES {{ savings.balance|floatformat:2|intcomma }}</h2>
-                    <p class="text-muted">This is current Availlable  Savings</p>
+                    <p class="text-muted">This is current Available Savings</p>
                     <p class="text-muted">Total Profits Earned: KES {{ savings.total_profits_earned|floatformat:2|intcomma }}</p>
+                    <p class="text-muted">Total Profits Taken: KES {{ savings.total_profits_taken|floatformat:2|intcomma }}</p>
                     <hr>
                     <p class="small">💰 Only profits from sales revenue</p>
                     <a href="{% url 'finance:savings_account' %}" class="btn btn-outline-success mt-2">View Details</a>
@@ -75,7 +83,6 @@
     
     <!-- Recent Transactions -->
     <div class="row">
-
         <div class="col-md-4">
             <div class="card">
                 <div class="card-header">
@@ -150,8 +157,8 @@
                                 <tr>
                                     <td>{{ t.transaction_date|date:"d/m/Y" }}</td>
                                     <td>{{ t.get_transaction_type_display }}</td>
-                                    <td class="{% if t.transaction_type == 'profit' %}text-success{% else %}text-danger{% endif %}">
-                                        {% if t.transaction_type == 'profit' %}+{% else %}-{% endif %} KES {{ t.amount|floatformat:2|intcomma }}
+                                    <td class="{% if t.transaction_type == 'profit' %}text-success{% elif t.transaction_type == 'profit_taken' %}text-warning{% else %}text-danger{% endif %}">
+                                        {% if t.transaction_type == 'profit' %}+{% elif t.transaction_type == 'profit_taken' %}-{% else %}{% endif %} KES {{ t.amount|floatformat:2|intcomma }}
                                     </td>
                                 </tr>
                                 {% empty %}
@@ -163,7 +170,89 @@
                 </div>
             </div>
         </div>
-
     </div>
 </div>
+
+<!-- Take Profit Modal -->
+<div class="modal fade" id="takeProfitModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title">
+                    <i class="fas fa-hand-holding-usd me-2"></i>Take Profit
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="{% url 'finance:take_profit' %}">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <strong>Current Profit Available:</strong> 
+                        <h3 class="text-success">KES {{ savings.balance|floatformat:2|intcomma }}</h3>
+                    </div>
+                    
+                    <div class="alert alert-warning">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>What happens when you take profit?</strong>
+                        <ul class="mb-0 mt-2">
+                            <li>Money moves from business to YOU</li>
+                            <li>Business assets DECREASE by this amount</li>
+                            <li>Your personal wealth INCREASES by this amount</li>
+                            <li>A record is kept for accounting</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="amount" class="form-label">Amount to Take (KES)</label>
+                        <input type="number" 
+                               name="amount" 
+                               id="amount" 
+                               class="form-control form-control-lg"
+                               step="0.01"
+                               min="1"
+                               max="{{ savings.balance }}"
+                               value="{{ savings.balance }}"
+                               required>
+                        <small class="text-muted">Max: KES {{ savings.balance|floatformat:2|intcomma }}</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="notes" class="form-label">Notes (Optional)</label>
+                        <textarea name="notes" id="notes" class="form-control" rows="2" 
+                                  placeholder="e.g., Weekly profit withdrawal"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning">
+                        <i class="fas fa-hand-holding-usd me-2"></i>Take Profit
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+// Auto-update the max value when user types
+document.getElementById('amount').addEventListener('input', function() {
+    var max = {{ savings.balance|floatformat:2 }};
+    if (parseFloat(this.value) > max) {
+        this.value = max;
+    }
+});
+</script>
+
+<style>
+    .card {
+        transition: transform 0.2s;
+    }
+    .card:hover {
+        transform: translateY(-5px);
+    }
+    .table-responsive {
+        max-height: 300px;
+        overflow-y: auto;
+    }
+</style>
 {% endblock %}

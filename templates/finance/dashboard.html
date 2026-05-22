@@ -1,160 +1,155 @@
 {% extends 'finance/base.html' %}
 {% load static %}
+{% load humanize %}
 
 {% block title %}Finance Dashboard{% endblock %}
 
-{% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2><i class="fas fa-chart-line me-2"></i>Finance Dashboard</h2>
-    <div>
-        <span class="text-muted">Last updated: {% now "F j, Y H:i" %}</span>
-        <span class="ms-3">
-            <a href="{% url 'finance:salary_list' %}" class="btn btn-sm btn-primary"><i class="fas fa-money-bill-wave me-1"></i>Salary List</a>
-            <a href="{% url 'finance:commission_pay_list' %}" class="btn btn-sm btn-secondary"><i class="fas fa-hand-holding-usd me-1"></i>Pay Commissions</a>
-            <a href="{% url 'finance:financial_transactions' %}" class="btn btn-sm btn-info"><i class="fas fa-exchange-alt me-1"></i>Transactions</a>
-        </span> 
-    </div>
-</div>
-
-<!-- ============================================ -->
-<!-- FINANCIAL PERFORMANCE TABS (Filter by Period) -->
-<!-- ============================================ -->
-<div class="card mb-4">
-    <div class="card-header">
-        <ul class="nav nav-tabs card-header-tabs" id="financialTabs" role="tablist">
-            <li class="nav-item" role="presentation">
-                <a class="nav-link {% if selected_period == 'day' %}active{% endif %}" href="?period=day">
-                    <i class="fas fa-calendar-day me-1"></i>Daily
-                </a>
-            </li>
-            <li class="nav-item" role="presentation">
-                <a class="nav-link {% if selected_period == 'week' %}active{% endif %}" href="?period=week">
-                    <i class="fas fa-calendar-week me-1"></i>Weekly
-                </a>
-            </li>
-            <li class="nav-item" role="presentation">
-                <a class="nav-link {% if selected_period == 'month' %}active{% endif %}" href="?period=month">
-                    <i class="fas fa-calendar-alt me-1"></i>Monthly
-                </a>
-            </li>
-            <li class="nav-item" role="presentation">
-                <a class="nav-link {% if selected_period == 'year' %}active{% endif %}" href="?period=year">
-                    <i class="fas fa-calendar-year me-1"></i>Yearly
-                </a>
-            </li>
-        </ul>
-    </div>
-    <div class="card-body">
-        <div class="row">
-            <div class="col-md-4 mb-3">
-                <div class="stat-card-sm text-center">
-                    <div class="text-muted small">Total Income</div>
-                    <div class="h4 text-success">KES {{ total_income|default:"0"|floatformat:0 }}</div>
-                </div>
-            </div>
-            <div class="col-md-4 mb-3">
-                <div class="stat-card-sm text-center">
-                    <div class="text-muted small">Total Expenses</div>
-                    <div class="h4 text-danger">KES {{ total_expenses|default:"0"|floatformat:0 }}</div>
-                </div>
-            </div>
-            <div class="col-md-4 mb-3">
-                <div class="stat-card-sm text-center">
-                    <div class="text-muted small">Net Profit</div>
-                    <div class="h4 text-warning">KES {{ net_profit|default:"0"|floatformat:0 }}</div>
-                </div>
-            </div>
-        </div>
-        <div class="text-center text-muted small">
-            <i class="fas fa-chart-line me-1"></i> {{ period_name }}: {{ period_label }}
-            {% if selected_period == 'day' %}
-                <i class="fas fa-calendar-day ms-2"></i>
-            {% elif selected_period == 'week' %}
-                <i class="fas fa-calendar-week ms-2"></i>
-            {% elif selected_period == 'month' %}
-                <i class="fas fa-calendar-alt ms-2"></i>
-            {% elif selected_period == 'year' %}
-                <i class="fas fa-calendar-year ms-2"></i>
-            {% endif %}
-        </div>
-    </div>
-</div>
-
-<!-- ============================================ -->
-<!-- SALARIES & COMMISSIONS STATUS -->
-<!-- ============================================ -->
-<div class="row mb-4">
-    <div class="col-md-6 mb-4">
-        <div class="card h-100">
-            <div class="card-header bg-primary text-white">
-                <i class="fas fa-money-bill-wave me-2"></i>Salaries Status
-            </div>
-            <div class="card-body">
-                <div class="row text-center">
-                    <div class="col-6 mb-3">
-                        <div class="border rounded p-3">
-                            <div class="text-muted small">Pending ({{ previous_month }} {{ previous_year }})</div>
-                            <div class="h4 text-warning">KES {{ salaries_pending|default:"0"|floatformat:0 }}</div>
-                            <small class="text-muted">{{ previous_month_salaries_count }} salary pending</small>
-                        </div>
-                    </div>
-                    <div class="col-6 mb-3">
-                        <div class="border rounded p-3">
-                            <div class="text-muted small">Paid ({{ previous_month }} {{ previous_year }})</div>
-                            <div class="h4 text-success">KES {{ previous_month_salaries_paid|default:"0"|floatformat:0 }}</div>
-                            <small class="text-muted">{{ previous_month_salaries_count }} salary paid</small>
-                        </div>
-                    </div>
-                    <div class="col-6">
-                        <div class="border rounded p-3">
-                            <div class="text-muted small">Approved ({{ previous_month }} {{ previous_year }})</div>
-                            <div class="h4 text-info">KES {{ salaries_approved|default:"0"|floatformat:0 }}</div>
-                        </div>
-                    </div>
-                    <div class="col-6">
-                        <div class="border rounded p-3">
-                            <div class="text-muted small">Total ({{ previous_month }} {{ previous_year }})</div>
-                            <div class="h4">KES {{ total_salary_amount|default:"0"|floatformat:0 }}</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+{% block extra_css %}
+<style>
+    :root {
+        --gradient-1: linear-gradient(135deg, #042c1d 0%, #085f25 100%);
+    }
     
-    <div class="col-md-6 mb-4">
-        <div class="card h-100">
-            <div class="card-header bg-success text-white">
-                <i class="fas fa-hand-holding-usd me-2"></i>Commissions Status
+    .hero-card {
+        background: var(--gradient-1);
+        border-radius: 16px;
+        padding: 20px;
+        color: white;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .stat-card-modern {
+        background: white;
+        border-radius: 14px;
+        padding: 15px;
+        border: none;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 10px rgb(0, 0, 0);
+    }
+    .stat-card-modern:hover { transform: translateY(-2px); box-shadow: 0 5px 20px rgb(0, 0, 0); }
+    
+    .stat-icon-circle {
+        width: 45px;
+        height: 45px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        color: white;
+    }
+    .stat-value { font-size: 24px; font-weight: 800; margin-bottom: 2px; }
+    .stat-label { font-size: 11px; color: #6c757d; text-transform: uppercase; letter-spacing: 0.5px; }
+    
+    .period-btn {
+        padding: 5px 16px;
+        border-radius: 25px;
+        font-weight: 500;
+        font-size: 13px;
+        transition: all 0.3s;
+        background: rgba(255,255,255,0.2);
+        border: none;
+        color: white;
+        text-decoration: none;
+        display: inline-block;
+    }
+    .period-btn:hover, .period-btn.active {
+        background: white;
+        color: #667eea;
+        transform: translateY(-1px);
+    }
+    
+    .compact-card {
+        background: white;
+        border-radius: 12px;
+        padding: 12px;
+        box-shadow: 0 1px 3px rgb(0, 0, 0);
+    }
+    
+    [data-theme="dark"] .stat-card-modern,
+    [data-theme="dark"] .compact-card {
+        background: #1f2937;
+    }
+    [data-theme="dark"] .stat-card-modern .stat-label { color: #9ca3af; }
+    
+    .text-purple { color: #8b5cf6; }
+    .text-pink { color: #ec489a; }
+    .text-teal { color: #14b8a6; }
+    .bg-opacity-10 { --bs-bg-opacity: 0.1; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Hero Section - Update the period display -->
+<div class="hero-card mb-3">
+    <div class="row align-items-center">
+        <div class="col-md-8">
+            <small class="text-white-50">FINANCIAL OVERVIEW</small>
+            <h4 class="text-white mb-0">Finance Dashboard</h4>
+            <small class="text-white-50">{{ period_name }} · {{ period_label }}</small>
+        </div>
+        <div class="col-md-4 text-end">
+            <div class="btn-group btn-group-sm" role="group">
+                <a href="?period=day" class="period-btn {% if selected_period == 'day' %}active{% endif %}">Day</a>
+                <a href="?period=week" class="period-btn {% if selected_period == 'week' %}active{% endif %}">Week</a>
+                <a href="?period=month" class="period-btn {% if selected_period == 'month' %}active{% endif %}">Month</a>
+                <a href="?period=year" class="period-btn {% if selected_period == 'year' %}active{% endif %}">Year</a>
             </div>
-            <div class="card-body">
-                <div class="row text-center">
-                    <div class="col-6 mb-3">
-                        <div class="border rounded p-3">
-                            <div class="text-muted small">Pending</div>
-                            <div class="h4 text-warning">KES {{ commissions_pending|default:"0"|floatformat:0 }}</div>
-                            <small class="text-muted">{{ commissions_pending_count }} commission pending</small>
-                        </div>
-                    </div>
-                    <div class="col-6 mb-3">
-                        <div class="border rounded p-3">
-                            <div class="text-muted small">Approved</div>
-                            <div class="h4 text-info">KES {{ commissions_approved|default:"0"|floatformat:0 }}</div>
-                            <small class="text-muted">{{ commissions_approved_count }} commission approved</small>
-                        </div>
-                    </div>
-                    <div class="col-6">
-                        <div class="border rounded p-3">
-                            <div class="text-muted small">Paid (All Time)</div>
-                            <div class="h4 text-success">KES {{ commissions_paid|default:"0"|floatformat:0 }}</div>
-                        </div>
-                    </div>
-                    <div class="col-6">
-                        <div class="border rounded p-3">
-                            <div class="text-muted small">Total Pending Value</div>
-                            <div class="h4">KES {{ total_pending_commissions|default:"0"|floatformat:0 }}</div>
-                        </div>
-                    </div>
+        </div>
+    </div>
+</div>
+
+<!-- 4 Stats Cards -->
+<div class="row g-2 mb-3">
+    <div class="col-6 col-md-3">
+        <div class="stat-card-modern">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <div class="stat-label">REVENUE</div>
+                    <div class="stat-value text-success">KES {{ total_income|default:0|floatformat:0|intcomma }}</div>
+                </div>
+                <div class="stat-icon-circle" style="background: linear-gradient(135deg, #10b981, #059669);">
+                    <i class="fas fa-chart-line"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="stat-card-modern">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <div class="stat-label">EXPENSES</div>
+                    <div class="stat-value text-danger">KES {{ total_expenses|default:0|floatformat:0|intcomma }}</div>
+                </div>
+                <div class="stat-icon-circle" style="background: linear-gradient(135deg, #ef4444, #dc2626);">
+                    <i class="fas fa-arrow-down"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="stat-card-modern">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <div class="stat-label">PROFIT</div>
+                    <div class="stat-value text-warning">KES {{ net_profit|default:0|floatformat:0|intcomma }}</div>
+                </div>
+                <div class="stat-icon-circle" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
+                    <i class="fas fa-coins"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="stat-card-modern">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <div class="stat-label">PETTY CASH</div>
+                    <div class="stat-value text-info">KES {{ net_balance|default:0|floatformat:0|intcomma }}</div>
+                </div>
+                <div class="stat-icon-circle" style="background: linear-gradient(135deg, #3b82f6, #1d4ed8);">
+                    <i class="fas fa-wallet"></i>
                 </div>
             </div>
         </div>
@@ -162,378 +157,189 @@
 </div>
 
 <!-- Charts Row -->
-<div class="row mb-4">
-    <div class="col-lg-8">
-        <div class="card">
-            <div class="card-header">
-                <i class="fas fa-chart-line me-2"></i>Financial Trends (Last 30 Days)
+<div class="row g-2 mb-3">
+    <div class="col-lg-7">
+        <div class="compact-card">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <small class="fw-bold"><i class="fas fa-chart-line me-1 text-primary"></i>30-Day Trend</small>
+                <small class="text-muted">Last 30 days</small>
             </div>
-            <div class="card-body">
-                <canvas id="financeChart" height="300"></canvas>
-            </div>
+            <canvas id="financeChart" height="180" style="max-height: 180px;"></canvas>
         </div>
     </div>
-    
-    <div class="col-lg-4">
-        <div class="card">
-            <div class="card-header">
-                <i class="fas fa-chart-pie me-2"></i>Expense Distribution (Selected Period)
-            </div>
-            <div class="card-body">
-                <canvas id="expenseChart" height="300"></canvas>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Salary Summary Table -->
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <span><i class="fas fa-money-bill-wave me-2"></i>Salary Summary ({{ previous_month }} {{ previous_year }})</span>
-                <a href="{% url 'finance:salary_list' %}" class="btn btn-sm btn-primary">View All</a>
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-hover mb-0">
-                        <thead>
-                            <tr>
-                                <th>Staff Name</th>
-                                <th>Base Salary</th>
-                                <th>Bonus</th>
-                                <th>Deductions</th>
-                                <th>Total</th>
-                                <th>Status</th>
-                                <th>Action</th>
-                             </thead>
-                        <tbody>
-                            {% for salary in previous_month_salaries %}
-                             <tr>
-                                <td class="fw-bold">{{ salary.staff.get_full_name|default:salary.staff.username }}</td>
-                                <td>KES {{ salary.base_salary|floatformat:0 }}</td>
-                                <td class="text-success">+ KES {{ salary.bonus|floatformat:0 }}</td>
-                                <td class="text-danger">- KES {{ salary.deductions|floatformat:0 }}</td>
-                                <td class="fw-bold">KES {{ salary.total_amount|floatformat:0 }}</td>
-                                <td>
-                                    {% if salary.status == 'pending' %}
-                                        <span class="badge bg-warning">Pending</span>
-                                    {% elif salary.status == 'approved' %}
-                                        <span class="badge bg-info">Approved</span>
-                                    {% elif salary.status == 'paid' %}
-                                        <span class="badge bg-success">Paid</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if salary.status == 'pending' %}
-                                        <a href="{% url 'finance:salary_approve' salary.id %}" class="btn btn-sm btn-outline-primary">Approve</a>
-                                    {% elif salary.status == 'approved' %}
-                                        <a href="{% url 'finance:salary_pay' salary.id %}" class="btn btn-sm btn-outline-success">Pay</a>
-                                    {% endif %}
-                                </td>
-                              </tr>
-                            {% empty %}
-                             <tr>
-                                <td colspan="7" class="text-center py-4">No salary records for previous month</td>
-                              </tr>
-                            {% endfor %}
-                        </tbody>
-                        <tfoot class="table-light">
-                            <tr class="fw-bold">
-                                <td>TOTALS</td>
-                                <td>KES {{ total_base_salary|default:"0"|floatformat:0 }}</td>
-                                <td>KES {{ total_bonus|default:"0"|floatformat:0 }}</td>
-                                <td>KES {{ total_deductions|default:"0"|floatformat:0 }}</td>
-                                <td class="text-success">KES {{ total_salary_amount|default:"0"|floatformat:0 }}</td>
-                                <td colspan="2"></td>
-                             </tr>
-                        </tfoot>
-                     </table>
+    <div class="col-lg-5">
+        <div class="compact-card">
+            <small class="fw-bold d-block mb-2"><i class="fas fa-chart-pie me-1 text-primary"></i>Expense Breakdown</small>
+            <div class="row align-items-center">
+                <div class="col-6">
+                    <canvas id="expenseChart" height="120" style="max-height: 120px;"></canvas>
+                </div>
+                <div class="col-6">
+                    <div class="small">
+                        <div class="mb-1"><i class="fas fa-circle text-purple me-1"></i>Salaries: <strong>KES {{ salary_expenses|default:0|floatformat:0|intcomma }}</strong></div>
+                        <div class="mb-1"><i class="fas fa-circle text-pink me-1"></i>Commissions: <strong>KES {{ commission_expenses|default:0|floatformat:0|intcomma }}</strong></div>
+                        <div><i class="fas fa-circle text-teal me-1"></i>Operational: <strong>KES {{ operational_expenses|default:0|floatformat:0|intcomma }}</strong></div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Pending Commission Payments Table -->
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <span><i class="fas fa-hand-holding-usd me-2"></i>Pending Commission Payments</span>
-                <a href="{% url 'finance:commission_pay_list' %}" class="btn btn-sm btn-warning">Pay Commissions</a>
+<!-- Salaries & Commissions Row -->
+<div class="row g-2 mb-3">
+    <div class="col-md-6">
+        <div class="compact-card">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <small class="fw-bold"><i class="fas fa-money-bill-wave me-1"></i>Salaries</small>
+                <small class="text-muted">{{ previous_month }} {{ previous_year }}</small>
             </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-hover mb-0">
-                        <thead>
-                            <tr>
-                                <th>Seller</th>
-                                <th>Transaction ID</th>
-                                <th>Product</th>
-                                <th>Sale Amount</th>
-                                <th>Commission Amount</th>
-                                <th>Date</th>
-                                <th>Status</th>
-                             </thead>
-                        <tbody>
-                            {% for commission in pending_commissions %}
-                            <tr>
-                                <td class="fw-bold">{{ commission.seller.get_full_name|default:commission.seller.username }}</td>
-                                <td><code>{{ commission.transaction.transaction_id }}</code></td>
-                                <td>{{ commission.transaction.product_name|default:commission.transaction.product.display_name }}</td>
-                                <td>KES {{ commission.transaction.ceiling_price|floatformat:0 }}</td>
-                                <td class="text-success fw-bold">KES {{ commission.amount|floatformat:0 }}</td>
-                                <td>{{ commission.created_at|date:"Y-m-d" }}</td>
-                                <td>
-                                    <span class="badge bg-warning">Pending</span>
-                                </td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="7" class="text-center py-4">No pending commission payments</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                        <tfoot class="table-light">
-                            <tr class="fw-bold">
-                                <td colspan="4">Total Pending Commissions</td>
-                                <td class="text-success">KES {{ total_pending_commissions|default:"0"|floatformat:0 }}</td>
-                                <td colspan="2"></td>
-                             </tr>
-                        </tfoot>
-                     </table>
+            <div class="row text-center small g-1">
+                <div class="col-3">
+                    <div class="p-1 rounded bg-warning bg-opacity-10">
+                        <div class="text-muted">Pending</div>
+                        <strong class="text-warning">KES {{ salaries_pending|default:0|floatformat:0|intcomma }}</strong>
+                    </div>
+                </div>
+                <div class="col-3">
+                    <div class="p-1 rounded bg-info bg-opacity-10">
+                        <div class="text-muted">Approved</div>
+                        <strong class="text-info">KES {{ salaries_approved|default:0|floatformat:0|intcomma }}</strong>
+                    </div>
+                </div>
+                <div class="col-3">
+                    <div class="p-1 rounded bg-success bg-opacity-10">
+                        <div class="text-muted">Paid</div>
+                        <strong class="text-success">KES {{ previous_month_salaries_paid|default:0|floatformat:0|intcomma }}</strong>
+                    </div>
+                </div>
+                <div class="col-3">
+                    <div class="p-1 rounded bg-secondary bg-opacity-10">
+                        <div class="text-muted">Total</div>
+                        <strong>KES {{ total_salary_amount|default:0|floatformat:0|intcomma }}</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="compact-card">
+            <small class="fw-bold d-block mb-2"><i class="fas fa-hand-holding-usd me-1"></i>Commissions</small>
+            <div class="row text-center small g-1">
+                <div class="col-3">
+                    <div class="p-1 rounded bg-warning bg-opacity-10">
+                        <div class="text-muted">Pending</div>
+                        <strong class="text-warning">KES {{ commissions_pending|default:0|floatformat:0|intcomma }}</strong>
+                    </div>
+                </div>
+                <div class="col-3">
+                    <div class="p-1 rounded bg-info bg-opacity-10">
+                        <div class="text-muted">Approved</div>
+                        <strong class="text-info">KES {{ commissions_approved|default:0|floatformat:0|intcomma }}</strong>
+                    </div>
+                </div>
+                <div class="col-3">
+                    <div class="p-1 rounded bg-success bg-opacity-10">
+                        <div class="text-muted">Paid</div>
+                        <strong class="text-success">KES {{ commissions_paid|default:0|floatformat:0|intcomma }}</strong>
+                    </div>
+                </div>
+                <div class="col-3">
+                    <div class="p-1 rounded bg-secondary bg-opacity-10">
+                        <div class="text-muted">Due</div>
+                        <strong>KES {{ total_pending_commissions|default:0|floatformat:0|intcomma }}</strong>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Recent Financial Transactions -->
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <span><i class="fas fa-exchange-alt me-2"></i>Recent Financial Transactions</span>
-                <a href="{% url 'finance:financial_transactions' %}" class="btn btn-sm btn-info">View All</a>
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-hover mb-0">
-                        <thead>
-                            <tr>
-                                <th>Date</th>
-                                <th>Type</th>
-                                <th>Category</th>
-                                <th>Description</th>
-                                <th>Amount</th>
-                                <th>Payment Method</th>
-                                <th>Recipient</th>
-                             </thead>
-                        <tbody>
-                            {% for transaction in recent_transactions %}
-                            <tr>
-                                <td>{{ transaction.transaction_date|date:"Y-m-d H:i" }}</td>
-                                <td>
-                                    {% if transaction.transaction_type == 'salary' %}
-                                        <span class="badge bg-primary">Salary</span>
-                                    {% elif transaction.transaction_type == 'commission' %}
-                                        <span class="badge bg-success">Commission</span>
-                                    {% elif transaction.transaction_type == 'expense' %}
-                                        <span class="badge bg-danger">Expense</span>
-                                    {% elif transaction.transaction_type == 'income' %}
-                                        <span class="badge bg-info">Income</span>
-                                    {% else %}
-                                        <span class="badge bg-secondary">{{ transaction.get_transaction_type_display }}</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if transaction.category == 'staff' %}
-                                        <span class="badge bg-secondary">Staff</span>
-                                    {% elif transaction.category == 'commission' %}
-                                        <span class="badge bg-success">Commission</span>
-                                    {% elif transaction.category == 'operational' %}
-                                        <span class="badge bg-info">Operational</span>
-                                    {% else %}
-                                        <span class="badge bg-light text-dark">{{ transaction.get_category_display }}</span>
-                                    {% endif %}
-                                </td>
-                                <td>{{ transaction.description|truncatechars:50 }}</td>
-                                <td class="fw-bold {% if transaction.transaction_type == 'income' %}text-success{% else %}text-danger{% endif %}">
-                                    {% if transaction.transaction_type == 'income' %}+{% else %}-{% endif %} KES {{ transaction.amount|floatformat:0 }}
-                                </td>
-                                <td>
-                                    {% if transaction.payment_method == 'cash' %}
-                                        <i class="fas fa-money-bill-wave me-1"></i> Cash
-                                    {% elif transaction.payment_method == 'bank' %}
-                                        <i class="fas fa-university me-1"></i> Bank
-                                    {% elif transaction.payment_method == 'mpesa' %}
-                                        <i class="fas fa-mobile-alt me-1"></i> M-Pesa
-                                    {% elif transaction.payment_method == 'cheque' %}
-                                        <i class="fas fa-check-circle me-1"></i> Cheque
-                                    {% endif %}
-                                </td>
-                                <td>{{ transaction.recipient_name|default:"-" }}</td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="7" class="text-center py-4">No recent transactions</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                     </table>
-                </div>
-            </div>
-        </div>
+<!-- Recent Transactions -->
+<div class="compact-card">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <small class="fw-bold"><i class="fas fa-exchange-alt me-1"></i>Recent Transactions</small>
+        <a href="{% url 'finance:financial_transactions' %}" class="btn btn-sm btn-outline-primary py-0 px-2">View All</a>
+    </div>
+    <div class="table-responsive" style="max-height: 200px; overflow-y: auto;">
+        <table class="table table-sm table-hover mb-0">
+            <thead class="table-light small">
+                <tr><th>Date</th><th>Type</th><th>Description</th><th class="text-end">Amount</th><th>Method</th></tr>
+            </thead>
+            <tbody class="small">
+                {% for t in recent_transactions %}
+                <tr>
+                    <td>{{ t.transaction_date|date:"d/m H:i" }}</small></td>
+                    <td>
+                        {% if t.transaction_type == 'salary' %}<span class="badge bg-primary">Salary</span>
+                        {% elif t.transaction_type == 'commission' %}<span class="badge bg-success">Comm</span>
+                        {% elif t.transaction_type == 'expense' %}<span class="badge bg-danger">Exp</span>
+                        {% else %}<span class="badge bg-info">Inc</span>{% endif %}
+                    </td>
+                    <td>{{ t.description|truncatechars:35 }}</small></td>
+                    <td class="text-end fw-bold {% if t.transaction_type == 'income' %}text-success{% else %}text-danger{% endif %}">
+                        {% if t.transaction_type == 'income' %}+{% else %}-{% endif %} KES {{ t.amount|floatformat:0|intcomma }}
+                    </td>
+                    <td><i class="fas fa-{% if t.payment_method == 'cash' %}money-bill-wave{% elif t.payment_method == 'bank' %}university{% else %}mobile-alt{% endif %}"></i></td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="5" class="text-center py-2 text-muted">No transactions</small></td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </div>
 </div>
 
-<style>
-    .stat-card-sm {
-        background: var(--card-bg);
-        border-radius: 10px;
-        padding: 15px;
-        transition: transform 0.2s;
-        border: 1px solid var(--border-color);
-    }
-    .stat-card-sm:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-    }
-    .nav-tabs .nav-link {
-        color: var(--text-primary);
-    }
-    .nav-tabs .nav-link.active {
-        font-weight: bold;
-        background-color: var(--primary-color);
-        color: white;
-        border-color: var(--primary-color);
-    }
-    .nav-tabs .nav-link.active:hover {
-        color: white;
-    }
-    [data-theme="dark"] .border {
-        border-color: #374151 !important;
-    }
-</style>
-
+<!-- JavaScript to handle period filtering without page reload (optional) -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add click handlers to period buttons for smooth navigation
+    const periodBtns = document.querySelectorAll('.period-btn');
+    periodBtns.forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            const url = this.getAttribute('href');
+            if (url) {
+                window.location.href = url;
+            }
+        });
+    });
+});
+</script>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-/* global Chart */
-(function() {
-    'use strict';
-    
-    document.addEventListener('DOMContentLoaded', function() {
-        // Financial Trend Chart
-        var financeChartEl = document.getElementById('financeChart');
-        if (financeChartEl) {
-            var ctx1 = financeChartEl.getContext('2d');
-            new Chart(ctx1, {
-                type: 'line',
-                data: {
-                    labels: {{ chart_labels|safe|default:"[]" }},
-                    datasets: [
-                        {
-                            label: 'Income (KSH)',
-                            data: {{ income_data|safe|default:"[]" }},
-                            borderColor: '#10b981',
-                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                            tension: 0.4,
-                            fill: true
-                        },
-                        {
-                            label: 'Expenses (KSH)',
-                            data: {{ expense_data|safe|default:"[]" }},
-                            borderColor: '#ef4444',
-                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                            tension: 0.4,
-                            fill: true
-                        },
-                        {
-                            label: 'Net Profit (KSH)',
-                            data: {{ profit_data|safe|default:"[]" }},
-                            borderColor: '#f59e0b',
-                            backgroundColor: 'rgba(245, 158, 11, 0.1)',
-                            tension: 0.4,
-                            fill: true
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'bottom'
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    return context.dataset.label + ': KES ' + context.raw.toLocaleString();
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: {
-                                callback: function(value) {
-                                    return 'KES ' + value.toLocaleString();
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-        }
-        
-        // Expense Distribution Chart
-        var expenseChartEl = document.getElementById('expenseChart');
-        if (expenseChartEl) {
-            var ctx2 = expenseChartEl.getContext('2d');
-            new Chart(ctx2, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Salaries', 'Commissions', 'Operational', 'Other'],
-                    datasets: [{
-                        data: [
-                            {{ salary_expenses|default:0 }},
-                            {{ commission_expenses|default:0 }},
-                            {{ operational_expenses|default:0 }},
-                            {{ other_expenses|default:0 }}
-                        ],
-                        backgroundColor: ['#8b5cf6', '#ec489a', '#14b8a6', '#6b7280'],
-                        borderWidth: 0,
-                        hoverOffset: 5
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'bottom'
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    let label = context.label || '';
-                                    let value = context.raw || 0;
-                                    let total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                    let percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
-                                    return `${label}: KES ${value.toLocaleString()} (${percentage}%)`;
-                                }
-                            }
-                        }
-                    },
-                    cutout: '60%'
-                }
-            });
+document.addEventListener('DOMContentLoaded', function() {
+    // Financial Trend Chart
+    var ctx1 = document.getElementById('financeChart').getContext('2d');
+    new Chart(ctx1, {
+        type: 'line',
+        data: {
+            labels: {{ chart_labels|safe|default:"[]" }},
+            datasets: [
+                { label: 'Revenue', data: {{ income_data|safe|default:"[]" }}, borderColor: '#10b981', borderWidth: 2, fill: false, tension: 0.3, pointRadius: 1 },
+                { label: 'Expenses', data: {{ expense_data|safe|default:"[]" }}, borderColor: '#ef4444', borderWidth: 2, fill: false, tension: 0.3, pointRadius: 1 },
+                { label: 'Profit', data: {{ profit_data|safe|default:"[]" }}, borderColor: '#f59e0b', borderWidth: 2, fill: false, tension: 0.3, pointRadius: 1 }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: { legend: { position: 'top', labels: { boxWidth: 10, font: { size: 10 } } } },
+            scales: { y: { beginAtZero: true, ticks: { callback: v => 'KES ' + (v/1000).toFixed(0) + 'k', font: { size: 9 } }, grid: { color: '#e5e7eb' } }, x: { ticks: { font: { size: 9 } } } }
         }
     });
-})();
+    
+    // Expense Chart
+    var ctx2 = document.getElementById('expenseChart').getContext('2d');
+    new Chart(ctx2, {
+        type: 'doughnut',
+        data: {
+            labels: ['Salaries', 'Commissions', 'Operational'],
+            datasets: [{ data: [{{ salary_expenses|default:0 }}, {{ commission_expenses|default:0 }}, {{ operational_expenses|default:0 }}], backgroundColor: ['#8b5cf6', '#ec489a', '#14b8a6'], borderWidth: 0 }]
+        },
+        options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } }, cutout: '70%' }
+    });
+});
 </script>
 {% endblock %}

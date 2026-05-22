@@ -6,9 +6,18 @@ from decimal import Decimal
 import logging
 
 
+
+
+
 logger = logging.getLogger(__name__)
 
 
+
+
+
+# ============================================
+# FINANCE  SAMMARY MODELS
+# ============================================
 class Salary(models.Model):
     """Staff salary records"""
     
@@ -238,6 +247,11 @@ class FinancialSummary(models.Model):
 
 
         # ============================================
+
+
+
+
+# ============================================
 # FINANCE ACCOUNTS MODELS
 # ============================================
 
@@ -533,11 +547,6 @@ class MpesaCallbackLog(models.Model):
         return f"Callback {self.checkout_request_id} - Code: {self.result_code}"
 
 
-
-
-
-# Add after the existing models
-
 class StockPurchase(models.Model):
     """Track stock purchases (inventory expenses)"""
     
@@ -597,8 +606,6 @@ class StockPurchase(models.Model):
     
     def __str__(self):
         return f"Stock Purchase: {self.sku_code} - {self.quantity} units @ KES {self.unit_price}"
-
-
 
 
 class MoneyTransfer(models.Model):
@@ -780,28 +787,16 @@ class MoneyTransfer(models.Model):
 
 
 
-
-
-# ============================================
-# ADD THESE NEW MODELS HERE
-# ============================================
-# Place this after MoneyTransfer class and before IncomeAccount class
-
 # ============================================
 # SAVINGS ACCOUNT (Only Profits)
 # ============================================
 
 class SavingsAccount(models.Model):
-    """
-    SAVINGS ACCOUNT - ONLY TRACKS PROFITS
-    Profit = Selling Price - Buying Price (COGS)
-    
-    This account ONLY receives profits from sales.
-    Money can be transferred from Savings to Injection when needed.
-    """
+    """SAVINGS ACCOUNT - ONLY TRACKS PROFITS"""
     
     balance = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal('0.00'))
     total_profits_earned = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal('0.00'))
+    total_profits_taken = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal('0.00'))  # ← ADD THIS
     
     last_updated = models.DateTimeField(auto_now=True)
     updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
@@ -825,7 +820,7 @@ class SavingsAccount(models.Model):
         """Add profit to savings account from a sale"""
         if amount <= 0:
             return self.balance
-        
+    
         self.balance += amount
         self.total_profits_earned += amount
         self.updated_by = user
@@ -843,34 +838,72 @@ class SavingsAccount(models.Model):
         logger.info(f"💰 SAVINGS: +{amount} profit from sale {sale_reference}")
         return self.balance
     
-    def transfer_to_injection(self, amount, user=None):
-        """Transfer money from Savings to Injection Account"""
+    # ============================================
+    # ADD THIS NEW METHOD - ONE CLICK PROFIT TAKING
+    # ============================================
+    
+    def take_profit(self, amount=None, user=None):
+        """
+        ONE CLICK PROFIT TAKING - Move profit from business to owner
+        This REDUCES business assets (money leaves the business)
+        """
+        if amount is None:
+            amount = self.balance
+        
         if amount <= 0:
-            return False, "Amount must be greater than 0"
+            return False, "No profit to take", Decimal('0.00')
         
         if self.balance < amount:
-            return False, f"Insufficient savings balance. Available: KES {self.balance:,.2f}"
+            return False, f"Insufficient savings. Available: KES {self.balance:,.2f}", Decimal('0.00')
         
         with transaction.atomic():
+            # Record that profit is being taken
             self.balance -= amount
+            self.total_profits_taken += amount
             self.updated_by = user
             self.save()
             
+            # Create transaction record
             SavingsTransaction.objects.create(
                 savings_account=self,
                 amount=amount,
-                transaction_type='transfer_out',
-                description=f"Transfer to Injection Account",
+                transaction_type='profit_taken',  # ← NEW TYPE
+                description=f"Profit taken by owner: KES {amount:,.2f}",
                 created_by=user
             )
             
-            injection_account = InjectionAccount.get_account()
-            injection_account.receive_from_savings(amount, user)
+            # Optional: Create a financial transaction record
+            FinancialTransaction.objects.create(
+                transaction_type='expense',
+                category='other',
+                amount=amount,
+                description=f"Owner profit withdrawal",
+                payment_method='cash',
+                payment_reference=f"PROFIT-TAKE-{timezone.now().strftime('%Y%m%d%H%M%S')}",
+                recipient_name=user.get_full_name() if user else "Owner",
+                created_by=user,
+                notes=f"Profit taken from business. Assets decreased by KES {amount:,.2f}"
+            )
             
-        return True, f"Successfully transferred KES {amount:,.2f} from Savings to Injection"
+            logger.info(f"💸 OWNER TOOK PROFIT: KES {amount:,.2f} from Savings")
+            
+        return True, f"Successfully took KES {amount:,.2f} profit", amount
     
     @property
-    def available_for_transfer(self):
+    def available_profit_to_take(self):
+        """Profit available to take home"""
+        return self.balance
+    
+    @property
+    def total_profit_ever_earned(self):
+        return self.total_profits_earned
+    
+    @property
+    def total_profit_ever_taken(self):
+        return self.total_profits_taken
+    
+    @property
+    def profit_remaining_in_business(self):
         return self.balance
 
 
@@ -880,6 +913,7 @@ class SavingsTransaction(models.Model):
     TRANSACTION_TYPES = [
         ('profit', 'Profit Added'),
         ('transfer_out', 'Transfer to Injection'),
+        ('profit_taken', 'Profit Taken by Owner'), 
     ]
     
     savings_account = models.ForeignKey(SavingsAccount, on_delete=models.CASCADE, related_name='transactions')
@@ -896,6 +930,12 @@ class SavingsTransaction(models.Model):
     
     def __str__(self):
         return f"{self.get_transaction_type_display()}: KES {self.amount}"
+
+
+
+
+
+
 
 
 # ============================================
@@ -998,9 +1038,6 @@ class InjectionAccount(models.Model):
         return True, f"Recorded transfer of KES {amount:,.2f} to Net Account"
     
 
-    
-
-
 class InjectionTransaction(models.Model):
     """Track all injection account transactions"""
     
@@ -1027,6 +1064,10 @@ class InjectionTransaction(models.Model):
     
     def __str__(self):
         return f"{self.get_transaction_type_display()}: KES {self.amount}"
+
+
+
+
 
 
 # ============================================
@@ -1410,6 +1451,10 @@ class ProfitAccount(models.Model):
         return account
 
 
+
+
+
+
 # ============================================
 # TRANSACTION RECORDS
 # ============================================
@@ -1527,6 +1572,11 @@ class ProfitTransaction(models.Model):
     
     def __str__(self):
         return f"Profit: KES {self.amount} - {self.get_transaction_type_display()}"
+
+
+
+
+
 
 
 # ============================================
@@ -1878,3 +1928,38 @@ class CapitalAccount(models.Model):
         """Add sales revenue to capital"""
         self.refresh_from_db()
         return self.net_capital
+    
+
+
+
+
+
+__all__ = [
+    'Salary',
+    'FinancialTransaction',
+    'FinancialSummary',
+    'AccountTransaction',
+    'CashAccount',
+    'BankAccount',
+    'CreditAccount',
+    'MpesaTransaction',
+    'MpesaCallbackLog',
+    'StockPurchase',
+    'MoneyTransfer',
+    'SavingsAccount',
+    'SavingsTransaction',
+    'InjectionAccount',
+    'InjectionTransaction',
+    'NetAccount',
+    'NetTransaction',
+    'IncomeAccount',
+    'PurchaseAccount',
+    'ProfitAccount',
+    'IncomeTransaction',
+    'PurchaseTransaction',
+    'ProfitTransaction',
+    'SaleAccountingHelper',
+    'CapitalInjection',
+    'CapitalInjectionRepayment',
+    'CapitalAccount',
+]

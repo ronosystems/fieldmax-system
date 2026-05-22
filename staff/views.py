@@ -49,7 +49,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required, user_passes_test
 from .models import UserProfile
-
+from finance.utils import UnifiedFinanceCalculator
 
 
 
@@ -1165,6 +1165,9 @@ def prepare_dashboard_messages(request, dashboard_name=None):
 
 
 
+
+
+
 # ==========================================
 # ADMIN DASHBOARD - COMPREHENSIVE STATISTICS
 # ==========================================
@@ -1177,6 +1180,7 @@ def admin_dashboard(request):
     from sales.models import Sale, SaleItem
     from credit.models import CreditTransaction, CreditCustomer, CreditCompany
     from finance.models import NetAccount, SavingsAccount, InjectionAccount
+    from finance.utils import UnifiedFinanceCalculator  # ← ADD THIS IMPORT
     from django.db.models import Sum, Count, Q, F, Avg, DecimalField, Case, When, Value, IntegerField, ExpressionWrapper
     from django.utils import timezone
     from datetime import timedelta
@@ -1195,29 +1199,36 @@ def admin_dashboard(request):
     current_month = today.month
     
     # ============================================
-    # USE FINANCE ACCOUNTS FOR ACCURATE SALES DATA
+    # USE UNIFIED FINANCE CALCULATOR FOR ACCURATE MONTHLY DATA
     # ============================================
+    
+    # Get current month data using UnifiedFinanceCalculator
+    month_data = UnifiedFinanceCalculator.get_period_data('month')
+    
+    # Get previous month for comparison
+    if current_month == 1:
+        prev_month_start = timezone.datetime(current_year - 1, 12, 1).date()
+        prev_month_end = timezone.datetime(current_year - 1, 12, 31).date()
+    else:
+        import calendar
+        prev_month_start = timezone.datetime(current_year, current_month - 1, 1).date()
+        last_day = calendar.monthrange(current_year, current_month - 1)[1]
+        prev_month_end = timezone.datetime(current_year, current_month - 1, last_day).date()
+    
+    prev_month_revenue = UnifiedFinanceCalculator.calculate_revenue(prev_month_start, prev_month_end)
+    prev_month_cogs = UnifiedFinanceCalculator.calculate_cogs(prev_month_start, prev_month_end)
+    prev_month_profit = prev_month_revenue - prev_month_cogs
+    
+    # Calculate monthly percentage change
+    if prev_month_revenue > 0:
+        monthly_percentage_change = ((month_data['revenue'] - prev_month_revenue) / prev_month_revenue) * 100
+    else:
+        monthly_percentage_change = 100 if month_data['revenue'] > 0 else 0
+    
+    # Get finance accounts for overall totals
     net = NetAccount.get_account()
     savings = SavingsAccount.get_account()
     injection = InjectionAccount.get_account()
-    
-    # Correct sales values from finance accounts (all Decimal)
-    total_cogs = net.total_cogs_added
-    total_profit = savings.total_profits_earned
-    total_sales_value = total_cogs + total_profit
-    total_injections = injection.total_injected_all_time
-    
-    # Current month's values (from finance accounts)
-    current_month_sales_value = total_sales_value
-    current_month_profit = total_profit
-    current_month_cogs = total_cogs
-    
-    # Get month name
-    month_name = timezone.now().strftime('%B')
-    
-    # Calculate previous month's sales (simplified - use Decimal)
-    previous_month_sales = total_sales_value * Decimal('0.5')
-    monthly_percentage_change = Decimal('100') if previous_month_sales > 0 else Decimal('0')
     
     # ============================================
     # GET RETURNED SALE IDs (to exclude from active sales)
@@ -1238,16 +1249,30 @@ def admin_dashboard(request):
     )
     
     # ============================================
-    # CURRENT MONTH'S SALES COUNT
+    # CURRENT MONTH'S SALES (using date filtering)
     # ============================================
     current_month_sales = active_sales.filter(
         sale_date__year=current_year,
         sale_date__month=current_month
     )
+    
+    # CORRECT current month values from filtered queryset
+    current_month_sales_value_db = current_month_sales.aggregate(
+        total=Sum('total_amount')
+    )['total'] or Decimal('0')
+    
     current_month_sales_count = current_month_sales.count()
     current_month_items_sold = SaleItem.objects.filter(
         sale__in=current_month_sales
     ).aggregate(total=Sum('quantity'))['total'] or 0
+    
+    # Use unified calculator values (should match database values)
+    current_month_sales_value = month_data['revenue']
+    current_month_profit = month_data['net_profit']
+    current_month_cogs = month_data['cogs']
+    
+    # Get month name
+    month_name = timezone.now().strftime('%B')
     
     # ============================================
     # SYSTEM OVERVIEW
@@ -1262,7 +1287,6 @@ def admin_dashboard(request):
     # PRODUCT STATS - CORRECTED FOR BULK ITEMS
     # ============================================
     
-    # Calculate inventory values correctly
     total_item_count = 0
     total_inventory_value = Decimal('0')
     total_inventory_cost = Decimal('0')
@@ -1274,7 +1298,6 @@ def admin_dashboard(request):
     inactive_products = 0
     
     for product in Product.objects.all():
-        # Count by type
         if product.category.is_single_item:
             single_items += 1
             quantity = product.total_quantity or 0
@@ -1282,16 +1305,13 @@ def admin_dashboard(request):
             bulk_items += 1
             quantity = product.bulk_quantity or 0
         
-        # Active/inactive count
         if product.is_active:
             active_products += 1
         else:
             inactive_products += 1
         
-        # Add to totals
         total_item_count += quantity
         
-        # Calculate values for active products only
         if product.is_active:
             selling_price = product.selling_price or Decimal('0')
             buying_price = product.buying_price or Decimal('0')
@@ -1299,27 +1319,22 @@ def admin_dashboard(request):
             total_inventory_value += selling_price * quantity
             total_inventory_cost += buying_price * quantity
         
-        # Check zero stock
         if quantity == 0:
             zero_stock_products += 1
             out_of_stock += 1
     
-    # Calculate potential profit
     potential_profit = total_inventory_value - total_inventory_cost
     
-    # Calculate profit margin percentage
     if total_inventory_value > 0:
         profit_margin_percentage = (potential_profit / total_inventory_value) * Decimal('100')
     else:
         profit_margin_percentage = Decimal('0')
     
-    # Products added this month
     products_added_this_month = Product.objects.filter(
         created_at__year=current_year,
         created_at__month=current_month
     ).count()
     
-    # Low stock products (bulk items only)
     low_stock_products = Product.objects.filter(
         category__item_type='bulk',
         is_active=True,
@@ -1327,7 +1342,6 @@ def admin_dashboard(request):
         bulk_quantity__lte=F('reorder_level')
     ).count()
     
-    # Stock alerts
     active_alerts = StockAlert.objects.filter(
         is_active=True,
         is_dismissed=False
@@ -1350,16 +1364,20 @@ def admin_dashboard(request):
     ).aggregate(total=Sum('quantity'))['total'] or 0
     
     # ============================================
-    # OVERALL SALES STATS
+    # OVERALL SALES STATS (using unified calculator for consistency)
     # ============================================
     total_sales_count = active_sales.count()
     total_items_sold = SaleItem.objects.filter(
         sale__in=active_sales
     ).aggregate(total=Sum('quantity'))['total'] or 0
     
-    # Average transaction value
+    # Get all-time totals from unified calculator
+    all_time_revenue = UnifiedFinanceCalculator.calculate_revenue()
+    all_time_cogs = UnifiedFinanceCalculator.calculate_cogs()
+    all_time_profit = all_time_revenue - all_time_cogs
+    
     if total_sales_count > 0:
-        avg_transaction_value = total_sales_value / Decimal(str(total_sales_count))
+        avg_transaction_value = all_time_revenue / Decimal(str(total_sales_count))
     else:
         avg_transaction_value = Decimal('0')
     
@@ -1377,14 +1395,12 @@ def admin_dashboard(request):
     total_returns = all_returns.count()
     total_refund_amount = all_returns.aggregate(total=Sum('refund_amount'))['total'] or Decimal('0')
     
-    # Returns by status
-    pending_returns = all_returns.filter(status__in=['submitted', 'verified']).count()
+    returns_by_status = all_returns.filter(status__in=['submitted', 'verified']).count()
     approved_returns = all_returns.filter(status='approved').count()
     processed_returns = all_returns.filter(status='processed').count()
     rejected_returns = all_returns.filter(status='rejected').count()
     damaged_returns = all_returns.filter(status='damaged_loss').count()
     
-    # Damaged returns loss value
     damaged_loss = all_returns.filter(status='damaged_loss').aggregate(
         total=Sum('refund_amount')
     )['total'] or Decimal('0')
@@ -1470,13 +1486,13 @@ def admin_dashboard(request):
         date = today - timedelta(days=i)
         labels.append(date.strftime('%d %b'))
         
-        day_sales = active_sales.filter(sale_date__date=date).aggregate(
-            total=Sum('total_amount')
-        )['total'] or Decimal('0')
+        # Use UnifiedFinanceCalculator for daily sales
+        day_sales = UnifiedFinanceCalculator.calculate_revenue(date, date)
         sales_data.append(float(day_sales))
         
         day_credit = CreditTransaction.objects.filter(
-            transaction_date__date=date
+            paid_date__date=date,
+            payment_status='paid'
         ).aggregate(
             total=Sum('ceiling_price')
         )['total'] or Decimal('0')
@@ -1518,8 +1534,8 @@ def admin_dashboard(request):
         method_sales = active_sales.filter(payment_method=method)
         count = method_sales.count()
         amount = method_sales.aggregate(total=Sum('total_amount'))['total'] or Decimal('0')
-        if total_sales_value > 0:
-            percentage = float((amount / total_sales_value) * Decimal('100'))
+        if all_time_revenue > 0:
+            percentage = float((amount / all_time_revenue) * Decimal('100'))
         else:
             percentage = 0
         
@@ -1564,24 +1580,24 @@ def admin_dashboard(request):
         'today_sales_count': today_sales_count,
         'today_items_sold': today_items_sold,
         
-        # Current Month's Stats
-        'current_month_sales_value': float(current_month_sales_value),
+        # Current Month's Stats - CORRECTED using unified calculator
+        'current_month_sales_value': float(month_data['revenue']),  # ← CORRECT
         'current_month_sales_count': current_month_sales_count,
         'current_month_items_sold': current_month_items_sold,
-        'current_month_profit': float(current_month_profit),
-        'current_month_cogs': float(current_month_cogs),
+        'current_month_profit': float(month_data['net_profit']),  # ← CORRECT
+        'current_month_cogs': float(month_data['cogs']),  # ← CORRECT
         'month_name': month_name,
         'monthly_percentage_change': float(monthly_percentage_change),
-        'previous_month_sales': float(previous_month_sales),
+        'previous_month_sales': float(prev_month_revenue),
         
-        # Sales Overview
-        'total_sales_value': float(total_sales_value),
+        # Sales Overview - CORRECTED using unified calculator
+        'total_sales_value': float(all_time_revenue),  # ← CORRECT
         'total_sales_count': total_sales_count,
         'total_items_sold': total_items_sold,
         'avg_transaction_value': float(avg_transaction_value),
-        'total_profit': float(total_profit),
-        'total_cogs': float(total_cogs),
-        'total_injections': float(total_injections),
+        'total_profit': float(all_time_profit),  # ← CORRECT
+        'total_cogs': float(all_time_cogs),  # ← CORRECT
+        'total_injections': float(injection.total_injected_all_time),
         
         # Reversal Stats
         'reversed_count': reversed_count,
@@ -1591,7 +1607,7 @@ def admin_dashboard(request):
         # Return Stats
         'total_returns': total_returns,
         'total_refund_amount': float(total_refund_amount),
-        'pending_returns': pending_returns,
+        'pending_returns': returns_by_status,
         'approved_returns': approved_returns,
         'processed_returns': processed_returns,
         'rejected_returns': rejected_returns,
@@ -1635,6 +1651,8 @@ def admin_dashboard(request):
     }
     
     return render(request, 'staff/dashboards/admin_dashboard.html', context)
+
+
 
 
 
@@ -2273,9 +2291,6 @@ def technician_update_job_status(request, job_id):
 
 # ============================================
 # TECHNICIAN MY JOBS
-# ============================================
-# ============================================
-# TECHNICIAN MY JOBS - ONLY OWN JOBS
 # ============================================
 @login_required
 @dashboard_for_role('Technician', 'Senior Technician', 'Workshop Technician')

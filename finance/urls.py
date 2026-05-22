@@ -8,6 +8,7 @@ urlpatterns = [
     # ============================================
     # FINANCE DASHBOARD
     # ============================================
+    path('verify-consistency/', views.verify_financial_consistency, name='verify_financial_consistency'),
     path('', views.finance_dashboard, name='dashboard'),
     
     # ============================================
@@ -132,4 +133,5 @@ urlpatterns = [
     path('savings/transfer-to-injection/', views.savings_transfer_to_injection, name='savings_transfer_to_injection'),
     path('injection/add-external/', views.injection_add_external, name='injection_add_external'),
     path('injection/transfer-to-net/', views.injection_transfer_to_net, name='injection_transfer_to_net'),
+    path('take-profit/', views.take_profit, name='take_profit'),
 ]
