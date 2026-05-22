@@ -1708,7 +1708,6 @@ def sale_create(request):
 
 
 
-
 @login_required
 def sale_create_api(request):
     """API endpoint for POS sale creation - ALWAYS returns JSON"""
@@ -1724,9 +1723,48 @@ def sale_create_api(request):
         if not cart:
             return JsonResponse({'success': False, 'error': 'No items in cart'})
         
+        # ============================================
+        # DUPLICATE PREVENTION - Check if sale already processing
+        # ============================================
+        import hashlib
+        from django.core.cache import cache
+        
+        # Create unique hash from cart contents
+        cart_hash = hashlib.md5(json.dumps(cart, sort_keys=True).encode()).hexdigest()
+        cache_key = f"sale_processing_{cart_hash}"
+        
+        if cache.get(cache_key):
+            print(f"⚠️ DUPLICATE SALE DETECTED! Cart hash: {cart_hash}")
+            return JsonResponse({
+                'success': False, 
+                'error': 'Sale already being processed. Please wait.',
+                'duplicate': True
+            })
+        
+        # Set cache to prevent duplicate (15 second timeout)
+        cache.set(cache_key, True, 15)
+        
+        # ============================================
+        # CRITICAL: Generate a unique request ID to prevent duplicate sale creation
+        # ============================================
+        import uuid
+        request_id = str(uuid.uuid4())
+        idempotency_key = f"sale_idempotent_{request_id}"
+        
+        if cache.get(idempotency_key):
+            print(f"⚠️ DUPLICATE REQUEST DETECTED! ID: {request_id}")
+            cache.delete(cache_key)
+            return JsonResponse({
+                'success': False,
+                'error': 'Duplicate request detected. Please wait.',
+                'duplicate': True
+            })
+        
+        cache.set(idempotency_key, True, 60)  # 1 minute
+        
         # Debug: Print cart contents
         print("=" * 60)
-        print("🔍 SALE CREATE API - CART ITEMS:")
+        print(f"🔍 SALE CREATE API - Request ID: {request_id}")
         for idx, item in enumerate(cart):
             print(f"Item {idx}:")
             print(f"  sku_code: {item.get('sku_code')}")
@@ -1800,6 +1838,26 @@ def sale_create_api(request):
                 else:
                     raise ValueError(f"Insufficient points. Available: {customer.points_balance}, Requested: {points_redeemed}")
             
+            # ============================================
+            # CRITICAL FIX: Check for existing sale with same cart BEFORE creating
+            # ============================================
+            # Check if there's already a pending sale with same unique identifier
+            # We'll use the cart hash as a temporary identifier
+            
+            existing_sale_key = f"temp_sale_{cart_hash}"
+            if cache.get(existing_sale_key):
+                print(f"⚠️ DUPLICATE SALE DETECTED! Sale already in progress for cart: {cart_hash}")
+                cache.delete(cache_key)
+                cache.delete(idempotency_key)
+                return JsonResponse({
+                    'success': False,
+                    'error': 'This sale is already being processed. Please wait.',
+                    'duplicate': True
+                })
+            
+            # Mark this cart as having a sale in progress
+            cache.set(existing_sale_key, True, 30)
+            
             print("📝 Creating sale...")
             # Create sale
             sale = create_sale_safely(
@@ -1816,6 +1874,25 @@ def sale_create_api(request):
                 original_subtotal=original_subtotal
             )
             print(f"✅ Sale created: {sale.sale_id}")
+            
+            # ============================================
+            # DOUBLE CHECK: Verify sale wasn't already processed (use select_for_update)
+            # ============================================
+            from finance.models import NetTransaction
+            
+            # Use select_for_update to lock the row and prevent race conditions
+            already_processed = NetTransaction.objects.select_for_update().filter(
+                description__icontains=sale.sale_id,
+                category='cogs'
+            ).exists()
+            
+            if already_processed:
+                print(f"⚠️ Sale {sale.sale_id} already processed! Rolling back...")
+                cache.delete(cache_key)
+                cache.delete(idempotency_key)
+                cache.delete(existing_sale_key)
+                # Rollback the transaction
+                raise transaction.TransactionManagementError("Sale already processed")
             
             # Deduct points AFTER sale is created (needs sale ID)
             if is_registered_customer and points_redeemed > 0:
@@ -1998,7 +2075,12 @@ def sale_create_api(request):
             
             # Clear the cart from session
             request.session['sales_cart'] = []
-            print("\n✅ Cart cleared")
+            
+            # Clear all cache keys
+            cache.delete(cache_key)
+            cache.delete(idempotency_key)
+            cache.delete(existing_sale_key)
+            print("\n✅ Cart cleared and cache removed")
             
             # Prepare response data
             response_data = {
@@ -2027,16 +2109,44 @@ def sale_create_api(request):
     except Product.DoesNotExist as e:
         print(f"\n❌ Product not found: {str(e)}")
         logger.error(f"Product not found: {str(e)}")
+        if 'cache_key' in locals():
+            cache.delete(cache_key)
+        if 'idempotency_key' in locals():
+            cache.delete(idempotency_key)
+        if 'existing_sale_key' in locals():
+            cache.delete(existing_sale_key)
         return JsonResponse({'success': False, 'error': f'Product not found: {str(e)}'})
     
     except ProductUnit.DoesNotExist as e:
         print(f"\n❌ Product unit not found: {str(e)}")
         logger.error(f"Product unit not found: {str(e)}")
+        if 'cache_key' in locals():
+            cache.delete(cache_key)
+        if 'idempotency_key' in locals():
+            cache.delete(idempotency_key)
+        if 'existing_sale_key' in locals():
+            cache.delete(existing_sale_key)
         return JsonResponse({'success': False, 'error': f'Product unit not found: {str(e)}'})
+    
+    except transaction.TransactionManagementError as e:
+        print(f"\n⚠️ Transaction error: {str(e)}")
+        if 'cache_key' in locals():
+            cache.delete(cache_key)
+        if 'idempotency_key' in locals():
+            cache.delete(idempotency_key)
+        if 'existing_sale_key' in locals():
+            cache.delete(existing_sale_key)
+        return JsonResponse({'success': False, 'error': str(e)})
     
     except ValueError as e:
         print(f"\n❌ Validation error: {str(e)}")
         logger.error(f"Validation error: {str(e)}")
+        if 'cache_key' in locals():
+            cache.delete(cache_key)
+        if 'idempotency_key' in locals():
+            cache.delete(idempotency_key)
+        if 'existing_sale_key' in locals():
+            cache.delete(existing_sale_key)
         return JsonResponse({'success': False, 'error': str(e)})
     
     except Exception as e:
@@ -2044,6 +2154,12 @@ def sale_create_api(request):
         import traceback
         traceback.print_exc()
         logger.error(f"Sale API error: {str(e)}", exc_info=True)
+        if 'cache_key' in locals():
+            cache.delete(cache_key)
+        if 'idempotency_key' in locals():
+            cache.delete(idempotency_key)
+        if 'existing_sale_key' in locals():
+            cache.delete(existing_sale_key)
         return JsonResponse({'success': False, 'error': str(e)})
 
 

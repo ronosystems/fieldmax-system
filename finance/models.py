@@ -193,15 +193,35 @@ class FinancialTransaction(models.Model):
     )
     notes = models.TextField(blank=True)
     
+    
     class Meta:
         ordering = ['-transaction_date']
         indexes = [
             models.Index(fields=['transaction_type']),
             models.Index(fields=['-transaction_date']),
+            # Add composite index for duplicate detection
+            models.Index(fields=['transaction_type', 'amount', 'transaction_date']),
         ]
+        # Add unique constraint to prevent exact duplicates
+        unique_together = [['transaction_type', 'amount', 'description', 'transaction_date']]
     
-    def __str__(self):
-        return f"{self.get_transaction_type_display()} - KSH {self.amount} - {self.transaction_date.date()}"
+    def save(self, *args, **kwargs):
+        """Prevent duplicate transactions before saving"""
+        # Skip duplicate check for existing records
+        if not self.pk:
+            # Check for duplicate within the same day
+            duplicate_exists = FinancialTransaction.objects.filter(
+                transaction_type=self.transaction_type,
+                amount=self.amount,
+                description=self.description,
+                transaction_date__date=self.transaction_date.date()
+            ).exists()
+            
+            if duplicate_exists:
+                logger.warning(f"⚠️ DUPLICATE FINANCIAL TRANSACTION BLOCKED: {self.description[:50]} - KES {self.amount}")
+                return  # Don't save duplicate
+        
+        super().save(*args, **kwargs)
 
 
 class FinancialSummary(models.Model):
@@ -925,12 +945,25 @@ class SavingsTransaction(models.Model):
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     
+    
     class Meta:
         ordering = ['-transaction_date']
+        unique_together = [['transaction_type', 'amount', 'sale_reference']]
     
-    def __str__(self):
-        return f"{self.get_transaction_type_display()}: KES {self.amount}"
-
+    def save(self, *args, **kwargs):
+        """Prevent duplicate Savings transactions"""
+        if not self.pk and self.sale_reference:
+            duplicate_exists = SavingsTransaction.objects.filter(
+                transaction_type=self.transaction_type,
+                amount=self.amount,
+                sale_reference=self.sale_reference
+            ).exists()
+            
+            if duplicate_exists:
+                logger.warning(f"⚠️ DUPLICATE SAVINGS TRANSACTION BLOCKED: {self.description[:50]} - KES {self.amount}")
+                return
+        
+        super().save(*args, **kwargs)
 
 
 
@@ -1277,12 +1310,27 @@ class NetTransaction(models.Model):
             models.Index(fields=['category']),
             models.Index(fields=['-transaction_date']),
             models.Index(fields=['transaction_type']),
+            # Add composite index for duplicate detection
+            models.Index(fields=['category', 'amount', 'transaction_date']),
         ]
+        # Add unique constraint
+        unique_together = [['category', 'amount', 'description', 'transaction_date']]
     
-    def __str__(self):
-        sign = "+" if self.transaction_type == 'addition' else "-"
-        return f"{sign} KES {self.amount} - {self.get_category_display()}"
-
+    def save(self, *args, **kwargs):
+        """Prevent duplicate Net transactions"""
+        if not self.pk:
+            duplicate_exists = NetTransaction.objects.filter(
+                category=self.category,
+                amount=self.amount,
+                description=self.description,
+                transaction_date__date=self.transaction_date.date()
+            ).exists()
+            
+            if duplicate_exists:
+                logger.warning(f"⚠️ DUPLICATE NET TRANSACTION BLOCKED: {self.description[:50]} - KES {self.amount}")
+                return
+        
+        super().save(*args, **kwargs)
 
 
 

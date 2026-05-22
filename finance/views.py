@@ -1796,6 +1796,8 @@ def commission_export(request):
     return response
 
 
+
+
 # ============================================
 # FINANCIAL TRANSACTIONS VIEW - FIXED
 # ============================================
@@ -4399,8 +4401,7 @@ def financial_overview(request):
 
 @login_required
 def take_profit(request):
-    """One-click profit taking - Move profit from business to owner"""
-    from .models import SavingsAccount
+    from finance.models import SavingsAccount
     from decimal import Decimal
     
     if request.method == 'POST':
@@ -4421,28 +4422,12 @@ def take_profit(request):
         
         if success:
             messages.success(request, f'✅ {message}')
-            
-            # Add note if provided
-            if notes:
-                from .models import SavingsTransaction
-                # Update the last transaction with notes
-                last_transaction = savings.transactions.filter(transaction_type='profit_taken').first()
-                if last_transaction:
-                    last_transaction.description = f"{last_transaction.description}\nNotes: {notes}"
-                    last_transaction.save()
-            
-            # Optional: Send email notification
-            # send_profit_taken_email(request.user, taken_amount)
-            
         else:
             messages.error(request, f'❌ {message}')
         
         return redirect('finance:financial_overview')
     
     return redirect('finance:financial_overview')
-
-
-
 
 
 @login_required
