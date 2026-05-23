@@ -56,19 +56,11 @@ def track_inventory_asset(sender, instance, created, **kwargs):
             unit_price=unit_price,
             user=instance.created_by
         )
-        
-    elif instance.entry_type == 'sale' and instance.quantity < 0:
-        # Sale - DECREASE asset (COGS)
-        # Note: This might double-count if you already deduct in sale_create_api
-        # Consider commenting this out if you already deduct there
-        inventory_asset.deduct_cogs(
-            amount=total_cost,
-            sku_code=sku_code,
-            quantity=quantity,
-            unit_price=unit_price,
-            sale_reference=instance.reference_id,
-            user=instance.created_by
-        )
+    
+    # ============================================
+    # REMOVED: COGS deduction for sale entries
+    # This is now handled in sale_create_api
+    # ============================================
     
     elif instance.entry_type == 'reversal':
         # Reversal - reverse the effect

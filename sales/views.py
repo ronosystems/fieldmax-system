@@ -1707,7 +1707,6 @@ def sale_create(request):
     return render(request, 'sales/create.html', context)
 
 
-
 @login_required
 def sale_create_api(request):
     """API endpoint for POS sale creation - ALWAYS returns JSON"""
@@ -1841,9 +1840,6 @@ def sale_create_api(request):
             # ============================================
             # CRITICAL FIX: Check for existing sale with same cart BEFORE creating
             # ============================================
-            # Check if there's already a pending sale with same unique identifier
-            # We'll use the cart hash as a temporary identifier
-            
             existing_sale_key = f"temp_sale_{cart_hash}"
             if cache.get(existing_sale_key):
                 print(f"⚠️ DUPLICATE SALE DETECTED! Sale already in progress for cart: {cart_hash}")
@@ -2048,6 +2044,51 @@ def sale_create_api(request):
             print(f"💰 Total Revenue for this sale: {final_amount}")
             print(f"💰 Gross Profit for this sale: {final_amount - total_cogs}")
             
+            # ============================================
+            # UPDATE FINANCE ACCOUNTS (Net and Savings)
+            # ============================================
+            from finance.models import NetAccount, SavingsAccount, InventoryAsset
+            
+            net = NetAccount.get_account()
+            savings = SavingsAccount.get_account()
+            inventory_asset = InventoryAsset.get_account()
+            
+            profit = final_amount - total_cogs
+            
+            print(f"\n💰 UPDATING FINANCE ACCOUNTS:")
+            print(f"   Total Revenue: KES {final_amount:,.2f}")
+            print(f"   Total COGS: KES {total_cogs:,.2f}")
+            print(f"   Profit: KES {profit:,.2f}")
+            
+            # Add COGS to Net Account (recouped cost)
+            if total_cogs > 0:
+                net.add_cogs(amount=total_cogs, sale_reference=sale.sale_id, user=request.user)
+                print(f"   ✅ NET: +KES {total_cogs:,.2f} (COGS recouped)")
+            
+            # Add Profit to Savings Account
+            if profit > 0:
+                savings.add_profit(amount=profit, sale_reference=sale.sale_id, user=request.user)
+                print(f"   ✅ SAVINGS: +KES {profit:,.2f} (Profit)")
+            
+            # Update Inventory Asset (deduct COGS)
+            if total_cogs > 0:
+                inventory_asset.deduct_cogs(
+                    amount=total_cogs,
+                    sku_code="MULTIPLE",
+                    quantity=0,
+                    unit_price=0,
+                    sale_reference=sale.sale_id,
+                    user=request.user
+                )
+                print(f"   ✅ INVENTORY ASSET: -KES {total_cogs:,.2f} (COGS deducted)")
+            
+            # Update Net balance display
+            net_balance = net.balance
+            savings_balance = savings.balance
+            print(f"\n📊 Updated Balances:")
+            print(f"   Net Account: KES {net_balance:,.2f}")
+            print(f"   Savings Account: KES {savings_balance:,.2f}")
+            
             # Award points
             print("\n💰 Awarding points...")
             points_earned = 0
@@ -2161,7 +2202,6 @@ def sale_create_api(request):
         if 'existing_sale_key' in locals():
             cache.delete(existing_sale_key)
         return JsonResponse({'success': False, 'error': str(e)})
-
 
 
 
