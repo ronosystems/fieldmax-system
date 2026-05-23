@@ -1,0 +1,199 @@
+{% extends 'finance/base.html' %}
+{% load humanize %}
+
+{% block title %}Pay Expense from Savings{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-piggy-bank me-2 text-success"></i> Pay Expense from Savings</h2>
+        <a href="{% url 'finance:savings_account' %}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left me-2"></i>Back to Savings
+        </a>
+    </div>
+    
+    <div class="row">
+        <div class="col-md-8 mx-auto">
+            <!-- Warning Alert -->
+            <div class="alert alert-warning">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                <strong>Note:</strong> Paying expenses from Savings will reduce your profits.
+                Available Savings Balance: <strong class="text-success">KES {{ savings.balance|floatformat:2|intcomma }}</strong>
+            </div>
+            
+            <div class="card shadow">
+                <div class="card-header bg-success text-white">
+                    <h4 class="mb-0"><i class="fas fa-receipt me-2"></i> Record Expense from Savings</h4>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <!-- Expense Type -->
+                        <div class="mb-3">
+                            <label for="expense_type" class="form-label fw-bold">Expense Type *</label>
+                            <select name="expense_type" id="expense_type" class="form-select" required onchange="toggleFields()">
+                                {% for value, label in expense_types %}
+                                <option value="{{ value }}">{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <!-- Salary Fields -->
+                        <div id="salaryFields" style="display: none;">
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label for="staff_id" class="form-label fw-bold">Staff Member *</label>
+                                    <select name="staff_id" id="staff_id" class="form-select">
+                                        <option value="">Select staff...</option>
+                                        {% for staff in staff_list %}
+                                        <option value="{{ staff.id }}">{{ staff.get_full_name|default:staff.username }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label for="month" class="form-label fw-bold">Month *</label>
+                                    <select name="month" id="month" class="form-select">
+                                        <option value="">Select...</option>
+                                        {% for num, name in months %}
+                                        <option value="{{ num }}">{{ name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label for="year" class="form-label fw-bold">Year *</label>
+                                    <select name="year" id="year" class="form-select">
+                                        <option value="">Select...</option>
+                                        {% for y in "2023,2024,2025,2026,2027"|split:"," %}
+                                        <option value="{{ y }}" {% if y == current_year|stringformat:"s" %}selected{% endif %}>{{ y }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Rent Fields -->
+                        <div id="rentFields" style="display: none;">
+                            <div class="mb-3">
+                                <label for="shop_id" class="form-label fw-bold">Select Shop *</label>
+                                <select name="shop_id" id="shop_id" class="form-select">
+                                    <option value="">-- Select Shop --</option>
+                                    {% for shop in shop_list %}
+                                    <option value="{{ shop.id }}">{{ shop.name }} - {{ shop.location|default:'No location' }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <!-- Common Fields -->
+                        <div class="mb-3">
+                            <label for="description" class="form-label fw-bold">Description *</label>
+                            <input type="text" name="description" id="description" class="form-control" 
+                                   required placeholder="e.g., May 2026 Salary, Electricity bill">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="amount" class="form-label fw-bold">Amount (KES) *</label>
+                            <input type="number" name="amount" id="amount" class="form-control form-control-lg" 
+                                   step="0.01" min="0.01" required placeholder="0.00">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="recipient_name" class="form-label fw-bold">Recipient/Payee</label>
+                            <input type="text" name="recipient_name" id="recipient_name" class="form-control" 
+                                   placeholder="e.g., Staff name, Landlord, Kenya Power">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="payment_method" class="form-label fw-bold">Payment Method *</label>
+                            <select name="payment_method" id="payment_method" class="form-select" required>
+                                {% for value, label in payment_methods %}
+                                <option value="{{ value }}">{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="reference" class="form-label fw-bold">Reference Number</label>
+                            <input type="text" name="reference" id="reference" class="form-control" 
+                                   placeholder="e.g., Transaction ID, Receipt number">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="notes" class="form-label fw-bold">Notes</label>
+                            <textarea name="notes" id="notes" class="form-control" rows="2" 
+                                      placeholder="Additional notes..."></textarea>
+                        </div>
+                        
+                        <hr>
+                        
+                        <!-- Summary -->
+                        <div class="alert alert-info">
+                            <strong><i class="fas fa-info-circle me-2"></i>Effect on Savings Account:</strong>
+                            <ul class="mb-0 mt-2">
+                                <li>Current Savings Balance: <strong>KES {{ savings.balance|floatformat:2|intcomma }}</strong></li>
+                                <li>After Expense: <strong class="text-danger">KES <span id="newBalance">{{ savings.balance|floatformat:2|intcomma }}</span></strong></li>
+                            </ul>
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-success btn-lg">
+                                <i class="fas fa-check-circle me-2"></i>Pay from Savings
+                            </button>
+                            <a href="{% url 'finance:savings_account' %}" class="btn btn-secondary">Cancel</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleFields() {
+    var expenseType = document.getElementById('expense_type').value;
+    var salaryFields = document.getElementById('salaryFields');
+    var rentFields = document.getElementById('rentFields');
+    
+    salaryFields.style.display = 'none';
+    rentFields.style.display = 'none';
+    
+    if (expenseType === 'salary') {
+        salaryFields.style.display = 'block';
+        document.getElementById('staff_id').required = true;
+        document.getElementById('month').required = true;
+        document.getElementById('year').required = true;
+    } else if (expenseType === 'rent') {
+        rentFields.style.display = 'block';
+        document.getElementById('shop_id').required = true;
+    } else {
+        // Other types - clear requirements
+        if (document.getElementById('staff_id')) document.getElementById('staff_id').required = false;
+        if (document.getElementById('month')) document.getElementById('month').required = false;
+        if (document.getElementById('year')) document.getElementById('year').required = false;
+        if (document.getElementById('shop_id')) document.getElementById('shop_id').required = false;
+    }
+}
+
+// Update new balance dynamically
+document.addEventListener('DOMContentLoaded', function() {
+    var amountInput = document.getElementById('amount');
+    var savingsBalance = {{ savings.balance|default:0 }};
+    var newBalanceSpan = document.getElementById('newBalance');
+    
+    amountInput.addEventListener('input', function() {
+        var amount = parseFloat(this.value) || 0;
+        var newBalance = savingsBalance - amount;
+        newBalanceSpan.textContent = newBalance.toLocaleString('en-KE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        
+        if (newBalance < 0) {
+            newBalanceSpan.style.color = 'red';
+        } else {
+            newBalanceSpan.style.color = 'black';
+        }
+    });
+    
+    toggleFields();
+});
+</script>
+{% endblock %}

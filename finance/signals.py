@@ -12,89 +12,101 @@ from .models import (
     FinancialTransaction, CashAccount, BankAccount, CapitalAccount, 
     CapitalInjection, CapitalInjectionRepayment, StockPurchase, 
     PurchaseAccount, IncomeTransaction, IncomeAccount, ProfitAccount,
-    PurchaseTransaction, ProfitTransaction, NetAccount, SavingsAccount
+    PurchaseTransaction, ProfitTransaction, NetAccount, SavingsAccount, InventoryAsset
 )
 from finance import models
 
 logger = logging.getLogger(__name__)
 
 
+
+
 # ============================================
-# SALE ACCOUNTING HELPER - FIXED VERSION
+# SIGNAL: StockEntry - Track Inventory Asset
 # ============================================
 
+@receiver(post_save, sender=StockEntry)
+def track_inventory_asset(sender, instance, created, **kwargs):
+    """Track inventory asset value when stock moves"""
+    if not created:
+        return
+    
+    inventory_asset = InventoryAsset.get_account()
+    
+    # Calculate total cost
+    total_cost = abs(instance.quantity) * instance.unit_price
+    
+    # Get product info
+    sku_code = ""
+    quantity = abs(instance.quantity)
+    unit_price = instance.unit_price
+    
+    if instance.product_sku:
+        sku_code = instance.product_sku.sku_code
+    elif instance.product_unit:
+        sku_code = instance.product_unit.product.sku_code
+    
+    # Handle different entry types
+    if instance.entry_type == 'purchase' and instance.quantity > 0:
+        # Stock purchase - INCREASE asset
+        inventory_asset.add_purchase(
+            amount=total_cost,
+            sku_code=sku_code,
+            quantity=quantity,
+            unit_price=unit_price,
+            user=instance.created_by
+        )
+        
+    elif instance.entry_type == 'sale' and instance.quantity < 0:
+        # Sale - DECREASE asset (COGS)
+        # Note: This might double-count if you already deduct in sale_create_api
+        # Consider commenting this out if you already deduct there
+        inventory_asset.deduct_cogs(
+            amount=total_cost,
+            sku_code=sku_code,
+            quantity=quantity,
+            unit_price=unit_price,
+            sale_reference=instance.reference_id,
+            user=instance.created_by
+        )
+    
+    elif instance.entry_type == 'reversal':
+        # Reversal - reverse the effect
+        if instance.quantity > 0:
+            # Positive reversal (return) - INCREASE asset
+            inventory_asset.add_purchase(
+                amount=total_cost,
+                sku_code=sku_code,
+                quantity=quantity,
+                unit_price=unit_price,
+                user=instance.created_by
+            )
+        else:
+            # Negative reversal - DECREASE asset
+            inventory_asset.deduct_cogs(
+                amount=total_cost,
+                sku_code=sku_code,
+                quantity=quantity,
+                unit_price=unit_price,
+                user=instance.created_by
+            )
+
+
+
+# ============================================
+# DISABLED: SaleAccountingHelper - Use only sale_create_api for accounting
+# ============================================
+# Comment out or remove this entire class to prevent duplicates
+# The sale_create_api already handles Net and Savings accounts correctly
+
 class SaleAccountingHelper:
-    """Helper to process sale accounting"""
+    """DEPRECATED: Use sale_create_api instead. This class is disabled to prevent duplicates."""
     
     @staticmethod
     def process_sale(sale, user=None):
-        """
-        Process accounting for a sale:
-        1. Record income (selling price) - CREDIT IncomeAccount
-        2. Record purchase cost (buying price) - DEBIT PurchaseAccount  
-        3. Record profit (selling price - buying price) - CREDIT ProfitAccount
-        """
-        from decimal import Decimal
-        
-        # Get or create accounts
-        income_account = IncomeAccount.get_or_create_account()
-        purchase_account = PurchaseAccount.get_or_create_account()
-        profit_account = ProfitAccount.get_or_create_account()
-        
-        total_income = Decimal('0')
-        total_cost = Decimal('0')
-        
-        # Get sale items
-        if hasattr(sale, 'items'):
-            items = sale.items.all()
-        elif hasattr(sale, 'sale_items'):
-            items = sale.sale_items.all()
-        else:
-            items = []
-        
-        for item in items:
-            # FIXED: Use unit_price, not price
-            selling_price = Decimal(str(item.unit_price)) * Decimal(str(item.quantity))
-            
-            # Get buying price from product
-            if hasattr(item, 'product') and item.product:
-                buying_price = Decimal(str(item.product.buying_price)) * Decimal(str(item.quantity))
-            else:
-                buying_price = Decimal('0')
-            
-            profit = selling_price - buying_price
-            
-            total_income += selling_price
-            total_cost += buying_price
-        
-        # Only record if there are items
-        if total_income > 0:
-            # Add total income to IncomeAccount
-            income_account.add_income(
-                amount=total_income,
-                sale_reference=getattr(sale, 'sale_id', str(sale.id)),
-                user=user or getattr(sale, 'seller', None)
-            )
-            
-            # Add total purchase cost to PurchaseAccount
-            purchase_account.add_purchase_cost(
-                amount=total_cost,
-                product_reference=getattr(sale, 'sale_id', str(sale.id)),
-                user=user or getattr(sale, 'seller', None)
-            )
-            
-            # Record profit
-            profit_account.add_profit(
-                amount=total_income - total_cost,
-                sale_reference=getattr(sale, 'sale_id', str(sale.id)),
-                user=user or getattr(sale, 'seller', None)
-            )
-        
-        return {
-            'income': total_income,
-            'cost': total_cost,
-            'profit': total_income - total_cost
-        }
+        """DISABLED: This would create duplicate records. Use sale_create_api instead."""
+        logger.warning(f"⚠️ SaleAccountingHelper.process_sale called but DISABLED for sale {getattr(sale, 'sale_id', 'unknown')}")
+        return {'income': 0, 'cost': 0, 'profit': 0}
 
 
 # ============================================
@@ -106,6 +118,11 @@ def create_finance_entry_for_company_payment(sender, instance, created, **kwargs
     """Automatically create finance entry when a company payment is recorded"""
     if created:
         try:
+            # Check for duplicate first
+            if hasattr(instance, 'financial_transaction') and instance.financial_transaction:
+                logger.info(f"⚠️ Company payment {instance.payment_id} already has financial transaction")
+                return
+            
             FinancialTransaction.objects.create(
                 transaction_type='income',
                 category='credit_reconciliation',
@@ -134,17 +151,36 @@ def create_finance_entry_for_company_payment(sender, instance, created, **kwargs
 
 
 # ============================================
-# SIGNAL: Sale (Main Accounting) - FIXED
+# FIXED SIGNAL: Sale (Only for FinancialTransaction, NOT for Net/Savings)
 # ============================================
 
 @receiver(post_save, sender=Sale)
 def process_sale_accounting(sender, instance, created, **kwargs):
     """
-    Process accounting when a sale is completed:
-    Update Net and Savings accounts, and create FinancialTransaction
+    ONLY create FinancialTransaction for the sale.
+    Net and Savings accounts are handled by sale_create_api.
     """
     # Only process when sale is not reversed
     if instance.is_reversed:
+        return
+    
+    # Skip if this is a split payment sale (handled separately)
+    if instance.is_split_payment:
+        logger.info(f"Split payment sale {instance.sale_id} - skipping signal")
+        return
+    
+    # ============================================
+    # CHECK IF FINANCIAL TRANSACTION ALREADY EXISTS
+    # ============================================
+    from .models import FinancialTransaction
+    
+    existing = FinancialTransaction.objects.filter(
+        description__icontains=instance.sale_id,
+        transaction_type='income'
+    ).exists()
+    
+    if existing:
+        logger.info(f"⚠️ FinancialTransaction already exists for sale {instance.sale_id} - skipping")
         return
     
     try:
@@ -163,67 +199,48 @@ def process_sale_accounting(sender, instance, created, **kwargs):
                 total_cogs += cogs_for_item
                 total_profit += profit_for_item
         
-        if total_cogs > 0:
-            net_account.add_cogs(amount=total_cogs, sale_reference=instance.sale_id, user=instance.seller)
-            logger.info(f"📈 NET: Added COGS KES {total_cogs} from sale {instance.sale_id}")
-        
-        if total_profit > 0:
-            savings_account.add_profit(amount=total_profit, sale_reference=instance.sale_id, user=instance.seller)
-            logger.info(f"💰 SAVINGS: Added profit KES {total_profit} from sale {instance.sale_id}")
-        
-        # ============================================
-        # CREATE FINANCIAL TRANSACTION FOR THE SALE
-        # ============================================
-        from .models import FinancialTransaction
-        
-        # Create income transaction for the sale
-        FinancialTransaction.objects.create(
-            transaction_type='income',
-            category='other',
-            amount=instance.total_amount,
-            description=f"Sale {instance.sale_id} - {instance.buyer_name or 'Walk-in Customer'}",
-            payment_method=instance.payment_method.lower() if instance.payment_method else 'cash',
-            payment_reference=instance.sale_id,
-            recipient_name=instance.buyer_name or 'Walk-in Customer',
-            transaction_date=instance.sale_date,
-            created_by=instance.seller,
-            notes=f"Items: {instance.items.count()} | Paid via: {instance.payment_method}"
-        )
-        logger.info(f"📝 FINANCIAL TRANSACTION: Created income record for sale {instance.sale_id}")
+        # ONLY create FinancialTransaction here
+        # Net and Savings updates should ONLY happen in sale_create_api
+        if instance.total_amount > 0:
+            FinancialTransaction.objects.create(
+                transaction_type='income',
+                category='other',
+                amount=instance.total_amount,
+                description=f"Sale {instance.sale_id} - {instance.buyer_name or 'Walk-in Customer'}",
+                payment_method=instance.payment_method.lower() if instance.payment_method else 'cash',
+                payment_reference=instance.sale_id,
+                recipient_name=instance.buyer_name or 'Walk-in Customer',
+                transaction_date=instance.sale_date,
+                created_by=instance.seller,
+                notes=f"Items: {instance.items.count()} | Paid via: {instance.payment_method}"
+            )
+            logger.info(f"📝 FinancialTransaction created for sale {instance.sale_id}")
+        else:
+            logger.warning(f"⚠️ Sale {instance.sale_id} has zero amount - no transaction created")
         
     except Exception as e:
         logger.error(f"Error processing sale accounting for {instance.sale_id}: {str(e)}")
 
 
 # ============================================
-# SIGNAL: StockEntry (Purchase entries only)
+# DISABLED: StockEntry Purchase Signal - Inventory is ASSET, not expense
 # ============================================
+# Stock purchases should NOT create expenses. They are assets.
+# Only COGS when items are sold should be expenses.
 
 @receiver(post_save, sender=StockEntry)
 def update_purchase_account_on_stock_entry(sender, instance, created, **kwargs):
-    """Update purchase account when stock entry is created or updated"""
-    if instance.entry_type != 'purchase' or instance.quantity <= 0:
+    """
+    DISABLED: Stock purchases are ASSETS, not expenses.
+    Do NOT add to PurchaseAccount (which tracks expenses).
+    """
+    # Skip purchase entries - they are assets, not expenses
+    if instance.entry_type == 'purchase' and instance.quantity > 0:
+        logger.info(f"📦 Inventory asset: {instance.quantity} units of {instance.product_sku.sku_code if instance.product_sku else 'product'} - NOT an expense")
         return
     
-    try:
-        purchase_account = PurchaseAccount.get_or_create_account()
-        total_cost = instance.unit_price * instance.quantity
-        
-        purchase_account.add_purchase_cost(
-            amount=total_cost,
-            product_reference=instance.reference_id or f"SKU:{instance.product_sku.sku_code if instance.product_sku else 'N/A'}",
-            user=instance.created_by
-        )
-        
-        purchase_account.total_purchases = PurchaseTransaction.objects.filter(
-            transaction_type='cogs'
-        ).aggregate(total=models.Sum('amount'))['total'] or Decimal('0')
-        purchase_account.save()
-        
-        logger.info(f"✅ Purchase account updated for stock entry {instance.id}: KES {total_cost:,.2f}")
-        
-    except Exception as e:
-        logger.error(f"Error updating purchase account for stock entry {instance.id}: {str(e)}")
+    # For other entry types if needed
+    logger.debug(f"StockEntry {instance.id} - type: {instance.entry_type} - no action needed")
 
 
 # ============================================
@@ -256,14 +273,19 @@ def update_capital_account_on_repayment(sender, instance, created, **kwargs):
     except Exception as e:
         logger.error(f"Error updating capital account for repayment: {str(e)}")
 
+
 # ============================================
-# SIGNAL: AccountTransaction Expense for Net Account
+# FIXED SIGNAL: AccountTransaction Expense for Net Account
 # ============================================
 
 @receiver(post_save, sender='finance.AccountTransaction')
 def process_expense_for_net(sender, instance, created, **kwargs):
     """When an expense is recorded, deduct from Net Account"""
     if not created or instance.transaction_type != 'expense':
+        return
+    
+    # Skip if this expense was already processed
+    if hasattr(instance, '_processed') and instance._processed:
         return
     
     try:
@@ -277,6 +299,9 @@ def process_expense_for_net(sender, instance, created, **kwargs):
             reference=instance.reference or f"EXP-{instance.id}",
             user=instance.created_by
         )
+        
+        # Mark as processed to prevent duplicates
+        instance._processed = True
         logger.info(f"📉 NET: Deducted expense KES {instance.amount} ({expense_type})")
     except Exception as e:
         logger.error(f"Failed to process expense for Net: {str(e)}")

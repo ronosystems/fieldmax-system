@@ -8,7 +8,6 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2><i class="fas fa-chart-line me-2"></i> Financial Overview</h2>
         <div>
-            <!-- One-Click Profit Taking Button - Uses custom modal -->
             {% if savings.balance > 0 %}
             <button type="button" class="btn btn-warning me-2" onclick="openProfitModal()">
                 <i class="fas fa-hand-holding-usd me-2"></i>💰 Take Profit (KES {{ savings.balance|floatformat:2|intcomma }})
@@ -24,58 +23,73 @@
         </div>
     </div>
     
-    <!-- Three Account Cards -->
+    <!-- Four Account Cards (2x2 Grid) -->
     <div class="row mb-4">
         
         <!-- Injection Account -->
-        <div class="col-md-4">
+        <div class="col-md-6 col-lg-3 mb-3">
             <div class="card border-info h-100">
                 <div class="card-header bg-info text-white">
-                    <h4 class="mb-0"><i class="fas fa-syringe me-2"></i> Total Injections Added</h4>
+                    <h4 class="mb-0"><i class="fas fa-syringe me-2"></i> Total Injections</h4>
                 </div>
                 <div class="card-body text-center">
                     <h2 class="text-info">KES {{ injection.balance|floatformat:2|intcomma }}</h2>
-                    <p class="text-muted">From Savings: KES {{ injection.total_from_savings|floatformat:2|intcomma }}</p>
-                    <p class="text-muted">From External: KES {{ injection.total_external_injection|floatformat:2|intcomma }}</p>
+                    <p class="text-muted small mb-1">From Savings: KES {{ injection.total_from_savings|floatformat:2|intcomma }}</p>
+                    <p class="text-muted small">From External: KES {{ injection.total_external_injection|floatformat:2|intcomma }}</p>
                     <hr>
-                    <p class="small">💉 Money entry point (Savings + External)</p>
-                    <a href="{% url 'finance:injection_account' %}" class="btn btn-outline-info mt-2">View Details</a>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Net Account -->
-        <div class="col-md-4">
-            <div class="card border-primary h-100">
-                <div class="card-header bg-primary text-white">
-                    <h4 class="mb-0"><i class="fas fa-network-wired me-2"></i> Net Account Balance</h4>
-                </div>
-                <div class="card-body text-center">
-                    <h2 class="text-primary">KES {{ net.balance|floatformat:2|intcomma }}</h2>
-                    <p class="text-muted">Total Funds Received: KES {{ net.total_additions|floatformat:2|intcomma }}</p>
-                    <p class="text-muted">Total Funds Expenses: KES {{ net.total_deductions|floatformat:2|intcomma }}</p>
-                    <hr>
-                    <p class="small">📊 Main operating account</p>
-                    <a href="{% url 'finance:net_account' %}" class="btn btn-outline-primary mt-2">View Details</a>
+                    <p class="small">💉 Money entry point</p>
+                    <a href="{% url 'finance:injection_account' %}" class="btn btn-sm btn-outline-info">View Details</a>
                 </div>
             </div>
         </div>
 
-        
+        <!-- Inventory Asset Card -->
+        <div class="col-md-6 col-lg-3 mb-3">
+            <div class="card border-warning h-100">
+                <div class="card-header bg-warning text-dark">
+                    <h4 class="mb-0"><i class="fas fa-boxes me-2"></i> Inventory Asset</h4>
+                </div>
+                <div class="card-body text-center">
+                    <h2 class="text-warning">KES {{ inventory_asset.current_value|floatformat:2|intcomma }}</h2>
+                    <p class="text-muted small mb-1">Purchased: KES {{ inventory_asset.total_purchased|floatformat:2|intcomma }}</p>
+                    <p class="text-muted small">COGS (Sold): KES {{ inventory_asset.total_cogs|floatformat:2|intcomma }}</p>
+                    <hr>
+                    <p class="small">📦 Stock value at cost</p>
+                    <a href="{% url 'finance:inventory_asset' %}" class="btn btn-sm btn-outline-warning">View Details</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Net Account -->
+        <div class="col-md-6 col-lg-3 mb-3">
+            <div class="card border-primary h-100">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0"><i class="fas fa-network-wired me-2"></i> Net Account</h4>
+                </div>
+                <div class="card-body text-center">
+                    <h2 class="text-primary">KES {{ net.balance|floatformat:2|intcomma }}</h2>
+                    <p class="text-muted small mb-1">Cash Inflow: KES {{ net.total_cash_inflow|floatformat:2|intcomma }}</p>
+                    <p class="text-muted small">Cash Outflow: KES {{ net.total_cash_outflow|floatformat:2|intcomma }}</p>
+                    <hr>
+                    <p class="small">📊 Operating account</p>
+                    <a href="{% url 'finance:net_account' %}" class="btn btn-sm btn-outline-primary">View Details</a>
+                </div>
+            </div>
+        </div>
+
         <!-- Savings Account -->
-        <div class="col-md-4">
+        <div class="col-md-6 col-lg-3 mb-3">
             <div class="card border-success h-100">
                 <div class="card-header bg-success text-white">
-                    <h4 class="mb-0"><i class="fas fa-piggy-bank me-2"></i> Savings Account Balance</h4>
+                    <h4 class="mb-0"><i class="fas fa-piggy-bank me-2"></i> Savings Account</h4>
                 </div>
                 <div class="card-body text-center">
                     <h2 class="text-success">KES {{ savings.balance|floatformat:2|intcomma }}</h2>
-                    <p class="text-muted">This is current Available Savings</p>
-                    <p class="text-muted">Total Profits Earned: KES {{ savings.total_profits_earned|floatformat:2|intcomma }}</p>
-                    <p class="text-muted">Total Profits Taken: KES {{ savings.total_profits_taken|floatformat:2|intcomma }}</p>
+                    <p class="text-muted small mb-1">Earned: KES {{ savings.total_profits_earned|floatformat:2|intcomma }}</p>
+                    <p class="text-muted small">Taken: KES {{ savings.total_profits_taken|floatformat:2|intcomma }}</p>
                     <hr>
-                    <p class="small">💰 Only profits from sales revenue</p>
-                    <a href="{% url 'finance:savings_account' %}" class="btn btn-outline-success mt-2">View Details</a>
+                    <p class="small">💰 Profits from sales</p>
+                    <a href="{% url 'finance:savings_account' %}" class="btn btn-sm btn-outline-success">View Details</a>
                 </div>
             </div>
         </div>
@@ -83,26 +97,26 @@
     
     <!-- Recent Transactions -->
     <div class="row">
-        <div class="col-md-4">
-            <div class="card">
+        <div class="col-md-4 mb-3">
+            <div class="card h-100">
                 <div class="card-header">
-                    <h5><i class="fas fa-history"></i> Recent Injection Transactions</h5>
+                    <h5><i class="fas fa-history"></i> Recent Injections</h5>
                 </div>
                 <div class="card-body p-0">
-                    <div class="table-responsive">
+                    <div class="table-responsive" style="max-height: 250px; overflow-y: auto;">
                         <table class="table table-sm mb-0">
-                            <thead>
-                                <tr><th>Date</th><th>Type</th><th>Amount</th></tr>
+                            <thead class="table-light">
+                                <tr><th>Date</th><th>Type</th><th class="text-end">Amount</th></tr>
                             </thead>
                             <tbody>
-                                {% for t in injection_transactions %}
+                                {% for t in injection_transactions|slice:":10" %}
                                 <tr>
-                                    <td>{{ t.transaction_date|date:"d/m/Y" }}</td>
-                                    <td>{{ t.get_transaction_type_display }}</td>
-                                    <td class="text-success">+ KES {{ t.amount|floatformat:2|intcomma }}</td>
+                                    <td>{{ t.transaction_date|date:"d/m/Y" }}</small></td>
+                                    <td><small>{{ t.get_transaction_type_display }}</small></td>
+                                    <td class="text-end text-success"><small>+ KES {{ t.amount|floatformat:0|intcomma }}</small></small></td>
                                 </tr>
                                 {% empty %}
-                                <tr><td colspan="3" class="text-center">No transactions</td></tr>
+                                <tr><td colspan="3" class="text-center py-3 text-muted">No transactions</small></td></tr>
                                 {% endfor %}
                             </tbody>
                         </table>
@@ -111,28 +125,28 @@
             </div>
         </div>
         
-        <div class="col-md-4">
-            <div class="card">
+        <div class="col-md-4 mb-3">
+            <div class="card h-100">
                 <div class="card-header">
                     <h5><i class="fas fa-history"></i> Recent Net Transactions</h5>
                 </div>
                 <div class="card-body p-0">
-                    <div class="table-responsive">
+                    <div class="table-responsive" style="max-height: 250px; overflow-y: auto;">
                         <table class="table table-sm mb-0">
-                            <thead>
-                                <tr><th>Date</th><th>Type</th><th>Amount</th></tr>
+                            <thead class="table-light">
+                                <tr><th>Date</th><th>Type</th><th class="text-end">Amount</th></tr>
                             </thead>
                             <tbody>
-                                {% for t in net_transactions %}
+                                {% for t in net_transactions|slice:":10" %}
                                 <tr>
-                                    <td>{{ t.transaction_date|date:"d/m/Y" }}</td>
-                                    <td>{{ t.get_category_display }}</td>
-                                    <td class="{% if t.transaction_type == 'addition' %}text-success{% else %}text-danger{% endif %}">
-                                        {% if t.transaction_type == 'addition' %}+{% else %}-{% endif %} KES {{ t.amount|floatformat:2|intcomma }}
-                                    </td>
+                                    <td>{{ t.transaction_date|date:"d/m/Y" }}</small></td>
+                                    <td><small>{{ t.get_category_display }}</small></td>
+                                    <td class="text-end {% if t.transaction_type == 'addition' %}text-success{% else %}text-danger{% endif %}">
+                                        <small>{% if t.transaction_type == 'addition' %}+{% else %}-{% endif %} KES {{ t.amount|floatformat:0|intcomma }}</small>
+                                    </small></td>
                                 </tr>
                                 {% empty %}
-                                <tr><td colspan="3" class="text-center">No transactions</td></tr>
+                                <tr><td colspan="3" class="text-center py-3 text-muted">No transactions</small></td></tr>
                                 {% endfor %}
                             </tbody>
                         </table>
@@ -141,28 +155,30 @@
             </div>
         </div>
 
-        <div class="col-md-4">
-            <div class="card">
+        <div class="col-md-4 mb-3">
+            <div class="card h-100">
                 <div class="card-header">
-                    <h5><i class="fas fa-history"></i> Recent Savings Transactions</h5>
+                    <h5><i class="fas fa-history"></i> Recent Savings</h5>
                 </div>
                 <div class="card-body p-0">
-                    <div class="table-responsive">
+                    <div class="table-responsive" style="max-height: 250px; overflow-y: auto;">
                         <table class="table table-sm mb-0">
-                            <thead>
-                                <tr><th>Date</th><th>Type</th><th>Amount</th></tr>
+                            <thead class="table-light">
+                                <tr><th>Date</th><th>Type</th><th class="text-end">Amount</th></tr>
                             </thead>
                             <tbody>
-                                {% for t in savings_transactions %}
+                                {% for t in savings_transactions|slice:":10" %}
                                 <tr>
-                                    <td>{{ t.transaction_date|date:"d/m/Y" }}</td>
-                                    <td>{{ t.get_transaction_type_display }}</td>
-                                    <td class="{% if t.transaction_type == 'profit' %}text-success{% elif t.transaction_type == 'profit_taken' %}text-warning{% else %}text-danger{% endif %}">
-                                        {% if t.transaction_type == 'profit' %}+{% elif t.transaction_type == 'profit_taken' %}-{% else %}{% endif %} KES {{ t.amount|floatformat:2|intcomma }}
-                                    </td>
+                                    <td>{{ t.transaction_date|date:"d/m/Y" }}</small></td>
+                                    <td><small>{{ t.get_transaction_type_display }}</small></td>
+                                    <td class="text-end {% if t.transaction_type == 'profit' %}text-success{% elif t.transaction_type == 'profit_taken' %}text-warning{% else %}text-danger{% endif %}">
+                                        <small>
+                                        {% if t.transaction_type == 'profit' %}+{% elif t.transaction_type == 'profit_taken' %}-{% endif %} KES {{ t.amount|floatformat:0|intcomma }}
+                                        </small>
+                                    </small></td>
                                 </tr>
                                 {% empty %}
-                                <tr><td colspan="3" class="text-center">No transactions</td></tr>
+                                <tr><td colspan="3" class="text-center py-3 text-muted">No transactions</small></td></tr>
                                 {% endfor %}
                             </tbody>
                         </table>
@@ -173,9 +189,9 @@
     </div>
 </div>
 
-<!-- Custom Modal (No Bootstrap JS required) -->
+<!-- Custom Profit Modal -->
 <div id="profitModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10000; align-items: center; justify-content: center;">
-    <div style="background: white; border-radius: 12px; width: 90%; max-width: 500px; margin: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.2);">
+    <div style="background: var(--card-bg); border-radius: 12px; width: 90%; max-width: 500px; margin: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.2);">
         <div style="background: #f59e0b; padding: 15px 20px; border-radius: 12px 12px 0 0; color: white; display: flex; justify-content: space-between; align-items: center;">
             <h5 style="margin: 0;"><i class="fas fa-hand-holding-usd me-2"></i>Take Profit</h5>
             <button type="button" onclick="closeProfitModal()" style="background: none; border: none; color: white; font-size: 24px; cursor: pointer;">&times;</button>
@@ -232,37 +248,50 @@
 
 <style>
     .card {
-        transition: transform 0.2s;
+        transition: transform 0.2s, box-shadow 0.2s;
+        border: none;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     }
     .card:hover {
-        transform: translateY(-5px);
+        transform: translateY(-3px);
+        box-shadow: 0 4px 15px rgba(0,0,0,0.12);
     }
-    .table-responsive {
-        max-height: 300px;
-        overflow-y: auto;
+    .table-responsive::-webkit-scrollbar {
+        width: 4px;
+    }
+    .table-responsive::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 4px;
+    }
+    .table-responsive::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 4px;
+    }
+    [data-theme="dark"] .table-responsive::-webkit-scrollbar-track {
+        background: #2d2d2d;
+    }
+    [data-theme="dark"] .table-responsive::-webkit-scrollbar-thumb {
+        background: #555;
     }
 </style>
 
 <script>
-// Open custom modal
 function openProfitModal() {
     var modal = document.getElementById('profitModal');
     if (modal) {
         modal.style.display = 'flex';
-        document.body.style.overflow = 'hidden'; // Prevent scrolling
+        document.body.style.overflow = 'hidden';
     }
 }
 
-// Close custom modal
 function closeProfitModal() {
     var modal = document.getElementById('profitModal');
     if (modal) {
         modal.style.display = 'none';
-        document.body.style.overflow = ''; // Restore scrolling
+        document.body.style.overflow = '';
     }
 }
 
-// Auto-update max value
 document.addEventListener('DOMContentLoaded', function() {
     var amountInput = document.getElementById('amount');
     if (amountInput) {
@@ -274,7 +303,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Handle form submission with loading state
     var takeProfitForm = document.getElementById('takeProfitForm');
     if (takeProfitForm) {
         takeProfitForm.addEventListener('submit', function(e) {
@@ -287,7 +315,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-// Close modal when clicking outside
 document.addEventListener('click', function(e) {
     var modal = document.getElementById('profitModal');
     if (modal && modal.style.display === 'flex') {
@@ -297,7 +324,6 @@ document.addEventListener('click', function(e) {
     }
 });
 
-// Close modal with Escape key
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
         closeProfitModal();

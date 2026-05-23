@@ -31,50 +31,96 @@
                     <h5><i class="fas fa-info-circle"></i> About {{ account_type }}</h5>
                     <p>{{ description }}</p>
                     
+                    <!-- Savings Account Specific Info -->
                     {% if account_type == 'Savings Account' %}
-                    <div class="alert alert-success">
-                        <strong>Total Profits Earned:</strong> KES {{ account.total_profits_earned|floatformat:2|intcomma }}
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <div class="alert alert-success">
+                                <small>Total Profits Earned</small>
+                                <h5 class="mb-0">KES {{ account.total_profits_earned|floatformat:2|intcomma }}</h5>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="alert alert-warning">
+                                <small>Total Profits Taken</small>
+                                <h5 class="mb-0">KES {{ account.total_profits_taken|floatformat:2|intcomma }}</h5>
+                            </div>
+                        </div>
                     </div>
-                    {% if can_transfer %}
-                    <a href="{% url 'finance:savings_transfer_to_injection' %}" class="btn btn-warning">
-                        <i class="fas fa-arrow-right"></i> Transfer To Net Account
-                    </a>
-                    {% endif %}
+                    
+                    <!-- Savings Account Action Buttons -->
+                    <hr>
+                    <h6><i class="fas fa-cogs"></i> Actions</h6>
+                    <div class="row mt-2">
+                        {% if can_transfer %}
+                        <div class="col-md-6 mb-2">
+                            <a href="{% url 'finance:savings_transfer_to_injection' %}" class="btn btn-warning w-100">
+                                <i class="fas fa-arrow-right"></i> Transfer to Net
+                            </a>
+                        </div>
+                        {% endif %}
+                        <div class="col-md-6 mb-2">
+                            <button type="button" class="btn btn-danger w-100" onclick="openExpenseModal()">
+                                <i class="fas fa-hand-holding-usd"></i> Pay from Savings
+                            </button>
+                        </div>
+                    </div>
                     {% endif %}
                     
+                    <!-- Injection Account Specific Info -->
                     {% if account_type == 'Injection Account' %}
-                    <div class="row">
+                    <div class="row mb-3">
                         <div class="col-6">
-                            <div class="alert alert-info">From Savings: KES {{ account.total_from_savings|floatformat:2|intcomma }}</div>
+                            <div class="alert alert-info">
+                                <small>From Savings</small>
+                                <h5 class="mb-0">KES {{ account.total_from_savings|floatformat:2|intcomma }}</h5>
+                            </div>
                         </div>
                         <div class="col-6">
-                            <div class="alert alert-primary">External: KES {{ account.total_external_injection|floatformat:2|intcomma }}</div>
+                            <div class="alert alert-primary">
+                                <small>From External</small>
+                                <h5 class="mb-0">KES {{ account.total_external_injection|floatformat:2|intcomma }}</h5>
+                            </div>
                         </div>
                     </div>
-                    <div class="btn-group">
-                        <a href="{% url 'finance:injection_add_external' %}" class="btn btn-info">Add External Injection</a>
+                    
+                    <!-- Injection Account Action Buttons -->
+                    <hr>
+                    <div class="btn-group w-100">
+                        <a href="{% url 'finance:injection_add_external' %}" class="btn btn-info">
+                            <i class="fas fa-plus"></i> Add External
+                        </a>
                         {% if can_transfer %}
-                        <a href="{% url 'finance:savings_transfer_to_injection' %}" class="btn btn-primary">Pull From Savings</a>
+                        <a href="{% url 'finance:savings_transfer_to_injection' %}" class="btn btn-primary">
+                            <i class="fas fa-arrow-right"></i> Pull from Savings
+                        </a>
                         {% endif %}
                     </div>
                     {% endif %}
                     
+                    <!-- Net Account Specific Info -->
                     {% if account_type == 'Net Account' %}
-                    <div class="row">
+                    <div class="row mb-3">
                         <div class="col-6">
-                            <div class="alert alert-success">Additions: KES {{ total_additions|floatformat:2|intcomma }}</div>
-                            <small>• COGS: KES {{ additions_breakdown.COGS|floatformat:2|intcomma }}</small><br>
-                            <small>• Injections: KES {{ additions_breakdown.Injections|floatformat:2|intcomma }}</small>
+                            <div class="alert alert-success">
+                                <small>Cash Inflow</small>
+                                <h5 class="mb-0">KES {{ total_additions|floatformat:2|intcomma }}</h5>
+                                <small class="text-muted">• COGS: KES {{ additions_breakdown.COGS|floatformat:2|intcomma }}</small><br>
+                                <small class="text-muted">• Injections: KES {{ additions_breakdown.Injections|floatformat:2|intcomma }}</small>
+                            </div>
                         </div>
                         <div class="col-6">
-                            <div class="alert alert-danger">Deductions: KES {{ total_deductions|floatformat:2|intcomma }}</div>
-                            <small>• Inventory: KES {{ deductions_breakdown.Inventory_Purchases|floatformat:2|intcomma }}</small><br>
-                            <small>• Salaries: KES {{ deductions_breakdown.Salaries|floatformat:2|intcomma }}</small><br>
-                            <small>• Operations: KES {{ deductions_breakdown.Operational_Expenses|floatformat:2|intcomma }}</small>
+                            <div class="alert alert-danger">
+                                <small>Cash Outflow</small>
+                                <h5 class="mb-0">KES {{ total_deductions|floatformat:2|intcomma }}</h5>
+                                <small class="text-muted">• Inventory: KES {{ deductions_breakdown.Inventory_Purchases|floatformat:2|intcomma }}</small><br>
+                                <small class="text-muted">• Salaries: KES {{ deductions_breakdown.Salaries|floatformat:2|intcomma }}</small><br>
+                                <small class="text-muted">• Operations: KES {{ deductions_breakdown.Operational_Expenses|floatformat:2|intcomma }}</small>
+                            </div>
                         </div>
                     </div>
                     
-                    <!-- EXPENSE BUTTONS FOR NET ACCOUNT -->
+                    <!-- Net Account Action Buttons -->
                     <hr>
                     <h6><i class="fas fa-plus-circle"></i> Add Expense</h6>
                     <div class="row mt-2">
@@ -112,50 +158,95 @@
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
-                <table class="table table-striped table-bordered" id="transactionsTable">
-                    <thead>
+                <table class="table table-striped table-hover" id="transactionsTable">
+                    <thead class="table-dark">
                         <tr>
                             <th>Date</th>
                             <th>Type</th>
                             <th>Description</th>
                             <th>Reference</th>
-                            <th>Amount</th>
+                            <th class="text-end">Amount</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for t in transactions %}
                         <tr>
-                            <td>{{ t.transaction_date|date:"d/m/Y H:i" }}</td>
+                            <td>{{ t.transaction_date|date:"d/m/Y H:i" }}</small></td>
                             <td>
                                 {% if account_type == 'Savings Account' %}
-                                    {{ t.get_transaction_type_display }}
+                                    {% if t.transaction_type == 'profit' %}
+                                        <span class="badge bg-success">Profit Added</span>
+                                    {% elif t.transaction_type == 'transfer_out' %}
+                                        <span class="badge bg-info">Transferred Out</span>
+                                    {% elif t.transaction_type == 'profit_taken' %}
+                                        <span class="badge bg-warning text-dark">Profit Taken</span>
+                                    {% elif t.transaction_type == 'expense' %}
+                                        <span class="badge bg-danger">Expense</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">{{ t.get_transaction_type_display }}</span>
+                                    {% endif %}
                                 {% elif account_type == 'Injection Account' %}
-                                    {{ t.get_transaction_type_display }}
+                                    {% if t.transaction_type == 'from_savings' %}
+                                        <span class="badge bg-success">From Savings</span>
+                                    {% elif t.transaction_type == 'external' %}
+                                        <span class="badge bg-info">External</span>
+                                    {% elif t.transaction_type == 'transfer_to_net' %}
+                                        <span class="badge bg-warning text-dark">To Net</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">{{ t.get_transaction_type_display }}</span>
+                                    {% endif %}
                                 {% else %}
-                                    {{ t.get_category_display }}
+                                    {% if t.transaction_type == 'addition' %}
+                                        <span class="badge bg-success">Addition (+) - Money In</span>
+                                    {% else %}
+                                        <span class="badge bg-danger">Deduction (-) - Money Out</span>
+                                    {% endif %}
                                 {% endif %}
-                            </td>
-                            <td>{{ t.description|default:"-" }}</td>
-                            <td>{{ t.reference|default:"-" }}</td>
-                            <td class="{% if account_type == 'Net Account' and t.transaction_type == 'addition' %}text-success{% elif account_type == 'Net Account' and t.transaction_type == 'deduction' %}text-danger{% elif account_type == 'Savings Account' and t.transaction_type == 'profit' %}text-success{% else %}text-success{% endif %}">
+                             </small></td>
+                            <td>{{ t.description|default:"-"|truncatechars:60 }}</small></td>
+                            <td>{{ t.reference|default:"-" }}</small></td>
+                            <td class="text-end fw-bold 
+                                {% if account_type == 'Net Account' and t.transaction_type == 'addition' %}text-success
+                                {% elif account_type == 'Net Account' and t.transaction_type == 'deduction' %}text-danger
+                                {% elif account_type == 'Savings Account' and t.transaction_type == 'profit' %}text-success
+                                {% elif account_type == 'Savings Account' and t.transaction_type == 'expense' %}text-danger
+                                {% elif account_type == 'Savings Account' and t.transaction_type == 'profit_taken' %}text-warning
+                                {% elif account_type == 'Injection Account' and t.transaction_type == 'external' %}text-info
+                                {% elif account_type == 'Injection Account' and t.transaction_type == 'from_savings' %}text-success
+                                {% else %}text-success{% endif %}">
                                 {% if account_type == 'Net Account' %}
                                     {% if t.transaction_type == 'addition' %}+{% else %}-{% endif %}
                                 {% elif account_type == 'Savings Account' and t.transaction_type == 'profit' %}
                                     +
                                 {% elif account_type == 'Savings Account' and t.transaction_type == 'transfer_out' %}
                                     -
+                                {% elif account_type == 'Savings Account' and t.transaction_type == 'profit_taken' %}
+                                    -
+                                {% elif account_type == 'Savings Account' and t.transaction_type == 'expense' %}
+                                    -
+                                {% elif account_type == 'Injection Account' %}
+                                    +
                                 {% else %}
                                     +
                                 {% endif %}
                                 KES {{ t.amount|floatformat:2|intcomma }}
-                            </td>
+                             </small></td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="5" class="text-center">No transactions found</td>
+                            <td colspan="5" class="text-center py-5 text-muted">
+                                <i class="fas fa-inbox fa-3x mb-3"></i><br>
+                                No transactions found
+                             </small></td>
                         </tr>
                         {% endfor %}
                     </tbody>
+                    <tfoot class="table-light">
+                        <tr class="fw-bold">
+                            <td colspan="4" class="text-end">Total Balance:</td>
+                            <td class="text-end text-primary">KES {{ account.balance|floatformat:2|intcomma }}</td>
+                        </tr>
+                    </tfoot>
                 </table>
             </div>
         </div>
@@ -163,7 +254,7 @@
 </div>
 
 <!-- ============================================ -->
-<!-- MODALS (same as before - keep them) -->
+<!-- NET ACCOUNT EXPENSE MODALS -->
 <!-- ============================================ -->
 
 <!-- Salary Expense Modal -->
@@ -179,7 +270,7 @@
             <div style="padding: 20px;">
                 <div class="mb-3">
                     <label class="form-label">Select Staff Member *</label>
-                    <select class="form-control" name="staff_id" id="staff_id" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
+                    <select class="form-control" name="staff_id" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
                         <option value="">-- Select Staff --</option>
                         {% for staff in staff_list %}
                         <option value="{{ staff.id }}">{{ staff.get_full_name|default:staff.username }}</option>
@@ -188,25 +279,16 @@
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Salary Month *</label>
-                    <select class="form-control" name="salary_month" id="salary_month" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
+                    <select class="form-control" name="salary_month" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
                         <option value="">-- Select Month --</option>
-                        <option value="1">January</option>
-                        <option value="2">February</option>
-                        <option value="3">March</option>
-                        <option value="4">April</option>
-                        <option value="5">May</option>
-                        <option value="6">June</option>
-                        <option value="7">July</option>
-                        <option value="8">August</option>
-                        <option value="9">September</option>
-                        <option value="10">October</option>
-                        <option value="11">November</option>
-                        <option value="12">December</option>
+                        {% for num, name in months %}
+                        <option value="{{ num }}">{{ name }}</option>
+                        {% endfor %}
                     </select>
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Salary Year *</label>
-                    <select class="form-control" name="salary_year" id="salary_year" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
+                    <select class="form-control" name="salary_year" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
                         <option value="">-- Select Year --</option>
                         {% for year in year_range %}
                         <option value="{{ year }}" {% if year == current_year %}selected{% endif %}>{{ year }}</option>
@@ -215,11 +297,11 @@
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Salary Amount (KES) *</label>
-                    <input type="number" class="form-control" name="amount" step="0.01" min="0.01" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
+                    <input type="number" class="form-control" name="amount" step="0.01" min="0.01" required>
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Payment Method</label>
-                    <select class="form-control" name="payment_method" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
+                    <select class="form-control" name="payment_method">
                         <option value="bank">Bank Transfer</option>
                         <option value="cash">Cash</option>
                         <option value="mpesa">M-Pesa</option>
@@ -227,7 +309,7 @@
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Payment Reference</label>
-                    <input type="text" class="form-control" name="reference" placeholder="e.g., Transaction ID, Receipt No">
+                    <input type="text" class="form-control" name="reference" placeholder="e.g., Transaction ID">
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Notes</label>
@@ -265,28 +347,6 @@
                 <div class="mb-3">
                     <label class="form-label">Rent Amount (KES) *</label>
                     <input type="number" class="form-control" name="amount" step="0.01" min="0.01" required>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Month</label>
-                    <select class="form-control" name="month">
-                        <option value="">Select month</option>
-                        <option value="January">January</option>
-                        <option value="February">February</option>
-                        <option value="March">March</option>
-                        <option value="April">April</option>
-                        <option value="May">May</option>
-                        <option value="June">June</option>
-                        <option value="July">July</option>
-                        <option value="August">August</option>
-                        <option value="September">September</option>
-                        <option value="October">October</option>
-                        <option value="November">November</option>
-                        <option value="December">December</option>
-                    </select>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Year</label>
-                    <input type="number" class="form-control" name="year" value="{% now 'Y' %}">
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Payment Method</label>
@@ -343,7 +403,7 @@
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Meter/Account Number</label>
-                    <input type="text" class="form-control" name="meter_number" placeholder="e.g., Meter No, Account No">
+                    <input type="text" class="form-control" name="meter_number" placeholder="e.g., Meter No">
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Payment Method</label>
@@ -400,7 +460,7 @@
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Description *</label>
-                    <input type="text" class="form-control" name="description" required placeholder="Brief description of expense">
+                    <input type="text" class="form-control" name="description" required placeholder="Brief description">
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Amount (KES) *</label>
@@ -431,35 +491,628 @@
     </div>
 </div>
 
+
+
+<!-- ============================================ -->
+<!-- SAVINGS ACCOUNT EXPENSE MODAL (DYNAMIC FIELDS) -->
+<!-- ============================================ -->
+<div id="savingsExpenseModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); z-index: 9999;">
+    <div style="position: relative; width: 550px; margin: 80px auto; background: white; border-radius: 10px; box-shadow: 0 5px 20px rgba(0,0,0,0.3);">
+        <form method="post" action="{% url 'finance:savings_add_expense' %}" id="savingsExpenseForm">
+            {% csrf_token %}
+            <div style="padding: 20px; border-bottom: 1px solid #ddd; background: #dc3545; border-radius: 10px 10px 0 0; color: white;">
+                <h5 style="margin: 0;"><i class="fas fa-piggy-bank"></i> Pay from Savings</h5>
+                <button type="button" onclick="closeModal('savingsExpenseModal')" style="float: right; background: none; border: none; color: white; font-size: 24px; cursor: pointer;">&times;</button>
+            </div>
+            <div style="padding: 20px;">
+                <!-- Current Balance Alert -->
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Current Savings Balance: <strong>KES {{ savings.balance|floatformat:2|intcomma }}</strong>
+                </div>
+                
+                <!-- Expense Type Selection -->
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Expense Type *</label>
+                    <select class="form-control" name="expense_type" id="savingsExpenseType" required onchange="toggleSavingsExpenseFields()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
+                        <option value="">-- Select Expense Type --</option>
+                        <option value="salary">💰 Salary Payment</option>
+                        <option value="rent">🏢 Rent Payment</option>
+                        <option value="utility">⚡ Utility Bill</option>
+                        <option value="bill">📄 Bill Payment</option>
+                        <option value="other">📝 Other Expense</option>
+                    </select>
+                </div>
+                
+                <!-- ============================================ -->
+                <!-- SALARY FIELDS -->
+                <!-- ============================================ -->
+                <div id="savingsSalaryFields" style="display: none;">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Select Staff Member *</label>
+                        <select class="form-control" name="staff_id" id="savingsStaffId" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
+                            <option value="">-- Select Staff --</option>
+                            {% for staff in staff_list %}
+                            <option value="{{ staff.id }}">{{ staff.get_full_name|default:staff.username }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Salary Month *</label>
+                            <select class="form-control" name="salary_month" id="savingsSalaryMonth" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
+                                <option value="">-- Select Month --</option>
+                                <option value="1">January</option>
+                                <option value="2">February</option>
+                                <option value="3">March</option>
+                                <option value="4">April</option>
+                                <option value="5">May</option>
+                                <option value="6">June</option>
+                                <option value="7">July</option>
+                                <option value="8">August</option>
+                                <option value="9">September</option>
+                                <option value="10">October</option>
+                                <option value="11">November</option>
+                                <option value="12">December</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Salary Year *</label>
+                            <select class="form-control" name="salary_year" id="savingsSalaryYear" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
+                                <option value="">-- Select Year --</option>
+                                {% for year in year_range %}
+                                <option value="{{ year }}" {% if year == current_year %}selected{% endif %}>{{ year }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Salary Amount (KES) *</label>
+                        <input type="number" class="form-control" name="amount" id="savingsAmount" step="0.01" min="0.01" required>
+                    </div>
+                </div>
+                
+                <!-- ============================================ -->
+                <!-- RENT FIELDS -->
+                <!-- ============================================ -->
+                <div id="savingsRentFields" style="display: none;">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Select Shop *</label>
+                        <select class="form-control" name="shop_id" id="savingsShopId" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
+                            <option value="">-- Select Shop --</option>
+                            {% for shop in shop_list %}
+                            <option value="{{ shop.id }}">{{ shop.name }} - {{ shop.location|default:'No location' }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Rent Month *</label>
+                            <select class="form-control" name="rent_month" id="savingsRentMonth" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
+                                <option value="">-- Select Month --</option>
+                                <option value="January">January</option>
+                                <option value="February">February</option>
+                                <option value="March">March</option>
+                                <option value="April">April</option>
+                                <option value="May">May</option>
+                                <option value="June">June</option>
+                                <option value="July">July</option>
+                                <option value="August">August</option>
+                                <option value="September">September</option>
+                                <option value="October">October</option>
+                                <option value="November">November</option>
+                                <option value="December">December</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Rent Year *</label>
+                            <select class="form-control" name="rent_year" id="savingsRentYear" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
+                                <option value="">-- Select Year --</option>
+                                {% for year in year_range %}
+                                <option value="{{ year }}" {% if year == current_year %}selected{% endif %}>{{ year }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Rent Amount (KES) *</label>
+                        <input type="number" class="form-control" name="amount" id="savingsRentAmount" step="0.01" min="0.01" required>
+                    </div>
+                </div>
+                
+                <!-- ============================================ -->
+                <!-- UTILITY BILL FIELDS -->
+                <!-- ============================================ -->
+                <div id="savingsUtilityFields" style="display: none;">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Utility Type *</label>
+                        <select class="form-control" name="utility_type" id="savingsUtilityType" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
+                            <option value="">-- Select Utility --</option>
+                            <option value="Electricity">⚡ Electricity (KPLC)</option>
+                            <option value="Water">💧 Water</option>
+                            <option value="Internet">🌐 Internet</option>
+                            <option value="Gas">🔥 Gas</option>
+                            <option value="Security">🔒 Security</option>
+                            <option value="Garbage">🗑️ Garbage Collection</option>
+                            <option value="Other">📝 Other</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Meter/Account Number</label>
+                        <input type="text" class="form-control" name="meter_number" id="savingsMeterNumber" placeholder="e.g., Meter No, Account No">
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Bill Month *</label>
+                            <select class="form-control" name="bill_month" id="savingsBillMonth" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
+                                <option value="">-- Select Month --</option>
+                                <option value="January">January</option>
+                                <option value="February">February</option>
+                                <option value="March">March</option>
+                                <option value="April">April</option>
+                                <option value="May">May</option>
+                                <option value="June">June</option>
+                                <option value="July">July</option>
+                                <option value="August">August</option>
+                                <option value="September">September</option>
+                                <option value="October">October</option>
+                                <option value="November">November</option>
+                                <option value="December">December</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Bill Year *</label>
+                            <select class="form-control" name="bill_year" id="savingsBillYear" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
+                                <option value="">-- Select Year --</option>
+                                {% for year in year_range %}
+                                <option value="{{ year }}" {% if year == current_year %}selected{% endif %}>{{ year }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Bill Amount (KES) *</label>
+                        <input type="number" class="form-control" name="amount" id="savingsBillAmount" step="0.01" min="0.01" required>
+                    </div>
+                </div>
+                
+                <!-- ============================================ -->
+                <!-- BILL PAYMENT FIELDS (General Bill) -->
+                <!-- ============================================ -->
+                <div id="savingsBillFields" style="display: none;">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Bill Type *</label>
+                        <select class="form-control" name="bill_type" id="savingsBillType" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
+                            <option value="">-- Select Bill Type --</option>
+                            <option value="Telephone">📞 Telephone</option>
+                            <option value="Subscription">📺 Subscription (DSTV, Netflix, etc.)</option>
+                            <option value="Insurance">🛡️ Insurance</option>
+                            <option value="License">📋 License Fee</option>
+                            <option value="Tax">💰 Tax Payment</option>
+                            <option value="Other">📝 Other Bill</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Bill Description *</label>
+                        <input type="text" class="form-control" name="description" id="savingsBillDesc" required placeholder="e.g., May 2026 Telephone Bill">
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Bill Month *</label>
+                            <select class="form-control" name="bill_month" id="savingsGeneralBillMonth" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
+                                <option value="">-- Select Month --</option>
+                                <option value="January">January</option>
+                                <option value="February">February</option>
+                                <option value="March">March</option>
+                                <option value="April">April</option>
+                                <option value="May">May</option>
+                                <option value="June">June</option>
+                                <option value="July">July</option>
+                                <option value="August">August</option>
+                                <option value="September">September</option>
+                                <option value="October">October</option>
+                                <option value="November">November</option>
+                                <option value="December">December</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Bill Year *</label>
+                            <select class="form-control" name="bill_year" id="savingsGeneralBillYear" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
+                                <option value="">-- Select Year --</option>
+                                {% for year in year_range %}
+                                <option value="{{ year }}" {% if year == current_year %}selected{% endif %}>{{ year }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Bill Amount (KES) *</label>
+                        <input type="number" class="form-control" name="amount" id="savingsGeneralBillAmount" step="0.01" min="0.01" required>
+                    </div>
+                </div>
+                
+                <!-- ============================================ -->
+                <!-- OTHER EXPENSE FIELDS -->
+                <!-- ============================================ -->
+                <div id="savingsOtherFields" style="display: none;">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Expense Category *</label>
+                        <select class="form-control" name="expense_category" id="savingsOtherCategory" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
+                            <option value="">-- Select Category --</option>
+                            <option value="Transport">🚗 Transport/Fuel</option>
+                            <option value="Marketing">📢 Marketing/Advertising</option>
+                            <option value="Supplies">📎 Office Supplies</option>
+                            <option value="Maintenance">🔧 Maintenance/Repairs</option>
+                            <option value="Training">📚 Staff Training</option>
+                            <option value="Travel">✈️ Travel Expenses</option>
+                            <option value="Equipment">🖥️ Equipment Purchase</option>
+                            <option value="Software">💻 Software/Subscriptions</option>
+                            <option value="Other">📝 Other</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Description *</label>
+                        <input type="text" class="form-control" name="description" id="savingsOtherDesc" required placeholder="Brief description">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Amount (KES) *</label>
+                        <input type="number" class="form-control" name="amount" id="savingsOtherAmount" step="0.01" min="0.01" required>
+                    </div>
+                </div>
+                
+                <!-- ============================================ -->
+                <!-- COMMON FIELDS (Always visible) -->
+                <!-- ============================================ -->
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Recipient/Payee</label>
+                    <input type="text" class="form-control" name="recipient_name" id="savingsRecipient" placeholder="e.g., Staff name, Landlord, Kenya Power">
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Payment Method *</label>
+                    <select class="form-control" name="payment_method" id="savingsPaymentMethod" required style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;">
+                        <option value="bank">🏦 Bank Transfer</option>
+                        <option value="cash">💵 Cash</option>
+                        <option value="mpesa">📱 M-Pesa</option>
+                    </select>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Reference Number</label>
+                    <input type="text" class="form-control" name="reference" id="savingsReference" placeholder="e.g., Transaction ID, Receipt number">
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Notes</label>
+                    <textarea class="form-control" name="notes" id="savingsNotes" rows="2" placeholder="Additional notes..."></textarea>
+                </div>
+                
+                <!-- Summary Alert -->
+                <div class="alert alert-info" id="savingsSummaryAlert">
+                    <strong><i class="fas fa-info-circle me-2"></i>Effect on Savings:</strong>
+                    <ul class="mb-0 mt-2">
+                        <li>Current Balance: <strong>KES {{ savings.balance|floatformat:2|intcomma }}</strong></li>
+                        <li>Amount to Deduct: <strong class="text-danger">KES 0.00</strong></li>
+                        <li>New Balance: <strong id="savingsNewBalance">{{ savings.balance|floatformat:2|intcomma }}</strong></li>
+                    </ul>
+                </div>
+            </div>
+            <div style="padding: 20px; border-top: 1px solid #ddd; text-align: right;">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('savingsExpenseModal')">Cancel</button>
+                <button type="submit" class="btn btn-danger">Pay from Savings</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+
+
 <script>
+// Modal functions
 function openModal(modalId) {
     document.getElementById(modalId).style.display = 'block';
+    document.body.style.overflow = 'hidden';
 }
 
 function closeModal(modalId) {
     document.getElementById(modalId).style.display = 'none';
+    document.body.style.overflow = '';
+}
+
+function openExpenseModal() {
+    document.getElementById('savingsExpenseModal').style.display = 'block';
+    document.body.style.overflow = 'hidden';
 }
 
 // Close modal when clicking outside
 window.onclick = function(event) {
-    var modals = ['salaryModal', 'rentModal', 'utilityModal', 'otherExpenseModal'];
+    var modals = ['salaryModal', 'rentModal', 'utilityModal', 'otherExpenseModal', 'savingsExpenseModal'];
     for(var i = 0; i < modals.length; i++) {
         var modal = document.getElementById(modals[i]);
         if(event.target == modal) {
             modal.style.display = 'none';
+            document.body.style.overflow = '';
         }
     }
 }
 
-// Initialize simple table without DataTables
-document.addEventListener('DOMContentLoaded', function() {
-    // If you want simple sorting, add this
-    var table = document.getElementById('transactionsTable');
-    if(table) {
-        // Just ensure table is visible, no complex initialization
-        console.log('Table loaded with ' + table.rows.length + ' rows');
+// Close modals with Escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        var modals = ['salaryModal', 'rentModal', 'utilityModal', 'otherExpenseModal', 'savingsExpenseModal'];
+        for(var i = 0; i < modals.length; i++) {
+            var modal = document.getElementById(modals[i]);
+            if(modal && modal.style.display === 'block') {
+                modal.style.display = 'none';
+                document.body.style.overflow = '';
+            }
+        }
     }
 });
+
+// Initialize table on page load
+document.addEventListener('DOMContentLoaded', function() {
+    // Ensure all modals are hidden on page load
+    var modals = ['salaryModal', 'rentModal', 'utilityModal', 'otherExpenseModal', 'savingsExpenseModal'];
+    for(var i = 0; i < modals.length; i++) {
+        var modal = document.getElementById(modals[i]);
+        if(modal) {
+            modal.style.display = 'none';
+        }
+    }
+    
+    console.log('Page loaded successfully');
+});
+
+
+// ============================================
+// SAVINGS EXPENSE MODAL DYNAMIC FIELDS
+// ============================================
+
+function toggleSavingsExpenseFields() {
+    var expenseType = document.getElementById('savingsExpenseType').value;
+    
+    // Get all field containers
+    var salaryFields = document.getElementById('savingsSalaryFields');
+    var rentFields = document.getElementById('savingsRentFields');
+    var utilityFields = document.getElementById('savingsUtilityFields');
+    var billFields = document.getElementById('savingsBillFields');
+    var otherFields = document.getElementById('savingsOtherFields');
+    
+    // Hide all fields first
+    salaryFields.style.display = 'none';
+    rentFields.style.display = 'none';
+    utilityFields.style.display = 'none';
+    billFields.style.display = 'none';
+    otherFields.style.display = 'none';
+    
+    // Clear required attributes from all fields
+    clearRequiredAttributes();
+    
+    // Show appropriate fields based on selection
+    if (expenseType === 'salary') {
+        salaryFields.style.display = 'block';
+        setRequired(['savingsStaffId', 'savingsSalaryMonth', 'savingsSalaryYear', 'savingsAmount']);
+        document.getElementById('savingsAmount').focus();
+    } 
+    else if (expenseType === 'rent') {
+        rentFields.style.display = 'block';
+        setRequired(['savingsShopId', 'savingsRentMonth', 'savingsRentYear', 'savingsRentAmount']);
+        document.getElementById('savingsRentAmount').focus();
+    } 
+    else if (expenseType === 'utility') {
+        utilityFields.style.display = 'block';
+        setRequired(['savingsUtilityType', 'savingsBillMonth', 'savingsBillYear', 'savingsBillAmount']);
+        document.getElementById('savingsUtilityType').focus();
+    } 
+    else if (expenseType === 'bill') {
+        billFields.style.display = 'block';
+        setRequired(['savingsBillType', 'savingsBillDesc', 'savingsGeneralBillMonth', 'savingsGeneralBillYear', 'savingsGeneralBillAmount']);
+        document.getElementById('savingsBillType').focus();
+    } 
+    else if (expenseType === 'other') {
+        otherFields.style.display = 'block';
+        setRequired(['savingsOtherCategory', 'savingsOtherDesc', 'savingsOtherAmount']);
+        document.getElementById('savingsOtherCategory').focus();
+    }
+    
+    // Update amount field ID for summary
+    updateAmountFieldForSummary(expenseType);
+}
+
+function setRequired(fieldIds) {
+    for(var i = 0; i < fieldIds.length; i++) {
+        var field = document.getElementById(fieldIds[i]);
+        if(field) {
+            field.required = true;
+        }
+    }
+}
+
+function clearRequiredAttributes() {
+    var allFields = [
+        'savingsStaffId', 'savingsSalaryMonth', 'savingsSalaryYear', 'savingsAmount',
+        'savingsShopId', 'savingsRentMonth', 'savingsRentYear', 'savingsRentAmount',
+        'savingsUtilityType', 'savingsMeterNumber', 'savingsBillMonth', 'savingsBillYear', 'savingsBillAmount',
+        'savingsBillType', 'savingsBillDesc', 'savingsGeneralBillMonth', 'savingsGeneralBillYear', 'savingsGeneralBillAmount',
+        'savingsOtherCategory', 'savingsOtherDesc', 'savingsOtherAmount'
+    ];
+    
+    for(var i = 0; i < allFields.length; i++) {
+        var field = document.getElementById(allFields[i]);
+        if(field) {
+            field.required = false;
+        }
+    }
+}
+
+function updateAmountFieldForSummary(expenseType) {
+    var amountField = null;
+    
+    if (expenseType === 'salary') {
+        amountField = document.getElementById('savingsAmount');
+    } else if (expenseType === 'rent') {
+        amountField = document.getElementById('savingsRentAmount');
+    } else if (expenseType === 'utility') {
+        amountField = document.getElementById('savingsBillAmount');
+    } else if (expenseType === 'bill') {
+        amountField = document.getElementById('savingsGeneralBillAmount');
+    } else if (expenseType === 'other') {
+        amountField = document.getElementById('savingsOtherAmount');
+    }
+    
+    if (amountField) {
+        // Remove existing event listener to avoid duplicates
+        var newAmountField = amountField.cloneNode(true);
+        amountField.parentNode.replaceChild(newAmountField, amountField);
+        
+        newAmountField.addEventListener('input', function() {
+            updateSavingsSummary();
+        });
+        
+        // Also add event to common amount field if it exists
+        var commonAmount = document.getElementById('savingsAmountCommon');
+        if(commonAmount) {
+            commonAmount.addEventListener('input', updateSavingsSummary);
+        }
+    }
+    
+    // Also update on any input change
+    document.getElementById('savingsPaymentMethod').addEventListener('change', updateSavingsSummary);
+    document.getElementById('savingsRecipient').addEventListener('input', updateSavingsSummary);
+}
+
+function updateSavingsSummary() {
+    var expenseType = document.getElementById('savingsExpenseType').value;
+    var amount = 0;
+    
+    if (expenseType === 'salary') {
+        amount = parseFloat(document.getElementById('savingsAmount')?.value) || 0;
+    } else if (expenseType === 'rent') {
+        amount = parseFloat(document.getElementById('savingsRentAmount')?.value) || 0;
+    } else if (expenseType === 'utility') {
+        amount = parseFloat(document.getElementById('savingsBillAmount')?.value) || 0;
+    } else if (expenseType === 'bill') {
+        amount = parseFloat(document.getElementById('savingsGeneralBillAmount')?.value) || 0;
+    } else if (expenseType === 'other') {
+        amount = parseFloat(document.getElementById('savingsOtherAmount')?.value) || 0;
+    }
+    
+    var currentBalance = {{ savings.balance|default:0 }};
+    var newBalance = currentBalance - amount;
+    
+    var summaryAlert = document.getElementById('savingsSummaryAlert');
+    if (summaryAlert) {
+        var recipient = document.getElementById('savingsRecipient')?.value || 'Recipient';
+        var paymentMethod = document.getElementById('savingsPaymentMethod')?.value || 'bank';
+        var methodName = paymentMethod === 'bank' ? 'Bank Transfer' : (paymentMethod === 'cash' ? 'Cash' : 'M-Pesa');
+        
+        summaryAlert.innerHTML = '<strong><i class="fas fa-info-circle me-2"></i>Payment Summary:</strong>' +
+            '<ul class="mb-0 mt-2">' +
+            '<li>Expense Type: <strong>' + expenseType.toUpperCase() + '</strong></li>' +
+            '<li>Recipient: <strong>' + (recipient || 'Not specified') + '</strong></li>' +
+            '<li>Payment Method: <strong>' + methodName + '</strong></li>' +
+            '<li>Current Savings Balance: <strong>KES ' + currentBalance.toLocaleString('en-KE', {minimumFractionDigits: 2}) + '</strong></li>' +
+            '<li>Amount to Deduct: <strong class="text-danger">KES ' + amount.toLocaleString('en-KE', {minimumFractionDigits: 2}) + '</strong></li>' +
+            '<li>New Balance: <strong id="savingsNewBalance">KES ' + newBalance.toLocaleString('en-KE', {minimumFractionDigits: 2}) + '</strong></li>' +
+            '</ul>';
+        
+        if (newBalance < 0) {
+            document.getElementById('savingsNewBalance').style.color = 'red';
+        } else {
+            document.getElementById('savingsNewBalance').style.color = 'green';
+        }
+    }
+}
+
+// Form validation before submit
+document.getElementById('savingsExpenseForm')?.addEventListener('submit', function(e) {
+    var expenseType = document.getElementById('savingsExpenseType').value;
+    var amount = 0;
+    
+    if (expenseType === 'salary') {
+        amount = parseFloat(document.getElementById('savingsAmount')?.value) || 0;
+        if (!document.getElementById('savingsStaffId').value) {
+            alert('Please select a staff member');
+            e.preventDefault();
+            return false;
+        }
+    } else if (expenseType === 'rent') {
+        amount = parseFloat(document.getElementById('savingsRentAmount')?.value) || 0;
+        if (!document.getElementById('savingsShopId').value) {
+            alert('Please select a shop');
+            e.preventDefault();
+            return false;
+        }
+    } else if (expenseType === 'utility') {
+        amount = parseFloat(document.getElementById('savingsBillAmount')?.value) || 0;
+    } else if (expenseType === 'bill') {
+        amount = parseFloat(document.getElementById('savingsGeneralBillAmount')?.value) || 0;
+        if (!document.getElementById('savingsBillDesc').value) {
+            alert('Please enter bill description');
+            e.preventDefault();
+            return false;
+        }
+    } else if (expenseType === 'other') {
+        amount = parseFloat(document.getElementById('savingsOtherAmount')?.value) || 0;
+        if (!document.getElementById('savingsOtherDesc').value) {
+            alert('Please enter description');
+            e.preventDefault();
+            return false;
+        }
+    } else {
+        alert('Please select an expense type');
+        e.preventDefault();
+        return false;
+    }
+    
+    var currentBalance = {{ savings.balance|default:0 }};
+    
+    if (amount <= 0) {
+        alert('Please enter a valid amount greater than 0');
+        e.preventDefault();
+        return false;
+    }
+    
+    if (amount > currentBalance) {
+        alert('Insufficient savings balance! Available: KES ' + currentBalance.toLocaleString());
+        e.preventDefault();
+        return false;
+    }
+    
+    return true;
+});
+
+// Initialize on modal open
+function openSavingsExpenseModal() {
+    // Reset form
+    document.getElementById('savingsExpenseForm').reset();
+    document.getElementById('savingsExpenseType').value = '';
+    
+    // Hide all field containers
+    document.getElementById('savingsSalaryFields').style.display = 'none';
+    document.getElementById('savingsRentFields').style.display = 'none';
+    document.getElementById('savingsUtilityFields').style.display = 'none';
+    document.getElementById('savingsBillFields').style.display = 'none';
+    document.getElementById('savingsOtherFields').style.display = 'none';
+    
+    // Clear required attributes
+    clearRequiredAttributes();
+    
+    // Reset summary
+    updateSavingsSummary();
+    
+    // Show modal
+    document.getElementById('savingsExpenseModal').style.display = 'block';
+    document.body.style.overflow = 'hidden';
+}
+
+// Override the openExpenseModal function
+function openExpenseModal() {
+    openSavingsExpenseModal();
+}
+
+
 </script>
 
 <style>
@@ -474,6 +1127,35 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 .text-danger {
     color: #ef4444 !important;
+}
+.text-warning {
+    color: #f59e0b !important;
+}
+.badge {
+    font-size: 0.75rem;
+    padding: 0.35rem 0.65rem;
+}
+.card {
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+}
+.table-responsive {
+    max-height: 600px;
+    overflow-y: auto;
+}
+.table-responsive::-webkit-scrollbar {
+    width: 6px;
+}
+.table-responsive::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+.table-responsive::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 3px;
 }
 </style>
 {% endblock %}

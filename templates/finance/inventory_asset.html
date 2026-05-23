@@ -1,0 +1,105 @@
+{% extends 'finance/base.html' %}
+{% load humanize %}
+
+{% block title %}Inventory Asset{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-boxes me-2 text-warning"></i> Inventory Asset</h2>
+        <a href="{% url 'finance:financial_overview' %}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left me-2"></i>Back to Overview
+        </a>
+    </div>
+    
+    <!-- Main Stats Card -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card border-warning">
+                <div class="card-header bg-warning text-dark">
+                    <h4 class="mb-0"><i class="fas fa-chart-line me-2"></i> Inventory Value</h4>
+                </div>
+                <div class="card-body text-center">
+                    <h1 class="text-warning display-4">KES {{ inventory_asset.current_value|floatformat:2|intcomma }}</h1>
+                    <p class="text-muted">Current stock value at cost</p>
+                    <hr>
+                    <div class="row">
+                        <div class="col-6">
+                            <small class="text-muted">Total Purchased:</small>
+                            <h5>KES {{ inventory_asset.total_purchased|floatformat:2|intcomma }}</h5>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">COGS (Sold):</small>
+                            <h5>KES {{ inventory_asset.total_cogs|floatformat:2|intcomma }}</h5>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="row">
+                        <div class="col-6">
+                            <small class="text-muted">From Database:</small>
+                            <h5>KES {{ current_inventory_value|floatformat:2|intcomma }}</h5>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">Total Units:</small>
+                            <h5>{{ total_units|intcomma }}</h5>
+                        </div>
+                    </div>
+                    {% if sync_match %}
+                    <div class="alert alert-success mt-3">
+                        <i class="fas fa-check-circle me-2"></i> Inventory asset is in sync with actual products!
+                    </div>
+                    {% else %}
+                    <div class="alert alert-warning mt-3">
+                        <i class="fas fa-exclamation-triangle me-2"></i> Inventory asset is out of sync. Run refresh to update.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0"><i class="fas fa-history me-2"></i> Recent Inventory Transactions</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                        <table class="table table-sm table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Type</th>
+                                    <th>SKU</th>
+                                    <th class="text-end">Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for t in transactions %}
+                                <tr>
+                                    <td>{{ t.transaction_date|date:"d/m H:i" }}</small></td>
+                                    <td>
+                                        {% if t.transaction_type == 'purchase' %}
+                                            <span class="badge bg-success">Purchase</span>
+                                        {% elif t.transaction_type == 'cogs' %}
+                                            <span class="badge bg-danger">COGS</span>
+                                        {% else %}
+                                            <span class="badge bg-warning">Adjust</span>
+                                        {% endif %}
+                                    </small></td>
+                                    <td><small>{{ t.sku_code|default:"-" }}</small></td>
+                                    <td class="text-end fw-bold {% if t.transaction_type == 'purchase' %}text-success{% elif t.transaction_type == 'cogs' %}text-danger{% else %}text-warning{% endif %}">
+                                        {% if t.transaction_type == 'purchase' %}+{% elif t.transaction_type == 'cogs' %}-{% endif %} KES {{ t.amount|floatformat:0|intcomma }}
+                                    </small></td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="4" class="text-center py-3">No transactions</small></td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

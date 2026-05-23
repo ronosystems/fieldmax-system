@@ -3,6 +3,7 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 from django.db import transaction
 from decimal import Decimal
+from django.db.models import Sum  
 import logging
 
 
@@ -934,6 +935,7 @@ class SavingsTransaction(models.Model):
         ('profit', 'Profit Added'),
         ('transfer_out', 'Transfer to Injection'),
         ('profit_taken', 'Profit Taken by Owner'), 
+        ('expense', 'Expense Deduction'),
     ]
     
     savings_account = models.ForeignKey(SavingsAccount, on_delete=models.CASCADE, related_name='transactions')
@@ -961,6 +963,247 @@ class SavingsTransaction(models.Model):
             
             if duplicate_exists:
                 logger.warning(f"⚠️ DUPLICATE SAVINGS TRANSACTION BLOCKED: {self.description[:50]} - KES {self.amount}")
+                return
+        
+        super().save(*args, **kwargs)
+
+
+
+
+# ============================================
+# NET ACCOUNT (Main Operating Account)
+# ============================================
+
+class NetAccount(models.Model):
+    """
+    NET ACCOUNT - Main operating account
+    
+    DEDUCTIONS (-):
+    - Inventory purchases
+    - Salaries
+    - Rent, bills, operational expenses
+    
+    ADDITIONS (+):
+    - Cost of Goods Sold (buying price of sold items)
+    - Injections from Injection Account
+    """
+    
+    balance = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal('0.00'))
+    
+    # Deductions tracking (Money OUT)
+    total_inventory_purchases = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal('0.00'))
+    total_salaries = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal('0.00'))
+    total_operational_expenses = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal('0.00'))
+    
+    # Additions tracking (Money IN)
+    total_cogs_added = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal('0.00'))
+    total_injections_received = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal('0.00'))
+    
+    last_updated = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    
+    class Meta:
+        verbose_name = 'Net Account'
+        verbose_name_plural = 'Net Accounts'
+    
+    def __str__(self):
+        return f"Net Account Balance: KES {self.balance:,.2f}"
+    
+    @classmethod
+    def get_account(cls):
+        account, created = cls.objects.get_or_create(id=1)
+        if created:
+            account.save()
+        return account
+    
+    # ADDITIONS (+) - Money INTO Net Account
+    
+    def add_cogs(self, amount, sale_reference="", user=None):
+        """ADD COGS (Cost of Goods Sold) - Buying price of sold items"""
+        if amount <= 0:
+            return self.balance
+        
+        self.balance += amount
+        self.total_cogs_added += amount
+        self.updated_by = user
+        self.save()
+        
+        NetTransaction.objects.create(
+            net_account=self,
+            amount=amount,
+            transaction_type='addition',
+            category='cogs',
+            reference=sale_reference,
+            description=f"COGS added from sale {sale_reference}",
+            created_by=user
+        )
+        
+        logger.info(f"📈 NET: +{amount} COGS from sale {sale_reference}")
+        return self.balance
+    
+    def receive_injection(self, amount, user=None):
+        """RECEIVE INJECTION from Injection Account"""
+        if amount <= 0:
+            return self.balance
+        
+        self.balance += amount
+        self.total_injections_received += amount
+        self.updated_by = user
+        self.save()
+        
+        NetTransaction.objects.create(
+            net_account=self,
+            amount=amount,
+            transaction_type='addition',
+            category='injection',
+            reference="Injection Transfer",
+            description=f"Injection received from Injection Account",
+            created_by=user
+        )
+        
+        logger.info(f"📈 NET: +{amount} injection received")
+        return self.balance
+    
+    
+    def deduct_inventory_purchase(self, amount, sku_ref="", user=None):
+        """DEDUCT inventory purchase when buying stock"""
+        if amount <= 0:
+            return self.balance
+        
+        self.balance -= amount
+        self.total_inventory_purchases += amount
+        self.updated_by = user
+        self.save()
+        
+        NetTransaction.objects.create(
+            net_account=self,
+            amount=amount,
+            transaction_type='deduction',
+            category='inventory',
+            reference=sku_ref,
+            description=f"Inventory Purchase: {sku_ref}",
+            created_by=user
+        )
+        
+        logger.info(f"📉 NET: -{amount} inventory purchase")
+        return self.balance
+    
+    def deduct_salary(self, amount, staff_name="", user=None):
+        """DEDUCT salary payment"""
+        if amount <= 0:
+            return self.balance
+        
+        self.balance -= amount
+        self.total_salaries += amount
+        self.updated_by = user
+        self.save()
+        
+        NetTransaction.objects.create(
+            net_account=self,
+            amount=amount,
+            transaction_type='deduction',
+            category='salary',
+            reference=staff_name,
+            description=f"Salary: {staff_name}",
+            created_by=user
+        )
+        
+        logger.info(f"📉 NET: -{amount} salary payment")
+        return self.balance
+    
+    def deduct_operational_expense(self, amount, expense_type="", reference="", user=None):
+        """DEDUCT operational expense (rent, utilities, bills, etc.)"""
+        if amount <= 0:
+            return self.balance
+        
+        self.balance -= amount
+        self.total_operational_expenses += amount
+        self.updated_by = user
+        self.save()
+        
+        NetTransaction.objects.create(
+            net_account=self,
+            amount=amount,
+            transaction_type='deduction',
+            category='operational',
+            reference=reference,
+            description=f"{expense_type}: {reference}" if expense_type else reference,
+            created_by=user
+        )
+        
+        logger.info(f"📉 NET: -{amount} operational expense ({expense_type})")
+        return self.balance
+    
+    @property
+    def total_deductions(self):
+        return self.total_inventory_purchases + self.total_salaries + self.total_operational_expenses
+    
+    @property
+    def total_additions(self):
+        return self.total_cogs_added + self.total_injections_received
+
+    @property
+    def total_cash_outflow(self):
+        """Total money that left Net Account (purchases, salaries, expenses)"""
+        return self.total_inventory_purchases + self.total_salaries + self.total_operational_expenses
+
+    @property
+    def total_cash_inflow(self):
+        """Total money that entered Net Account (COGS, injections)"""
+        return self.total_cogs_added + self.total_injections_received
+
+
+class NetTransaction(models.Model):
+    """Track all net account transactions"""
+    
+    TRANSACTION_TYPES = [
+        ('addition', 'Addition (+) - Money In'),
+        ('deduction', 'Deduction (-) - Money Out'),
+    ]
+    
+    CATEGORIES = [
+        ('cogs', 'COGS Added (Buying Price)'),
+        ('injection', 'Injection Received'),
+        ('inventory', 'Inventory Purchase'),
+        ('salary', 'Salary Payment'),
+        ('operational', 'Operational Expense'),
+        ('other', 'Other'),
+    ]
+    
+    net_account = models.ForeignKey(NetAccount, on_delete=models.CASCADE, related_name='transactions')
+    amount = models.DecimalField(max_digits=15, decimal_places=2)
+    transaction_type = models.CharField(max_length=20, choices=TRANSACTION_TYPES)
+    category = models.CharField(max_length=20, choices=CATEGORIES)
+    reference = models.CharField(max_length=200, blank=True)
+    description = models.TextField(blank=True)
+    transaction_date = models.DateTimeField(default=timezone.now)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-transaction_date']
+        indexes = [
+            models.Index(fields=['category']),
+            models.Index(fields=['-transaction_date']),
+            models.Index(fields=['transaction_type']),
+            # Add composite index for duplicate detection
+            models.Index(fields=['category', 'amount', 'transaction_date']),
+        ]
+        # Add unique constraint
+        unique_together = [['category', 'amount', 'description', 'transaction_date']]
+    
+    def save(self, *args, **kwargs):
+        """Prevent duplicate Net transactions"""
+        if not self.pk:
+            duplicate_exists = NetTransaction.objects.filter(
+                category=self.category,
+                amount=self.amount,
+                description=self.description,
+                transaction_date__date=self.transaction_date.date()
+            ).exists()
+            
+            if duplicate_exists:
+                logger.warning(f"⚠️ DUPLICATE NET TRANSACTION BLOCKED: {self.description[:50]} - KES {self.amount}")
                 return
         
         super().save(*args, **kwargs)
@@ -1099,238 +1342,6 @@ class InjectionTransaction(models.Model):
         return f"{self.get_transaction_type_display()}: KES {self.amount}"
 
 
-
-
-
-
-# ============================================
-# NET ACCOUNT (Main Operating Account)
-# ============================================
-
-class NetAccount(models.Model):
-    """
-    NET ACCOUNT - Main operating account
-    
-    DEDUCTIONS (-):
-    - Inventory purchases
-    - Salaries
-    - Rent, bills, operational expenses
-    
-    ADDITIONS (+):
-    - Cost of Goods Sold (buying price of sold items)
-    - Injections from Injection Account
-    """
-    
-    balance = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal('0.00'))
-    
-    # Deductions tracking (Money OUT)
-    total_inventory_purchases = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal('0.00'))
-    total_salaries = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal('0.00'))
-    total_operational_expenses = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal('0.00'))
-    
-    # Additions tracking (Money IN)
-    total_cogs_added = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal('0.00'))
-    total_injections_received = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal('0.00'))
-    
-    last_updated = models.DateTimeField(auto_now=True)
-    updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
-    
-    class Meta:
-        verbose_name = 'Net Account'
-        verbose_name_plural = 'Net Accounts'
-    
-    def __str__(self):
-        return f"Net Account Balance: KES {self.balance:,.2f}"
-    
-    @classmethod
-    def get_account(cls):
-        account, created = cls.objects.get_or_create(id=1)
-        if created:
-            account.save()
-        return account
-    
-    # ADDITIONS (+) - Money INTO Net Account
-    
-    def add_cogs(self, amount, sale_reference="", user=None):
-        """ADD COGS (Cost of Goods Sold) - Buying price of sold items"""
-        if amount <= 0:
-            return self.balance
-        
-        self.balance += amount
-        self.total_cogs_added += amount
-        self.updated_by = user
-        self.save()
-        
-        NetTransaction.objects.create(
-            net_account=self,
-            amount=amount,
-            transaction_type='addition',
-            category='cogs',
-            reference=sale_reference,
-            description=f"COGS added from sale {sale_reference}",
-            created_by=user
-        )
-        
-        logger.info(f"📈 NET: +{amount} COGS from sale {sale_reference}")
-        return self.balance
-    
-    def receive_injection(self, amount, user=None):
-        """RECEIVE INJECTION from Injection Account"""
-        if amount <= 0:
-            return self.balance
-        
-        self.balance += amount
-        self.total_injections_received += amount
-        self.updated_by = user
-        self.save()
-        
-        NetTransaction.objects.create(
-            net_account=self,
-            amount=amount,
-            transaction_type='addition',
-            category='injection',
-            reference="Injection Transfer",
-            description=f"Injection received from Injection Account",
-            created_by=user
-        )
-        
-        logger.info(f"📈 NET: +{amount} injection received")
-        return self.balance
-    
-    # DEDUCTIONS (-) - Money OUT of Net Account
-    
-    def deduct_inventory_purchase(self, amount, sku_ref="", user=None):
-        """DEDUCT inventory purchase when buying stock"""
-        if amount <= 0:
-            return self.balance
-        
-        self.balance -= amount
-        self.total_inventory_purchases += amount
-        self.updated_by = user
-        self.save()
-        
-        NetTransaction.objects.create(
-            net_account=self,
-            amount=amount,
-            transaction_type='deduction',
-            category='inventory',
-            reference=sku_ref,
-            description=f"Inventory Purchase: {sku_ref}",
-            created_by=user
-        )
-        
-        logger.info(f"📉 NET: -{amount} inventory purchase")
-        return self.balance
-    
-    def deduct_salary(self, amount, staff_name="", user=None):
-        """DEDUCT salary payment"""
-        if amount <= 0:
-            return self.balance
-        
-        self.balance -= amount
-        self.total_salaries += amount
-        self.updated_by = user
-        self.save()
-        
-        NetTransaction.objects.create(
-            net_account=self,
-            amount=amount,
-            transaction_type='deduction',
-            category='salary',
-            reference=staff_name,
-            description=f"Salary: {staff_name}",
-            created_by=user
-        )
-        
-        logger.info(f"📉 NET: -{amount} salary payment")
-        return self.balance
-    
-    def deduct_operational_expense(self, amount, expense_type="", reference="", user=None):
-        """DEDUCT operational expense (rent, utilities, bills, etc.)"""
-        if amount <= 0:
-            return self.balance
-        
-        self.balance -= amount
-        self.total_operational_expenses += amount
-        self.updated_by = user
-        self.save()
-        
-        NetTransaction.objects.create(
-            net_account=self,
-            amount=amount,
-            transaction_type='deduction',
-            category='operational',
-            reference=reference,
-            description=f"{expense_type}: {reference}" if expense_type else reference,
-            created_by=user
-        )
-        
-        logger.info(f"📉 NET: -{amount} operational expense ({expense_type})")
-        return self.balance
-    
-    @property
-    def total_deductions(self):
-        return self.total_inventory_purchases + self.total_salaries + self.total_operational_expenses
-    
-    @property
-    def total_additions(self):
-        return self.total_cogs_added + self.total_injections_received
-
-
-class NetTransaction(models.Model):
-    """Track all net account transactions"""
-    
-    TRANSACTION_TYPES = [
-        ('addition', 'Addition (+) - Money In'),
-        ('deduction', 'Deduction (-) - Money Out'),
-    ]
-    
-    CATEGORIES = [
-        ('cogs', 'COGS Added (Buying Price)'),
-        ('injection', 'Injection Received'),
-        ('inventory', 'Inventory Purchase'),
-        ('salary', 'Salary Payment'),
-        ('operational', 'Operational Expense'),
-        ('other', 'Other'),
-    ]
-    
-    net_account = models.ForeignKey(NetAccount, on_delete=models.CASCADE, related_name='transactions')
-    amount = models.DecimalField(max_digits=15, decimal_places=2)
-    transaction_type = models.CharField(max_length=20, choices=TRANSACTION_TYPES)
-    category = models.CharField(max_length=20, choices=CATEGORIES)
-    reference = models.CharField(max_length=200, blank=True)
-    description = models.TextField(blank=True)
-    transaction_date = models.DateTimeField(default=timezone.now)
-    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    
-    class Meta:
-        ordering = ['-transaction_date']
-        indexes = [
-            models.Index(fields=['category']),
-            models.Index(fields=['-transaction_date']),
-            models.Index(fields=['transaction_type']),
-            # Add composite index for duplicate detection
-            models.Index(fields=['category', 'amount', 'transaction_date']),
-        ]
-        # Add unique constraint
-        unique_together = [['category', 'amount', 'description', 'transaction_date']]
-    
-    def save(self, *args, **kwargs):
-        """Prevent duplicate Net transactions"""
-        if not self.pk:
-            duplicate_exists = NetTransaction.objects.filter(
-                category=self.category,
-                amount=self.amount,
-                description=self.description,
-                transaction_date__date=self.transaction_date.date()
-            ).exists()
-            
-            if duplicate_exists:
-                logger.warning(f"⚠️ DUPLICATE NET TRANSACTION BLOCKED: {self.description[:50]} - KES {self.amount}")
-                return
-        
-        super().save(*args, **kwargs)
 
 
 
@@ -1978,7 +1989,188 @@ class CapitalAccount(models.Model):
         return self.net_capital
     
 
+# ============================================
+# INVENTORY ASSET MODEL (Track inventory value)
+# ============================================
 
+class InventoryAsset(models.Model):
+    """
+    Track inventory as an ASSET (not expense)
+    This shows the value of your current stock
+    """
+    
+    # Current inventory value at cost (what you paid)
+    current_value = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal('0.00'))
+    
+    # Total purchases all time
+    total_purchased = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal('0.00'))
+    
+    # Total COGS all time (items sold)
+    total_cogs = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal('0.00'))
+    
+    # Last updated timestamp
+    last_updated = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    
+    class Meta:
+        verbose_name = 'Inventory Asset'
+        verbose_name_plural = 'Inventory Assets'
+    
+    def __str__(self):
+        return f"Inventory Asset: KES {self.current_value:,.2f}"
+    
+    @classmethod
+    def get_account(cls):
+        """Get or create the single inventory asset account"""
+        account, created = cls.objects.get_or_create(id=1)
+        if created:
+            account.save()
+        return account
+    
+    def add_purchase(self, amount, sku_code="", quantity=0, unit_price=0, user=None):
+        """
+        Add inventory purchase (ASSET increases)
+        Called when you restock/buy products
+        """
+        if amount <= 0:
+            return self.current_value
+        
+        self.current_value += amount
+        self.total_purchased += amount
+        self.updated_by = user
+        self.save()
+        
+        InventoryTransaction.objects.create(
+            inventory_asset=self,
+            amount=amount,
+            transaction_type='purchase',
+            sku_code=sku_code,
+            quantity=quantity,
+            unit_price=unit_price,
+            description=f"Stock purchase: {sku_code} - {quantity} units @ KES {unit_price}",
+            created_by=user
+        )
+        
+        logger.info(f"📦 INVENTORY ASSET: +{amount} (Purchase) | Total: {self.current_value:,.2f}")
+        return self.current_value
+    
+    def deduct_cogs(self, amount, sku_code="", quantity=0, unit_price=0, sale_reference="", user=None):
+        """
+        Deduct COGS when items are sold (ASSET decreases)
+        Called when you sell products
+        """
+        if amount <= 0:
+            return self.current_value
+        
+        self.current_value -= amount
+        self.total_cogs += amount
+        self.updated_by = user
+        self.save()
+        
+        InventoryTransaction.objects.create(
+            inventory_asset=self,
+            amount=amount,
+            transaction_type='cogs',
+            sku_code=sku_code,
+            quantity=quantity,
+            unit_price=unit_price,
+            sale_reference=sale_reference,
+            description=f"COGS for sale {sale_reference}: {sku_code} - {quantity} units @ KES {unit_price}",
+            created_by=user
+        )
+        
+        logger.info(f"📦 INVENTORY ASSET: -{amount} (COGS) | Remaining: {self.current_value:,.2f}")
+        return self.current_value
+    
+    def adjust_inventory(self, amount, reason="", user=None):
+        """
+        Manual adjustment for inventory (e.g., damaged, stolen, found)
+        """
+        if amount == 0:
+            return self.current_value
+        
+        self.current_value += amount
+        self.updated_by = user
+        self.save()
+        
+        trans_type = 'adjustment_increase' if amount > 0 else 'adjustment_decrease'
+        
+        InventoryTransaction.objects.create(
+            inventory_asset=self,
+            amount=abs(amount),
+            transaction_type=trans_type,
+            description=f"Manual adjustment: {reason}",
+            created_by=user
+        )
+        
+        logger.info(f"📦 INVENTORY ASSET: Adjustment {amount:+,.2f} | New value: {self.current_value:,.2f}")
+        return self.current_value
+    
+    def refresh_from_inventory(self):
+        """
+        Refresh inventory value by calculating from actual products
+        This syncs with your actual inventory data
+        """
+        from inventory.models import Product
+        from decimal import Decimal
+        
+        total_value = Decimal('0.00')
+        
+        for product in Product.objects.filter(is_active=True, is_discontinued=False):
+            current_stock = product.current_stock
+            total_value += current_stock * product.buying_price
+        
+        self.current_value = total_value
+        self.save()
+        
+        logger.info(f"📊 Inventory asset refreshed to KES {total_value:,.2f}")
+        return total_value
+    
+    @property
+    def profit_realized_from_inventory(self):
+        """Profit you've made from sold inventory (Revenue - COGS)"""
+        # This matches your Savings account
+        from sales.models import Sale
+        total_revenue = Sale.objects.filter(is_reversed=False).aggregate(total=Sum('total_amount'))['total'] or Decimal('0')
+        return total_revenue - self.total_cogs
+
+
+class InventoryTransaction(models.Model):
+    """Track all inventory asset transactions"""
+    
+    TRANSACTION_TYPES = [
+        ('purchase', 'Stock Purchase (Asset Increase)'),
+        ('cogs', 'Cost of Goods Sold (Asset Decrease)'),
+        ('adjustment_increase', 'Manual Increase'),
+        ('adjustment_decrease', 'Manual Decrease'),
+    ]
+    
+    inventory_asset = models.ForeignKey(InventoryAsset, on_delete=models.CASCADE, related_name='transactions')
+    amount = models.DecimalField(max_digits=15, decimal_places=2)
+    transaction_type = models.CharField(max_length=20, choices=TRANSACTION_TYPES)
+    
+    # Product details
+    sku_code = models.CharField(max_length=50, blank=True, db_index=True)
+    quantity = models.PositiveIntegerField(default=0)
+    unit_price = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    sale_reference = models.CharField(max_length=100, blank=True)
+    
+    description = models.TextField(blank=True)
+    transaction_date = models.DateTimeField(default=timezone.now)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-transaction_date']
+        indexes = [
+            models.Index(fields=['-transaction_date']),
+            models.Index(fields=['transaction_type']),
+            models.Index(fields=['sku_code']),
+        ]
+    
+    def __str__(self):
+        sign = "+" if self.amount > 0 else "-"
+        return f"{self.get_transaction_type_display()}: {sign} KES {abs(self.amount):,.2f}"
 
 
 

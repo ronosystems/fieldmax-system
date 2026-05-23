@@ -91,6 +91,7 @@ urlpatterns = [
     # STOCK PURCHASE EXPENSES
     # ============================================
     path('stock-purchases/', views.stock_purchase_expenses, name='stock_purchase_expenses'),
+    path('inventory-asset/', views.inventory_asset_view, name='inventory_asset'),
 
     # ============================================
     # M-PESA PAYMENTS
@@ -134,4 +135,5 @@ urlpatterns = [
     path('injection/add-external/', views.injection_add_external, name='injection_add_external'),
     path('injection/transfer-to-net/', views.injection_transfer_to_net, name='injection_transfer_to_net'),
     path('take-profit/', views.take_profit, name='take_profit'),
+    path('savings/add-expense/', views.savings_add_expense, name='savings_add_expense'),
 ]
