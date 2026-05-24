@@ -237,28 +237,31 @@ class StaffAdmin(admin.ModelAdmin):
     first_login_status.short_description = 'First Login'
     first_login_status.boolean = True
     
+    # FIXED: format_html with placeholder
     def account_status_display(self, obj):
         if not obj.user.is_active:
-            return format_html('<span style="color: #ba2121;">❌ Deactivated</span>')
-        return format_html('<span style="color: #2bde3f;">✅ Active</span>')
+            return format_html('<span style="color: #ba2121;">{}</span>', '❌ Deactivated')
+        return format_html('<span style="color: #2bde3f;">{}</span>', '✅ Active')
     account_status_display.short_description = 'Account Status'
     
+    # FIXED: format_html with placeholder
     def security_status_display(self, obj):
         try:
             status = UserStatus.objects.get(user=obj.user)
             if status.is_locked:
-                return format_html('<span style="color: #ba2121;">🔒 Locked</span>')
+                return format_html('<span style="color: #ba2121;">{}</span>', '🔒 Locked')
             if status.is_suspended:
-                return format_html('<span style="color: #ff8c00;">⛔ Suspended</span>')
-            return format_html('<span style="color: #2bde3f;">🔓 Active</span>')
+                return format_html('<span style="color: #ff8c00;">{}</span>', '⛔ Suspended')
+            return format_html('<span style="color: #2bde3f;">{}</span>', '🔓 Active')
         except UserStatus.DoesNotExist:
-            return format_html('<span style="color: #2bde3f;">✅ Normal</span>')
+            return format_html('<span style="color: #2bde3f;">{}</span>', '✅ Normal')
     security_status_display.short_description = 'Security Status'
     
+    # FIXED: format_html with placeholder
     def view_user_profile_link(self, obj):
         if obj.user and hasattr(obj.user, 'profile'):
             url = reverse('admin:staff_userprofile_change', args=[obj.user.profile.id])
-            return format_html('<a href="{}" style="font-weight: bold; color: #007bff;">📋 View Profile</a>', url)
+            return format_html('<a href="{}" style="font-weight: bold; color: #007bff;">{}</a>', url, '📋 View Profile')
         return '-'
     view_user_profile_link.short_description = 'User Profile'
     
@@ -417,9 +420,9 @@ class CustomUserAdmin(BaseUserAdmin):
         'email',
         'first_name',
         'last_name',
-        'is_superuser',           # This is native - returns boolean
-        'is_ceo_display',         # Custom - returns boolean
-        'is_verified_display',    # Custom - returns boolean
+        'is_superuser',
+        'is_ceo_display',
+        'is_verified_display',
         'is_staff',
         'is_active',
         'staff_member_link',
@@ -476,7 +479,7 @@ class CustomUserAdmin(BaseUserAdmin):
             return True
         return False
     is_ceo_display.short_description = 'CEO'
-    is_ceo_display.boolean = True  # This tells Django to show yes/no icon
+    is_ceo_display.boolean = True
     is_ceo_display.admin_order_field = 'profile__is_ceo'
     
     def is_verified_display(self, obj):
@@ -485,22 +488,25 @@ class CustomUserAdmin(BaseUserAdmin):
             return True
         return False
     is_verified_display.short_description = 'Verified'
-    is_verified_display.boolean = True  # This tells Django to show yes/no icon
+    is_verified_display.boolean = True
     is_verified_display.admin_order_field = 'profile__is_verified'
     
+    # FIXED: format_html with placeholder
     def staff_member_link(self, obj):
         try:
             staff = Staff.objects.get(user=obj)
             url = reverse('admin:staff_staff_change', args=[staff.id])
             return format_html(
-                '<a href="{}" style="font-weight: bold; color: #28a745;">👤 View Staff</a>',
-                url
+                '<a href="{}" style="font-weight: bold; color: #28a745;">{}</a>',
+                url,
+                '👤 View Staff'
             )
         except Staff.DoesNotExist:
             add_url = reverse('admin:staff_staff_add') + f'?user={obj.id}'
             return format_html(
-                '<a href="{}" style="font-weight: bold; color: #ff8c00;">➕ Create Staff</a>',
-                add_url
+                '<a href="{}" style="font-weight: bold; color: #ff8c00;">{}</a>',
+                add_url,
+                '➕ Create Staff'
             )
     staff_member_link.short_description = 'Staff Member'
     
@@ -627,14 +633,15 @@ class HiddenUserProfileAdmin(admin.ModelAdmin):
     search_fields = ['user__username', 'user__email']
     readonly_fields = ['verified_at', 'verified_by', 'last_password_change']
     
+    # FIXED: format_html with placeholder
     def view_staff_link(self, obj):
         try:
             staff = Staff.objects.get(user=obj.user)
             url = reverse('admin:staff_staff_change', args=[staff.id])
-            return format_html('<a href="{}" style="font-weight: bold; color: #28a745;">👤 View Staff Member</a>', url)
+            return format_html('<a href="{}" style="font-weight: bold; color: #28a745;">{}</a>', url, '👤 View Staff Member')
         except Staff.DoesNotExist:
             add_url = reverse('admin:staff_staff_add') + f'?user={obj.user.id}'
-            return format_html('<a href="{}" style="font-weight: bold; color: #ff8c00;">➕ Create Staff Record</a>', add_url)
+            return format_html('<a href="{}" style="font-weight: bold; color: #ff8c00;">{}</a>', add_url, '➕ Create Staff Record')
     view_staff_link.short_description = 'Staff Member'
     
     def has_module_permission(self, request):
@@ -651,11 +658,12 @@ class UserStatusAdmin(admin.ModelAdmin):
     search_fields = ['user__username', 'user__email']
     readonly_fields = ['locked_at', 'suspended_at', 'deactivated_at']
     
+    # FIXED: format_html with placeholder
     def view_staff_link(self, obj):
         try:
             staff = Staff.objects.get(user=obj.user)
             url = reverse('admin:staff_staff_change', args=[staff.id])
-            return format_html('<a href="{}" style="color: #28a745;">👤 View Staff</a>', url)
+            return format_html('<a href="{}" style="color: #28a745;">{}</a>', url, '👤 View Staff')
         except Staff.DoesNotExist:
             return '-'
     view_staff_link.short_description = 'Staff Member'
