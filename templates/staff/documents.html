@@ -69,7 +69,7 @@
             <div class="card-body text-center">
                 {% if application.passport_photo %}
                     <div class="document-container">
-                        <img src="{{ application.passport_photo.url }}" alt="Passport Photo" class="img-fluid document-image mb-3" style="max-height: 300px; border: 1px solid #ddd; border-radius: 8px; cursor: pointer;" onclick="showImageModal('{{ application.passport_photo.url }}', 'Passport Photo - {{ application.full_name }}')">
+                        <img src="{{ application.passport_photo.url }}" alt="Passport Photo" class="img-fluid document-image mb-3" style="max-height: 300px; border: 1px solid #ddd; border-radius: 8px; cursor: pointer;" onclick="openModal('{{ application.passport_photo.url }}', 'Passport Photo - {{ application.full_name }}')">
                         <div class="mt-2">
                             <p class="text-muted small">
                                 <i class="fas fa-file me-1"></i> Filename: {{ application.passport_photo.name|slice:"-30:" }}
@@ -100,7 +100,7 @@
             <div class="card-body text-center">
                 {% if application.id_front %}
                     <div class="document-container">
-                        <img src="{{ application.id_front.url }}" alt="ID Front" class="img-fluid document-image mb-3" style="max-height: 300px; border: 1px solid #ddd; border-radius: 8px; cursor: pointer;" onclick="showImageModal('{{ application.id_front.url }}', 'ID Front - {{ application.full_name }}')">
+                        <img src="{{ application.id_front.url }}" alt="ID Front" class="img-fluid document-image mb-3" style="max-height: 300px; border: 1px solid #ddd; border-radius: 8px; cursor: pointer;" onclick="openModal('{{ application.id_front.url }}', 'ID Front - {{ application.full_name }}')">
                         <div class="mt-2">
                             <p class="text-muted small">
                                 <i class="fas fa-file me-1"></i> Filename: {{ application.id_front.name|slice:"-30:" }}
@@ -131,7 +131,7 @@
             <div class="card-body text-center">
                 {% if application.id_back %}
                     <div class="document-container">
-                        <img src="{{ application.id_back.url }}" alt="ID Back" class="img-fluid document-image mb-3" style="max-height: 300px; border: 1px solid #ddd; border-radius: 8px; cursor: pointer;" onclick="showImageModal('{{ application.id_back.url }}', 'ID Back - {{ application.full_name }}')">
+                        <img src="{{ application.id_back.url }}" alt="ID Back" class="img-fluid document-image mb-3" style="max-height: 300px; border: 1px solid #ddd; border-radius: 8px; cursor: pointer;" onclick="openModal('{{ application.id_back.url }}', 'ID Back - {{ application.full_name }}')">
                         <div class="mt-2">
                             <p class="text-muted small">
                                 <i class="fas fa-file me-1"></i> Filename: {{ application.id_back.name|slice:"-30:" }}
@@ -228,34 +228,36 @@
     {% endif %}
 </div>
 
-<!-- Image Modal for Zoom -->
-<div class="modal fade" id="imageModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header bg-info text-white">
-                <h5 class="modal-title" id="imageModalTitle"></h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body text-center">
-                <img src="" id="modalImage" class="img-fluid" style="max-height: 80vh;">
-            </div>
-        </div>
+<!-- WORKING MODAL WITH DIM BACKGROUND -->
+<div id="imageModalOverlay" class="modal-overlay" onclick="closeModal()"></div>
+<div id="imageModal" class="modal-container">
+    <div class="modal-header">
+        <h5 id="modalTitle" class="modal-title">Document Viewer</h5>
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+        <img id="modalImage" src="" alt="Document Image">
+    </div>
+    <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal()">Close</button>
+        <a id="downloadLink" href="#" class="btn btn-primary" download>Download</a>
     </div>
 </div>
 {% endblock %}
 
 {% block extra_css %}
 <style>
+/* Image hover effect */
 .document-image {
-    transition: transform 0.2s;
+    transition: transform 0.2s, box-shadow 0.2s;
 }
 
 .document-image:hover {
     transform: scale(1.02);
-    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
 }
 
-/* Hover effect for document cards */
+/* Card hover effect */
 .card {
     transition: transform 0.2s, box-shadow 0.2s;
 }
@@ -264,24 +266,223 @@
     transform: translateY(-2px);
     box-shadow: 0 6px 12px rgba(0,0,0,0.15);
 }
+
+/* ============================================
+   WORKING MODAL STYLES - DIMS THE SCREEN
+   ============================================ */
+
+/* Modal Overlay - This dims the entire screen */
+.modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.85);
+    z-index: 9998;
+    cursor: pointer;
+}
+
+/* Modal Container */
+.modal-container {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 90%;
+    max-width: 900px;
+    max-height: 90vh;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    z-index: 9999;
+    overflow: hidden;
+    flex-direction: column;
+}
+
+/* Modal Header */
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-bottom: 1px solid rgba(255,255,255,0.2);
+}
+
+.modal-title {
+    margin: 0;
+    font-size: 1.2rem;
+    font-weight: 600;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 28px;
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: background 0.2s;
+}
+
+.modal-close:hover {
+    background: rgba(255,255,255,0.2);
+}
+
+/* Modal Body */
+.modal-body {
+    flex: 1;
+    padding: 20px;
+    text-align: center;
+    overflow-y: auto;
+    max-height: calc(90vh - 120px);
+}
+
+.modal-body img {
+    max-width: 100%;
+    max-height: 70vh;
+    border-radius: 8px;
+}
+
+/* Modal Footer */
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 12px 20px;
+    background: #f8f9fa;
+    border-top: 1px solid #dee2e6;
+}
+
+.btn-secondary {
+    background: #6c757d;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.btn-secondary:hover {
+    background: #5a6268;
+}
+
+.btn-primary {
+    background: #007bff;
+    color: white;
+    text-decoration: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.2s;
+}
+
+.btn-primary:hover {
+    background: #0056b3;
+}
+
+/* Animation for modal */
+@keyframes modalFadeIn {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+}
+
+.modal-container.show {
+    animation: modalFadeIn 0.2s ease-out;
+}
 </style>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-function showImageModal(imageUrl, title) {
-    document.getElementById('modalImage').src = imageUrl;
-    document.getElementById('imageModalTitle').textContent = title;
-    new bootstrap.Modal(document.getElementById('imageModal')).show();
+// Get modal elements
+const modalOverlay = document.getElementById('imageModalOverlay');
+const modalContainer = document.getElementById('imageModal');
+const modalImage = document.getElementById('modalImage');
+const modalTitle = document.getElementById('modalTitle');
+const downloadLink = document.getElementById('downloadLink');
+
+// Function to open modal
+function openModal(imageUrl, title) {
+    // Set image source
+    modalImage.src = imageUrl;
+    modalTitle.textContent = title;
+    downloadLink.href = imageUrl;
+    
+    // Show overlay and modal
+    modalOverlay.style.display = 'block';
+    modalContainer.style.display = 'flex';
+    
+    // Add show class for animation
+    setTimeout(() => {
+        modalContainer.classList.add('show');
+    }, 10);
+    
+    // Prevent body scroll
+    document.body.style.overflow = 'hidden';
 }
 
-// Add click event to all document images (already inline, but this is backup)
+// Function to close modal
+function closeModal() {
+    // Remove show class
+    modalContainer.classList.remove('show');
+    
+    // Hide overlay and modal after animation
+    setTimeout(() => {
+        modalOverlay.style.display = 'none';
+        modalContainer.style.display = 'none';
+        // Clear image src
+        modalImage.src = '';
+    }, 200);
+    
+    // Restore body scroll
+    document.body.style.overflow = '';
+}
+
+// Close modal on ESC key
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        if (modalOverlay.style.display === 'block') {
+            closeModal();
+        }
+    }
+});
+
+// Prevent click on modal from closing
+modalContainer.addEventListener('click', function(event) {
+    event.stopPropagation();
+});
+
+// Add click event to all document images as backup
 document.addEventListener('DOMContentLoaded', function() {
     const images = document.querySelectorAll('.document-image');
     images.forEach(img => {
-        img.addEventListener('click', function() {
-            showImageModal(this.src, this.alt);
-        });
+        // Remove inline onclick if exists to avoid double calls
+        const onclickAttr = img.getAttribute('onclick');
+        if (!onclickAttr) {
+            img.addEventListener('click', function() {
+                openModal(this.src, this.alt);
+            });
+        }
     });
 });
 </script>

@@ -141,12 +141,12 @@ class StaffApplication(models.Model):
 
 
 # ============================================
-# Staff Model (for verified staff members)
+# Staff Model (for verified staff members) - UPDATED with sequential staff_id
 # ============================================
 class Staff(models.Model):
     """Staff member profile linked to User account"""
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='staff_profile')
-    staff_id = models.CharField(max_length=20, unique=True)
+    staff_id = models.CharField(max_length=20, unique=True, blank=True)
     id_number = models.CharField(max_length=50, unique=True, blank=True, null=True) 
     position = models.CharField(max_length=50, choices=POSITION_CHOICES)
     department = models.CharField(max_length=100, blank=True)
@@ -186,10 +186,30 @@ class Staff(models.Model):
         return f"{self.user.get_full_name()} - {self.staff_id}"
     
     def generate_staff_id(self):
-        """Generate a unique staff ID"""
-        prefix = 'FM'
-        random_part = ''.join(random.choices(string.digits, k=6))
-        return f"{prefix}{random_part}"
+        """Generate sequential staff ID (FM001, FM002, FM003, etc.)"""
+        # Get the last staff ID
+        last_staff = Staff.objects.order_by('-id').first()
+        
+        if not last_staff or not last_staff.staff_id:
+            # First staff member - start with FM001
+            return 'FM001'
+        
+        # Extract the number from the last staff_id
+        last_id = last_staff.staff_id
+        try:
+            # Get the numeric part (after FM)
+            numeric_part = last_id[2:]  # Remove 'FM' prefix
+            next_number = int(numeric_part) + 1
+            # Format with leading zeros (001, 002, etc.)
+            return f'FM{next_number:03d}'
+        except (ValueError, IndexError):
+            # If there's an error, fall back to FM001
+            return 'FM001'
+    
+    @classmethod
+    def get_group_for_position(cls, position):
+        """Get the group name for a given position"""
+        return POSITION_TO_GROUP_MAP.get(position)
     
     def save(self, *args, **kwargs):
         if not self.staff_id:
@@ -199,6 +219,34 @@ class Staff(models.Model):
     class Meta:
         verbose_name = 'Staff Member'
         verbose_name_plural = 'Staff Members'
+        ordering = ['staff_id']
+
+
+
+class ApplicationExtraData(models.Model):
+    """Additional data for staff applications"""
+    application = models.OneToOneField(
+        StaffApplication, 
+        on_delete=models.CASCADE, 
+        related_name='extra_data'
+    )
+    resident = models.TextField(blank=True, help_text="Current residence address")
+    former_employer = models.CharField(max_length=200, blank=True)
+    preferred_salary = models.CharField(max_length=50, blank=True)
+    signature = models.TextField(blank=True, help_text="Digital signature")
+    other_documents = models.FileField(
+        upload_to='staff_documents/other/', 
+        blank=True, 
+        null=True,
+        help_text="Additional supporting documents (CV, certificates, etc.)"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"Extra data for {self.application.full_name()}"
+
+
+
 
 
 # ============================================

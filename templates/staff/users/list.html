@@ -105,11 +105,11 @@
                             <i class="fas fa-search text-muted"></i>
                         </span>
                         <input type="text" id="searchInput" class="form-control" 
-                               placeholder="Search by name, email, or username...">
+                               placeholder="Search by name, email, username, or staff ID...">
                     </div>
                 </div>
                 <div class="col-md-2 d-flex align-items-end">
-                    <button type="button" id="clearFiltersBtn" class="btn btn-outline-secondary">
+                    <button type="button" id="clearFiltersBtn" class="btn btn-outline-secondary w-100">
                         <i class="fas fa-times me-1"></i> Clear
                     </button>
                 </div>
@@ -126,14 +126,15 @@
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-hover mb-0">
-                    <thead>
+                    <thead class="table-light">
                         <tr>
-                            <th>Staff Name / Id</th>
-                            <th>Username / Id</th>
+                            <th>Staff ID / Name</th>
+                            <th>Username / ID Number</th>
                             <th>Email</th>
                             <th>Type</th>
                             <th>Status</th>
-                            <th>Roles</th>
+                            <th>Role Group</th>
+                            <th>Assigned Shop</th>
                             <th>Joined</th>
                             <th>Last Login</th>
                             <th class="text-center">Actions</th>
@@ -148,7 +149,8 @@
                             data-user-suspended="{% if user.status.is_suspended %}true{% else %}false{% endif %}"
                             data-user-name="{{ user.get_full_name|default:user.username|lower }}"
                             data-user-email="{{ user.email|default:''|lower }}"
-                            data-user-username="{{ user.username|lower }}">
+                            data-user-username="{{ user.username|lower }}"
+                            data-user-staffid="{{ user.staff_id|default:''|lower }}">
                             <td>
                                 <div class="d-flex align-items-center gap-2">
                                     <div class="avatar-placeholder bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" 
@@ -156,48 +158,57 @@
                                         {{ user.first_name|first|upper }}{{ user.last_name|first|upper }}
                                     </div>
                                     <div>
-                                        <div class="fw-bold">{{ user.get_full_name|default:user.username }}</div>
-                                        <div class="small text-muted">ID: #{{ user.id }}</div>
+                                        <div class="fw-bold">
+                                            {% if user.staff_id %}
+                                                <span class="badge bg-primary me-1">{{ user.staff_id }}</span>
+                                            {% endif %}
+                                            {{ user.get_full_name|default:user.username }}
+                                        </div>
+                                        <div class="small text-muted">User ID: #{{ user.id }}</div>
                                     </div>
                                 </div>
                             </td>
                             <td>
                                 <div class="fw-bold">{{ user.username }}</div>
-                                <div class="small text-muted">{{ user.staff_profile.id_number }}</div>
+                                {% if user.staff_id_number %}
+                                    <div class="small text-muted">
+                                        <i class="fas fa-id-card me-1"></i>{{ user.staff_id_number }}
+                                    </div>
+                                {% endif %}
                             </td>
                             <td>
-                                <div class="small text-muted">{{ user.email|default:'No email' }}</div>
+                                <div class="small">{{ user.email|default:'<span class="text-muted">No email</span>'|safe }}</div>
                             </td>                            
                             <td>
                                 {% if user.is_superuser %}
-                                <span class="badge bg-danger bg-opacity-10 text-danger">
+                                <span class="badge bg-danger">
                                     <i class="fas fa-crown me-1"></i> Admin
                                 </span>
                                 {% elif user.is_staff %}
-                                <span class="badge bg-primary bg-opacity-10 text-primary">
+                                <span class="badge bg-primary">
                                     <i class="fas fa-user-tie me-1"></i> Staff
                                 </span>
                                 {% else %}
-                                <span class="badge bg-secondary bg-opacity-10 text-secondary">
+                                <span class="badge bg-secondary">
                                     <i class="fas fa-user me-1"></i> Regular
                                 </span>
                                 {% endif %}
                             </td>
                             <td>
                                 {% if not user.is_active %}
-                                <span class="badge bg-danger bg-opacity-10 text-danger">
+                                <span class="badge bg-danger">
                                     <i class="fas fa-ban me-1"></i> Deactivated
                                 </span>
                                 {% elif user.status.is_locked %}
-                                <span class="badge bg-info bg-opacity-10 text-info">
+                                <span class="badge bg-info">
                                     <i class="fas fa-lock me-1"></i> Locked
                                 </span>
                                 {% elif user.status.is_suspended %}
-                                <span class="badge bg-warning bg-opacity-10 text-warning">
+                                <span class="badge bg-warning">
                                     <i class="fas fa-pause-circle me-1"></i> Suspended
                                 </span>
                                 {% else %}
-                                <span class="badge bg-success bg-opacity-10 text-success">
+                                <span class="badge bg-success">
                                     <i class="fas fa-check-circle me-1"></i> Active
                                 </span>
                                 {% endif %}
@@ -206,15 +217,24 @@
                                 {% with groups=user.groups.all %}
                                     {% if groups %}
                                         {% for group in groups|slice:":2" %}
-                                            <span class="badge bg-light text-dark me-1">{{ group.name }}</span>
+                                            <span class="badge bg-light text-dark border me-1">{{ group.name }}</span>
                                         {% endfor %}
                                         {% if groups|length > 2 %}
-                                            <span class="badge bg-light text-dark">+{{ groups|length|add:"-2" }} more</span>
+                                            <span class="badge bg-light text-dark border">+{{ groups|length|add:"-2" }}</span>
                                         {% endif %}
                                     {% else %}
-                                        <span class="text-muted small">No roles</span>
+                                        <span class="text-muted small">No role assigned</span>
                                     {% endif %}
                                 {% endwith %}
+                            </td>
+                            <td>
+                                {% if user.assigned_shop %}
+                                    <span class="badge bg-info bg-opacity-10 text-info">
+                                        <i class="fas fa-store me-1"></i> {{ user.assigned_shop }}
+                                    </span>
+                                {% else %}
+                                    <span class="text-muted small">Not assigned</span>
+                                {% endif %}
                             </td>
                             <td class="text-muted small">
                                 {{ user.date_joined|date:"M d, Y" }}
@@ -232,18 +252,23 @@
                                 {% endif %}
                             </td>
                             <td class="text-center">
-                                <div class="btn-group" role="group" aria-label="User actions">
+                                <div class="btn-group" role="group">
                                     <a href="{% url 'staff:user_detail' user.id %}" 
                                        class="btn btn-sm btn-outline-primary" 
                                        title="View Details">
                                         <i class="fas fa-eye"></i>
+                                    </a>
+                                    <a href="{% url 'staff:user_edit' user.id %}" 
+                                       class="btn btn-sm btn-outline-secondary" 
+                                       title="Edit User">
+                                        <i class="fas fa-edit"></i>
                                     </a>
                                 </div>
                             </td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="8" class="text-center py-5">
+                            <td colspan="10" class="text-center py-5">
                                 <div class="empty-state">
                                     <i class="fas fa-users fa-4x text-muted mb-3"></i>
                                     <h5 class="mb-2">No users found</h5>
@@ -302,13 +327,11 @@
 
 {% block extra_js %}
 <script>
-    // Filter functionality
     document.addEventListener('DOMContentLoaded', function() {
         const userTypeFilter = document.getElementById('userTypeFilter');
         const searchInput = document.getElementById('searchInput');
         const clearFiltersBtn = document.getElementById('clearFiltersBtn');
         const tableBody = document.getElementById('usersTableBody');
-        const userCount = document.getElementById('userCount');
         const rows = Array.from(document.querySelectorAll('.user-row'));
         
         let currentFilter = 'all';
@@ -325,6 +348,7 @@
                 const userName = row.dataset.userName || '';
                 const userEmail = row.dataset.userEmail || '';
                 const userUsername = row.dataset.userUsername || '';
+                const userStaffId = row.dataset.userStaffid || '';
                 
                 // Check filter
                 let filterMatch = false;
@@ -345,7 +369,8 @@
                 if (currentSearch) {
                     searchMatch = userName.includes(currentSearch) || 
                                  userEmail.includes(currentSearch) || 
-                                 userUsername.includes(currentSearch);
+                                 userUsername.includes(currentSearch) ||
+                                 userStaffId.includes(currentSearch);
                 }
                 
                 if (filterMatch && searchMatch) {
@@ -356,11 +381,6 @@
                 }
             });
             
-            // Update user count
-            if (userCount) {
-                userCount.textContent = `${visibleCount} Total`;
-            }
-            
             // Show/hide empty state message
             const existingEmptyRow = document.querySelector('.filter-empty-state');
             if (visibleCount === 0 && rows.length > 0) {
@@ -368,7 +388,7 @@
                     const emptyRow = document.createElement('tr');
                     emptyRow.className = 'filter-empty-state';
                     emptyRow.innerHTML = `
-                        <td colspan="8" class="text-center py-5">
+                        <td colspan="10" class="text-center py-5">
                             <div class="empty-state">
                                 <i class="fas fa-search fa-4x text-muted mb-3"></i>
                                 <h5 class="mb-2">No users match your filters</h5>
@@ -385,19 +405,16 @@
             }
         }
         
-        // Filter type change handler
         userTypeFilter.addEventListener('change', function() {
             currentFilter = this.value;
             filterAndSearch();
         });
         
-        // Search input handler
         searchInput.addEventListener('input', function() {
             currentSearch = this.value.toLowerCase().trim();
             filterAndSearch();
         });
         
-        // Clear filters handler
         clearFiltersBtn.addEventListener('click', function() {
             currentFilter = 'all';
             currentSearch = '';
@@ -406,10 +423,8 @@
             filterAndSearch();
         });
         
-        // Row click handler (navigate to detail page)
         rows.forEach(row => {
             row.addEventListener('click', function(e) {
-                // Don't navigate if clicking on the button
                 if (e.target.closest('.btn-group')) {
                     return;
                 }
@@ -419,27 +434,20 @@
                 }
             });
         });
-        
-        // Initialize tooltips
-        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[title]'));
-        tooltipTriggerList.map(function(tooltipTriggerEl) {
-            return new bootstrap.Tooltip(tooltipTriggerEl);
-        });
     });
 </script>
 {% endblock %}
 
 {% block extra_css %}
 <style>
-    /* Additional styling for consistency */
     .avatar-placeholder {
         width: 40px;
         height: 40px;
         font-weight: 600;
         font-size: 14px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     }
     
-    /* Ensure table rows are clickable */
     .user-row {
         cursor: pointer;
         transition: background-color 0.2s ease;
@@ -449,7 +457,6 @@
         background-color: #f8f9fa;
     }
     
-    /* Button group spacing */
     .btn-group {
         gap: 0.25rem;
     }
@@ -459,26 +466,20 @@
         margin: 0 2px;
     }
     
-    .btn-group .btn-sm {
-        padding: 0.25rem 0.5rem;
-        font-size: 0.875rem;
-        line-height: 1.5;
-    }
-    
-    /* Empty state styling */
     .empty-state i {
         opacity: 0.5;
     }
     
-    /* Badge styling */
-    .badge.bg-opacity-10 {
-        padding: 0.35rem 0.75rem;
+    .badge {
         font-weight: 500;
+        padding: 0.35rem 0.75rem;
     }
     
-    /* Last login column styling */
-    .user-row td:nth-child(8) {
-        min-width: 110px;
+    .table-light th {
+        font-weight: 600;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
 </style>
 {% endblock %}

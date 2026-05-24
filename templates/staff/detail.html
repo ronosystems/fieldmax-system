@@ -15,7 +15,7 @@
 </div>
 
 <div class="row">
-    <!-- Left Column - Personal Info & Status -->
+    <!-- LEFT COLUMN -->
     <div class="col-md-4">
         <!-- Status Card -->
         <div class="card mb-4">
@@ -44,10 +44,11 @@
                         <th>Applied On:</th>
                         <td>{{ application.application_date|date:"Y-m-d H:i" }}</td>
                     </tr>
+                    
                     {% if application.reviewed_by %}
                     <tr>
                         <th>Reviewed By:</th>
-                        <td>{{ application.reviewed_by.username }}</td>
+                        <td>{{ application.reviewed_by.get_full_name|default:application.reviewed_by.username }}</td>
                     </tr>
                     {% endif %}
                     {% if application.review_date %}
@@ -61,22 +62,19 @@
                 {% if application.review_notes %}
                 <div class="alert alert-info mt-2">
                     <strong>Review Notes:</strong><br>
-                    {{ application.review_notes }}
+                    {{ application.review_notes|linebreaks }}
                 </div>
                 {% endif %}
                 
                 <div class="d-grid gap-2 mt-3">
                     {% if application.status == 'pending' or application.status == 'under_review' %}
                         <a href="{% url 'staff:application_approve' application.id %}" class="btn btn-success">
-                            <i class="fas fa-check me-2"></i>Approve
+                            <i class="fas fa-check me-2"></i>Approve Application
                         </a>
                         <a href="{% url 'staff:application_reject' application.id %}" class="btn btn-danger">
-                            <i class="fas fa-times me-2"></i>Reject
+                            <i class="fas fa-times me-2"></i>Reject Application
                         </a>
                     {% endif %}
-                    <a href="{% url 'staff:view_documents' application.id %}" class="btn btn-info">
-                        <i class="fas fa-file-pdf me-2"></i>View Documents
-                    </a>
                     <a href="{% url 'staff:application_list' %}" class="btn btn-secondary">
                         <i class="fas fa-arrow-left me-2"></i>Back to List
                     </a>
@@ -84,84 +82,245 @@
             </div>
         </div>
         
-        <!-- Terms Acceptance Card -->
+        
+        <!-- Employment Details Card -->
         <div class="card mb-4">
             <div class="card-header bg-info text-white">
-                <h5 class="mb-0"><i class="fas fa-file-signature me-2"></i>Terms Acceptance</h5>
+                <h5 class="mb-0"><i class="fas fa-briefcase me-2"></i>Employment Details</h5>
             </div>
             <div class="card-body">
                 <table class="table table-sm">
                     <tr>
-                        <th>Terms Accepted:</th>
-                        <td>
-                            {% if application.terms_accepted %}
-                                <span class="badge bg-success">Yes</span>
-                            {% else %}
-                                <span class="badge bg-danger">No</span>
-                            {% endif %}
-                        </td>
+                        <th>Current Residence:</th>
+                        <td>{{ extra_data.resident|default:"Not provided" }}</td>
                     </tr>
                     <tr>
-                        <th>Privacy Accepted:</th>
-                        <td>
-                            {% if application.privacy_accepted %}
-                                <span class="badge bg-success">Yes</span>
-                            {% else %}
-                                <span class="badge bg-danger">No</span>
-                            {% endif %}
-                        </td>
+                        <th>Former Employer:</th>
+                        <td>{{ extra_data.former_employer|default:"Not provided" }}</td>
+                    </tr>
+                    <tr>
+                        <th>Preferred Salary:</th>
+                        <td class="fw-bold text-success">KSH {{ extra_data.preferred_salary|default:"Not provided" }}</td>
                     </tr>
                 </table>
-                
-                {% if application.ip_address %}
-                <small class="text-muted">
-                    <i class="fas fa-network-wired me-1"></i>IP: {{ application.ip_address }}<br>
-                    <i class="fas fa-globe me-1"></i>UA: {{ application.user_agent|truncatechars:50 }}
-                </small>
-                {% endif %}
             </div>
         </div>
-    </div>
-    
-    <!-- Right Column - Personal & Application Details -->
-    <div class="col-md-8">
+
+
         <!-- Personal Information Card -->
         <div class="card mb-4">
             <div class="card-header bg-info text-white">
                 <h5 class="mb-0"><i class="fas fa-user me-2"></i>Personal Information</h5>
             </div>
             <div class="card-body">
-                <table class="table">
+                <div class="row">
+                    <div class="col-md-6">
+                        <table class="table table-borderless">
+                            <tr>
+                                <th style="width: 120px;">First Name:</th>
+                                <td class="fw-bold">{{ application.first_name }}</td>
+                            </tr>
+                            <tr>
+                                <th>Last Name:</th>
+                                <td class="fw-bold">{{ application.last_name }}</td>
+                            </tr>
+                            <tr>
+                                <th>Full Name:</th>
+                                <td><span class="badge bg-primary">{{ application.full_name }}</span></td>
+                            </tr>
+                            <tr>
+                                <th>Email:</th>
+                                <td><i class="fas fa-envelope me-1"></i>{{ application.email }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <table class="table table-borderless">
+                            <tr>
+                                <th style="width: 100px;">Phone:</th>
+                                <td><i class="fas fa-phone me-1"></i>{{ application.phone }}</td>
+                            </tr>
+                            <tr>
+                                <th>ID Number:</th>
+                                <td><span class="badge bg-secondary">{{ application.id_number }}</span></td>
+                            </tr>
+                            <tr>
+                                <th>Submitted:</th>
+                                <td>{{ application.application_date|date:"M d, Y H:i" }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+    
+    <!-- RIGHT COLUMN -->
+    <div class="col-md-8">
+
+        <!-- Assigned Information Card (Only for Approved) -->
+        {% if application.status == 'approved' and application.created_user %}
+        <div class="card mb-4 border-success">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="fas fa-check-circle me-2"></i>Assigned Information</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    {% with staff_profile=application.created_user.staff_profile %}
                     <tr>
-                        <th style="width: 150px;">Full Name:</th>
-                        <td class="fw-bold">{{ application.full_name }}</td>
+                        <th><i class="fas fa-id-card me-1"></i>Staff ID:</th>
+                        <td class="fw-bold">{{ actual_staff_id|default:"Not assigned" }}</td>
                     </tr>
                     <tr>
-                        <th>Email:</th>
-                        <td>{{ application.email }}</td>
+                        <th><i class="fas fa-users me-1"></i>Role Group:</th>
+                        <td>
+                            {% for group in application.created_user.groups.all %}
+                                <span class="badge bg-primary">{{ group.name }}</span>
+                            {% empty %}
+                                <span class="text-muted">No group assigned</span>
+                            {% endfor %}
+                        </td>
                     </tr>
                     <tr>
-                        <th>Phone:</th>
-                        <td>{{ application.phone }}</td>
+                        <th><i class="fas fa-store me-1"></i>Assigned Shop:</th>
+                        <td>
+                            {% if staff_profile.assigned_shop %}
+                                <span class="badge bg-info">{{ staff_profile.assigned_shop.name }}</span>
+                            {% else %}
+                                <span class="text-muted">No shop assigned</span>
+                            {% endif %}
+                        </td>
                     </tr>
                     <tr>
-                        <th>ID Number:</th>
-                        <td><span class="badge bg-secondary">{{ application.id_number }}</span></td>
+                        <th><i class="fas fa-store me-1"></i>Shop Code:</th>
+                        <td>
+                            {% if staff_profile.assigned_shop %}
+                                <small class="text-muted d-block">Code: {{ staff_profile.assigned_shop.code }}</small>
+                            {% else %}
+                                <span class="text-muted">No code</span>
+                            {% endif %}
+                        </td>
+
                     </tr>
                     <tr>
-                        <th>Position Applied:</th>
-                        <td>{{ application.get_position_display }}</td>
+                        <th><i class="fas fa-user-check me-1"></i>Username:</th>
+                        <td>{{ application.created_user.username }}</td>
                     </tr>
+                    {% endwith %}
                 </table>
             </div>
         </div>
+        {% endif %}
+
+
+        <!-- Terms & Signature Card -->
+        <div class="card mb-4">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="fas fa-file-signature me-2"></i>Terms & Signature</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <table class="table table-sm">
+                            <tr>
+                                <th>Terms Read:</th>
+                                <td>
+                                    {% if application.privacy_accepted %}
+                                        <span class="badge bg-success">Yes</span>
+                                    {% else %}
+                                        <span class="badge bg-danger">No</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Terms Accepted:</th>
+                                <td>
+                                    {% if application.terms_accepted %}
+                                        <span class="badge bg-success">Yes</span>
+                                    {% else %}
+                                        <span class="badge bg-danger">No</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% if application.ip_address %}
+                            <tr>
+                                <th>IP Address:</th>
+                                <td><code>{{ application.ip_address }}</code></td>
+                            </tr>
+                            <tr>
+                                <th>User Agent:</th>
+                                <td><small class="text-muted">{{ application.user_agent|truncatechars:60 }}</small></td>
+                            </tr>
+                            {% endif %}
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        {% if extra_data.signature %}
+                        <div class="text-center">
+                            <label class="fw-bold d-block mb-2">Digital Signature</label>
+                            <img src="{{ extra_data.signature }}" alt="Signature" 
+                                 style="max-width: 100%; border: 1px solid #ddd; padding: 10px; border-radius: 5px; background: white;">
+                        </div>
+                        {% else %}
+                        <div class="text-center text-muted">
+                            <i class="fas fa-signature fa-3x mb-2"></i>
+                            <p>No signature provided</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
         
-        <!-- Document Previews Card -->
-        <div class="card">
+        <!-- Preview Card - ONLY for pending applications -->
+        {% if application.status == 'pending' or application.status == 'under_review' %}
+        <div class="card mb-4 border-warning">
+            <div class="card-header bg-warning">
+                <h5 class="mb-0"><i class="fas fa-eye me-2"></i>Preview: What Will Be Assigned</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4 text-center">
+                        <div class="p-3 border rounded">
+                            <i class="fas fa-id-card fa-2x text-primary mb-2"></i>
+                            <h6>Staff ID</h6>
+                            <span class="badge bg-primary fs-6">{{ next_staff_id|default:"FM001" }}</span>
+                            <small class="text-muted d-block">Sequential (FM001, FM002...)</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4 text-center">
+                        <div class="p-3 border rounded">
+                            <i class="fas fa-users fa-2x text-success mb-2"></i>
+                            <h6>Role Group</h6>
+                            <span class="badge bg-success">To be selected by admin</span>
+                            <small class="text-muted d-block">Determines dashboard access</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4 text-center">
+                        <div class="p-3 border rounded">
+                            <i class="fas fa-store fa-2x text-info mb-2"></i>
+                            <h6>Assigned Shop</h6>
+                            <span class="badge bg-info">To be selected by admin</span>
+                            <small class="text-muted d-block">Work location</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="alert alert-info mt-3 mb-0">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>Upon approval:</strong> Staff ID will be <strong>{{ next_staff_id|default:"FM001" }}</strong>, 
+                    and you will assign a Role Group and Shop Branch.
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Documents Card -->
+        <div class="card mb-4">
             <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
-                <h5 class="mb-0"><i class="fas fa-images me-2"></i>Document Previews</h5>
+                <h5 class="mb-0"><i class="fas fa-images me-2"></i>Uploaded Documents</h5>
                 <a href="{% url 'staff:view_documents' application.id %}" class="btn btn-sm btn-light">
-                    <i class="fas fa-expand"></i> View All
+                    <i class="fas fa-expand"></i> Full View
                 </a>
             </div>
             <div class="card-body">
@@ -169,26 +328,79 @@
                     {% if application.passport_photo %}
                     <div class="col-md-4 text-center mb-3">
                         <label class="fw-bold d-block mb-2">Passport Photo</label>
-                        <img src="{{ application.passport_photo.url }}" class="document-preview" style="max-height: 120px;">
+                        <a href="{{ application.passport_photo.url }}" target="_blank">
+                            <img src="{{ application.passport_photo.url }}" class="document-preview img-thumbnail" style="max-height: 120px; cursor: pointer;">
+                        </a>
                     </div>
                     {% endif %}
                     
                     {% if application.id_front %}
                     <div class="col-md-4 text-center mb-3">
                         <label class="fw-bold d-block mb-2">ID Front</label>
-                        <img src="{{ application.id_front.url }}" class="document-preview" style="max-height: 120px;">
+                        <a href="{{ application.id_front.url }}" target="_blank">
+                            <img src="{{ application.id_front.url }}" class="document-preview img-thumbnail" style="max-height: 120px; cursor: pointer;">
+                        </a>
                     </div>
                     {% endif %}
                     
                     {% if application.id_back %}
                     <div class="col-md-4 text-center mb-3">
                         <label class="fw-bold d-block mb-2">ID Back</label>
-                        <img src="{{ application.id_back.url }}" class="document-preview" style="max-height: 120px;">
+                        <a href="{{ application.id_back.url }}" target="_blank">
+                            <img src="{{ application.id_back.url }}" class="document-preview img-thumbnail" style="max-height: 120px; cursor: pointer;">
+                        </a>
                     </div>
                     {% endif %}
                 </div>
+                
+                {% if extra_data.other_documents %}
+                <hr>
+                <div class="alert alert-info">
+                    <i class="fas fa-file-alt me-2"></i>
+                    <strong>Other Documents:</strong>
+                    <a href="{{ extra_data.other_documents.url }}" target="_blank" class="alert-link">
+                        View Document <i class="fas fa-external-link-alt ms-1"></i>
+                    </a>
+                </div>
+                {% endif %}
             </div>
         </div>
+        
+        <!-- Experience Card -->
+        {% if application.experience %}
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="fas fa-history me-2"></i>Work Experience</h5>
+            </div>
+            <div class="card-body">
+                {{ application.experience|linebreaks }}
+            </div>
+        </div>
+        {% endif %}
     </div>
 </div>
+
+<style>
+    .document-preview {
+        transition: transform 0.2s;
+    }
+    .document-preview:hover {
+        transform: scale(1.05);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+    .table-sm th {
+        font-weight: 600;
+        color: #495057;
+    }
+    .badge {
+        font-size: 0.9rem;
+        padding: 5px 10px;
+    }
+    .border-warning {
+        border-color: #ffc107 !important;
+    }
+    .border-success {
+        border-color: #28a745 !important;
+    }
+</style>
 {% endblock %}

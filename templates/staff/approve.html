@@ -10,101 +10,172 @@
             <li class="breadcrumb-item"><a href="{% url 'staff:staff_dashboard' %}">Dashboard</a></li>
             <li class="breadcrumb-item"><a href="{% url 'staff:application_list' %}">Applications</a></li>
             <li class="breadcrumb-item"><a href="{% url 'staff:application_detail' application.id %}">{{ application.full_name }}</a></li>
-            <li class="breadcrumb-item active">Approve & Create Account</li>
+            <li class="breadcrumb-item active">Approve Application</li>
         </ol>
     </nav>
 </div>
 
-<div class="row justify-content-center">
+<div class="row">
     <div class="col-md-8">
-        <div class="card border-success">
+        <div class="card">
             <div class="card-header bg-success text-white">
-                <h5 class="mb-0"><i class="fas fa-check-circle me-2"></i>Approve Application & Create User Account</h5>
+                <h5 class="mb-0"><i class="fas fa-check-circle me-2"></i>Approve Application</h5>
             </div>
             <div class="card-body">
-                <div class="alert alert-success">
+                <div class="alert alert-info">
                     <i class="fas fa-info-circle me-2"></i>
-                    Approving this application will create a user account and send login credentials to the applicant.
-                </div>
-                
-                <div class="card mb-3 bg-light">
-                    <div class="card-body">
-                        <h6 class="fw-bold mb-3">Applicant Information</h6>
-                        <table class="table table-sm">
-                            <tr>
-                                <th style="width: 150px;">Name:</th>
-                                <td class="fw-bold">{{ application.full_name }}</td>
-                            </tr>
-                            <tr>
-                                <th>Position:</th>
-                                <td>{{ application.get_position_display }}</td>
-                            </tr>
-                            <tr>
-                                <th>Email:</th>
-                                <td>{{ application.email }}</td>
-                            </tr>
-                            <tr>
-                                <th>Phone:</th>
-                                <td>{{ application.phone }}</td>
-                            </tr>
-                            <tr>
-                                <th>ID Number:</th>
-                                <td>{{ application.id_number }}</td>
-                            </tr>
-                            <tr>
-                                <th>Current Status:</th>
-                                <td>
-                                    {% if application.status == 'pending' %}
-                                        <span class="badge bg-warning">Pending</span>
-                                    {% elif application.status == 'under_review' %}
-                                        <span class="badge bg-info">Under Review</span>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                        </table>
-                    </div>
+                    <strong>Application Summary:</strong> {{ application.full_name }} - {{ application.get_position_display }}
                 </div>
                 
                 <form method="post">
                     {% csrf_token %}
                     
-                    <div class="mb-3">
-                        <label class="form-label">Assign Role/Group <span class="text-danger">*</span></label>
+                    <!-- Role Group Selection -->
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">
+                            <i class="fas fa-users me-2"></i>Assign Role Group *
+                        </label>
                         <select name="group" class="form-select" required>
-                            <option value="">Select Role</option>
+                            <option value="">-- Select Role Group --</option>
                             {% for group in groups %}
                             <option value="{{ group.id }}">{{ group.name }}</option>
                             {% endfor %}
                         </select>
-                        <small class="text-muted">This determines what permissions the user will have.</small>
+                        <small class="text-muted">This determines the user's dashboard and permissions</small>
                     </div>
                     
-                    <div class="mb-3">
-                        <label class="form-label">Review Notes (Optional)</label>
-                        <textarea name="review_notes" class="form-control" rows="3" 
+                    <!-- Shop Assignment -->
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">
+                            <i class="fas fa-store me-2"></i>Assign Shop Branch *
+                        </label>
+                        <select name="assigned_shop" class="form-select" required>
+                            <option value="">-- Select Shop Branch --</option>
+                            {% for shop in shops %}
+                            <option value="{{ shop.id }}">{{ shop.name }} ({{ shop.code }})</option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted">Staff member will be assigned to this shop</small>
+                    </div>
+                    
+                    <!-- Review Notes -->
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">
+                            <i class="fas fa-sticky-note me-2"></i>Review Notes (Optional)
+                        </label>
+                        <textarea name="review_notes" class="form-control" rows="4" 
                                   placeholder="Add any notes about this approval..."></textarea>
                     </div>
                     
-                    <div class="alert alert-info">
-                        <i class="fas fa-info-circle me-2"></i>
-                        <strong>What will happen:</strong>
-                        <ul class="mb-0 mt-2">
-                            <li>A user account will be created with username based on email</li>
-                            <li>A random password will be generated</li>
-                            <li>Login credentials will be emailed to {{ application.email }}</li>
-                            <li>The user will be assigned to the selected role</li>
+                    <!-- Account Settings Summary -->
+                    <div class="alert alert-success">
+                        <h6><i class="fas fa-cog me-2"></i>Account Settings (Auto-configured):</h6>
+                        <ul class="mb-0">
+                            <li>✅ Username: <strong>Auto-generated Staff ID (FM001, FM002, etc.)</strong></li>
+                            <li>✅ Password: <strong>User's chosen password</strong> (from application)</li>
+                            <li>✅ Staff ID: Auto-generated sequentially (FM001, FM002, etc.)</li>
+                            <li>✅ Identity Verified: <strong>Auto-verified</strong></li>
+                            <li>✅ Password Changed: <strong>Already set by user</strong> - No forced change!</li>
+                            <li>✅ Can login immediately after approval using Staff ID as username</li>
                         </ul>
                     </div>
                     
-                    <div class="d-flex justify-content-center gap-3">
+                    <div class="d-flex justify-content-between">
                         <a href="{% url 'staff:application_detail' application.id %}" class="btn btn-secondary">
-                            <i class="fas fa-times"></i> Cancel
+                            <i class="fas fa-times me-2"></i>Cancel
                         </a>
                         <button type="submit" class="btn btn-success">
-                            <i class="fas fa-check"></i> Approve & Create Account
+                            <i class="fas fa-check me-2"></i>Approve & Create Account
                         </button>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <!-- Applicant Info Card -->
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="fas fa-user me-2"></i>Applicant Information</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tr>
+                        <th>Name:</th>
+                        <td>{{ application.full_name }}</td>
+                    </tr>
+                    <tr>
+                        <th>Email:</th>
+                        <td>{{ application.email }}</td>
+                    </tr>
+                    <tr>
+                        <th>Phone:</th>
+                        <td>{{ application.phone }}</td>
+                    </tr>
+                    <tr>
+                        <th>ID Number:</th>
+                        <td>{{ application.id_number }}</td>
+                    </tr>
+                    <tr>
+                        <th>Position:</th>
+                        <td>{{ application.get_position_display }}</td>
+                    </tr>
+                    {% if extra_data %}
+                    <tr>
+                        <th>Former Employer:</th>
+                        <td>{{ extra_data.former_employer|truncatechars:30 }}</td>
+                    </tr>
+                    <tr>
+                        <th>Preferred Salary:</th>
+                        <td class="fw-bold text-success">KSH {{ extra_data.preferred_salary }}</td>
+                    </tr>
+                    {% endif %}
+                </table>
+            </div>
+        </div>
+        
+        <!-- Staff ID Preview -->
+        <div class="card mt-3">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="fas fa-id-card me-2"></i>Staff ID Preview</h5>
+            </div>
+            <div class="card-body text-center">
+                {% with last_staff=staff_list.0 %}
+                <div class="alert alert-info">
+                    <strong>Next Staff ID:</strong>
+                    <h2 class="mt-2">
+                        {% with last_id=staff_list.0.staff_id %}
+                            {% if last_id %}
+                                FM{% with num=last_id|slice:"2:"|add:"1" %}{{ num|stringformat:"03d" }}{% endwith %}
+                            {% else %}
+                                FM001
+                            {% endif %}
+                        {% endwith %}
+                    </h2>
+                    <small>Sequential format: FM001, FM002, FM003...</small>
+                </div>
+                {% endwith %}
+                <small class="text-muted">
+                    <i class="fas fa-info-circle"></i> Username will be the same as Staff ID
+                </small>
+            </div>
+        </div>
+        
+        <!-- Important Notes -->
+        <div class="card mt-3">
+            <div class="card-header bg-warning">
+                <h5 class="mb-0"><i class="fas fa-exclamation-triangle me-2"></i>Important Notes</h5>
+            </div>
+            <div class="card-body">
+                <ul class="mb-0 small">
+                    <li>Username = Staff ID (e.g., FM001)</li>
+                    <li>User uses their preferred password from application</li>
+                    <li>User will receive email with login instructions</li>
+                    <li>User can login immediately with Staff ID + their chosen password</li>
+                    <li>No forced password change required</li>
+                    <li>User will be redirected to their role-based dashboard</li>
+                </ul>
             </div>
         </div>
     </div>

@@ -41,6 +41,7 @@ from staff.models import UserProfile
 import random
 import re
 import string
+import sys
 from functools import wraps
 from django.contrib import messages
 from django.contrib.auth import get_user_model
@@ -50,16 +51,16 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required, user_passes_test
 from .models import UserProfile
 from finance.utils import UnifiedFinanceCalculator
+email_queue = queue.Queue()
+worker_running = True
+worker_thread = None
 
 
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
 
-# Create a global queue and worker thread
-email_queue = queue.Queue()
-worker_running = True
-worker_thread = None
+
 
 def email_worker():
     """Worker that handles both SMTP (local) and API (Render) emails"""
@@ -128,12 +129,104 @@ def queue_email(subject, message, recipient_list, html_message=None):
     
     logger.info(f"📦 Email queued for {recipient_list} - Queue size: {email_queue.qsize()}")
 
+def get_correct_dashboard_url(user):
+    """Get the correct dashboard URL for a user based on their groups"""
+    
+    # Get user's groups
+    user_groups = user.groups.values_list('name', flat=True)
+    
+    # Priority order (first match wins)
+    dashboard_map = [
+        (['Administrator'], 'staff:admin_dashboard'),
+        (['Sales Manager'], 'staff:sales_manager_dashboard'),
+        (['Store Manager', 'Inventory Manager'], 'staff:store_manager_dashboard'),
+        (['Credit Manager'], 'staff:credit_manager_dashboard'),
+        (['Credit Officer'], 'staff:credit_officer_dashboard'),
+        (['Finance Manager'], 'staff:finance_manager_dashboard'),
+        (['Sales Agent'], 'staff:sales_agent_dashboard'),
+        (['Cashier'], 'staff:cashier_dashboard'),
+        (['Customer Service'], 'staff:customer_service_dashboard'),
+        (['Security Officer'], 'staff:security_dashboard'),
+        (['Cleaner'], 'staff:cleaner_dashboard'),
+        (['M-Pesa Agent'], 'staff:mpesa_agent_dashboard'),
+    ]
+    
+    for groups, dashboard_url in dashboard_map:
+        if any(group in user_groups for group in groups):
+            return dashboard_url
+    
+    return 'staff:staff_stats_dashboard'
+
+def dashboard_for_role(*allowed_roles):
+    """
+    Decorator that checks if user has the right role for this dashboard.
+    If not, automatically redirects to their correct dashboard.
+    
+    Usage:
+        @dashboard_for_role('Store Manager', 'Inventory Manager')
+        def store_manager_dashboard(request):
+            ...
+    """
+    def decorator(view_func):
+        @wraps(view_func)
+        def _wrapped_view(request, *args, **kwargs):
+            # Must be logged in
+            if not request.user.is_authenticated:
+                return redirect('login')
+            
+            # Superusers can access everything
+            if request.user.is_superuser:
+                return view_func(request, *args, **kwargs)
+            
+            # Get user's groups
+            user_groups = set(request.user.groups.values_list('name', flat=True))
+            
+            # Check if user has any of the allowed roles
+            has_permission = bool(set(allowed_roles) & user_groups)
+            
+            if not has_permission:
+                # User doesn't have permission for this dashboard
+                # Get their correct dashboard
+                correct_dashboard = get_correct_dashboard_url(request.user)
+                
+                # Get readable names for the message
+                current_dashboard_name = view_func.__name__.replace('_dashboard', '').replace('_', ' ').title()
+                correct_dashboard_name = correct_dashboard.split(':')[-1].replace('_dashboard', '').replace('_', ' ').title()
+                
+                # Log the redirect
+                logger.info(f"Redirecting {request.user.username} from {current_dashboard_name} to {correct_dashboard_name}")
+                
+                # Add friendly message (optional - remove if you don't want messages)
+                messages.info(
+                    request,
+                    f"👋 You were trying to access the {current_dashboard_name} Dashboard. "
+                    f"We've redirected you to your {correct_dashboard_name} Dashboard."
+                )
+                
+                return redirect(correct_dashboard)
+            
+            # User has permission - show the view
+            return view_func(request, *args, **kwargs)
+        
+        return _wrapped_view
+    return decorator
 
 
 
 
-import sys
+# ============================================
+# Start the worker thread
+# ============================================
+worker_thread = threading.Thread(target=email_worker, daemon=True)
+worker_thread.start()
+logger.info(f"✅ Worker thread started. Alive: {worker_thread.is_alive()}")
 
+
+
+
+#====================================
+# VERIFICATION  VIEW
+#===================================
 @login_required
 def otp_verify(request):
     # Write to stderr immediately (bypasses Django logging)
@@ -245,10 +338,6 @@ def otp_verify(request):
     }
     return render(request, 'staff/otp_verify.html', context)
 
-
-
-
-
 @login_required
 def otp_resend(request):
     """Resend OTP code"""
@@ -328,264 +417,217 @@ def email_queue_status(request):
         'worker_alive': worker_thread.is_alive() if worker_thread else False,
     })
 
-# ============================================
-# Start the worker thread
-# ============================================
-worker_thread = threading.Thread(target=email_worker, daemon=True)
-worker_thread.start()
-logger.info(f"✅ Worker thread started. Alive: {worker_thread.is_alive()}")
-
-
-
-
-
-
 def custom_logout(request):
     """Custom logout view that handles POST requests"""
     logout(request)
     messages.success(request, "You have been successfully logged out.")
     return redirect('website:home') 
 
-
-
-
-
-# ============================================
-# CORRECT AUTOREDIRECT DASHBOARD
-# ============================================
-def get_correct_dashboard_url(user):
-    """Get the correct dashboard URL for a user based on their groups"""
-    
-    # Get user's groups
-    user_groups = user.groups.values_list('name', flat=True)
-    
-    # Priority order (first match wins)
-    dashboard_map = [
-        (['Administrator'], 'staff:admin_dashboard'),
-        (['Sales Manager'], 'staff:sales_manager_dashboard'),
-        (['Store Manager', 'Inventory Manager'], 'staff:store_manager_dashboard'),
-        (['Credit Manager'], 'staff:credit_manager_dashboard'),
-        (['Credit Officer'], 'staff:credit_officer_dashboard'),
-        (['Finance Manager'], 'staff:finance_manager_dashboard'),
-        (['Sales Agent'], 'staff:sales_agent_dashboard'),
-        (['Cashier'], 'staff:cashier_dashboard'),
-        (['Customer Service'], 'staff:customer_service_dashboard'),
-        (['Security Officer'], 'staff:security_dashboard'),
-        (['Cleaner'], 'staff:cleaner_dashboard'),
-        (['M-Pesa Agent'], 'staff:mpesa_agent_dashboard'),
-    ]
-    
-    for groups, dashboard_url in dashboard_map:
-        if any(group in user_groups for group in groups):
-            return dashboard_url
-    
-    return 'staff:staff_stats_dashboard'
-
-def dashboard_for_role(*allowed_roles):
-    """
-    Decorator that checks if user has the right role for this dashboard.
-    If not, automatically redirects to their correct dashboard.
-    
-    Usage:
-        @dashboard_for_role('Store Manager', 'Inventory Manager')
-        def store_manager_dashboard(request):
-            ...
-    """
-    def decorator(view_func):
-        @wraps(view_func)
-        def _wrapped_view(request, *args, **kwargs):
-            # Must be logged in
-            if not request.user.is_authenticated:
-                return redirect('login')
-            
-            # Superusers can access everything
-            if request.user.is_superuser:
-                return view_func(request, *args, **kwargs)
-            
-            # Get user's groups
-            user_groups = set(request.user.groups.values_list('name', flat=True))
-            
-            # Check if user has any of the allowed roles
-            has_permission = bool(set(allowed_roles) & user_groups)
-            
-            if not has_permission:
-                # User doesn't have permission for this dashboard
-                # Get their correct dashboard
-                correct_dashboard = get_correct_dashboard_url(request.user)
-                
-                # Get readable names for the message
-                current_dashboard_name = view_func.__name__.replace('_dashboard', '').replace('_', ' ').title()
-                correct_dashboard_name = correct_dashboard.split(':')[-1].replace('_dashboard', '').replace('_', ' ').title()
-                
-                # Log the redirect
-                logger.info(f"Redirecting {request.user.username} from {current_dashboard_name} to {correct_dashboard_name}")
-                
-                # Add friendly message (optional - remove if you don't want messages)
-                messages.info(
-                    request,
-                    f"👋 You were trying to access the {current_dashboard_name} Dashboard. "
-                    f"We've redirected you to your {correct_dashboard_name} Dashboard."
-                )
-                
-                return redirect(correct_dashboard)
-            
-            # User has permission - show the view
-            return view_func(request, *args, **kwargs)
-        
-        return _wrapped_view
-    return decorator
-
-
-
-
-
-
-
-
-# ============================================
-# MAIN DASHBOARD REDIRECT (Based on Groups)
-# ============================================
 @login_required
-def staff_dashboard(request):
-    """Main dashboard that redirects to role-specific dashboard"""
-
-    prepare_dashboard_messages(request, 'Staff')
+def notifications_page(request):
+    """Display all notifications for the user - WITHOUT SALES/PURCHASES"""
+    
+    # Get current time for time calculations
+    now = timezone.now()
+    last_24h = now - timedelta(hours=24)
+    last_week = now - timedelta(days=7)
     
     # ============================================
-    # STEP 1: Check if user has staff profile
+    # STOCK ALERTS
     # ============================================
-    try:
-        staff_profile = request.user.staff_profile
-    except AttributeError:
-        messages.error(request, "Staff profile not found. Please contact administrator.")
-        return redirect('logout')
+    stock_alerts = StockAlert.objects.filter(
+        is_active=True,
+        is_dismissed=False
+    ).select_related('product').order_by('-severity', '-created_at')
+    
+    # Count alerts by severity
+    critical_alerts = stock_alerts.filter(severity__in=['critical', 'danger']).count()
+    warning_alerts = stock_alerts.filter(severity='warning').count()
+    info_alerts = stock_alerts.filter(severity='info').count()
     
     # ============================================
-    # STEP 2: Check if user is active
+    # RETURN REQUESTS (for managers/staff)
     # ============================================
-    if not request.user.is_active:
-        messages.error(request, "Your account is inactive. Please contact administrator.")
-        return redirect('logout')
-    
-    # ============================================
-    # STEP 3: Check ITP Verification Status
-    # ============================================
-    if not staff_profile.is_identity_verified:
-        # Check if verification is pending (documents submitted but not verified by admin)
-        if staff_profile.verification_submitted_at and not staff_profile.is_identity_verified:
-            messages.info(request, "Your identity verification is pending admin approval. You'll be notified once verified.")
-            return render(request, 'staff/pending_approval.html', {
-                'staff_profile': staff_profile,
-                'message': 'Your documents are under review. This usually takes 24-48 hours.'
-            })
+    if request.user.is_staff or request.user.is_superuser:
+        pending_returns = ReturnRequest.objects.filter(
+            status='submitted'
+        ).select_related('product', 'requested_by').order_by('-requested_at')
         
-        # Check if verification code exists and is not expired (24 hours)
-        from django.utils import timezone
-        from datetime import timedelta
+        verified_returns = ReturnRequest.objects.filter(
+            status='verified'
+        ).select_related('product', 'requested_by', 'verified_by').order_by('-verified_at')
+    else:
+        # Regular users see their own returns
+        pending_returns = ReturnRequest.objects.filter(
+            requested_by=request.user,
+            status='submitted'
+        ).order_by('-requested_at')
         
-        if staff_profile.verification_code and staff_profile.verification_sent_at:
-            time_diff = timezone.now() - staff_profile.verification_sent_at
-            is_expired = time_diff > timedelta(hours=24)
-            
-            if is_expired:
-                staff_profile.verification_code = generate_verification_code()
-                staff_profile.verification_sent_at = timezone.now()
-                staff_profile.verification_attempts = 0
-                staff_profile.save(update_fields=['verification_code', 'verification_sent_at', 'verification_attempts'])
-                
-                from .utils.email_verification import send_itp_verification_email
-                send_itp_verification_email(staff_profile, request)
-                
-                messages.warning(request, "Your previous verification code has expired. A new 6-digit code has been sent to your email.")
-            else:
-                hours_remaining = 24 - (time_diff.seconds // 3600)
-                minutes_remaining = (time_diff.seconds % 3600) // 60
-                messages.warning(
-                    request, 
-                    f"Please complete identity verification to access the dashboard. "
-                    f"Your verification code expires in {hours_remaining}h {minutes_remaining}m."
-                )
-        else:
-            from .utils.email_verification import send_itp_verification_email
-            from django.utils import timezone
-            
-            staff_profile.verification_code = generate_verification_code()
-            staff_profile.verification_sent_at = timezone.now()
-            staff_profile.verification_attempts = 0
-            staff_profile.save(update_fields=['verification_code', 'verification_sent_at', 'verification_attempts'])
-            
-            send_itp_verification_email(staff_profile, request)
-            messages.info(request, "Welcome! Please verify your identity to access the dashboard. A 6-digit verification code has been sent to your email.")
-        
-        request.session['intended_dashboard_url'] = request.path
-        return redirect('staff:verify_identity', staff_id=staff_profile.id)
+        verified_returns = ReturnRequest.objects.filter(
+            requested_by=request.user,
+            status='verified'
+        ).order_by('-requested_at')
     
     # ============================================
-    # STEP 4: CHECK GROUPS FIRST (BEFORE SUPERUSER!)
+    # REMOVED: RECENT ACTIVITY (Sales & Purchases)
+    # COMMENTED OUT - NO LONGER SHOWING SALES/PURCHASES
     # ============================================
-    # Get user's groups
-    user_groups = request.user.groups.values_list('name', flat=True)
-    logger.info(f"🔴 DASHBOARD - User {request.user.username} groups: {list(user_groups)}")
+    # from inventory.models import StockEntry
+    # recent_activity = StockEntry.objects.select_related(
+    #     'product_sku', 'product_unit', 'created_by'
+    # ).filter(
+    #     created_at__gte=last_week
+    # ).order_by('-created_at')[:20]
     
-    # Define group to dashboard mapping (PRIORITY ORDER)
-    dashboard_routes = {
-        'Technician': 'staff:technician_dashboard', 
-        'Senior Technician': 'staff:technician_dashboard', 
-        'Workshop Technician': 'staff:technician_dashboard', 
-        'Cashier': 'staff:cashier_dashboard',
-        'Sales Agent': 'staff:sales_agent_dashboard',
-        'Sales Manager': 'staff:sales_manager_dashboard',
-        'Store Manager': 'staff:store_manager_dashboard',
-        'Inventory Manager': 'staff:store_manager_dashboard',
-        'Credit Manager': 'staff:credit_manager_dashboard',
-        'Credit Officer': 'staff:credit_officer_dashboard',
-        'Customer Service': 'staff:customer_service_dashboard',
-        'Finance Manager': 'staff:finance_manager_dashboard',
-        'Security Officer': 'staff:security_dashboard',
-        'M-Pesa Agent': 'staff:mpesa_agent_dashboard',
-        'Cleaner': 'staff:cleaner_dashboard',
-        'Assistant Manager': 'staff:supervisor_dashboard',
-        'Administrator': 'staff:admin_dashboard',
+    # ============================================
+    # LOW STOCK PRODUCTS - FIXED
+    # ============================================
+    from django.db.models import Q
+    
+    # For bulk items: check bulk_quantity
+    bulk_low_stock = Product.objects.filter(
+        category__item_type='bulk',
+        is_active=True,
+        is_discontinued=False,
+        bulk_quantity__lte=F('reorder_level'),
+        bulk_quantity__gt=0
+    )
+    
+    # For single items: check available_quantity
+    single_low_stock = Product.objects.filter(
+        category__item_type='single',
+        is_active=True,
+        is_discontinued=False,
+        available_quantity__lte=F('reorder_level'),
+        available_quantity__gt=0
+    )
+    
+    # Combine both
+    low_stock_products = (bulk_low_stock | single_low_stock).select_related('category')[:10]
+    
+    # ============================================
+    # OUT OF STOCK PRODUCTS - FIXED
+    # ============================================
+    bulk_out_of_stock = Product.objects.filter(
+        category__item_type='bulk',
+        is_active=True,
+        bulk_quantity=0
+    )
+    
+    single_out_of_stock = Product.objects.filter(
+        category__item_type='single',
+        is_active=True,
+        available_quantity=0
+    )
+    
+    out_of_stock_products = (bulk_out_of_stock | single_out_of_stock).select_related('category')[:10]
+    
+    # ============================================
+    # STAFF NOTIFICATIONS (for superusers/staff)
+    # ============================================
+    from .models import Staff, StaffApplication
+    
+    pending_verifications = []
+    pending_applications = []
+    
+    if request.user.is_superuser or request.user.is_staff:
+        # Pending staff verifications
+        pending_verifications = Staff.objects.filter(
+            verification_submitted_at__isnull=False,
+            is_identity_verified=False
+        ).select_related('user')[:10]
+        
+        # Pending staff applications
+        pending_applications = StaffApplication.objects.filter(
+            status='pending'
+        ).order_by('-application_date')[:10]
+    
+    # ============================================
+    # CREDIT TRANSACTIONS ALERTS (for managers)
+    # ============================================
+    credit_transactions_pending = []
+    if hasattr(request.user, 'credit_transactions'):
+        from credit.models import CreditTransaction
+        credit_transactions_pending = CreditTransaction.objects.filter(
+            Q(payment_status='pending_payment') | Q(commission_status='pending')
+        ).select_related('product', 'customer')[:10]
+    
+    # ============================================
+    # NOTIFICATION COUNTS BY TYPE
+    # ============================================
+    notification_counts = {
+        'total': stock_alerts.count() + pending_returns.count(),
+        'stock_alerts': stock_alerts.count(),
+        'critical_alerts': critical_alerts,
+        'warning_alerts': warning_alerts,
+        'info_alerts': info_alerts,
+        'pending_returns': pending_returns.count(),
+        'verified_returns': verified_returns.count(),
+        'low_stock': low_stock_products.count(),
+        'out_of_stock': out_of_stock_products.count(),
+        'pending_verifications': pending_verifications.count(),
+        'pending_applications': pending_applications.count(),
+        'credit_pending': credit_transactions_pending.count(),
     }
     
-    # Find matching dashboard based on group (FIRST MATCH WINS)
-    intended_url = None
-    for group_name, dashboard_url in dashboard_routes.items():
-        if group_name in user_groups:
-            intended_url = dashboard_url
-            logger.info(f"🔴 DASHBOARD - Matched group '{group_name}' to dashboard: {dashboard_url}")
-            break
+    context = {
+        'stock_alerts': stock_alerts,
+        'pending_returns': pending_returns,
+        'verified_returns': verified_returns,
+        # 'recent_activity': recent_activity,  # REMOVED - No longer passing sales/purchases
+        'low_stock_products': low_stock_products,
+        'out_of_stock_products': out_of_stock_products,
+        'pending_verifications': pending_verifications,
+        'pending_applications': pending_applications,
+        'credit_transactions_pending': credit_transactions_pending,
+        'notification_counts': notification_counts,
+        'now': now,
+        'last_24h': last_24h,
+        'last_week': last_week,
+    }
     
-    # ============================================
-    # STEP 5: If no group found, THEN check superuser
-    # ============================================
-    if not intended_url:
-        if request.user.is_superuser:
-            intended_url = 'staff:admin_dashboard'
-            logger.info(f"🔴 DASHBOARD - No groups found, using superuser admin dashboard")
-        else:
-            intended_url = 'staff:staff_stats_dashboard'  # Default fallback
-            logger.info(f"🔴 DASHBOARD - No groups found, using default stats dashboard")
+    return render(request, 'staff/notifications_page.html', context)
+
+@staff_member_required
+def user_list(request):
+    """View to list all users in the system with staff information"""
+    users = User.objects.all().order_by('-date_joined')
     
-    logger.info(f"🔴 DASHBOARD - Final intended URL for {request.user.username}: {intended_url}")
+    # Annotate users with staff profile info
+    from staff.models import Staff
+    for user in users:
+        try:
+            staff_profile = Staff.objects.get(user=user)
+            user.staff_id = staff_profile.staff_id
+            user.staff_id_number = staff_profile.id_number
+            user.assigned_shop = staff_profile.assigned_shop.name if staff_profile.assigned_shop else None
+        except Staff.DoesNotExist:
+            user.staff_id = None
+            user.staff_id_number = None
+            user.assigned_shop = None
     
-    # ============================================
-    # STEP 6: OTP CHECK (commented out)
-    # ============================================
-    # OTP bypassed for now
+    # Calculate regular users (non-staff, non-superuser)
+    regular_users = users.filter(is_staff=False, is_superuser=False).count()
     
-    # ============================================
-    # STEP 7: Redirect to the intended dashboard
-    # ============================================
-    return redirect(intended_url)
+    return render(request, 'staff/users/list.html', {
+        'users': users,
+        'total_users': users.count(),
+        'active_users': users.filter(is_active=True).count(),
+        'staff_users': users.filter(is_staff=True).count(),
+        'regular_users': regular_users,
+        'title': 'System Users'
+    })
 
+@staff_member_required
+def user_detail(request, pk):
+    """View details of a specific user"""
+    user = get_object_or_404(User, pk=pk)
+    
+    context = {
+        'user': user,
+    }
+    return render(request, 'staff/users/detail.html', context)
 
-
-
-
-# ============================================
-# Identity Verification View
-# ============================================
 @login_required
 def verify_identity(request, staff_id):
     """ITP Identity Verification View"""
@@ -739,15 +781,6 @@ def verify_identity(request, staff_id):
     }
     return render(request, 'staff/verify_identity.html', context)
 
-
-
-
-
-
-
-# ============================================
-# Resend Verification Code
-# ============================================
 @login_required
 def resend_verification(request):
     """Resend verification email"""
@@ -794,10 +827,6 @@ def resend_verification(request):
     
     return JsonResponse({'success': False, 'message': 'Invalid request method'})
 
-
-# ============================================
-# Send admin notification
-# ============================================
 def send_verification_admin_notification(staff, request=None):
     """Notify admins about pending verification"""
     try:
@@ -922,12 +951,6 @@ def send_verification_admin_notification(staff, request=None):
         logger.error(f"Failed to send admin verification notification: {str(e)}")
         return False
 
-
-
-
-
-
-
 @staff_member_required
 def admin_verify_list(request):
     """List all staff members pending verification"""
@@ -992,12 +1015,6 @@ def admin_verify_list(request):
     }
     return render(request, 'staff/admin_verify_list.html', context)
 
-
-
-
-
-
-
 @login_required
 @user_passes_test(lambda u: u.is_superuser or u.is_staff)
 def admin_verify_staff(request, staff_id):
@@ -1041,14 +1058,6 @@ def admin_verify_staff(request, staff_id):
     }
     return render(request, 'staff/admin_verify_staff.html', context)
 
-
-
-
-
-
-# ============================================
-# Send verification result email to staff
-# ============================================
 def send_verification_result_email(staff, approved=True, notes=''):
     """Send verification result notification to staff"""
     try:
@@ -1096,7 +1105,6 @@ def send_verification_result_email(staff, approved=True, notes=''):
     except Exception as e:
         logger.error(f"Failed to send verification result email: {str(e)}")
         return False
-
 
 
 
@@ -1162,6 +1170,210 @@ def prepare_dashboard_messages(request, dashboard_name=None):
         return True
     
     return False
+
+
+
+
+
+
+
+# ====================================
+# STATISTICS DASHBOARD VIEW (Rename this)
+# ====================================
+@login_required
+def staff_stats_dashboard(request):
+    """Staff dashboard with statistics (fallback for users without specific roles)"""
+    from datetime import timedelta, date
+    import json
+    
+    # Basic stats
+    total_applications = StaffApplication.objects.count()
+    pending_count = StaffApplication.objects.filter(status='pending').count()
+    approved_count = StaffApplication.objects.filter(status='approved').count()
+    rejected_count = StaffApplication.objects.filter(status='rejected').count()
+    under_review_count = StaffApplication.objects.filter(status='under_review').count()
+    
+    # Recent applications
+    recent_applications = StaffApplication.objects.order_by('-application_date')[:5]
+    
+    # Position statistics
+    position_stats = []
+    for pos_code, pos_name in StaffApplication.POSITION_CHOICES:
+        count = StaffApplication.objects.filter(position=pos_code).count()
+        if count > 0:
+            position_stats.append({
+                'code': pos_code,
+                'name': pos_name,
+                'count': count
+            })
+    
+    # Chart data (last 30 days)
+    today = date.today()
+    thirty_days_ago = today - timedelta(days=30)
+    
+    chart_labels = []
+    applications_data = []
+    
+    for i in range(30):
+        day = thirty_days_ago + timedelta(days=i)
+        count = StaffApplication.objects.filter(
+            application_date__date=day
+        ).count()
+        
+        chart_labels.append(day.strftime('%d %b'))
+        applications_data.append(count)
+    
+    context = {
+        'total_applications': total_applications,
+        'pending_count': pending_count,
+        'approved_count': approved_count,
+        'rejected_count': rejected_count,
+        'under_review_count': under_review_count,
+        'recent_applications': recent_applications,
+        'position_stats': position_stats,
+        'chart_labels': json.dumps(chart_labels),
+        'applications_data': json.dumps(applications_data),
+    }
+    
+    return render(request, 'staff/dashboard.html', context)
+
+# ============================================
+# MAIN DASHBOARD REDIRECT (Based on Groups)
+# ============================================
+@login_required
+def staff_dashboard(request):
+    """Main dashboard that redirects to role-specific dashboard"""
+
+    prepare_dashboard_messages(request, 'Staff')
+    
+    # ============================================
+    # STEP 1: Check if user has staff profile
+    # ============================================
+    try:
+        staff_profile = request.user.staff_profile
+    except AttributeError:
+        messages.error(request, "Staff profile not found. Please contact administrator.")
+        return redirect('logout')
+    
+    # ============================================
+    # STEP 2: Check if user is active
+    # ============================================
+    if not request.user.is_active:
+        messages.error(request, "Your account is inactive. Please contact administrator.")
+        return redirect('logout')
+    
+    # ============================================
+    # STEP 3: Check ITP Verification Status
+    # ============================================
+    if not staff_profile.is_identity_verified:
+        # Check if verification is pending (documents submitted but not verified by admin)
+        if staff_profile.verification_submitted_at and not staff_profile.is_identity_verified:
+            messages.info(request, "Your identity verification is pending admin approval. You'll be notified once verified.")
+            return render(request, 'staff/pending_approval.html', {
+                'staff_profile': staff_profile,
+                'message': 'Your documents are under review. This usually takes 24-48 hours.'
+            })
+        
+        # Check if verification code exists and is not expired (24 hours)
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        if staff_profile.verification_code and staff_profile.verification_sent_at:
+            time_diff = timezone.now() - staff_profile.verification_sent_at
+            is_expired = time_diff > timedelta(hours=24)
+            
+            if is_expired:
+                staff_profile.verification_code = generate_verification_code()
+                staff_profile.verification_sent_at = timezone.now()
+                staff_profile.verification_attempts = 0
+                staff_profile.save(update_fields=['verification_code', 'verification_sent_at', 'verification_attempts'])
+                
+                from .utils.email_verification import send_itp_verification_email
+                send_itp_verification_email(staff_profile, request)
+                
+                messages.warning(request, "Your previous verification code has expired. A new 6-digit code has been sent to your email.")
+            else:
+                hours_remaining = 24 - (time_diff.seconds // 3600)
+                minutes_remaining = (time_diff.seconds % 3600) // 60
+                messages.warning(
+                    request, 
+                    f"Please complete identity verification to access the dashboard. "
+                    f"Your verification code expires in {hours_remaining}h {minutes_remaining}m."
+                )
+        else:
+            from .utils.email_verification import send_itp_verification_email
+            from django.utils import timezone
+            
+            staff_profile.verification_code = generate_verification_code()
+            staff_profile.verification_sent_at = timezone.now()
+            staff_profile.verification_attempts = 0
+            staff_profile.save(update_fields=['verification_code', 'verification_sent_at', 'verification_attempts'])
+            
+            send_itp_verification_email(staff_profile, request)
+            messages.info(request, "Welcome! Please verify your identity to access the dashboard. A 6-digit verification code has been sent to your email.")
+        
+        request.session['intended_dashboard_url'] = request.path
+        return redirect('staff:verify_identity', staff_id=staff_profile.id)
+    
+    # ============================================
+    # STEP 4: CHECK GROUPS FIRST (BEFORE SUPERUSER!)
+    # ============================================
+    # Get user's groups
+    user_groups = request.user.groups.values_list('name', flat=True)
+    logger.info(f"🔴 DASHBOARD - User {request.user.username} groups: {list(user_groups)}")
+    
+    # Define group to dashboard mapping (PRIORITY ORDER)
+    dashboard_routes = {
+        'Technician': 'staff:technician_dashboard', 
+        'Senior Technician': 'staff:technician_dashboard', 
+        'Workshop Technician': 'staff:technician_dashboard', 
+        'Cashier': 'staff:cashier_dashboard',
+        'Sales Agent': 'staff:sales_agent_dashboard',
+        'Sales Manager': 'staff:sales_manager_dashboard',
+        'Store Manager': 'staff:store_manager_dashboard',
+        'Inventory Manager': 'staff:store_manager_dashboard',
+        'Credit Manager': 'staff:credit_manager_dashboard',
+        'Credit Officer': 'staff:credit_officer_dashboard',
+        'Customer Service': 'staff:customer_service_dashboard',
+        'Finance Manager': 'staff:finance_manager_dashboard',
+        'Security Officer': 'staff:security_dashboard',
+        'M-Pesa Agent': 'staff:mpesa_agent_dashboard',
+        'Cleaner': 'staff:cleaner_dashboard',
+        'Assistant Manager': 'staff:supervisor_dashboard',
+        'Administrator': 'staff:admin_dashboard',
+    }
+    
+    # Find matching dashboard based on group (FIRST MATCH WINS)
+    intended_url = None
+    for group_name, dashboard_url in dashboard_routes.items():
+        if group_name in user_groups:
+            intended_url = dashboard_url
+            logger.info(f"🔴 DASHBOARD - Matched group '{group_name}' to dashboard: {dashboard_url}")
+            break
+    
+    # ============================================
+    # STEP 5: If no group found, THEN check superuser
+    # ============================================
+    if not intended_url:
+        if request.user.is_superuser:
+            intended_url = 'staff:admin_dashboard'
+            logger.info(f"🔴 DASHBOARD - No groups found, using superuser admin dashboard")
+        else:
+            intended_url = 'staff:staff_stats_dashboard'  # Default fallback
+            logger.info(f"🔴 DASHBOARD - No groups found, using default stats dashboard")
+    
+    logger.info(f"🔴 DASHBOARD - Final intended URL for {request.user.username}: {intended_url}")
+    
+    # ============================================
+    # STEP 6: OTP CHECK (commented out)
+    # ============================================
+    # OTP bypassed for now
+    
+    # ============================================
+    # STEP 7: Redirect to the intended dashboard
+    # ============================================
+    return redirect(intended_url)
+
 
 
 
@@ -1858,12 +2070,6 @@ def store_manager_dashboard(request):
     return render(request, 'staff/dashboards/store_manager_dashboard.html', context)
 
 
-
-
-
-
-
-
 # ============================================
 # SALES AGENT DASHBOARD - WITH PRODUCT LOOKUP
 # ============================================
@@ -1947,100 +2153,9 @@ def sales_agent_dashboard(request):
     return render(request, 'staff/dashboards/sales_agent_dashboard.html', context)
 
 
+
 # ============================================
 # PRODUCT LOOKUP API - FOR SALES AGENT DASHBOARD
-# ============================================
-def product_lookup_api(request):
-    """
-    API endpoint for product lookup dashboard.
-    Searches across all product fields: product_code, sku_value, barcode, name, brand, model
-    """
-    search_term = request.GET.get('q', '').strip()
-    
-    if not search_term or len(search_term) < 2:
-        return JsonResponse({
-            'success': False,
-            'message': 'Please enter at least 2 characters'
-        })
-    
-    try:
-        # Build search query across multiple fields
-        products = Product.objects.filter(
-            Q(product_code__icontains=search_term) |
-            Q(sku_value__icontains=search_term) |
-            Q(barcode__icontains=search_term) |
-            Q(name__icontains=search_term) |
-            Q(brand__icontains=search_term) |
-            Q(model__icontains=search_term) |
-            Q(description__icontains=search_term)
-        ).select_related('category').filter(is_active=True)[:20]  # Limit to 20 results
-        
-        if not products.exists():
-            return JsonResponse({
-                'success': False,
-                'message': 'No products found matching your search'
-            })
-        
-        # If multiple products found, return all for grid display
-        products_list = []
-        for product in products:
-            # Format specifications for display
-            specs = {}
-            if product.specifications and isinstance(product.specifications, dict):
-                specs = {
-                    'ram': product.specifications.get('ram', ''),
-                    'storage': product.specifications.get('storage', ''),
-                    'color': product.specifications.get('color', ''),
-                    'screen_size': product.specifications.get('screen_size', ''),
-                }
-            
-            products_list.append({
-                'id': product.id,
-                'product_code': product.product_code,
-                'name': product.name,
-                'display_name': product.display_name,
-                'selling_price': float(product.selling_price) if product.selling_price else 0,
-                'buying_price': float(product.buying_price) if product.buying_price else 0,
-                'best_price': float(product.best_price) if product.best_price else None,
-                'sku_value': product.sku_value,
-                'barcode': product.barcode,
-                'brand': product.brand,
-                'model': product.model,
-                'quantity': product.quantity,
-                'category': product.category.name if product.category else None,
-                'category_id': product.category.id if product.category else None,
-                'status': product.status,
-                'stock_status': product.stock_status,
-                'stock_status_badge': product.stock_status_badge,
-                'stock_status_icon': product.stock_status_icon,
-                'condition': product.get_condition_display() if product.condition else 'New',
-                'warranty_months': product.warranty_months,
-                'specifications': specs,
-                'is_featured': product.is_featured,
-                'is_single_item': product.category.is_single_item if product.category else False,
-                'created_at': product.created_at.isoformat() if product.created_at else None,
-                'updated_at': product.updated_at.isoformat() if product.updated_at else None,
-            })
-        
-        response_data = {
-            'success': True,
-            'products': products_list,
-            'total_matches': products.count(),
-            'message': f'Found {products.count()} product(s)'
-        }
-        
-        return JsonResponse(response_data)
-        
-    except Exception as e:
-        logger.error(f"Product lookup error: {str(e)}")
-        return JsonResponse({
-            'success': False,
-            'message': f'Error searching for products: {str(e)}'
-        }, status=500)
-
-
-# ============================================
-# PRODUCT LOOKUP API - WITH DEBUGGING
 # ============================================
 def product_lookup_api(request):
     """
@@ -2054,7 +2169,6 @@ def product_lookup_api(request):
     
     # Log the request
     logger.info(f"🔍 Product lookup request - Search term: '{search_term}'")
-    logger.info(f"🔍 Request headers: {dict(request.headers)}")
     logger.info(f"🔍 GET params: {dict(request.GET)}")
     
     if not search_term or len(search_term) < 2:
@@ -2077,7 +2191,6 @@ def product_lookup_api(request):
         ).select_related('category').filter(is_active=True)[:20]
         
         # Log the query and count
-        logger.info(f"🔍 SQL Query: {products.query}")
         logger.info(f"🔍 Products found: {products.count()}")
         
         # Debug: Check if there are any products at all
@@ -2104,10 +2217,7 @@ def product_lookup_api(request):
         # Build products list
         products_list = []
         for product in products:
-            # Log each product found
-            logger.info(f"🔍 Found product: {product.product_code} - {product.display_name}")
-            
-            # Format specifications
+            # Format specifications for display
             specs = {}
             if product.specifications and isinstance(product.specifications, dict):
                 specs = {
@@ -2134,11 +2244,15 @@ def product_lookup_api(request):
                 'category_id': product.category.id if product.category else None,
                 'status': product.status or '',
                 'stock_status': product.stock_status,
+                'stock_status_badge': getattr(product, 'stock_status_badge', ''),
+                'stock_status_icon': getattr(product, 'stock_status_icon', ''),
                 'condition': product.get_condition_display() if product.condition else 'New',
                 'warranty_months': product.warranty_months or 12,
                 'specifications': specs,
                 'is_featured': product.is_featured,
                 'is_single_item': product.category.is_single_item if product.category else False,
+                'created_at': product.created_at.isoformat() if product.created_at else None,
+                'updated_at': product.updated_at.isoformat() if product.updated_at else None,
             })
         
         response_data = {
@@ -2163,7 +2277,6 @@ def product_lookup_api(request):
             'message': f'Error searching for products: {str(e)}',
             'debug': {'error': str(e)}
         }, status=500)
-
 
 
 
@@ -2468,10 +2581,6 @@ def technician_performance(request):
     return render(request, 'staff/dashboards/technician_performance.html', context)
 
 
-
-
-
-
 # ============================================
 # TECHNICIAN REPORTS - ONLY OWN DATA
 # ============================================
@@ -2654,8 +2763,6 @@ def technician_reports(request):
     }
     
     return render(request, 'workshop/technician_reports.html', context)
-
-
 
 
 # ============================================
@@ -2909,7 +3016,6 @@ def sales_manager_dashboard(request):
     return render(request, 'staff/dashboards/sales_manager_dashboard.html', context)
 
 
-
 # ============================================
 # CASHIER DASHBOARD
 # ============================================
@@ -3032,9 +3138,6 @@ def cashier_dashboard(request):
     }
     
     return render(request, 'staff/dashboards/cashier_dashboard.html', context)
-
-
-
 
 
 # ============================================
@@ -3325,10 +3428,6 @@ def credit_manager_dashboard(request):
     return render(request, 'staff/dashboards/credit_manager_dashboard.html', context)
 
 
-
-
-
-
 # ============================================
 # CREDIT OFFICER DASHBOARD
 # ============================================
@@ -3598,9 +3697,6 @@ def credit_officer_dashboard(request):
     return render(request, 'staff/dashboards/credit_officer_dashboard.html', context)
 
 
-  
-
-
 # ============================================
 # CUSTOMER SERVICE DASHBOARD
 # ============================================
@@ -3644,9 +3740,6 @@ def customer_service_dashboard(request):
         'recent_customers': recent_customers,
     }
     return render(request, 'staff/dashboards/customer_service_dashboard.html', context)
-
-
-
 
 
 # ============================================
@@ -3853,7 +3946,6 @@ def finance_manager_dashboard(request):
     return render(request, 'staff/dashboards/finance_manager_dashboard.html', context)
 
 
-
 # ============================================
 # SECURITY OFFICER DASHBOARD
 # ============================================
@@ -3898,12 +3990,9 @@ def security_dashboard(request):
     return render(request, 'staff/dashboards/security_dashboard.html', context)
 
 
-
-
 # ============================================
 # MPESA DASHBOARD
 # ============================================
-
 @login_required
 @dashboard_for_role('M-Pesa Agent')
 def mpesa_agent_dashboard(request):
@@ -4081,7 +4170,6 @@ def mpesa_agent_dashboard(request):
     return render(request, 'staff/dashboards/mpesa_agent_dashboard.html', context)
 
 
-
 # ============================================
 # CLEANER DASHBOARD
 # ============================================
@@ -4122,261 +4210,9 @@ def cleaner_dashboard(request):
 
 
 
-@login_required
-def notifications_page(request):
-    """Display all notifications for the user - WITHOUT SALES/PURCHASES"""
-    
-    # Get current time for time calculations
-    now = timezone.now()
-    last_24h = now - timedelta(hours=24)
-    last_week = now - timedelta(days=7)
-    
-    # ============================================
-    # STOCK ALERTS
-    # ============================================
-    stock_alerts = StockAlert.objects.filter(
-        is_active=True,
-        is_dismissed=False
-    ).select_related('product').order_by('-severity', '-created_at')
-    
-    # Count alerts by severity
-    critical_alerts = stock_alerts.filter(severity__in=['critical', 'danger']).count()
-    warning_alerts = stock_alerts.filter(severity='warning').count()
-    info_alerts = stock_alerts.filter(severity='info').count()
-    
-    # ============================================
-    # RETURN REQUESTS (for managers/staff)
-    # ============================================
-    if request.user.is_staff or request.user.is_superuser:
-        pending_returns = ReturnRequest.objects.filter(
-            status='submitted'
-        ).select_related('product', 'requested_by').order_by('-requested_at')
-        
-        verified_returns = ReturnRequest.objects.filter(
-            status='verified'
-        ).select_related('product', 'requested_by', 'verified_by').order_by('-verified_at')
-    else:
-        # Regular users see their own returns
-        pending_returns = ReturnRequest.objects.filter(
-            requested_by=request.user,
-            status='submitted'
-        ).order_by('-requested_at')
-        
-        verified_returns = ReturnRequest.objects.filter(
-            requested_by=request.user,
-            status='verified'
-        ).order_by('-requested_at')
-    
-    # ============================================
-    # REMOVED: RECENT ACTIVITY (Sales & Purchases)
-    # COMMENTED OUT - NO LONGER SHOWING SALES/PURCHASES
-    # ============================================
-    # from inventory.models import StockEntry
-    # recent_activity = StockEntry.objects.select_related(
-    #     'product_sku', 'product_unit', 'created_by'
-    # ).filter(
-    #     created_at__gte=last_week
-    # ).order_by('-created_at')[:20]
-    
-    # ============================================
-    # LOW STOCK PRODUCTS - FIXED
-    # ============================================
-    from django.db.models import Q
-    
-    # For bulk items: check bulk_quantity
-    bulk_low_stock = Product.objects.filter(
-        category__item_type='bulk',
-        is_active=True,
-        is_discontinued=False,
-        bulk_quantity__lte=F('reorder_level'),
-        bulk_quantity__gt=0
-    )
-    
-    # For single items: check available_quantity
-    single_low_stock = Product.objects.filter(
-        category__item_type='single',
-        is_active=True,
-        is_discontinued=False,
-        available_quantity__lte=F('reorder_level'),
-        available_quantity__gt=0
-    )
-    
-    # Combine both
-    low_stock_products = (bulk_low_stock | single_low_stock).select_related('category')[:10]
-    
-    # ============================================
-    # OUT OF STOCK PRODUCTS - FIXED
-    # ============================================
-    bulk_out_of_stock = Product.objects.filter(
-        category__item_type='bulk',
-        is_active=True,
-        bulk_quantity=0
-    )
-    
-    single_out_of_stock = Product.objects.filter(
-        category__item_type='single',
-        is_active=True,
-        available_quantity=0
-    )
-    
-    out_of_stock_products = (bulk_out_of_stock | single_out_of_stock).select_related('category')[:10]
-    
-    # ============================================
-    # STAFF NOTIFICATIONS (for superusers/staff)
-    # ============================================
-    from .models import Staff, StaffApplication
-    
-    pending_verifications = []
-    pending_applications = []
-    
-    if request.user.is_superuser or request.user.is_staff:
-        # Pending staff verifications
-        pending_verifications = Staff.objects.filter(
-            verification_submitted_at__isnull=False,
-            is_identity_verified=False
-        ).select_related('user')[:10]
-        
-        # Pending staff applications
-        pending_applications = StaffApplication.objects.filter(
-            status='pending'
-        ).order_by('-application_date')[:10]
-    
-    # ============================================
-    # CREDIT TRANSACTIONS ALERTS (for managers)
-    # ============================================
-    credit_transactions_pending = []
-    if hasattr(request.user, 'credit_transactions'):
-        from credit.models import CreditTransaction
-        credit_transactions_pending = CreditTransaction.objects.filter(
-            Q(payment_status='pending_payment') | Q(commission_status='pending')
-        ).select_related('product', 'customer')[:10]
-    
-    # ============================================
-    # NOTIFICATION COUNTS BY TYPE
-    # ============================================
-    notification_counts = {
-        'total': stock_alerts.count() + pending_returns.count(),
-        'stock_alerts': stock_alerts.count(),
-        'critical_alerts': critical_alerts,
-        'warning_alerts': warning_alerts,
-        'info_alerts': info_alerts,
-        'pending_returns': pending_returns.count(),
-        'verified_returns': verified_returns.count(),
-        'low_stock': low_stock_products.count(),
-        'out_of_stock': out_of_stock_products.count(),
-        'pending_verifications': pending_verifications.count(),
-        'pending_applications': pending_applications.count(),
-        'credit_pending': credit_transactions_pending.count(),
-    }
-    
-    context = {
-        'stock_alerts': stock_alerts,
-        'pending_returns': pending_returns,
-        'verified_returns': verified_returns,
-        # 'recent_activity': recent_activity,  # REMOVED - No longer passing sales/purchases
-        'low_stock_products': low_stock_products,
-        'out_of_stock_products': out_of_stock_products,
-        'pending_verifications': pending_verifications,
-        'pending_applications': pending_applications,
-        'credit_transactions_pending': credit_transactions_pending,
-        'notification_counts': notification_counts,
-        'now': now,
-        'last_24h': last_24h,
-        'last_week': last_week,
-    }
-    
-    return render(request, 'staff/notifications_page.html', context)
 
 
 
-
-@staff_member_required
-def user_list(request):
-    """View to list all users in the system"""
-    users = User.objects.all().order_by('-date_joined')
-    return render(request, 'staff/users/list.html', {
-        'users': users,
-        'total_users': users.count(),
-        'active_users': users.filter(is_active=True).count(),
-        'staff_users': users.filter(is_staff=True).count(),
-        'title': 'System Users'
-    })
-
-
-@staff_member_required
-def user_detail(request, pk):
-    """View details of a specific user"""
-    user = get_object_or_404(User, pk=pk)
-    
-    context = {
-        'user': user,
-    }
-    return render(request, 'staff/users/detail.html', context)
-
-
-
-
-
-
-# ====================================
-# STATISTICS DASHBOARD VIEW (Rename this)
-# ====================================
-@login_required
-def staff_stats_dashboard(request):
-    """Staff dashboard with statistics (fallback for users without specific roles)"""
-    from datetime import timedelta, date
-    import json
-    
-    # Basic stats
-    total_applications = StaffApplication.objects.count()
-    pending_count = StaffApplication.objects.filter(status='pending').count()
-    approved_count = StaffApplication.objects.filter(status='approved').count()
-    rejected_count = StaffApplication.objects.filter(status='rejected').count()
-    under_review_count = StaffApplication.objects.filter(status='under_review').count()
-    
-    # Recent applications
-    recent_applications = StaffApplication.objects.order_by('-application_date')[:5]
-    
-    # Position statistics
-    position_stats = []
-    for pos_code, pos_name in StaffApplication.POSITION_CHOICES:
-        count = StaffApplication.objects.filter(position=pos_code).count()
-        if count > 0:
-            position_stats.append({
-                'code': pos_code,
-                'name': pos_name,
-                'count': count
-            })
-    
-    # Chart data (last 30 days)
-    today = date.today()
-    thirty_days_ago = today - timedelta(days=30)
-    
-    chart_labels = []
-    applications_data = []
-    
-    for i in range(30):
-        day = thirty_days_ago + timedelta(days=i)
-        count = StaffApplication.objects.filter(
-            application_date__date=day
-        ).count()
-        
-        chart_labels.append(day.strftime('%d %b'))
-        applications_data.append(count)
-    
-    context = {
-        'total_applications': total_applications,
-        'pending_count': pending_count,
-        'approved_count': approved_count,
-        'rejected_count': rejected_count,
-        'under_review_count': under_review_count,
-        'recent_applications': recent_applications,
-        'position_stats': position_stats,
-        'chart_labels': json.dumps(chart_labels),
-        'applications_data': json.dumps(applications_data),
-    }
-    
-    return render(request, 'staff/dashboard.html', context)
 
 
 
@@ -4390,349 +4226,316 @@ def staff_stats_dashboard(request):
 # PUBLIC APPLICATION FORM
 # ====================================
 def application_form(request):
-    """Public form for staff applications"""
+    """Public form for staff applications with enhanced fields"""
     if request.method == 'POST':
         try:
             # Check if this is an AJAX request
             is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
             
-            # Get form data
-            first_name = request.POST.get('first_name')
-            last_name = request.POST.get('last_name')
-            email = request.POST.get('email')
-            phone = request.POST.get('phone')
-            id_number = request.POST.get('id_number')
-            address = request.POST.get('address', '')
-            position = request.POST.get('position')
-            experience = request.POST.get('experience', '')
+            # ============================================
+            # SECTION 1: PERSONAL INFORMATION
+            # ============================================
+            first_name = request.POST.get('first_name', '').strip()
+            last_name = request.POST.get('last_name', '').strip()
+            email = request.POST.get('email', '').strip()  # NEW: Email field
+            id_number = request.POST.get('id_number', '').strip()
+            phone = request.POST.get('phone', '').strip()
+            password = request.POST.get('password', '')
+            confirm_password = request.POST.get('confirm_password', '')
+            
+            # ============================================
+            # SECTION 2: EMPLOYMENT DETAILS
+            # ============================================
+            resident = request.POST.get('resident', '').strip()
+            former_employer = request.POST.get('former_employer', '').strip()
+            preferred_salary = request.POST.get('preferred_salary', '').strip()
+            
+            # ============================================
+            # SECTION 3: DOCUMENTS
+            # ============================================
+            passport_photo = request.FILES.get('passport_photo')
+            id_front = request.FILES.get('id_front')
+            id_back = request.FILES.get('id_back')
+            other_documents = request.FILES.get('other_documents')
+            
+            # ============================================
+            # SECTION 4: TERMS AND SIGNATURE
+            # ============================================
+            terms_read = request.POST.get('terms_read') == 'on'
             terms_accepted = request.POST.get('terms_accepted') == 'on'
-            privacy_accepted = request.POST.get('privacy_accepted') == 'on'
+            signature = request.POST.get('signature', '').strip()
             
             # Validate required fields
-            if not all([first_name, last_name, email, phone, id_number, position]):
-                error_msg = 'Please fill in all required fields.'
+            errors = []
+            
+            # Section 1 validation
+            if not all([first_name, last_name, email, id_number, phone]):  # Added email
+                errors.append('Please fill in all personal information fields (First Name, Last Name, Email, ID Number, Phone).')
+            
+            # Email validation
+            if email:
+                import re
+                email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+                if not re.match(email_pattern, email):
+                    errors.append('Please enter a valid email address.')
+            
+            if not password or not confirm_password:
+                errors.append('Please enter and confirm your password.')
+            elif password != confirm_password:
+                errors.append('Passwords do not match.')
+            elif len(password) < 8:
+                errors.append('Password must be at least 8 characters long.')
+            
+            # Section 2 validation
+            if not all([resident, former_employer, preferred_salary]):
+                errors.append('Please fill in all employment details.')
+            
+            # Section 3 validation
+            if not all([passport_photo, id_front, id_back]):
+                errors.append('Please upload all required documents.')
+            
+            # Section 4 validation
+            if not terms_read:
+                errors.append('You must confirm that you have read the terms and policy.')
+            if not terms_accepted:
+                errors.append('You must accept the terms and policy of this company.')
+            if not signature:
+                errors.append('Please provide your signature.')
+            
+            if errors:
+                error_msg = '\n'.join(errors)
                 if is_ajax:
                     return JsonResponse({'success': False, 'error': error_msg})
-                messages.error(request, error_msg)
+                for error in errors:
+                    messages.error(request, error)
                 return render(request, 'staff/apply.html', {
-                    'positions': StaffApplication.POSITION_CHOICES
-                })
-            
-            if not terms_accepted or not privacy_accepted:
-                error_msg = 'You must accept the terms and privacy policy.'
-                if is_ajax:
-                    return JsonResponse({'success': False, 'error': error_msg})
-                messages.error(request, error_msg)
-                return render(request, 'staff/apply.html', {
-                    'positions': StaffApplication.POSITION_CHOICES
+                    'form_data': request.POST
                 })
             
             # ============================================
-            # CHECK 1: EMAIL ALREADY EXISTS IN USER TABLE (ALREADY APPROVED STAFF)
+            # CHECK FOR EXISTING RECORDS
             # ============================================
-            if User.objects.filter(email=email).exists():
-                existing_user = User.objects.get(email=email)
-                error_msg = f'❌ An account with email {email} already exists in the system.\n'
-                error_msg += f'This email is registered to: {existing_user.get_full_name() or existing_user.username}\n'
-                error_msg += 'Please use a different email address or contact the administrator if this is an error.'
-                
-                if is_ajax:
-                    return JsonResponse({
-                        'success': False, 
-                        'error': error_msg,
-                        'existing_user': True,
-                        'existing_name': existing_user.get_full_name() or existing_user.username,
-                        'error_type': 'user_exists'
-                    })
-                messages.error(request, error_msg)
-                return render(request, 'staff/apply.html', {
-                    'positions': StaffApplication.POSITION_CHOICES
-                })
-            
-            # ============================================
-            # CHECK 2: PHONE NUMBER ALREADY EXISTS IN USER TABLE
-            # ============================================
-            # Clean phone number (remove non-digits)
             import re
-            clean_phone = re.sub(r'\D', '', phone)
             
-            if User.objects.filter(username=clean_phone).exists():
-                existing_user = User.objects.get(username=clean_phone)
-                error_msg = f'❌ Phone number {phone} is already registered in the system.\n'
-                error_msg += f'Registered to: {existing_user.get_full_name() or existing_user.username}\n'
-                error_msg += 'Please use a different phone number or contact the administrator.'
-                
+            # Check if email already exists in User table
+            if User.objects.filter(email=email).exists():
+                error_msg = f'Email {email} is already registered in the system. Please use a different email.'
                 if is_ajax:
-                    return JsonResponse({
-                        'success': False, 
-                        'error': error_msg,
-                        'error_type': 'phone_exists'
-                    })
+                    return JsonResponse({'success': False, 'error': error_msg})
                 messages.error(request, error_msg)
-                return render(request, 'staff/apply.html', {
-                    'positions': StaffApplication.POSITION_CHOICES
-                })
+                return render(request, 'staff/apply.html', {'form_data': request.POST})
             
-            # ============================================
-            # CHECK 3: ID NUMBER ALREADY EXISTS IN USER TABLE (via Staff profile)
-            # ============================================
-            if Staff.objects.filter(id_number=id_number).exists():
-                existing_staff = Staff.objects.get(id_number=id_number)
-                error_msg = f'❌ ID Number {id_number} is already registered in the system.\n'
-                error_msg += f'Registered to: {existing_staff.user.get_full_name() or existing_staff.user.username}\n'
-                error_msg += 'Please use your correct ID number or contact the administrator.'
-                
+            # Check if phone already exists as username
+            if User.objects.filter(username=phone).exists():
+                error_msg = f'Phone number {phone} is already registered in the system.'
                 if is_ajax:
-                    return JsonResponse({
-                        'success': False, 
-                        'error': error_msg,
-                        'error_type': 'id_exists'
-                    })
+                    return JsonResponse({'success': False, 'error': error_msg})
                 messages.error(request, error_msg)
-                return render(request, 'staff/apply.html', {
-                    'positions': StaffApplication.POSITION_CHOICES
-                })
+                return render(request, 'staff/apply.html', {'form_data': request.POST})
             
-            # ============================================
-            # CHECK 4: EMAIL ALREADY EXISTS IN PENDING/UNDER_REVIEW APPLICATIONS
-            # ============================================
-            pending_app = StaffApplication.objects.filter(
+            # Check if email exists in pending applications
+            pending_email = StaffApplication.objects.filter(
                 email=email, 
                 status__in=['pending', 'under_review']
             ).first()
             
-            if pending_app:
-                error_msg = f'❌ An application with email {email} is already pending review.\n'
-                error_msg += f'Submitted on: {pending_app.application_date.strftime("%Y-%m-%d")}\n'
-                error_msg += 'Please wait for review or contact the administrator.'
-                
+            if pending_email:
+                error_msg = f'Email {email} already has a pending application.'
                 if is_ajax:
-                    return JsonResponse({
-                        'success': False, 
-                        'error': error_msg,
-                        'pending': True,
-                        'submission_date': pending_app.application_date.strftime("%Y-%m-%d"),
-                        'error_type': 'pending_application'
-                    })
+                    return JsonResponse({'success': False, 'error': error_msg})
                 messages.error(request, error_msg)
-                return render(request, 'staff/apply.html', {
-                    'positions': StaffApplication.POSITION_CHOICES
-                })
+                return render(request, 'staff/apply.html', {'form_data': request.POST})
             
-            # ============================================
-            # CHECK 5: EMAIL ALREADY EXISTS IN REJECTED APPLICATIONS
-            # ============================================
-            rejected_app = StaffApplication.objects.filter(
+            # Check if email exists in approved applications
+            approved_email = StaffApplication.objects.filter(
                 email=email, 
-                status='rejected'
+                status='approved'
             ).first()
             
-            if rejected_app:
-                error_msg = f'❌ An application with email {email} was previously rejected.\n'
-                error_msg += f'Rejection date: {rejected_app.review_date.strftime("%Y-%m-%d") if rejected_app.review_date else "Unknown"}\n'
-                if rejected_app.review_notes:
-                    error_msg += f'Reason: {rejected_app.review_notes}\n'
-                error_msg += 'If you believe this is an error, please contact the administrator.'
-                
+            if approved_email:
+                error_msg = f'Email {email} has already been approved. Please login to your account.'
                 if is_ajax:
-                    return JsonResponse({
-                        'success': False, 
-                        'error': error_msg,
-                        'rejected': True,
-                        'rejection_date': rejected_app.review_date.strftime("%Y-%m-%d") if rejected_app.review_date else None,
-                        'rejection_reason': rejected_app.review_notes,
-                        'error_type': 'rejected_application'
-                    })
+                    return JsonResponse({'success': False, 'error': error_msg})
                 messages.error(request, error_msg)
-                return render(request, 'staff/apply.html', {
-                    'positions': StaffApplication.POSITION_CHOICES
-                })
+                return render(request, 'staff/apply.html', {'form_data': request.POST})
             
-            # ============================================
-            # CHECK 6: ID NUMBER ALREADY EXISTS IN APPLICATIONS
-            # ============================================
-            existing_id_app = StaffApplication.objects.filter(id_number=id_number).first()
-            if existing_id_app:
+            # Check ID number in applications
+            existing_app = StaffApplication.objects.filter(id_number=id_number).first()
+            if existing_app:
                 status_msg = {
                     'pending': 'pending review',
                     'under_review': 'under review',
                     'approved': 'already approved',
                     'rejected': 'previously rejected'
-                }.get(existing_id_app.status, 'exists')
+                }.get(existing_app.status, 'exists')
                 
-                error_msg = f'❌ An application with ID number {id_number} already exists.\n'
-                error_msg += f'Status: {status_msg}\n'
-                error_msg += f'Submitted on: {existing_id_app.application_date.strftime("%Y-%m-%d")}\n'
-                error_msg += 'Please contact the administrator for assistance.'
-                
+                error_msg = f'An application with ID number {id_number} already exists (Status: {status_msg}).'
                 if is_ajax:
-                    return JsonResponse({
-                        'success': False, 
-                        'error': error_msg,
-                        'existing': True,
-                        'existing_name': existing_id_app.full_name(),
-                        'status': existing_id_app.status,
-                        'error_type': 'id_in_application'
-                    })
+                    return JsonResponse({'success': False, 'error': error_msg})
                 messages.error(request, error_msg)
-                return render(request, 'staff/apply.html', {
-                    'positions': StaffApplication.POSITION_CHOICES
-                })
+                return render(request, 'staff/apply.html', {'form_data': request.POST})
             
-            # ============================================
-            # CHECK 7: PHONE NUMBER ALREADY EXISTS IN PENDING APPLICATIONS
-            # ============================================
+            # Check phone in pending applications
             pending_phone = StaffApplication.objects.filter(
                 phone=phone, 
                 status__in=['pending', 'under_review']
             ).first()
             
             if pending_phone:
-                error_msg = f'❌ Phone number {phone} already has a pending application.\n'
-                error_msg += f'Submitted on: {pending_phone.application_date.strftime("%Y-%m-%d")}\n'
-                error_msg += 'Please wait for review or contact the administrator.'
-                
-                if is_ajax:
-                    return JsonResponse({
-                        'success': False, 
-                        'error': error_msg,
-                        'error_type': 'phone_pending'
-                    })
-                messages.error(request, error_msg)
-                return render(request, 'staff/apply.html', {
-                    'positions': StaffApplication.POSITION_CHOICES
-                })
-            
-            # ============================================
-            # CHECK 8: PHONE NUMBER ALREADY EXISTS IN REJECTED APPLICATIONS
-            # ============================================
-            rejected_phone = StaffApplication.objects.filter(
-                phone=phone, 
-                status='rejected'
-            ).first()
-            
-            if rejected_phone:
-                error_msg = f'❌ Phone number {phone} was used in a previously rejected application.\n'
-                error_msg += f'Rejection date: {rejected_phone.review_date.strftime("%Y-%m-%d") if rejected_phone.review_date else "Unknown"}\n'
-                error_msg += 'Please contact the administrator if you believe this is an error.'
-                
-                if is_ajax:
-                    return JsonResponse({
-                        'success': False, 
-                        'error': error_msg,
-                        'error_type': 'phone_rejected'
-                    })
-                messages.error(request, error_msg)
-                return render(request, 'staff/apply.html', {
-                    'positions': StaffApplication.POSITION_CHOICES
-                })
-            
-            # ============================================
-            # HANDLE FILE UPLOADS
-            # ============================================
-            passport_photo = request.FILES.get('passport_photo')
-            id_front = request.FILES.get('id_front')
-            id_back = request.FILES.get('id_back')
-            
-            if not all([passport_photo, id_front, id_back]):
-                error_msg = 'Please upload all required documents.'
+                error_msg = f'Phone number {phone} already has a pending application.'
                 if is_ajax:
                     return JsonResponse({'success': False, 'error': error_msg})
                 messages.error(request, error_msg)
-                return render(request, 'staff/apply.html', {
-                    'positions': StaffApplication.POSITION_CHOICES
-                })
+                return render(request, 'staff/apply.html', {'form_data': request.POST})
             
-            # Get client IP and user agent
-            ip_address = request.META.get('REMOTE_ADDR')
-            user_agent = request.META.get('HTTP_USER_AGENT', '')
+            # ============================================
+            # CREATE APPLICATION WITH NEW FIELDS
+            # ============================================
             
-            # Create application
+            # Store password temporarily in session
+            request.session[f'pending_password_{id_number}'] = password
+            
+            # Create the application with all new fields
             application = StaffApplication.objects.create(
                 first_name=first_name,
                 last_name=last_name,
-                email=email,
+                email=email,  # Now using actual email
                 phone=phone,
                 id_number=id_number,
-                address=address,
-                position=position,
-                experience=experience,
+                position='pending',  # Default position until assigned
+                address=resident,  # Using resident as address
+                experience=f"Former Employer: {former_employer}\nPreferred Salary: {preferred_salary}",
                 passport_photo=passport_photo,
                 id_front=id_front,
                 id_back=id_back,
                 terms_accepted=terms_accepted,
-                privacy_accepted=privacy_accepted,
-                ip_address=ip_address,
-                user_agent=user_agent,
+                privacy_accepted=terms_read,
+                ip_address=request.META.get('REMOTE_ADDR'),
+                user_agent=request.META.get('HTTP_USER_AGENT', ''),
                 status='pending'
+            )
+            
+            # Store additional data
+            from .models import ApplicationExtraData
+            
+            extra_data = ApplicationExtraData.objects.create(
+                application=application,
+                resident=resident,
+                former_employer=former_employer,
+                preferred_salary=preferred_salary,
+                signature=signature,
+                other_documents=other_documents
             )
             
             logger.info(f"New staff application created: {application.full_name()} (ID: {application.id})")
             
-            # ============================================
-            # SEND ADMIN NOTIFICATION (commented out)
-            # ============================================
-            """
+            # Send confirmation email to applicant
             try:
-                from utils.notifications import AdminNotifier
-                AdminNotifier.notify_new_application(application)
-                logger.info(f"Admin notification sent for application #{application.id}")
-            except ImportError:
-                logger.warning("AdminNotifier not available - skipping notification")
+                subject = "Application Received - FieldMax"
+                html_message = f"""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <style>
+                        body {{ font-family: Arial, sans-serif; }}
+                        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                        .header {{ background: #007bff; color: white; padding: 20px; text-align: center; }}
+                        .content {{ padding: 20px; }}
+                        .footer {{ text-align: center; padding: 20px; color: #666; }}
+                        .details {{ background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0; }}
+                    </style>
+                </head>
+                <body>
+                    <div class="container">
+                        <div class="header">
+                            <h2>Application Received</h2>
+                        </div>
+                        <div class="content">
+                            <p>Dear <strong>{first_name} {last_name}</strong>,</p>
+                            <p>Thank you for applying to join FieldMax. Your application has been received and is pending review.</p>
+                            <div class="details">
+                                <h3>Application Details:</h3>
+                                <ul>
+                                    <li><strong>Application ID:</strong> {application.id}</li>
+                                    <li><strong>Name:</strong> {first_name} {last_name}</li>
+                                    <li><strong>Email:</strong> {email}</li>
+                                    <li><strong>ID Number:</strong> {id_number}</li>
+                                    <li><strong>Phone:</strong> {phone}</li>
+                                    <li><strong>Resident:</strong> {resident}</li>
+                                    <li><strong>Former Employer:</strong> {former_employer}</li>
+                                    <li><strong>Preferred Salary:</strong> KSH {preferred_salary}</li>
+                                </ul>
+                            </div>
+                            <p>You will receive an email notification once your application has been reviewed.</p>
+                            <p>Thank you for your interest in FieldMax!</p>
+                        </div>
+                        <div class="footer">
+                            <p>&copy; {timezone.now().year} FieldMax. All rights reserved.</p>
+                        </div>
+                    </div>
+                </body>
+                </html>
+                """
+                queue_email(subject, f"Application received", [email], html_message)
+                logger.info(f"Confirmation email sent to {email}")
+            except Exception as e:
+                logger.error(f"Failed to send confirmation email: {str(e)}")
+            
+            # Send notification to admins
+            try:
+                admin_emails = User.objects.filter(is_superuser=True).values_list('email', flat=True)
+                if admin_emails:
+                    admin_subject = f"New Staff Application - {first_name} {last_name}"
+                    admin_html = f"""
+                    <h2>New Staff Application Received</h2>
+                    <p><strong>Name:</strong> {first_name} {last_name}</p>
+                    <p><strong>Email:</strong> {email}</p>
+                    <p><strong>ID Number:</strong> {id_number}</p>
+                    <p><strong>Phone:</strong> {phone}</p>
+                    <p><strong>Resident:</strong> {resident}</p>
+                    <p><strong>Former Employer:</strong> {former_employer}</p>
+                    <p><strong>Preferred Salary:</strong> KSH {preferred_salary}</p>
+                    <p><strong>Application ID:</strong> {application.id}</p>
+                    <p><a href="{request.build_absolute_uri('/admin/staff/staffapplication/')}">Review Application</a></p>
+                    """
+                    queue_email(admin_subject, f"New application from {first_name} {last_name}", list(admin_emails), admin_html)
+                    logger.info(f"Admin notification sent to {len(admin_emails)} admins")
             except Exception as e:
                 logger.error(f"Failed to send admin notification: {str(e)}")
-                # Don't fail the application if notification fails
-            """
             
-            # Return response based on request type
             if is_ajax:
                 return JsonResponse({
                     'success': True,
                     'message': 'Your application has been submitted successfully!',
-                    'application_id': application.id,
-                    'data': {
-                        'name': application.full_name(),
-                        'position': application.get_position_display(),
-                        'application_date': application.application_date.strftime('%Y-%m-%d %H:%M')
-                    }
+                    'application_id': application.id
                 })
-            else:
-                messages.success(request, 'Your application has been submitted successfully!')
-                return redirect('staff:application_success')
+            
+            messages.success(request, 'Your application has been submitted successfully! You will receive a notification once reviewed.')
+            return redirect('staff:application_success')
             
         except Exception as e:
-            logger.error(f"Error creating staff application: {str(e)}")
+            logger.error(f"Error creating staff application: {str(e)}", exc_info=True)
             error_msg = f'Error submitting application: {str(e)}'
             
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 return JsonResponse({'success': False, 'error': error_msg})
             
             messages.error(request, error_msg)
-            return render(request, 'staff/apply.html', {
-                'positions': StaffApplication.POSITION_CHOICES
-            })
+            return render(request, 'staff/apply.html', {'form_data': request.POST})
     
     # GET request - show form
     context = {
-        'positions': StaffApplication.POSITION_CHOICES,
+        'form_data': request.GET,
     }
     return render(request, 'staff/apply.html', context)
-
 
 def application_success(request):
     """Application success page"""
     return render(request, 'staff/success.html')
 
-
-
-
-
-# ====================================
-# ADMIN LIST VIEW
-# ====================================
 @login_required
 def application_list(request):
-    """List all staff applications"""
+    """List all staff applications with new fields"""
     applications = StaffApplication.objects.all().order_by('-application_date')
     
     # Filters
@@ -4759,22 +4562,73 @@ def application_list(request):
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
     
+    # Get extra data for each application
+    for app in page_obj:
+        try:
+            app.extra = app.extra_data
+        except:
+            app.extra = None
+    
     context = {
         'applications': page_obj,
         'status_choices': StaffApplication.STATUS_CHOICES,
         'position_choices': StaffApplication.POSITION_CHOICES,
+        'total_count': applications.count(),
+        'pending_count': applications.filter(status='pending').count(),
+        'approved_count': applications.filter(status='approved').count(),
+        'rejected_count': applications.filter(status='rejected').count(),
+        'under_review_count': applications.filter(status='under_review').count(),
     }
     return render(request, 'staff/list.html', context)
 
 @login_required
 def application_detail(request, pk):
-    """View application details"""
+    """View application details with all new fields"""
     application = get_object_or_404(StaffApplication, pk=pk)
+    
+    # Get extra data
+    try:
+        extra_data = application.extra_data
+    except:
+        extra_data = None
+    
+    # Calculate staff ID based on application status
+    next_staff_id = None
+    actual_staff_id = None
+    
+    from staff.models import Staff
+    import re
+    
+    # If application is approved and has a user, get the actual staff ID
+    if application.status == 'approved' and application.created_user:
+        try:
+            staff_profile = Staff.objects.get(user=application.created_user)
+            actual_staff_id = staff_profile.staff_id
+        except Staff.DoesNotExist:
+            actual_staff_id = None
+    else:
+        # Only calculate next ID for pending applications
+        last_staff = Staff.objects.order_by('-id').first()
+        if last_staff and last_staff.staff_id:
+            numbers = re.findall(r'\d+', last_staff.staff_id)
+            if numbers:
+                last_num = int(numbers[0])
+                next_num = last_num + 1
+                next_staff_id = f"FM{next_num:03d}"
+            else:
+                next_staff_id = "FM001"
+        else:
+            next_staff_id = "FM001"
     
     context = {
         'application': application,
+        'extra_data': extra_data,
+        'next_staff_id': next_staff_id,
+        'actual_staff_id': actual_staff_id,
     }
     return render(request, 'staff/detail.html', context)
+
+
 
 @login_required
 def application_edit(request, pk):
@@ -4840,144 +4694,160 @@ def application_delete(request, pk):
 
 @login_required
 def application_approve(request, pk):
-    """Approve an application and create user account with proper group"""
+    """Approve an application and create user account with Staff ID as username"""
     application = get_object_or_404(StaffApplication, pk=pk)
+    
+    # Get extra data
+    try:
+        extra_data = application.extra_data
+    except:
+        extra_data = None
     
     if request.method == 'POST':
         try:
-            # Get role/group from form
+            # Get form data
             group_id = request.POST.get('group')
+            shop_id = request.POST.get('assigned_shop')
             notes = request.POST.get('review_notes', '')
             
             # ============================================
-            # USE PHONE NUMBER AS USERNAME
+            # GENERATE STAFF ID FIRST (FM001, FM002, etc.)
             # ============================================
-            username = application.phone
-            
-            # Remove any non-digit characters from phone (keep only numbers)
+            from staff.models import Staff
             import re
-            username = re.sub(r'\D', '', username)
             
-            # Ensure username is not empty
-            if not username:
-                # Fallback to email if phone is empty
-                username = application.email.split('@')[0]
+            # Get the last staff member to generate sequential ID
+            last_staff = Staff.objects.order_by('-id').first()
+            if last_staff and last_staff.staff_id:
+                numbers = re.findall(r'\d+', last_staff.staff_id)
+                if numbers:
+                    last_num = int(numbers[0])
+                    next_num = last_num + 1
+                    staff_id = f"FM{next_num:03d}"
+                else:
+                    staff_id = "FM001"
+            else:
+                staff_id = "FM001"
             
-            # Check if username exists, if so add suffix
+            # ============================================
+            # USE STAFF ID AS USERNAME (THIS IS THE KEY FIX)
+            # ============================================
+            username = staff_id  # e.g., FM001, FM002, FM003
+            
+            # Ensure username is unique
             base_username = username
             counter = 1
             while User.objects.filter(username=username).exists():
-                username = f"{base_username}{counter}"
+                username = f"{base_username}_{counter}"
                 counter += 1
             
             # ============================================
-            # USE ID NUMBER AS PASSWORD
+            # GET APPLICANT'S PREFERRED PASSWORD FROM SESSION
             # ============================================
-            password = application.id_number
+            password = request.session.get(f'pending_password_{application.id_number}')
             
-            # Remove any spaces from password
-            password = password.strip() if password else "Fsl@12345"
-            
-            # Ensure password meets minimum requirements (at least 8 chars)
-            if len(password) < 8:
-                # Pad with zeros or add default if too short
-                password = password.zfill(8)  # Pads with zeros to make 8 chars
-            
-            # Create user account
-            user = User.objects.create_user(
-                username=username,
-                email=application.email,
-                password=password,
-                first_name=application.first_name,
-                last_name=application.last_name,
-                is_active=True,
-                is_staff=True  # Give staff access
-            )
+            if not password:
+                # Fallback to ID number if password not found
+                password = application.id_number
+                if len(password) < 8:
+                    password = password.zfill(8)
             
             # ============================================
-            # CREATE USER PROFILE FOR PASSWORD TRACKING
+            # CHECK IF USER ALREADY EXISTS
             # ============================================
-            # Create profile with password_changed=False (first login)
+            user = None
+            if User.objects.filter(email=application.email).exists():
+                user = User.objects.get(email=application.email)
+                # Update username to staff_id
+                user.username = username
+                user.save()
+                logger.info(f"Existing user updated with username: {username}")
+            else:
+                # CREATE NEW USER ACCOUNT WITH STAFF ID AS USERNAME
+                user = User.objects.create_user(
+                    username=username,  # Staff ID as username
+                    email=application.email,
+                    password=password,
+                    first_name=application.first_name,
+                    last_name=application.last_name,
+                    is_active=True,
+                    is_staff=False
+                )
+                logger.info(f"New user account created with username: {username} (Staff ID)")
+            
+            # ============================================
+            # CREATE OR UPDATE USER PROFILE
+            # ============================================
             profile, created = UserProfile.objects.get_or_create(user=user)
-            profile.password_changed = False
-            profile.first_login = True
+            profile.password_changed = True
+            profile.first_login = False
+            profile.is_verified = True
+            profile.verified_at = timezone.now()
+            profile.verified_by = request.user
             profile.save()
             
-            logger.info(f"User profile created for {user.username} - First login tracking enabled")
-            
             # ============================================
-            # CREATE/UPDATE STAFF PROFILE WITH AUTO-VERIFICATION
+            # CREATE OR UPDATE STAFF PROFILE
             # ============================================
-            from staff.models import Staff
+            staff_profile, created = Staff.objects.get_or_create(
+                user=user,
+                defaults={
+                    'staff_id': staff_id,
+                    'id_number': application.id_number,
+                    'position': 'pending',
+                    'is_identity_verified': True,
+                    'verified_at': timezone.now(),
+                    'verified_by': request.user,
+                    'verification_notes': f"Auto-verified during application approval. Original notes: {notes}",
+                    'passport_photo': application.passport_photo,
+                    'id_front': application.id_front,
+                    'id_back': application.id_back,
+                }
+            )
             
-            # USE APPLICANT'S ID NUMBER AS STAFF ID
-            staff_id = application.id_number
-            
-            # Remove any spaces or special characters
-            staff_id = staff_id.strip().replace(' ', '')
-            
-            # Check if staff_id already exists, if so add suffix
-            original_staff_id = staff_id
-            counter = 1
-            while Staff.objects.filter(staff_id=staff_id).exists():
-                staff_id = f"{original_staff_id}_{counter}"
-                counter += 1
-            
-            # Get position value
-            position = application.position
-            
-            # Check if staff profile already exists (created by signal)
-            try:
-                staff_profile = Staff.objects.get(user=user)
-                # If exists, update it with auto-verification
+            if not created:
+                # Update existing staff profile
                 staff_profile.staff_id = staff_id
-                staff_profile.position = position
+                staff_profile.id_number = application.id_number
                 staff_profile.is_identity_verified = True
                 staff_profile.verified_at = timezone.now()
                 staff_profile.verified_by = request.user
                 staff_profile.verification_notes = f"Auto-verified during application approval. Original notes: {notes}"
-                staff_profile.passport_photo = application.passport_photo
-                staff_profile.id_front = application.id_front
-                staff_profile.id_back = application.id_back
+                if application.passport_photo:
+                    staff_profile.passport_photo = application.passport_photo
+                if application.id_front:
+                    staff_profile.id_front = application.id_front
+                if application.id_back:
+                    staff_profile.id_back = application.id_back
                 staff_profile.save()
-                
-                logger.info(f"Existing staff profile updated for {user.username} with staff ID: {staff_id}")
-                
-            except Staff.DoesNotExist:
-                # Create new staff profile
-                staff_profile = Staff.objects.create(
-                    user=user,
-                    staff_id=staff_id,
-                    id_number=application.id_number, 
-                    position=position,
-                    is_identity_verified=True,  # AUTO-VERIFY!
-                    verified_at=timezone.now(),
-                    verified_by=request.user,
-                    verification_notes=f"Auto-verified during application approval. Original notes: {notes}",
-                    # Copy documents from application to staff profile
-                    passport_photo=application.passport_photo,
-                    id_front=application.id_front,
-                    id_back=application.id_back,
-                )
-                
-                logger.info(f"New staff profile created for {user.username} with staff ID: {staff_id}")
+            
+            # Assign shop if provided
+            if shop_id:
+                try:
+                    from shops.models import ShopBranch
+                    shop = ShopBranch.objects.get(id=shop_id)
+                    staff_profile.assigned_shop = shop
+                    staff_profile.save()
+                    logger.info(f"Staff {username} assigned to shop: {shop.name}")
+                except Exception as e:
+                    logger.error(f"Error assigning shop: {str(e)}")
             
             # ============================================
             # ASSIGN TO GROUP
             # ============================================
             group_name = None
-            
-            # Assign to selected group
             if group_id:
                 try:
                     group = Group.objects.get(id=group_id)
+                    user.groups.clear()  # Clear existing groups
                     user.groups.add(group)
                     group_name = group.name
-                        
                 except Group.DoesNotExist:
                     logger.warning(f"Group with id {group_id} does not exist")
             
-            # Update application status
+            # ============================================
+            # UPDATE APPLICATION STATUS
+            # ============================================
             application.status = 'approved'
             application.reviewed_by = request.user
             application.review_date = timezone.now()
@@ -4985,15 +4855,58 @@ def application_approve(request, pk):
             application.created_user = user
             application.save()
             
+            # Clean up session
+            if f'pending_password_{application.id_number}' in request.session:
+                del request.session[f'pending_password_{application.id_number}']
+            
+            # ============================================
+            # SEND APPROVAL EMAIL
+            # ============================================
+            try:
+                subject = "✅ Your FieldMax Application Has Been Approved!"
+                html_message = f"""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <style>
+                        body {{ font-family: Arial, sans-serif; line-height: 1.6; }}
+                        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                        .header {{ background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%); color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }}
+                        .content {{ background: #f8f9fa; padding: 30px; border: 1px solid #dee2e6; }}
+                        .credentials {{ background: white; padding: 20px; border-radius: 10px; margin: 20px 0; border-left: 4px solid #28a745; }}
+                    </style>
+                </head>
+                <body>
+                    <div class="container">
+                        <div class="header">
+                            <h2>🎉 Welcome to FieldMax, {application.first_name}!</h2>
+                        </div>
+                        <div class="content">
+                            <p>Dear <strong>{application.first_name} {application.last_name}</strong>,</p>
+                            <p>Congratulations! Your application has been <strong>approved</strong>.</p>
+                            <div class="credentials">
+                                <h3>Your Login Credentials:</h3>
+                                <ul>
+                                    <li><strong>Username:</strong> {staff_id}</li>
+                                    <li><strong>Password:</strong> The password you chose during registration</li>
+                                    <li><strong>Staff ID:</strong> {staff_id}</li>
+                                    <li><strong>Role:</strong> {group_name if group_name else "Staff Member"}</li>
+                                </ul>
+                            </div>
+                            <p><strong>Important:</strong> Your username is your <strong>Staff ID: {staff_id}</strong></p>
+                            <p>Click here to login: <a href="{request.build_absolute_uri('/staff/login/')}">Login to Dashboard</a></p>
+                        </div>
+                    </div>
+                </body>
+                </html>
+                """
+                queue_email(subject, "Your application has been approved", [application.email], html_message)
+            except Exception as e:
+                logger.error(f"Failed to send approval email: {str(e)}")
+            
             messages.success(
                 request, 
-                f'✅ Application for {application.full_name()} has been approved.<br>'
-                f'👤 User account created with group: <strong>{group_name if group_name else "No group"}</strong><br>'
-                f'📧 Username: <strong>{username}</strong> (Phone number)<br>'
-                f'🔑 Password: <strong>{password}</strong> (ID number)<br>'
-                f'🆔 Staff ID: <strong>{staff_id}</strong> (Using ID number from application)<br>'
-                f'✅ Staff profile auto-verified! User can login and access dashboard immediately.<br>'
-                f'⚠️ <span class="text-warning">User will be required to change password on first login.</span>'
+                f'✅ Application approved! Username: {staff_id}, Password: User\'s chosen password'
             )
             return redirect('staff:application_detail', pk=application.pk)
             
@@ -5002,15 +4915,37 @@ def application_approve(request, pk):
             messages.error(request, f'Error approving application: {str(e)}')
             return redirect('staff:application_detail', pk=application.pk)
     
-    # GET request - show approval form with group selection
+    # GET request - show approval form
     groups = Group.objects.all().order_by('name')
+    from shops.models import ShopBranch
+    shops = ShopBranch.objects.filter(is_active=True).order_by('name')
+    
+    # Calculate next staff ID for preview
+    from staff.models import Staff
+    import re
+    last_staff = Staff.objects.order_by('-id').first()
+    if last_staff and last_staff.staff_id:
+        numbers = re.findall(r'\d+', last_staff.staff_id)
+        if numbers:
+            last_num = int(numbers[0])
+            next_num = last_num + 1
+            next_staff_id = f"FM{next_num:03d}"
+        else:
+            next_staff_id = "FM001"
+    else:
+        next_staff_id = "FM001"
     
     context = {
         'application': application,
+        'extra_data': extra_data,
         'groups': groups,
-        'first_login_note': True,
+        'shops': shops,
+        'next_staff_id': next_staff_id,
     }
     return render(request, 'staff/approve.html', context)
+
+
+
 
 @staff_member_required
 def application_revert_to_pending(request, pk):
