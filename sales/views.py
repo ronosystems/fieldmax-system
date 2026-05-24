@@ -92,18 +92,20 @@ def get_day_suffix(day):
     else:
         return 'th'
 
+
+
+
 def get_items_by_date(date_str):
-    """Get all items sold on a specific date"""
+    """Get all items sold on a specific date - FIXED for SKU model"""
     try:
         # Parse the date string
         date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
         start_date = timezone.make_aware(timezone.datetime.combine(date_obj, timezone.datetime.min.time()))
         end_date = timezone.make_aware(timezone.datetime.combine(date_obj, timezone.datetime.max.time()))
         
-        # Get active sales (not reversed and not returned)
+        # Get returned sale IDs to exclude
         from inventory.models import ReturnRequest
         
-        # Get returned sale IDs
         returned_sale_ids = ReturnRequest.objects.filter(
             ~Q(status='rejected')
         ).exclude(
@@ -121,34 +123,42 @@ def get_items_by_date(date_str):
         # Get all items from these sales
         items = SaleItem.objects.filter(
             sale__in=active_sales
-        ).select_related('product', 'sale')
+        ).select_related('product', 'sale', 'product_unit')
         
-        # Aggregate items by product
+        # Aggregate items by product SKU
         product_totals = {}
         for item in items:
-            product_key = item.product_code or (item.product.product_code if item.product else 'unknown')
-            if product_key not in product_totals:
-                product_totals[product_key] = {
+            # Get product SKU code
+            sku_code = item.sku_value or (item.product.sku_code if item.product else 'unknown')
+            
+            if sku_code not in product_totals:
+                # Get buying price for profit calculation
+                buying_price = Decimal('0')
+                if item.product_unit and item.product_unit.unit_buying_price:
+                    buying_price = item.product_unit.unit_buying_price
+                elif item.product and item.product.buying_price:
+                    buying_price = item.product.buying_price
+                
+                product_totals[sku_code] = {
                     'product_name': item.product_name or (item.product.display_name if item.product else 'Unknown'),
-                    'product_code': product_key,
-                    'sku_value': item.sku_value or (item.product.sku_value if item.product else ''),
-                    'barcode': item.product.barcode if item.product and item.product.barcode else '',
+                    'product_code': item.product_code or sku_code,
+                    'sku_value': item.sku_value or sku_code,
+                    'buying_price': buying_price,
                     'total_quantity': 0,
                     'total_revenue': 0,
                     'total_profit': 0,
                     'sales_count': 0
                 }
             
-            product_totals[product_key]['total_quantity'] += item.quantity
-            product_totals[product_key]['total_revenue'] += float(item.total_price)
+            # Calculate profit for this item
+            buying_price = product_totals[sku_code]['buying_price']
+            revenue = float(item.total_price)
+            profit = revenue - (float(buying_price) * item.quantity)
             
-            # Calculate profit
-            if item.product and item.product.buying_price:
-                profit = (item.unit_price - item.product.buying_price) * item.quantity
-            else:
-                profit = 0
-            product_totals[product_key]['total_profit'] += float(profit)
-            product_totals[product_key]['sales_count'] += 1
+            product_totals[sku_code]['total_quantity'] += item.quantity
+            product_totals[sku_code]['total_revenue'] += revenue
+            product_totals[sku_code]['total_profit'] += profit
+            product_totals[sku_code]['sales_count'] += 1
         
         # Convert to list and calculate margins
         items_list = []
@@ -162,7 +172,6 @@ def get_items_by_date(date_str):
                 'product_name': product_data['product_name'],
                 'product_code': product_data['product_code'],
                 'sku_value': product_data['sku_value'],
-                'barcode': product_data['barcode'],
                 'total_quantity': product_data['total_quantity'],
                 'total_revenue': product_data['total_revenue'],
                 'total_profit': product_data['total_profit'],
@@ -196,7 +205,7 @@ def get_items_by_date(date_str):
         }
 
 def get_items_by_week(week_number):
-    """Get all items sold during a specific week of the current month"""
+    """Get all items sold during a specific week of the current month - FIXED for SKU model"""
     today = timezone.now().date()
     current_year = today.year
     current_month = today.month
@@ -248,36 +257,41 @@ def get_items_by_week(week_number):
     # Get all items from these sales
     items = SaleItem.objects.filter(
         sale__in=active_sales
-    ).select_related('product', 'sale')
+    ).select_related('product', 'sale', 'product_unit')
     
-    # Aggregate items by product
+    # Aggregate items by product SKU
     product_totals = {}
     for item in items:
-        product_key = item.product_code or (item.product.product_code if item.product else 'unknown')
-        if product_key not in product_totals:
-            product_totals[product_key] = {
+        sku_code = item.sku_value or (item.product.sku_code if item.product else 'unknown')
+        
+        if sku_code not in product_totals:
+            buying_price = Decimal('0')
+            if item.product_unit and item.product_unit.unit_buying_price:
+                buying_price = item.product_unit.unit_buying_price
+            elif item.product and item.product.buying_price:
+                buying_price = item.product.buying_price
+            
+            product_totals[sku_code] = {
                 'product_name': item.product_name or (item.product.display_name if item.product else 'Unknown'),
-                'product_code': product_key,
-                'sku_value': item.sku_value or (item.product.sku_value if item.product else ''),
-                'barcode': item.product.barcode if item.product and item.product.barcode else '',
+                'product_code': item.product_code or sku_code,
+                'sku_value': item.sku_value or sku_code,
+                'buying_price': buying_price,
                 'total_quantity': 0,
                 'total_revenue': 0,
                 'total_profit': 0,
                 'sales_count': 0
             }
         
-        product_totals[product_key]['total_quantity'] += item.quantity
-        product_totals[product_key]['total_revenue'] += float(item.total_price)
+        buying_price = product_totals[sku_code]['buying_price']
+        revenue = float(item.total_price)
+        profit = revenue - (float(buying_price) * item.quantity)
         
-        # Calculate profit
-        if item.product and item.product.buying_price:
-            profit = (item.unit_price - item.product.buying_price) * item.quantity
-        else:
-            profit = 0
-        product_totals[product_key]['total_profit'] += float(profit)
-        product_totals[product_key]['sales_count'] += 1
+        product_totals[sku_code]['total_quantity'] += item.quantity
+        product_totals[sku_code]['total_revenue'] += revenue
+        product_totals[sku_code]['total_profit'] += profit
+        product_totals[sku_code]['sales_count'] += 1
     
-    # Convert to list and calculate margins
+    # Convert to list
     items_list = []
     total_revenue = 0
     total_profit = 0
@@ -289,7 +303,6 @@ def get_items_by_week(week_number):
             'product_name': product_data['product_name'],
             'product_code': product_data['product_code'],
             'sku_value': product_data['sku_value'],
-            'barcode': product_data['barcode'],
             'total_quantity': product_data['total_quantity'],
             'total_revenue': product_data['total_revenue'],
             'total_profit': product_data['total_profit'],
@@ -300,9 +313,7 @@ def get_items_by_week(week_number):
         total_profit += product_data['total_profit']
         total_items += product_data['total_quantity']
     
-    # Sort by quantity sold (descending)
     items_list.sort(key=lambda x: x['total_quantity'], reverse=True)
-    
     avg_margin = (total_profit / total_revenue * 100) if total_revenue > 0 else 0
     
     return {
@@ -315,13 +326,8 @@ def get_items_by_week(week_number):
     }
 
 def get_items_by_month(month_name, year):
-    """Get all items sold during a specific month"""
+    """Get all items sold during a specific month - FIXED for SKU model"""
     try:
-        # If month_name contains year, extract just the month name
-        if ' ' in month_name:
-            # This handles cases like "March 2026"
-            month_name = month_name.split(' ')[0]
-        
         # Convert month name to number
         month_number = datetime.strptime(month_name, '%B').month
         
@@ -350,44 +356,44 @@ def get_items_by_month(month_name, year):
             sale_id__in=returned_sale_ids
         )
         
-        print(f"Month: {month_name} {year}, Date range: {start_date} to {end_date}")
-        print(f"Found {active_sales.count()} sales")
-        
         # Get all items from these sales
         items = SaleItem.objects.filter(
             sale__in=active_sales
-        ).select_related('product', 'sale')
+        ).select_related('product', 'sale', 'product_unit')
         
-        print(f"Found {items.count()} items")
-        
-        # Aggregate items by product
+        # Aggregate items by product SKU
         product_totals = {}
         for item in items:
-            product_key = item.product_code or (item.product.product_code if item.product else 'unknown')
-            if product_key not in product_totals:
-                product_totals[product_key] = {
+            sku_code = item.sku_value or (item.product.sku_code if item.product else 'unknown')
+            
+            if sku_code not in product_totals:
+                buying_price = Decimal('0')
+                if item.product_unit and item.product_unit.unit_buying_price:
+                    buying_price = item.product_unit.unit_buying_price
+                elif item.product and item.product.buying_price:
+                    buying_price = item.product.buying_price
+                
+                product_totals[sku_code] = {
                     'product_name': item.product_name or (item.product.display_name if item.product else 'Unknown'),
-                    'product_code': product_key,
-                    'sku_value': item.sku_value or (item.product.sku_value if item.product else ''),
-                    'barcode': item.product.barcode if item.product and item.product.barcode else '',
+                    'product_code': item.product_code or sku_code,
+                    'sku_value': item.sku_value or sku_code,
+                    'buying_price': buying_price,
                     'total_quantity': 0,
                     'total_revenue': 0,
                     'total_profit': 0,
                     'sales_count': 0
                 }
             
-            product_totals[product_key]['total_quantity'] += item.quantity
-            product_totals[product_key]['total_revenue'] += float(item.total_price)
+            buying_price = product_totals[sku_code]['buying_price']
+            revenue = float(item.total_price)
+            profit = revenue - (float(buying_price) * item.quantity)
             
-            # Calculate profit
-            if item.product and item.product.buying_price:
-                profit = (item.unit_price - item.product.buying_price) * item.quantity
-            else:
-                profit = 0
-            product_totals[product_key]['total_profit'] += float(profit)
-            product_totals[product_key]['sales_count'] += 1
+            product_totals[sku_code]['total_quantity'] += item.quantity
+            product_totals[sku_code]['total_revenue'] += revenue
+            product_totals[sku_code]['total_profit'] += profit
+            product_totals[sku_code]['sales_count'] += 1
         
-        # Convert to list and calculate margins
+        # Convert to list
         items_list = []
         total_revenue = 0
         total_profit = 0
@@ -399,7 +405,6 @@ def get_items_by_month(month_name, year):
                 'product_name': product_data['product_name'],
                 'product_code': product_data['product_code'],
                 'sku_value': product_data['sku_value'],
-                'barcode': product_data['barcode'],
                 'total_quantity': product_data['total_quantity'],
                 'total_revenue': product_data['total_revenue'],
                 'total_profit': product_data['total_profit'],
@@ -410,9 +415,7 @@ def get_items_by_month(month_name, year):
             total_profit += product_data['total_profit']
             total_items += product_data['total_quantity']
         
-        # Sort by quantity sold (descending)
         items_list.sort(key=lambda x: x['total_quantity'], reverse=True)
-        
         avg_margin = (total_profit / total_revenue * 100) if total_revenue > 0 else 0
         
         return {
@@ -431,7 +434,6 @@ def get_items_by_month(month_name, year):
             'message': str(e),
             'items': []
         }
-
 
 
 
