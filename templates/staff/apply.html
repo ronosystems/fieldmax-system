@@ -1,393 +1,945 @@
-{% extends 'website/base.html' %}
-{% load static %}
-
-{% block title %}Staff Application - FieldMax{% endblock %}
-
-{% block extra_css %}
-<style>
-    .form-section {
-        background: #f8f9fa;
-        border-radius: 10px;
-        padding: 25px;
-        margin-bottom: 30px;
-        border: 1px solid #dee2e6;
-    }
-    .form-section h3 {
-        color: #007bff;
-        margin-bottom: 20px;
-        padding-bottom: 10px;
-        border-bottom: 2px solid #007bff;
-    }
-    .required-field::after {
-        content: " *";
-        color: red;
-    }
-    .errorlist {
-        color: red;
-        list-style: none;
-        padding: 0;
-    }
-    .signature-pad {
-        border: 2px solid #dee2e6;
-        border-radius: 5px;
-        background: white;
-        cursor: crosshair;
-        width: 100%;
-        height: 200px;
-    }
-    .btn-clear-signature {
-        margin-top: 10px;
-    }
-    .password-strength {
-        height: 5px;
-        margin-top: 5px;
-        border-radius: 3px;
-        transition: all 0.3s ease;
-    }
-    .strength-weak { background-color: #dc3545; width: 33%; }
-    .strength-medium { background-color: #ffc107; width: 66%; }
-    .strength-strong { background-color: #28a745; width: 100%; }
-    .preview-image {
-        max-width: 100px;
-        max-height: 100px;
-        margin-top: 10px;
-        border: 1px solid #ddd;
-        border-radius: 5px;
-        padding: 5px;
-    }
-</style>
-{% endblock %}
-
-{% block content %}
-<div class="container py-5">
-    <div class="row justify-content-center">
-        <div class="col-lg-8">
-            <div class="card shadow">
-                <div class="card-header bg-primary text-white">
-                    <h2 class="mb-0 text-center">Staff Application Form</h2>
-                    <p class="text-center mb-0">Join the FieldMax Team</p>
-                </div>
-                <div class="card-body">
-                    <form method="post" enctype="multipart/form-data" id="applicationForm">
-                        {% csrf_token %}
-                        
-                        <!-- SECTION 1: PERSONAL INFORMATION -->
-                        <div class="form-section">
-                            <h3>Section 1: Personal Information</h3>
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="required-field">First Name</label>
-                                    <input type="text" name="first_name" class="form-control" 
-                                           value="{{ form_data.first_name|default:'' }}" required>
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label class="required-field">Last Name</label>
-                                    <input type="text" name="last_name" class="form-control" 
-                                           value="{{ form_data.last_name|default:'' }}" required>
-                                </div>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <title>Staff Application - FieldMax</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #04e0fd 0%, #04bff8 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        
+        .form-card {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+        
+        .card-header {
+            background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+            color: white;
+            padding: 30px 20px;
+            text-align: center;
+        }
+        
+        .card-header h2 {
+            font-size: 1.8rem;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+        
+        .card-header p {
+            font-size: 1rem;
+            opacity: 0.9;
+        }
+        
+        .card-body {
+            padding: 25px;
+        }
+        
+        .form-section {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 25px;
+            border: 1px solid #e9ecef;
+        }
+        
+        .form-section h3 {
+            color: #007bff;
+            font-size: 1.3rem;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #007bff;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .form-section h3 i {
+            font-size: 1.2rem;
+        }
+        
+        .required-field::after {
+            content: " *";
+            color: #dc3545;
+        }
+        
+        .form-label {
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+        }
+        
+        .form-control, .form-select {
+            border-radius: 10px;
+            border: 1px solid #dee2e6;
+            padding: 12px 15px;
+            font-size: 0.95rem;
+            transition: all 0.3s ease;
+        }
+        
+        .auto-capitalize {
+            text-transform: uppercase;
+        }
+        
+        .form-control:focus, .form-select:focus {
+            border-color: #007bff;
+            box-shadow: 0 0 0 3px rgba(0,123,255,0.1);
+            outline: none;
+        }
+        
+        .signature-pad {
+            border: 2px solid #dee2e6;
+            border-radius: 10px;
+            background: white;
+            cursor: crosshair;
+            width: 100%;
+            height: 200px;
+            touch-action: none;
+        }
+        
+        .btn-clear-signature {
+            margin-top: 10px;
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+        }
+        
+        .password-strength {
+            height: 5px;
+            margin-top: 8px;
+            border-radius: 5px;
+            transition: all 0.3s ease;
+        }
+        
+        .strength-weak { background-color: #dc3545; width: 33%; }
+        .strength-medium { background-color: #ffc107; width: 66%; }
+        .strength-strong { background-color: #28a745; width: 100%; }
+        
+        .preview-image {
+            max-width: 80px;
+            max-height: 80px;
+            margin-top: 10px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 5px;
+            object-fit: cover;
+        }
+        
+        .btn-submit {
+            background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%);
+            color: white;
+            border: none;
+            padding: 14px 30px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            border-radius: 50px;
+            width: 100%;
+            transition: transform 0.2s ease;
+        }
+        
+        .btn-submit:hover {
+            transform: translateY(-2px);
+        }
+        
+        .btn-reset {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 14px 30px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            border-radius: 50px;
+            width: 100%;
+            margin-top: 10px;
+        }
+        
+        .form-check-label {
+            font-size: 0.9rem;
+        }
+        
+        .form-check-input {
+            width: 18px;
+            height: 18px;
+            margin-top: 2px;
+        }
+        
+        .checkbox-disabled {
+            pointer-events: none;
+            opacity: 0.6;
+        }
+        
+        .checkbox-wrapper {
+            position: relative;
+        }
+        
+        .checkbox-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+            z-index: 1;
+        }
+        
+        .modal-body {
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+        
+        .terms-content {
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+        
+        .terms-content h4 {
+            color: #007bff;
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+        
+        .terms-content p {
+            margin-bottom: 10px;
+        }
+        
+        .terms-content ul {
+            margin-bottom: 15px;
+        }
+        
+        .terms-content li {
+            margin-bottom: 5px;
+        }
+        
+        .link-terms {
+            color: #007bff;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        
+        .link-terms:hover {
+            text-decoration: underline;
+        }
+        
+        .alert-warning-custom {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            
+            .card-header {
+                padding: 20px 15px;
+            }
+            
+            .card-header h2 {
+                font-size: 1.4rem;
+            }
+            
+            .card-body {
+                padding: 15px;
+            }
+            
+            .form-section {
+                padding: 15px;
+            }
+            
+            .form-section h3 {
+                font-size: 1.1rem;
+            }
+            
+            .btn-submit, .btn-reset {
+                padding: 12px 20px;
+                font-size: 1rem;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .row {
+                flex-direction: column;
+            }
+            
+            .form-section h3 i {
+                display: none;
+            }
+        }
+        
+        .alert {
+            border-radius: 10px;
+            padding: 12px 15px;
+            margin-bottom: 20px;
+        }
+        
+        .spinner-border {
+            width: 1rem;
+            height: 1rem;
+        }
+        
+        .footer-note {
+            text-align: center;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+        
+        .footer-note p {
+            margin: 0;
+            font-size: 0.8rem;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="form-card">
+            <div class="card-header">
+                <h2><i class="fas fa-user-plus"></i> Staff Application Portal</h2>
+                <p>Join the FieldMax Team</p>
+            </div>
+            <div class="card-body">
+                {% if messages %}
+                    {% for message in messages %}
+                        <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+                
+                <form method="post" enctype="multipart/form-data" id="applicationForm">
+                    {% csrf_token %}
+                    
+                    <!-- SECTION 1: PERSONAL INFORMATION -->
+                    <div class="form-section">
+                        <h3><i class="fas fa-user"></i> Section 1: Personal Information</h3>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label required-field">First Name</label>
+                                <input type="text" name="first_name" class="form-control auto-capitalize" 
+                                       value="{{ form_data.first_name|default:'' }}" required
+                                       oninput="this.value = this.value.toUpperCase()">
                             </div>
-                            
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="required-field">Email Address</label>
-                                    <input type="email" name="email" class="form-control" 
-                                           value="{{ form_data.email|default:'' }}" required 
-                                           placeholder="example@email.com">
-                                    <small class="text-muted">We'll send application updates to this email</small>
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label class="required-field">Phone Number</label>
-                                    <input type="tel" name="phone" class="form-control" 
-                                           value="{{ form_data.phone|default:'' }}" required>
-                                    <small class="text-muted">This will be your username</small>
-                                </div>
-                            </div>
-                            
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="required-field">ID Number (National ID/Passport)</label>
-                                    <input type="text" name="id_number" class="form-control" 
-                                           value="{{ form_data.id_number|default:'' }}" required>
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label class="required-field">Preferred Password</label>
-                                    <input type="password" name="password" id="password" class="form-control" required minlength="8">
-                                    <div class="password-strength" id="passwordStrength"></div>
-                                    <small class="text-muted">Minimum 8 characters</small>
-                                </div>
-                            </div>
-                            
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="required-field">Confirm Password</label>
-                                    <input type="password" name="confirm_password" id="confirmPassword" class="form-control" required>
-                                    <small id="passwordMatch" class="text-muted"></small>
-                                </div>
+                            <div class="col-md-6">
+                                <label class="form-label required-field">Last Name</label>
+                                <input type="text" name="last_name" class="form-control auto-capitalize" 
+                                       value="{{ form_data.last_name|default:'' }}" required
+                                       oninput="this.value = this.value.toUpperCase()">
                             </div>
                         </div>
                         
-                        <!-- SECTION 2: EMPLOYMENT DETAILS -->
-                        <div class="form-section">
-                            <h3>Section 2: Employment Details</h3>
-                            <div class="row">
-                                <div class="col-12 mb-3">
-                                    <label class="required-field">Current Residence</label>
-                                    <textarea name="resident" class="form-control" rows="2" 
-                                              required>{{ form_data.resident|default:'' }}</textarea>
-                                </div>
+                        <div class="row g-3 mt-2">
+                            <div class="col-md-6">
+                                <label class="form-label required-field">Email Address</label>
+                                <input type="email" name="email" class="form-control" 
+                                       value="{{ form_data.email|default:'' }}" required>
                             </div>
-                            
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="required-field">Former Employer</label>
-                                    <input type="text" name="former_employer" class="form-control" 
-                                           value="{{ form_data.former_employer|default:'' }}" required>
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label class="required-field">Preferred Salary (KSH)</label>
-                                    <input type="number" name="preferred_salary" class="form-control" 
-                                           value="{{ form_data.preferred_salary|default:'' }}" required>
-                                </div>
+                            <div class="col-md-6">
+                                <label class="form-label required-field">Phone Number</label>
+                                <input type="tel" name="phone" class="form-control" 
+                                       value="{{ form_data.phone|default:'' }}" required>
                             </div>
                         </div>
                         
-                        <!-- SECTION 3: DOCUMENTS UPLOAD -->
-                        <div class="form-section">
-                            <h3>Section 3: Document Upload</h3>
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="required-field">Passport Photo</label>
-                                    <input type="file" name="passport_photo" class="form-control" 
-                                           accept="image/*" required onchange="previewImage(this, 'passportPreview')">
-                                    <img id="passportPreview" class="preview-image" style="display: none;">
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label class="required-field">ID Front</label>
-                                    <input type="file" name="id_front" class="form-control" 
-                                           accept="image/*" required onchange="previewImage(this, 'idFrontPreview')">
-                                    <img id="idFrontPreview" class="preview-image" style="display: none;">
-                                </div>
+                        <div class="row g-3 mt-2">
+                            <div class="col-md-6">
+                                <label class="form-label required-field">ID Number (National ID/Passport)</label>
+                                <input type="text" name="id_number" class="form-control auto-capitalize" 
+                                       value="{{ form_data.id_number|default:'' }}" required
+                                       oninput="this.value = this.value.toUpperCase()">
                             </div>
-                            
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="required-field">ID Back</label>
-                                    <input type="file" name="id_back" class="form-control" 
-                                           accept="image/*" required onchange="previewImage(this, 'idBackPreview')">
-                                    <img id="idBackPreview" class="preview-image" style="display: none;">
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label>Other Documents (CV, Certificates)</label>
-                                    <input type="file" name="other_documents" class="form-control" 
-                                           accept=".pdf,.doc,.docx,.jpg,.png">
-                                    <small class="text-muted">PDF, DOC, or Image files (Max 5MB)</small>
-                                </div>
+                            <div class="col-md-6">
+                                <label class="form-label required-field">Preferred Password</label>
+                                <input type="password" name="password" id="password" class="form-control" required minlength="8">
+                                <div class="password-strength" id="passwordStrength"></div>
                             </div>
                         </div>
                         
-                        <!-- SECTION 4: TERMS AND SIGNATURE -->
-                        <div class="form-section">
-                            <h3>Section 4: Terms & Signature</h3>
-                            
-                            <div class="form-check mb-3">
-                                <input type="checkbox" class="form-check-input" id="terms_read" name="terms_read" required>
-                                <label class="form-check-label" for="terms_read">
-                                    I confirm that I have read and understood the <a href="#" target="_blank">Terms and Conditions</a> 
-                                    and <a href="#" target="_blank">Privacy Policy</a> of this company.
-                                </label>
+                        <div class="row g-3 mt-2">
+                            <div class="col-md-12">
+                                <label class="form-label required-field">Confirm Password</label>
+                                <input type="password" name="confirm_password" id="confirmPassword" class="form-control" required>
+                                <div id="passwordMatch" class="info-text"></div>
                             </div>
-                            
-                            <div class="form-check mb-3">
-                                <input type="checkbox" class="form-check-input" id="terms_accepted" name="terms_accepted" required>
-                                <label class="form-check-label" for="terms_accepted">
-                                    I hereby accept and agree to abide by the Terms and Policy of FieldMax Company.
-                                </label>
-                            </div>
-                            
-                            <div class="mb-3">
-                                <label class="required-field">Digital Signature</label>
-                                <canvas id="signaturePad" class="signature-pad"></canvas>
-                                <input type="hidden" name="signature" id="signatureData" required>
-                                <button type="button" class="btn btn-sm btn-secondary btn-clear-signature" onclick="clearSignature()">
-                                    Clear Signature
-                                </button>
-                                <small class="text-muted d-block mt-2">
-                                    Sign using your mouse or touch screen. This serves as your electronic signature.
-                                </small>
+                        </div>
+                    </div>
+                    
+                    <!-- SECTION 2: EMPLOYMENT DETAILS -->
+                    <div class="form-section">
+                        <h3><i class="fas fa-briefcase"></i> Section 2: Employment Details</h3>
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label class="form-label required-field">Current Residence</label>
+                                <textarea name="resident" class="form-control auto-capitalize" rows="2" required
+                                          oninput="this.value = this.value.toUpperCase()"></textarea>
                             </div>
                         </div>
                         
-                        <div class="text-center mt-4">
-                            <button type="submit" class="btn btn-primary btn-lg px-5" id="submitBtn">
-                                Submit Application
+                        <div class="row g-3 mt-2">
+                            <div class="col-md-6">
+                                <label class="form-label required-field">Former Employer</label>
+                                <input type="text" name="former_employer" class="form-control auto-capitalize" 
+                                       value="{{ form_data.former_employer|default:'' }}" required
+                                       oninput="this.value = this.value.toUpperCase()">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label required-field">Preferred Salary (KSH)</label>
+                                <input type="number" name="preferred_salary" class="form-control" 
+                                       value="{{ form_data.preferred_salary|default:'' }}" required>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- SECTION 3: DOCUMENTS UPLOAD -->
+                    <div class="form-section">
+                        <h3><i class="fas fa-file-alt"></i> Section 3: Document Upload</h3>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label required-field">Passport Photo</label>
+                                <input type="file" name="passport_photo" class="form-control" 
+                                       accept="image/*" required onchange="previewImage(this, 'passportPreview')">
+                                <img id="passportPreview" class="preview-image" style="display: none;">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label required-field">ID Front</label>
+                                <input type="file" name="id_front" class="form-control" 
+                                       accept="image/*" required onchange="previewImage(this, 'idFrontPreview')">
+                                <img id="idFrontPreview" class="preview-image" style="display: none;">
+                            </div>
+                        </div>
+                        
+                        <div class="row g-3 mt-2">
+                            <div class="col-md-6">
+                                <label class="form-label required-field">ID Back</label>
+                                <input type="file" name="id_back" class="form-control" 
+                                       accept="image/*" required onchange="previewImage(this, 'idBackPreview')">
+                                <img id="idBackPreview" class="preview-image" style="display: none;">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Other Documents (CV, Certificates)</label>
+                                <input type="file" name="other_documents" class="form-control" 
+                                       accept=".pdf,.doc,.docx,.jpg,.png">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- SECTION 4: TERMS AND SIGNATURE -->
+                    <div class="form-section">
+                        <h3><i class="fas fa-gavel"></i> Section 4: Terms & Signature</h3>
+                        
+                        <!-- Terms Read - Cannot be checked directly -->
+                        <div class="form-check mb-3 checkbox-wrapper">
+                            <input type="checkbox" class="form-check-input checkbox-disabled" id="terms_read" name="terms_read" required disabled>
+                            <label class="form-check-label" for="terms_read">
+                                Read and understood
+                                <a href="#" class="link-terms" data-bs-toggle="modal" data-bs-target="#termsModal"> Terms and Conditions </a> 
+                                and 
+                                <a href="#" class="link-terms" data-bs-toggle="modal" data-bs-target="#privacyModal"> Privacy Policy </a> 
+                                of this company.
+                            </label>
+                            <div class="checkbox-overlay" data-bs-toggle="modal" data-bs-target="#termsModal"></div>
+                        </div>
+                        
+                        <!-- Terms Accepted - Cannot be checked directly -->
+                        <div class="form-check mb-3 checkbox-wrapper">
+                            <input type="checkbox" class="form-check-input checkbox-disabled" id="terms_accepted" name="terms_accepted" required disabled>
+                            <label class="form-check-label" for="terms_accepted">
+                            
+                                Accept and agree to abide by the 
+                                <a href="#" class="link-terms" data-bs-toggle="modal" data-bs-target="#termsModal"> Terms </a> 
+                                and 
+                                <a href="#" class="link-terms" data-bs-toggle="modal" data-bs-target="#privacyModal"> Policy </a> 
+                                of FieldMax Company.
+                            </label>
+                            <div class="checkbox-overlay" data-bs-toggle="modal" data-bs-target="#acceptModal"></div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label required-field">Digital Signature</label>
+                            <canvas id="signaturePad" class="signature-pad"></canvas>
+                            <input type="hidden" name="signature" id="signatureData" required>
+                            <button type="button" class="btn-clear-signature" onclick="clearSignature()">
+                                <i class="fas fa-eraser"></i> Clear Signature
                             </button>
-                            <button type="reset" class="btn btn-secondary btn-lg px-5" onclick="resetForm()">
-                                Reset Form
+                        </div>
+                    </div>
+                    
+                    <div class="row g-3">
+                        <div class="col-md-12">
+                            <button type="submit" class="btn-submit" id="submitBtn">
+                                <i class="fas fa-paper-plane"></i> Submit Application
                             </button>
                         </div>
-                    </form>
+                        <div class="col-md-12">
+                            <button type="reset" class="btn-reset" onclick="resetForm()">
+                                <i class="fas fa-redo"></i> Reset Form
+                            </button>
+                        </div>
+                    </div>
+                </form>
+                
+                <div class="footer-note">
+                    <p>&copy; {% now "Y" %} FieldMax. All rights reserved.</p>
+                    <p>For support, contact: support@fieldmax.com</p>
                 </div>
             </div>
         </div>
     </div>
-</div>
 
-<script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
-<script>
-// Initialize signature pad
-var canvas = document.getElementById('signaturePad');
-var signaturePad = new SignaturePad(canvas, {
-    backgroundColor: 'rgb(255, 255, 255)',
-    penColor: 'rgb(0, 0, 0)'
-});
+    <!-- Terms and Conditions Modal (Updated with Asset Protection section) -->
+    <div class="modal fade" id="termsModal" tabindex="-1" aria-labelledby="termsModalLabel" aria-hidden="true" data-bs-backdrop="static">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="termsModalLabel">Terms and Conditions</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="terms-content">
+                        <h4>1. Introduction</h4>
+                        <p>Welcome to FieldMax. By applying for a staff position, you agree to these Terms and Conditions.</p>
+                        
+                        <h4>2. Employment Relationship</h4>
+                        <p>Your application does not guarantee employment. FieldMax reserves the right to accept or reject any application at its sole discretion.</p>
+                        
+                        <h4>3. Data Accuracy</h4>
+                        <p>You confirm that all information provided in your application is true, accurate, and complete. Any false information may result in immediate disqualification or termination.</p>
+                        
+                        <h4>4. Confidentiality</h4>
+                        <p>As a staff member, you may be exposed to confidential information. You agree to maintain confidentiality during and after your employment.</p>
+                        
+                        <h4>5. Code of Conduct</h4>
+                        <p>You agree to abide by FieldMax's code of conduct, policies, and procedures as outlined in the employee handbook.</p>
+                        
+                        <h4>6. Background Check</h4>
+                        <p>FieldMax reserves the right to conduct background checks and verify the information provided in your application.</p>
+                        
+                        <h4>7. Asset Protection and Liability for Lost or Damaged Company Assets</h4>
+                        <div class="alert-warning-custom">
+                            <i class="fas fa-exclamation-triangle" style="color: #856404;"></i>
+                            <strong>Important Policy on Company Assets</strong>
+                        </div>
+                        <p>As a staff member of FieldMax, you will be entrusted with company assets including but not limited to:</p>
+                        <ul>
+                            <li><strong>Electronic Devices:</strong> Laptops, tablets, smartphones, printers, scanners, and other electronic equipment</li>
+                            <li><strong>Inventory and Stock:</strong> Products, merchandise, and supplies</li>
+                            <li><strong>Cash and Financial Assets:</strong> Petty cash, sales revenue, M-Pesa accounts, and other financial instruments</li>
+                            <li><strong>Vehicles and Transportation Equipment:</strong> Company vehicles, motorcycles, bicycles, and fuel cards</li>
+                            <li><strong>Office Equipment and Furniture:</strong> Desks, chairs, filing cabinets, and office supplies</li>
+                            <li><strong>Security Equipment:</strong> CCTV systems, alarm systems, keys, access cards, and security passes</li>
+                            <li><strong>Intellectual Property:</strong> Software licenses, databases, customer lists, and proprietary information</li>
+                            <li><strong>Uniforms and Identification:</strong> Staff uniforms, ID badges, name tags, and safety gear</li>
+                        </ul>
+                        
+                        <p><strong>Liability and Responsibility:</strong></p>
+                        <ul>
+                            <li>You are personally responsible for all company assets assigned to you</li>
+                            <li>Any lost, stolen, or damaged company assets must be reported immediately to your supervisor</li>
+                            <li>A formal investigation will be conducted for any missing or damaged assets</li>
+                            <li>If found negligent, you may be held financially liable for the replacement or repair cost</li>
+                            <li>Repeated negligence may result in disciplinary action including termination</li>
+                        </ul>
+                        
+                        <p><strong>Asset Check-in/Check-out Procedures:</strong></p>
+                        <ul>
+                            <li>You must sign for all company assets issued to you</li>
+                            <li>Assets must be returned in good working condition upon resignation or termination</li>
+                            <li>Regular asset audits will be conducted</li>
+                            <li>You are required to report any malfunctioning equipment immediately</li>
+                        </ul>
+                        
+                        <p><strong>Financial Liability Limits:</strong></p>
+                        <ul>
+                            <li>For willful damage or gross negligence: Full replacement cost</li>
+                            <li>For ordinary negligence: Up to 50% of replacement cost or KSH 50,000, whichever is lower</li>
+                            <li>For lost assets due to theft: You must provide a police report; liability determined by investigation</li>
+                            <li>Repeated incidents may result in full liability regardless of amount</li>
+                        </ul>
+                        
+                        <div class="alert-warning-custom">
+                            <i class="fas fa-gavel"></i> <strong>Consequences of Non-Compliance:</strong> Failure to comply with asset protection policies may result in disciplinary action including written warnings, suspension, financial penalties, or immediate termination of employment.
+                        </div>
+                        
+                        <h4>8. Data Protection</h4>
+                        <p>Your personal data will be processed in accordance with our Privacy Policy and applicable data protection laws.</p>
+                        
+                        <h4>9. Amendments</h4>
+                        <p>FieldMax may amend these terms at any time. Continued employment constitutes acceptance of any changes.</p>
+                        
+                        <h4>10. Governing Law</h4>
+                        <p>These terms shall be governed by and construed in accordance with the laws of Kenya.</p>
+                        
+                        <h4>11. Contact Information</h4>
+                        <p>For any questions regarding these terms, please contact us at legal@fieldmax.com</p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" id="acceptTermsBtn">
+                        <i class="fas fa-check"></i> I Confirm I Have Read the Terms and Conditions
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
-// Adjust canvas size for high DPI screens
-function resizeCanvas() {
-    var ratio = Math.max(window.devicePixelRatio || 1, 1);
-    canvas.width = canvas.offsetWidth * ratio;
-    canvas.height = canvas.offsetHeight * ratio;
-    canvas.getContext("2d").scale(ratio, ratio);
-    signaturePad.clear();
-}
+    <!-- Privacy Policy Modal -->
+    <div class="modal fade" id="privacyModal" tabindex="-1" aria-labelledby="privacyModalLabel" aria-hidden="true" data-bs-backdrop="static">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="privacyModalLabel">Privacy Policy</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="terms-content">
+                        <h4>1. Information We Collect</h4>
+                        <p>We collect personal information including but not limited to: name, contact details, identification documents, employment history, and educational qualifications.</p>
+                        
+                        <h4>2. How We Use Your Information</h4>
+                        <p>Your information is used for application processing, background verification, employment decision-making, and compliance with legal requirements.</p>
+                        
+                        <h4>3. Data Sharing</h4>
+                        <p>We may share your information with third parties for verification purposes, background checks, and as required by law.</p>
+                        
+                        <h4>4. Data Security</h4>
+                        <p>We implement appropriate technical and organizational measures to protect your personal data against unauthorized access, alteration, disclosure, or destruction.</p>
+                        
+                        <h4>5. Data Retention</h4>
+                        <p>Your application data will be retained for as long as necessary for recruitment purposes and as required by applicable laws.</p>
+                        
+                        <h4>6. Your Rights</h4>
+                        <p>You have the right to access, correct, or delete your personal data, and to object to or restrict certain processing activities.</p>
+                        
+                        <h4>7. Cookies and Tracking</h4>
+                        <p>Our website uses cookies to enhance user experience. You can control cookie preferences through your browser settings.</p>
+                        
+                        <h4>8. Children's Privacy</h4>
+                        <p>Our services are not directed to individuals under 18. We do not knowingly collect data from minors.</p>
+                        
+                        <h4>9. Changes to Privacy Policy</h4>
+                        <p>We may update this privacy policy from time to time. We will notify you of any material changes.</p>
+                        
+                        <h4>10. Contact Us</h4>
+                        <p>For privacy-related inquiries, please contact our Data Protection Officer at privacy@fieldmax.com</p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" id="acceptPrivacyBtn">
+                        <i class="fas fa-check"></i> I Confirm I Have Read the Privacy Policy
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
-window.addEventListener('resize', resizeCanvas);
-resizeCanvas();
+    <!-- Acceptance Modal -->
+    <div class="modal fade" id="acceptModal" tabindex="-1" aria-labelledby="acceptModalLabel" aria-hidden="true" data-bs-backdrop="static">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title" id="acceptModalLabel">Accept Terms and Policy</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="terms-content">
+                        <h4>Confirmation of Acceptance</h4>
+                        <p>By checking this box, you are confirming that you have read, understood, and agree to be bound by:</p>
+                        
+                        <ul>
+                            <li><strong>Terms and Conditions</strong> - Governing your employment relationship with FieldMax</li>
+                            <li><strong>Privacy Policy</strong> - How your personal data will be collected, used, and protected</li>
+                            <li><strong>Asset Protection Policy</strong> - Your responsibility for company assets and liability for lost or damaged items</li>
+                            <li><strong>Code of Conduct</strong> - Professional behavior expectations</li>
+                            <li><strong>Confidentiality Agreement</strong> - Protection of company information</li>
+                            <li><strong>Data Protection Policy</strong> - Compliance with privacy laws</li>
+                        </ul>
+                        
+                        <h4>Legal Effect</h4>
+                        <p>This acceptance constitutes a binding agreement between you and FieldMax. You acknowledge that:</p>
+                        <ul>
+                            <li>All information provided is accurate and complete</li>
+                            <li>You have had the opportunity to ask questions about these terms</li>
+                            <li>You voluntarily agree to these terms without coercion</li>
+                            <li>You understand the consequences of violating these terms</li>
+                            <li>You accept full responsibility for any company assets assigned to you</li>
+                        </ul>
+                        
+                        <h4>Asset Acknowledgment</h4>
+                        <p>You specifically acknowledge and agree that:</p>
+                        <ul>
+                            <li>You will be issued company assets as needed for your role</li>
+                            <li>You will sign for all assets received</li>
+                            <li>You will report any loss, theft, or damage immediately</li>
+                            <li>You may be held financially liable for negligent loss or damage</li>
+                            <li>Assets must be returned upon resignation or termination</li>
+                        </ul>
+                        
+                        <div class="alert-warning-custom">
+                            <i class="fas fa-gavel"></i> <strong>Important:</strong> This acceptance is legally binding and may be used as evidence of your agreement in any legal proceeding regarding company asset liability.
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-success" id="acceptFinalBtn">
+                        <i class="fas fa-check-circle"></i> I Accept All Terms and Policies
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
-function clearSignature() {
-    signaturePad.clear();
-}
-
-// Password strength indicator
-document.getElementById('password').addEventListener('input', function() {
-    var password = this.value;
-    var strength = 0;
-    
-    if (password.length >= 8) strength++;
-    if (password.match(/[a-z]/)) strength++;
-    if (password.match(/[A-Z]/)) strength++;
-    if (password.match(/[0-9]/)) strength++;
-    if (password.match(/[^a-zA-Z0-9]/)) strength++;
-    
-    var strengthBar = document.getElementById('passwordStrength');
-    strengthBar.className = 'password-strength';
-    
-    if (strength <= 2) {
-        strengthBar.classList.add('strength-weak');
-    } else if (strength <= 4) {
-        strengthBar.classList.add('strength-medium');
-    } else {
-        strengthBar.classList.add('strength-strong');
-    }
-});
-
-// Password match validation
-document.getElementById('confirmPassword').addEventListener('input', function() {
-    var password = document.getElementById('password').value;
-    var confirm = this.value;
-    var matchMsg = document.getElementById('passwordMatch');
-    
-    if (password === confirm && password !== '') {
-        matchMsg.innerHTML = '✓ Passwords match';
-        matchMsg.style.color = 'green';
-    } else if (confirm !== '') {
-        matchMsg.innerHTML = '✗ Passwords do not match';
-        matchMsg.style.color = 'red';
-    } else {
-        matchMsg.innerHTML = '';
-    }
-});
-
-// Image preview function
-function previewImage(input, previewId) {
-    var preview = document.getElementById(previewId);
-    if (input.files && input.files[0]) {
-        var reader = new FileReader();
-        reader.onload = function(e) {
-            preview.src = e.target.result;
-            preview.style.display = 'block';
-        };
-        reader.readAsDataURL(input.files[0]);
-    }
-}
-
-// Form submission handler
-document.getElementById('applicationForm').addEventListener('submit', function(e) {
-    // Validate signature
-    if (signaturePad.isEmpty()) {
-        e.preventDefault();
-        alert('Please provide your signature.');
-        return false;
-    }
-    
-    // Validate password match
-    var password = document.getElementById('password').value;
-    var confirm = document.getElementById('confirmPassword').value;
-    
-    if (password !== confirm) {
-        e.preventDefault();
-        alert('Passwords do not match!');
-        return false;
-    }
-    
-    if (password.length < 8) {
-        e.preventDefault();
-        alert('Password must be at least 8 characters long!');
-        return false;
-    }
-    
-    // Validate email format
-    var email = document.querySelector('[name="email"]').value;
-    var emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-    if (!emailPattern.test(email)) {
-        e.preventDefault();
-        alert('Please enter a valid email address!');
-        return false;
-    }
-    
-    // Save signature as base64
-    var signatureData = signaturePad.toDataURL();
-    document.getElementById('signatureData').value = signatureData;
-    
-    // Show loading
-    var submitBtn = document.getElementById('submitBtn');
-    submitBtn.disabled = true;
-    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Submitting...';
-});
-
-// Reset form function
-function resetForm() {
-    signaturePad.clear();
-    document.getElementById('passwordStrength').className = 'password-strength';
-    document.getElementById('passwordMatch').innerHTML = '';
-    
-    // Clear image previews
-    var previews = ['passportPreview', 'idFrontPreview', 'idBackPreview'];
-    previews.forEach(function(id) {
-        var img = document.getElementById(id);
-        if (img) {
-            img.style.display = 'none';
-            img.src = '';
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
+    <script>
+        // Initialize signature pad
+        var canvas = document.getElementById('signaturePad');
+        var signaturePad = new SignaturePad(canvas, {
+            backgroundColor: 'rgb(255, 255, 255)',
+            penColor: 'rgb(0, 0, 0)'
+        });
+        
+        function resizeCanvas() {
+            var ratio = Math.max(window.devicePixelRatio || 1, 1);
+            var container = canvas.parentElement;
+            var width = container.clientWidth - 32;
+            canvas.width = width * ratio;
+            canvas.height = 200 * ratio;
+            canvas.style.width = width + 'px';
+            canvas.style.height = '200px';
+            canvas.getContext("2d").scale(ratio, ratio);
+            signaturePad.clear();
         }
-    });
-}
-
-// Prevent accidental form reset
-window.addEventListener('beforeunload', function(e) {
-    var form = document.getElementById('applicationForm');
-    var inputs = form.querySelectorAll('input, textarea');
-    var isDirty = false;
-    
-    inputs.forEach(function(input) {
-        if (input.type !== 'file' && input.value && input.value !== '') {
-            isDirty = true;
+        
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+        
+        function clearSignature() {
+            signaturePad.clear();
         }
-    });
-    
-    if (isDirty && !signaturePad.isEmpty()) {
-        e.preventDefault();
-        e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
-        return e.returnValue;
-    }
-});
-</script>
-{% endblock %}
+        
+        // Accept Terms button
+        document.getElementById('acceptTermsBtn').addEventListener('click', function() {
+            var termsCheckbox = document.getElementById('terms_read');
+            termsCheckbox.disabled = false;
+            termsCheckbox.checked = true;
+            termsCheckbox.disabled = true;
+            var modal = bootstrap.Modal.getInstance(document.getElementById('termsModal'));
+            modal.hide();
+        });
+        
+        // Accept Privacy button
+        document.getElementById('acceptPrivacyBtn').addEventListener('click', function() {
+            var termsCheckbox = document.getElementById('terms_read');
+            termsCheckbox.disabled = false;
+            termsCheckbox.checked = true;
+            termsCheckbox.disabled = true;
+            var modal = bootstrap.Modal.getInstance(document.getElementById('privacyModal'));
+            modal.hide();
+        });
+        
+        // Accept Final button
+        document.getElementById('acceptFinalBtn').addEventListener('click', function() {
+            var acceptCheckbox = document.getElementById('terms_accepted');
+            acceptCheckbox.disabled = false;
+            acceptCheckbox.checked = true;
+            acceptCheckbox.disabled = true;
+            var modal = bootstrap.Modal.getInstance(document.getElementById('acceptModal'));
+            modal.hide();
+        });
+        
+        // Auto-capitalize
+        document.querySelectorAll('.auto-capitalize').forEach(function(input) {
+            if (input.value) {
+                input.value = input.value.toUpperCase();
+            }
+        });
+        
+        // Password strength
+        document.getElementById('password').addEventListener('input', function() {
+            var password = this.value;
+            var strength = 0;
+            
+            if (password.length >= 8) strength++;
+            if (password.match(/[a-z]/)) strength++;
+            if (password.match(/[A-Z]/)) strength++;
+            if (password.match(/[0-9]/)) strength++;
+            if (password.match(/[^a-zA-Z0-9]/)) strength++;
+            
+            var strengthBar = document.getElementById('passwordStrength');
+            strengthBar.className = 'password-strength';
+            
+            if (strength <= 2) {
+                strengthBar.classList.add('strength-weak');
+            } else if (strength <= 4) {
+                strengthBar.classList.add('strength-medium');
+            } else {
+                strengthBar.classList.add('strength-strong');
+            }
+        });
+        
+        // Password match
+        document.getElementById('confirmPassword').addEventListener('input', function() {
+            var password = document.getElementById('password').value;
+            var confirm = this.value;
+            var matchMsg = document.getElementById('passwordMatch');
+            
+            if (password === confirm && password !== '') {
+                matchMsg.innerHTML = '✓ Passwords match';
+                matchMsg.style.color = '#28a745';
+            } else if (confirm !== '') {
+                matchMsg.innerHTML = '✗ Passwords do not match';
+                matchMsg.style.color = '#dc3545';
+            } else {
+                matchMsg.innerHTML = '';
+            }
+        });
+        
+        // Image preview
+        function previewImage(input, previewId) {
+            var preview = document.getElementById(previewId);
+            if (input.files && input.files[0]) {
+                var reader = new FileReader();
+                reader.onload = function(e) {
+                    preview.src = e.target.result;
+                    preview.style.display = 'block';
+                };
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+        
+        // Form submission
+        document.getElementById('applicationForm').addEventListener('submit', function(e) {
+            if (signaturePad.isEmpty()) {
+                e.preventDefault();
+                alert('Please provide your signature.');
+                return false;
+            }
+            
+            var password = document.getElementById('password').value;
+            var confirm = document.getElementById('confirmPassword').value;
+            
+            if (password !== confirm) {
+                e.preventDefault();
+                alert('Passwords do not match!');
+                return false;
+            }
+            
+            if (password.length < 8) {
+                e.preventDefault();
+                alert('Password must be at least 8 characters long!');
+                return false;
+            }
+            
+            var email = document.querySelector('[name="email"]').value;
+            var emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+            if (!emailPattern.test(email)) {
+                e.preventDefault();
+                alert('Please enter a valid email address!');
+                return false;
+            }
+            
+            var termsRead = document.getElementById('terms_read');
+            var termsAccepted = document.getElementById('terms_accepted');
+            
+            if (!termsRead.checked) {
+                e.preventDefault();
+                alert('You must read and confirm the Terms and Conditions and Privacy Policy before submitting.');
+                return false;
+            }
+            
+            if (!termsAccepted.checked) {
+                e.preventDefault();
+                alert('You must accept and agree to abide by the Terms and Policy of FieldMax Company before submitting.');
+                return false;
+            }
+            termsRead.disabled = false;
+            termsAccepted.disabled = false;
+            
+            var signatureData = signaturePad.toDataURL();
+            document.getElementById('signatureData').value = signatureData;
+            
+            var submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Submitting...';
+        });
+        
+        // Reset form
+        function resetForm() {
+            signaturePad.clear();
+            document.getElementById('passwordStrength').className = 'password-strength';
+            document.getElementById('passwordMatch').innerHTML = '';
+            
+            var previews = ['passportPreview', 'idFrontPreview', 'idBackPreview'];
+            previews.forEach(function(id) {
+                var img = document.getElementById(id);
+                if (img) {
+                    img.style.display = 'none';
+                    img.src = '';
+                }
+            });
+            
+            var fileInputs = document.querySelectorAll('input[type="file"]');
+            fileInputs.forEach(function(input) {
+                input.value = '';
+            });
+            
+            document.querySelectorAll('.auto-capitalize').forEach(function(input) {
+                input.value = '';
+            });
+            
+            var termsRead = document.getElementById('terms_read');
+            termsRead.disabled = true;
+            termsRead.checked = false;
+            
+            var termsAccepted = document.getElementById('terms_accepted');
+            termsAccepted.disabled = true;
+            termsAccepted.checked = false;
+        }
+        
+        var formDirty = false;
+        document.querySelectorAll('#applicationForm input, #applicationForm textarea').forEach(function(input) {
+            input.addEventListener('input', function() {
+                formDirty = true;
+            });
+        });
+        
+        window.addEventListener('beforeunload', function(e) {
+            if (formDirty && !signaturePad.isEmpty()) {
+                e.preventDefault();
+                e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+                return e.returnValue;
+            }
+        });
+    </script>
+</body>
+</html>
