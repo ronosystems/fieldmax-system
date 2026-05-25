@@ -1,0 +1,44 @@
+{% extends "shops/base.html" %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}Reject Adjustment{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0">Confirm Rejection</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-danger">Are you sure you want to <strong>REJECT</strong> this adjustment?</p>
+                    
+                    <div class="alert alert-warning">
+                        <strong>Details:</strong><br>
+                        Account: {{ adjustment.mpesa_account.account_name }}<br>
+                        Type: {{ adjustment.get_adjustment_type_display }}<br>
+                        Amount: KES {{ adjustment.amount|floatformat:2|intcomma }}<br>
+                        Reason: {{ adjustment.reason }}
+                    </div>
+                    
+                    <p><strong>This action cannot be undone.</strong> The adjustment will be permanently deleted.</p>
+                    
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="d-flex justify-content-between">
+                            <a href="{% url 'shops:mpesa_adjustments_pending' %}" class="btn btn-secondary">
+                                Cancel
+                            </a>
+                            <button type="submit" class="btn btn-danger">
+                                <i class="fas fa-times"></i> Confirm Rejection
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

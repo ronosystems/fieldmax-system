@@ -120,7 +120,13 @@ class MpesaAccount(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='created_mpesa_accounts')
     last_modified_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='modified_mpesa_accounts')
-    
+
+    # New fields for tracking manual adjustments
+    total_injections_count = models.PositiveIntegerField(default=0, verbose_name="Manual Injections Count")
+    total_injections_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    total_manual_withdrawals_count = models.PositiveIntegerField(default=0, verbose_name="Manual Withdrawals Count")
+    total_manual_withdrawals_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+
     class Meta:
         ordering = ['shop__name', 'account_name']
         indexes = [
@@ -366,9 +372,6 @@ class ShopExpense(models.Model):
         return f"{self.daily_report} - {self.description}: KES {self.amount}"
 
 
-
-
-
 # ==================== DAILY SHOP REPORT MODEL ====================
 
 class DailyShopReport(models.Model):
@@ -490,8 +493,7 @@ class ShopConfiguration(models.Model):
             return default
 
 
-# ==================== BANK CLOSING BALANCE (Legacy/Compatibility) ====================
-# Keep for backward compatibility with existing views
+# ==================== BANK CLOSING BALANCE  ====================
 
 class BankClosingBalance(models.Model):
     """Legacy model - use BankDailyBalance instead"""
@@ -506,3 +508,204 @@ class BankClosingBalance(models.Model):
     
     def __str__(self):
         return f"{self.daily_report} - {self.bank_account.bank_name}: {self.closing_balance}"
+
+
+# ==================== MPESA ADJUSTMENT ==============================
+
+class MpesaAdjustment(models.Model):
+    """Track manual adjustments (injections/withdrawals) to M-Pesa accounts"""
+    
+    ADJUSTMENT_TYPE_CHOICES = [
+        ('injection', 'Injection (Add Money)'),
+        ('withdrawal', 'Withdrawal (Take Money Out)'),
+    ]
+    
+    mpesa_account = models.ForeignKey(MpesaAccount, on_delete=models.CASCADE, related_name='adjustments')
+    adjustment_type = models.CharField(max_length=20, choices=ADJUSTMENT_TYPE_CHOICES)
+    amount = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
+    
+    # Reference info
+    reference_number = models.CharField(max_length=100, blank=True, null=True, help_text="Transaction reference or receipt number")
+    reason = models.TextField(help_text="Reason for this adjustment (e.g., 'Extra cash injection from owner', 'Cash taken for expenses')")
+    
+    # Balance tracking
+    balance_before = models.DecimalField(max_digits=12, decimal_places=2)
+    balance_after = models.DecimalField(max_digits=12, decimal_places=2)
+    
+    # Audit fields
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='mpesa_adjustments')
+    created_at = models.DateTimeField(auto_now_add=True)
+    approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_mpesa_adjustments')
+    approved_at = models.DateTimeField(null=True, blank=True)
+    is_approved = models.BooleanField(default=False)
+    
+    # Optional: link to a daily report if adjustment is part of end-of-day
+    daily_report = models.ForeignKey('DailyShopReport', on_delete=models.SET_NULL, null=True, blank=True, related_name='mpesa_adjustments')
+    
+    notes = models.TextField(blank=True, null=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = "M-Pesa Adjustment"
+        verbose_name_plural = "M-Pesa Adjustments"
+    
+    def __str__(self):
+        return f"{self.get_adjustment_type_display()} - {self.mpesa_account.account_name}: KES {self.amount}"
+    
+    def save(self, *args, **kwargs):
+        # Calculate balance after adjustment
+        self.balance_before = self.mpesa_account.current_balance
+        
+        if self.adjustment_type == 'injection':
+            self.balance_after = self.balance_before + self.amount
+            self.mpesa_account.current_balance = self.balance_after
+            # Also update total deposit count/amount as injection
+            self.mpesa_account.total_deposit_count += 1
+            self.mpesa_account.total_deposit_amount += self.amount
+        else:  # withdrawal
+            self.balance_after = self.balance_before - self.amount
+            self.mpesa_account.current_balance = self.balance_after
+            # Update withdrawal counts
+            self.mpesa_account.total_withdrawal_count += 1
+            self.mpesa_account.total_withdrawal_amount += self.amount
+        
+        self.mpesa_account.save()
+        super().save(*args, **kwargs)
+
+
+# ==================== ACCOUNT  TRANSACTIONS ===========================
+
+class AccountTransaction(models.Model):
+    """Generic transaction model for all account types (M-Pesa, Bank, Cash)"""
+    
+    ACCOUNT_TYPE_CHOICES = [
+        ('mpesa', 'M-Pesa Account'),
+        ('bank', 'Bank Account'),
+        ('cash', 'Cash Account'),
+    ]
+    
+    TRANSACTION_TYPE_CHOICES = [
+        ('injection', 'Injection (Add Money)'),
+        ('withdrawal', 'Withdrawal (Take Money Out)'),
+        ('transfer', 'Transfer Between Accounts'),
+    ]
+    
+    # Account identification
+    account_type = models.CharField(max_length=20, choices=ACCOUNT_TYPE_CHOICES)
+    mpesa_account = models.ForeignKey(MpesaAccount, on_delete=models.CASCADE, null=True, blank=True, related_name='transactions')
+    bank_account = models.ForeignKey(BankAccount, on_delete=models.CASCADE, null=True, blank=True, related_name='transactions')
+    cash_account = models.ForeignKey(CashAccount, on_delete=models.CASCADE, null=True, blank=True, related_name='transactions')
+    
+    # Transaction details
+    transaction_type = models.CharField(max_length=20, choices=TRANSACTION_TYPE_CHOICES)
+    amount = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
+    
+    # For transfers (source and destination)
+    from_account_type = models.CharField(max_length=20, choices=ACCOUNT_TYPE_CHOICES, null=True, blank=True)
+    from_mpesa_account = models.ForeignKey(MpesaAccount, on_delete=models.SET_NULL, null=True, blank=True, related_name='transfers_out')
+    from_bank_account = models.ForeignKey(BankAccount, on_delete=models.SET_NULL, null=True, blank=True, related_name='transfers_out')
+    from_cash_account = models.ForeignKey(CashAccount, on_delete=models.SET_NULL, null=True, blank=True, related_name='transfers_out')
+    
+    to_account_type = models.CharField(max_length=20, choices=ACCOUNT_TYPE_CHOICES, null=True, blank=True)
+    to_mpesa_account = models.ForeignKey(MpesaAccount, on_delete=models.SET_NULL, null=True, blank=True, related_name='transfers_in')
+    to_bank_account = models.ForeignKey(BankAccount, on_delete=models.SET_NULL, null=True, blank=True, related_name='transfers_in')
+    to_cash_account = models.ForeignKey(CashAccount, on_delete=models.SET_NULL, null=True, blank=True, related_name='transfers_in')
+    
+    # Reference info
+    reference_number = models.CharField(max_length=100, blank=True, null=True)
+    reason = models.TextField()
+    notes = models.TextField(blank=True, null=True)
+    
+    # Balance tracking
+    balance_before = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    balance_after = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    
+    # Audit fields
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='transactions')
+    created_at = models.DateTimeField(auto_now_add=True)
+    approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_transactions')
+    approved_at = models.DateTimeField(null=True, blank=True)
+    is_approved = models.BooleanField(default=False)
+    
+    # Link to daily report
+    daily_report = models.ForeignKey('DailyShopReport', on_delete=models.SET_NULL, null=True, blank=True, related_name='transactions')
+    
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = "Account Transaction"
+        verbose_name_plural = "Account Transactions"
+    
+    def __str__(self):
+        account_name = ""
+        if self.account_type == 'mpesa' and self.mpesa_account:
+            account_name = self.mpesa_account.account_name
+        elif self.account_type == 'bank' and self.bank_account:
+            account_name = f"{self.bank_account.bank_name} - {self.bank_account.account_name}"
+        elif self.account_type == 'cash' and self.cash_account:
+            account_name = self.cash_account.account_name
+        
+        return f"{self.get_transaction_type_display()} - {account_name}: KES {self.amount}"
+    
+    def get_account(self):
+        """Return the actual account object"""
+        if self.account_type == 'mpesa' and self.mpesa_account:
+            return self.mpesa_account
+        elif self.account_type == 'bank' and self.bank_account:
+            return self.bank_account
+        elif self.account_type == 'cash' and self.cash_account:
+            return self.cash_account
+        return None
+    
+    def get_balance_field(self):
+        """Return the balance field name for the account"""
+        if self.account_type == 'mpesa':
+            return 'current_balance'
+        elif self.account_type == 'bank':
+            return 'current_balance'
+        elif self.account_type == 'cash':
+            return 'current_balance'
+        return 'current_balance'
+    
+    def save(self, *args, **kwargs):
+        """Save transaction and update account balance"""
+        account = self.get_account()
+        
+        if account:
+            # Get current balance
+            self.balance_before = account.current_balance
+            
+            if self.transaction_type == 'injection':
+                # Add money
+                self.balance_after = self.balance_before + self.amount
+                account.current_balance = self.balance_after
+                
+                # Update specific account counters
+                if self.account_type == 'mpesa':
+                    account.total_injections_count += 1
+                    account.total_injections_amount += self.amount
+                    account.total_deposit_count += 1
+                    account.total_deposit_amount += self.amount
+                elif self.account_type == 'bank':
+                    # For bank accounts, you may want to add similar counters
+                    pass
+                elif self.account_type == 'cash':
+                    # For cash accounts, you may want to add similar counters
+                    pass
+                    
+            elif self.transaction_type == 'withdrawal':
+                # Subtract money
+                self.balance_after = self.balance_before - self.amount
+                account.current_balance = self.balance_after
+                
+                # Update specific account counters
+                if self.account_type == 'mpesa':
+                    account.total_manual_withdrawals_count += 1
+                    account.total_manual_withdrawals_amount += self.amount
+                    account.total_withdrawal_count += 1
+                    account.total_withdrawal_amount += self.amount
+                    
+            # Save the account
+            account.save()
+        
+        super().save(*args, **kwargs)
+

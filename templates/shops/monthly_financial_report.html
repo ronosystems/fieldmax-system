@@ -1,0 +1,512 @@
+{% extends "shops/base.html" %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}Monthly Financial Report{% endblock %}
+
+{% block extra_css %}
+<style>
+    .summary-card {
+        border: none;
+        border-radius: 15px;
+        transition: transform 0.3s;
+        margin-bottom: 1rem;
+    }
+    .summary-card:hover { transform: translateY(-3px); }
+    .summary-icon {
+        font-size: 2rem;
+        opacity: 0.2;
+        position: absolute;
+        right: 15px;
+        top: 15px;
+    }
+    .filter-bar {
+        background: white;
+        border-radius: 12px;
+        padding: 1rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+    .balance-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        border-radius: 15px;
+    }
+    .commission-card {
+        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        color: white;
+        border: none;
+        border-radius: 15px;
+    }
+    .injection-card {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        color: white;
+        border: none;
+        border-radius: 15px;
+    }
+    .expense-card {
+        background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+        color: white;
+        border: none;
+        border-radius: 15px;
+    }
+    .variance-positive { color: #10b981; }
+    .variance-negative { color: #ef4444; }
+    .chart-container { height: 300px; margin-bottom: 1rem; }
+    
+    /* Left Panel Stats */
+    .stat-box {
+        background: #f8f9fa;
+        border-radius: 12px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        text-align: center;
+    }
+    .stat-box .stat-value {
+        font-size: 1.5rem;
+        font-weight: bold;
+    }
+    .stat-box .stat-label {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        color: #6c757d;
+    }
+    
+    .injection-badge {
+        background: #f0fdf4;
+        color: #10b981;
+        padding: 2px 8px;
+        border-radius: 20px;
+        font-size: 0.7rem;
+    }
+    
+    @media (max-width: 768px) { 
+        .chart-container { height: 250px; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h2 mb-0">
+                <i class="fas fa-chart-line text-primary"></i> Monthly Financial Report
+            </h1>
+            <p class="text-muted mt-2">Opening Balance (Previous Day's Closing) | Commission | Injections | Expenses | Closing Balance (Including Post-Report Injections)</p>
+        </div>
+        <div>
+            <button type="button" class="btn btn-outline-primary" onclick="window.print()">
+                <i class="fas fa-print"></i> Print Report
+            </button>
+        </div>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="filter-bar">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label">Shop Branch</label>
+                <select name="shop" class="form-select">
+                    <option value="all" {% if selected_shop == 'all' %}selected{% endif %}>All Shops</option>
+                    {% for shop in shops %}
+                        <option value="{{ shop.id }}" {% if selected_shop|stringformat:"s" == shop.id|stringformat:"s" %}selected{% endif %}>{{ shop.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Period Type</label>
+                <select name="period" class="form-select" id="periodType">
+                    <option value="day" {% if period_type == 'day' %}selected{% endif %}>Daily</option>
+                    <option value="week" {% if period_type == 'week' %}selected{% endif %}>Weekly</option>
+                    <option value="month" {% if period_type == 'month' %}selected{% endif %}>Monthly</option>
+                    <option value="year" {% if period_type == 'year' %}selected{% endif %}>Yearly</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label" id="dateLabel">Select Month</label>
+                <input type="text" name="date" class="form-control" id="datePicker" 
+                       placeholder="Select date" value="{{ selected_date }}">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">&nbsp;</label>
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="fas fa-filter"></i> Apply
+                </button>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">&nbsp;</label>
+                <a href="{% url 'shops:monthly_financial_report' %}" class="btn btn-secondary w-100">
+                    <i class="fas fa-sync-alt"></i> Reset
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <!-- Period Info -->
+    <div class="alert alert-info mb-4">
+        <i class="fas fa-calendar-alt"></i> 
+        Reporting Period: <strong>{{ period_display }}</strong>
+        ({{ period_summary.total_days }} days • {{ period_summary.total_reports }} reports • 
+        {{ period_summary.finalized_reports }} finalized)
+    </div>
+
+    <!-- TWO COLUMN LAYOUT -->
+    <div class="row">
+        
+        <!-- ==================== LEFT COLUMN ==================== -->
+        <div class="col-lg-6">
+            
+            <!-- Opening Balance Card (Previous Day's Closing) -->
+            <div class="card summary-card balance-card mb-3">
+                <div class="card-body">
+                    <div class="summary-icon"><i class="fas fa-door-open"></i></div>
+                    <small class="text-uppercase opacity-75">Opening Balance</small>
+                    <small class="d-block opacity-50">(Previous Day's Closing)</small>
+                    <h2 class="mb-2">KES {{ opening_balance_total|floatformat:2|intcomma }}</h2>
+                    <div class="row mt-2">
+                        <div class="col-4">
+                            <small class="opacity-75">M-Pesa</small>
+                            <div class="fw-bold">KES {{ opening_balance_mpesa|floatformat:2|intcomma }}</div>
+                        </div>
+                        <div class="col-4">
+                            <small class="opacity-75">Bank</small>
+                            <div class="fw-bold">KES {{ opening_balance_bank|floatformat:2|intcomma }}</div>
+                        </div>
+                        <div class="col-4">
+                            <small class="opacity-75">Cash</small>
+                            <div class="fw-bold">KES {{ opening_balance_cash|floatformat:2|intcomma }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Closing Balance Card (Last Report + Post-Report Injections) -->
+            <div class="card summary-card balance-card mb-3">
+                <div class="card-body">
+                    <div class="summary-icon"><i class="fas fa-door-closed"></i></div>
+                    <small class="text-uppercase opacity-75">Closing Balance</small>
+                    <small class="d-block opacity-50">(Last Report + Post-Report Injections)</small>
+                    <h2 class="mb-2">KES {{ closing_balance_total|floatformat:2|intcomma }}</h2>
+                    <div class="row mt-2">
+                        <div class="col-4">
+                            <small class="opacity-75">M-Pesa</small>
+                            <div class="fw-bold">KES {{ closing_balance_mpesa|floatformat:2|intcomma }}</div>
+                        </div>
+                        <div class="col-4">
+                            <small class="opacity-75">Bank</small>
+                            <div class="fw-bold">KES {{ closing_balance_bank|floatformat:2|intcomma }}</div>
+                        </div>
+                        <div class="col-4">
+                            <small class="opacity-75">Cash</small>
+                            <div class="fw-bold">KES {{ closing_balance_cash|floatformat:2|intcomma }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Stats Row (Commission, Injections, Expenses) -->
+            <div class="row mb-3">
+                <div class="col-4">
+                    <div class="stat-box">
+                        <div class="stat-value text-success">KES {{ commission_received|floatformat:2|intcomma }}</div>
+                        <div class="stat-label">Commission</div>
+                        <small>{{ commission_transactions }} txns</small>
+                    </div>
+                </div>
+                <div class="col-4">
+                    <div class="stat-box">
+                        <div class="stat-value text-primary">KES {{ money_injected|floatformat:2|intcomma }}</div>
+                        <div class="stat-label">Injections</div>
+                        <small>{{ injection_count }} injections</small>
+                    </div>
+                </div>
+                <div class="col-4">
+                    <div class="stat-box">
+                        <div class="stat-value text-danger">KES {{ total_expenses|floatformat:2|intcomma }}</div>
+                        <div class="stat-label">Expenses</div>
+                        <small>{{ expense_count }} expenses</small>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Variance Analysis Card -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="fas fa-chart-line"></i> Variance Analysis</h6>
+                </div>
+                <div class="card-body">
+                    <div class="mb-2">
+                        <small class="text-muted">Expected Closing</small>
+                        <h4 class="mb-0">KES {{ expected_closing|floatformat:2|intcomma }}</h4>
+                        <small class="text-muted">Opening + Commission + Injections - Expenses</small>
+                    </div>
+                    <div class="mb-2">
+                        <small class="text-muted">Actual Closing</small>
+                        <h4 class="mb-0">KES {{ actual_closing|floatformat:2|intcomma }}</h4>
+                        <small class="text-muted">(Last Report Balance + Post-Report Injections)</small>
+                    </div>
+                    <hr>
+                    <div>
+                        <small class="text-muted">Variance</small>
+                        <h3 class="{% if variance >= 0 %}variance-positive{% else %}variance-negative{% endif %} mb-0">
+                            {% if variance >= 0 %}+{% endif %}KES {{ variance|floatformat:2|intcomma }}
+                        </h3>
+                        <small>Net Change: {% if net_change >= 0 %}+{% endif %}KES {{ net_change|floatformat:2|intcomma }}</small>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Money Injections Details -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="fas fa-plus-circle text-success"></i> Money Injections Details</h6>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Type</th>
+                                    <th>Account</th>
+                                    <th>Number</th>
+                                    <th>Count</th>
+                                    <th>Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for inj in injections_by_account %}
+                                <tr>
+                                    <td>
+                                        {% if inj.type == 'M-Pesa' %}
+                                            <span class="badge bg-success">{{ inj.type }}</span>
+                                        {% elif inj.type == 'Bank' %}
+                                            <span class="badge bg-primary">{{ inj.type }}</span>
+                                        {% else %}
+                                            <span class="badge bg-warning">{{ inj.type }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ inj.name }}</a></td>
+                                    <td>{{ inj.number }}</code></td>
+                                    <td>{{ inj.count }}</a></td>
+                                    <td class="text-success">+ KES {{ inj.total|floatformat:2|intcomma }}</a></td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="5" class="text-center py-3">No injections this period</a></td>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot class="table-light">
+                                <tr>
+                                    <th colspan="4" class="text-end">Total Injections:</th>
+                                    <th class="text-success">KES {{ money_injected|floatformat:2|intcomma }}</th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- ==================== RIGHT COLUMN ==================== -->
+        <div class="col-lg-6">
+            
+            <!-- Daily Trends Chart -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="fas fa-chart-line"></i> Daily Trends</h6>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="trendsChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Expenses by Category -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="fas fa-tags text-danger"></i> Expenses by Category</h6>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr><th>Category</th><th>Count</th><th>Total</th><th>%</th></tr>
+                            </thead>
+                            <tbody>
+                                {% for cat in expenses_by_category %}
+                                <tr>
+                                    <td>{{ cat.expense_category|default:"Uncategorized" }}</a></a></td>
+                                    <td>{{ cat.count }}</a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></td>
+                                    <td class="text-danger">KES {{ cat.total|floatformat:2|intcomma }}</a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></td>
+                                    <td>
+                                        {% widthratio cat.total total_expenses 100 %}%
+                                     </a>
+                                 </a>
+                                {% empty %}
+                                <tr><td colspan="4" class="text-center py-3">No expenses this period</a></td>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Expenses by Payment Method -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="fas fa-credit-card"></i> Expenses by Payment Method</h6>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr><th>Method</th><th>Count</th><th>Total</th></tr>
+                            </thead>
+                            <tbody>
+                                {% for pm in expenses_by_payment %}
+                                <tr>
+                                    <td>{{ pm.payment_method|title }}</a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></td>
+                                    <td>{{ pm.count }}</a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></td>
+                                    <td class="text-danger">KES {{ pm.total|floatformat:2|intcomma }}</a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></a></td>
+                                 </a>
+                                {% empty %}
+                                <tr><td colspan="3" class="text-center py-3">No expenses this period</a></td>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Recent Expenses List -->
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="fas fa-clock"></i> Recent Expenses</h6>
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush">
+                        {% for expense in recent_expenses %}
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <small class="text-muted">{{ expense.created_at|date:"Y-m-d H:i" }}</small>
+                                    <div>
+                                        <strong>{{ expense.description }}</strong>
+                                        <span class="badge bg-secondary">{{ expense.expense_category|default:"Uncategorized" }}</span>
+                                    </div>
+                                    <small>{{ expense.payment_method|title }}</small>
+                                </div>
+                                <div class="text-end">
+                                    <div class="fw-bold text-danger">- KES {{ expense.amount|floatformat:2|intcomma }}</div>
+                                    {% if expense.receipt_number %}
+                                        <small class="text-muted">Ref: {{ expense.receipt_number }}</small>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% empty %}
+                        <div class="list-group-item text-center py-4">No recent expenses</div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Update date picker based on period type
+    const periodType = document.getElementById('periodType');
+    const datePicker = document.getElementById('datePicker');
+    const dateLabel = document.getElementById('dateLabel');
+    
+    function updateDatePicker() {
+        const type = periodType.value;
+        if (type === 'day') {
+            datePicker.type = 'date';
+            dateLabel.textContent = 'Select Date';
+            datePicker.placeholder = 'YYYY-MM-DD';
+        } else if (type === 'week') {
+            datePicker.type = 'date';
+            dateLabel.textContent = 'Week Starting (Monday)';
+            datePicker.placeholder = 'YYYY-MM-DD';
+        } else if (type === 'month') {
+            datePicker.type = 'month';
+            dateLabel.textContent = 'Select Month';
+            datePicker.placeholder = 'YYYY-MM';
+        } else {
+            datePicker.type = 'text';
+            dateLabel.textContent = 'Select Year';
+            datePicker.placeholder = 'YYYY';
+            datePicker.pattern = '\\d{4}';
+        }
+    }
+    
+    periodType.addEventListener('change', updateDatePicker);
+    updateDatePicker();
+    
+    // Trends Chart
+    const ctx = document.getElementById('trendsChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: {{ chart_dates|safe }},
+            datasets: [
+                {
+                    label: 'Commission Received',
+                    data: {{ chart_commission|safe }},
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                },
+                {
+                    label: 'Expenses',
+                    data: {{ chart_expenses|safe }},
+                    borderColor: '#ef4444',
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                },
+                {
+                    label: 'Injections',
+                    data: {{ chart_injections|safe }},
+                    borderColor: '#f093fb',
+                    backgroundColor: 'rgba(240, 147, 251, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `${context.dataset.label}: KES ${context.raw.toLocaleString()}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return 'KES ' + value.toLocaleString();
+                        }
+                    }
+                }
+            }
+        }
+    });
+</script>
+{% endblock %}
+{% endblock %}

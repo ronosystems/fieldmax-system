@@ -1,0 +1,776 @@
+{% extends "shops/base.html" %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .adjustment-card {
+        border: none;
+        border-radius: 15px;
+        box-shadow: 0 0 20px rgba(0,0,0,0.08);
+        overflow: hidden;
+        height: 100%;
+    }
+    
+    .adjustment-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 0.75rem 1.25rem;
+        border-bottom: none;
+    }
+    
+    .adjustment-header.injection {
+        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    }
+    
+    .adjustment-header.withdrawal {
+        background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+    }
+    
+    .form-control, .form-select {
+        border-radius: 8px;
+        border: 1px solid #e0e0e0;
+        padding: 0.4rem 0.6rem;
+        transition: all 0.3s;
+        font-size: 0.85rem;
+    }
+    
+    .form-control:focus, .form-select:focus {
+        border-color: #11998e;
+        box-shadow: 0 0 0 0.2rem rgba(17, 153, 142, 0.1);
+    }
+    
+    .form-label {
+        font-weight: 600;
+        margin-bottom: 0.2rem;
+        color: #333;
+        font-size: 0.8rem;
+    }
+    
+    .btn-submit {
+        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        border: none;
+        border-radius: 8px;
+        padding: 0.4rem 1rem;
+        font-weight: 600;
+        transition: transform 0.2s;
+        width: 100%;
+        font-size: 0.85rem;
+    }
+    
+    .btn-submit:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(17, 153, 142, 0.4);
+    }
+    
+    .btn-cancel {
+        border-radius: 8px;
+        padding: 0.4rem 1rem;
+        font-weight: 600;
+        width: 100%;
+        font-size: 0.85rem;
+    }
+    
+    .info-card {
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        border: none;
+        border-radius: 12px;
+        height: 100%;
+    }
+    
+    .current-balance-card {
+        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        color: white;
+        border: none;
+        border-radius: 12px;
+        margin-bottom: 0.75rem;
+        padding: 0.5rem;
+    }
+    
+    .balance-amount {
+        font-size: 1.25rem;
+        font-weight: bold;
+        margin: 0;
+    }
+    
+    .alert-custom {
+        border-radius: 8px;
+        border-left: 4px solid;
+        padding: 0.4rem 0.6rem;
+        margin-bottom: 0.5rem;
+        font-size: 0.75rem;
+    }
+    
+    .alert-warning-custom {
+        background: #fff3cd;
+        border-left-color: #ffc107;
+    }
+    
+    .alert-info-custom {
+        background: #d1ecf1;
+        border-left-color: #17a2b8;
+    }
+    
+    .form-text {
+        font-size: 0.65rem;
+        margin-top: 0.2rem;
+    }
+    
+    .required-field::after {
+        content: "*";
+        color: red;
+        margin-left: 4px;
+    }
+    
+    .summary-card {
+        border: none;
+        border-radius: 12px;
+        background: white;
+        box-shadow: 0 0 20px rgba(0,0,0,0.08);
+        margin-bottom: 0.5rem;
+    }
+    
+    .summary-item {
+        padding: 0.4rem 0.75rem;
+        border-bottom: 1px solid #e0e0e0;
+    }
+    
+    .summary-item:last-child {
+        border-bottom: none;
+    }
+    
+    .summary-label {
+        font-size: 0.65rem;
+        color: #666;
+        margin-bottom: 0;
+    }
+    
+    .summary-value {
+        font-size: 0.9rem;
+        font-weight: bold;
+        color: #333;
+    }
+    
+    .stats-card {
+        background: white;
+        border-radius: 10px;
+        padding: 0.4rem;
+        text-align: center;
+        margin-bottom: 0.5rem;
+        box-shadow: 0 0 20px rgba(0,0,0,0.08);
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+    
+    .stats-card:hover {
+        transform: translateY(-2px);
+        border: 1px solid #11998e;
+    }
+    
+    .stats-card.active {
+        border: 2px solid #11998e;
+        background: #f0fdf4;
+    }
+    
+    .stats-number {
+        font-size: 0.9rem;
+        font-weight: bold;
+    }
+    
+    .stats-label {
+        font-size: 0.65rem;
+        color: #666;
+    }
+    
+    .expected-result {
+        background: #f0fdf4;
+        border-radius: 10px;
+        padding: 0.5rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    /* Animations */
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    
+    .animate-fade-in-up {
+        animation: fadeInUp 0.5s ease-out;
+    }
+    
+    .right-column {
+        animation: fadeInUp 0.5s ease-out 0.2s both;
+    }
+    
+    /* Reduce spacing */
+    .mb-3 {
+        margin-bottom: 0.5rem !important;
+    }
+    
+    .mb-2 {
+        margin-bottom: 0.4rem !important;
+    }
+    
+    .mt-3 {
+        margin-top: 0.5rem !important;
+    }
+    
+    .py-3 {
+        padding-top: 0.5rem !important;
+        padding-bottom: 0.5rem !important;
+    }
+    
+    .gap-2 {
+        gap: 0.5rem !important;
+    }
+    
+    .btn-sm {
+        padding: 0.2rem 0.5rem;
+        font-size: 0.7rem;
+    }
+    
+    /* Ensure no overflow */
+    body {
+        overflow: hidden;
+    }
+    
+    .container-fluid {
+        height: 100vh;
+        overflow-y: auto;
+    }
+    
+    .container-fluid::-webkit-scrollbar {
+        width: 6px;
+    }
+    
+    .container-fluid::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 3px;
+    }
+    
+    .container-fluid::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 3px;
+    }
+    
+    /* Quick amount buttons */
+    .quick-amount-btn {
+        padding: 0.2rem 0.4rem;
+        font-size: 0.65rem;
+        margin: 0.1rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-2 animate-fade-in-up">
+    <!-- Header Section - Compressed -->
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <div>
+            <h5 class="mb-0">
+                {% if preselected_type == 'injection' %}
+                    <i class="fas fa-plus-circle text-success"></i>
+                {% else %}
+                    <i class="fas fa-minus-circle text-danger"></i>
+                {% endif %}
+                {{ title }}
+            </h5>
+            <small class="text-muted">Make manual adjustments to M-Pesa account balance</small>
+        </div>
+        <div>
+            <a href="{% url 'shops:mpesa_accounts' %}" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-arrow-left"></i> Back
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- LEFT COLUMN - Form -->
+        <div class="col-lg-7">
+            <!-- Current Balance Card (if account is preselected) -->
+            {% if preselected_account %}
+            <div class="card current-balance-card mb-2">
+                <div class="card-body py-1">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <small class="mb-0 opacity-75">Current Balance</small>
+                            <h5 class="mb-0 balance-amount" id="currentBalanceDisplay">
+                                KES 0.00
+                            </h5>
+                            <small class="opacity-75" id="accountNameDisplay"></small>
+                        </div>
+                        <div>
+                            <i class="fas fa-mobile-alt fa-2x opacity-50"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Main Form Card -->
+            <div class="card adjustment-card">
+                <div class="adjustment-header {% if preselected_type == 'injection' %}injection{% elif preselected_type == 'withdrawal' %}withdrawal{% endif %} py-1">
+                    <div class="d-flex align-items-center">
+                        <div class="me-2">
+                            {% if preselected_type == 'injection' %}
+                                <i class="fas fa-plus-circle"></i>
+                            {% elif preselected_type == 'withdrawal' %}
+                                <i class="fas fa-minus-circle"></i>
+                            {% else %}
+                                <i class="fas fa-edit"></i>
+                            {% endif %}
+                        </div>
+                        <div>
+                            <h6 class="mb-0">Adjustment Form</h6>
+                            <small class="opacity-75">Fill in the details below</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card-body p-2">
+                    <form method="post" id="adjustmentForm">
+                        {% csrf_token %}
+                        
+                        {% if form.non_field_errors %}
+                            <div class="alert alert-danger alert-custom mb-2">
+                                {% for error in form.non_field_errors %}
+                                    <i class="fas fa-exclamation-circle"></i> {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                        
+                        <!-- M-Pesa Account Selection with Visual Cards -->
+                        <div class="mb-2">
+                            <label class="form-label required-field">
+                                <i class="fas fa-mobile-alt me-1"></i>Select M-Pesa Account
+                            </label>
+                            {{ form.mpesa_account }}
+                            {% if form.mpesa_account.errors %}
+                                <div class="text-danger small mt-1">
+                                    {% for error in form.mpesa_account.errors %}
+                                        <i class="fas fa-exclamation-circle"></i> {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                            {% if preselected_account %}
+                                <div class="form-text text-info">
+                                    <i class="fas fa-info-circle"></i> Account pre-selected
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Adjustment Type - Visual Selection -->
+                        <div class="mb-2">
+                            <label class="form-label required-field">
+                                <i class="fas fa-tag me-1"></i>Adjustment Type
+                            </label>
+                            <div class="row g-1">
+                                <div class="col-6">
+                                    <div class="stats-card type-option" data-type="injection">
+                                        <i class="fas fa-plus-circle fa-lg text-success mb-1"></i>
+                                        <div class="stats-number text-success">Injection</div>
+                                        <small class="text-muted">Add Money</small>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="stats-card type-option" data-type="withdrawal">
+                                        <i class="fas fa-minus-circle fa-lg text-danger mb-1"></i>
+                                        <div class="stats-number text-danger">Withdrawal</div>
+                                        <small class="text-muted">Take Money</small>
+                                    </div>
+                                </div>
+                            </div>
+                            {{ form.adjustment_type }}
+                        </div>
+                        
+                        <!-- Amount with Quick Amounts -->
+                        <div class="mb-2">
+                            <label for="{{ form.amount.id_for_label }}" class="form-label required-field">
+                                <i class="fas fa-coins me-1"></i>Amount (KES)
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light" style="padding: 0.3rem 0.6rem;">KES</span>
+                                {{ form.amount }}
+                            </div>
+                            <div class="quick-amounts mt-1">
+                                <small class="text-muted">Quick:</small>
+                                <button type="button" class="btn btn-outline-secondary btn-sm quick-amount-btn" data-amount="1000">1K</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm quick-amount-btn" data-amount="2000">2K</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm quick-amount-btn" data-amount="5000">5K</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm quick-amount-btn" data-amount="10000">10K</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm quick-amount-btn" data-amount="20000">20K</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm quick-amount-btn" data-amount="50000">50K</button>
+                            </div>
+                            {% if form.amount.errors %}
+                                <div class="text-danger small mt-1">
+                                    {% for error in form.amount.errors %}
+                                        <i class="fas fa-exclamation-circle"></i> {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Reference Number -->
+                        <div class="mb-2">
+                            <label for="{{ form.reference_number.id_for_label }}" class="form-label">
+                                <i class="fas fa-hashtag me-1"></i>Reference Number
+                            </label>
+                            {{ form.reference_number }}
+                            {% if form.reference_number.errors %}
+                                <div class="text-danger small mt-1">
+                                    {% for error in form.reference_number.errors %}
+                                        <i class="fas fa-exclamation-circle"></i> {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Reason -->
+                        <div class="mb-2">
+                            <label for="{{ form.reason.id_for_label }}" class="form-label required-field">
+                                <i class="fas fa-comment me-1"></i>Reason
+                            </label>
+                            {{ form.reason }}
+                            {% if form.reason.errors %}
+                                <div class="text-danger small mt-1">
+                                    {% for error in form.reason.errors %}
+                                        <i class="fas fa-exclamation-circle"></i> {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Notes -->
+                        <div class="mb-2">
+                            <label for="{{ form.notes.id_for_label }}" class="form-label">
+                                <i class="fas fa-sticky-note me-1"></i>Notes
+                            </label>
+                            {{ form.notes }}
+                            {% if form.notes.errors %}
+                                <div class="text-danger small mt-1">
+                                    {% for error in form.notes.errors %}
+                                        <i class="fas fa-exclamation-circle"></i> {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Expected Result Preview -->
+                        <div class="expected-result mb-2">
+                            <div class="d-flex justify-content-between mb-1">
+                                <small>Current Balance:</small>
+                                <strong id="previewCurrentBalance">KES 0.00</strong>
+                            </div>
+                            <div class="d-flex justify-content-between mb-1 text-success">
+                                <small>Amount to {% if preselected_type == 'injection' %}Add{% else %}Subtract{% endif %}:</small>
+                                <strong id="previewAmount">KES 0.00</strong>
+                            </div>
+                            <hr class="my-1">
+                            <div class="d-flex justify-content-between">
+                                <small>New Balance:</small>
+                                <strong class="text-success" id="previewNewBalance">KES 0.00</strong>
+                            </div>
+                        </div>
+                        
+                        <!-- Submit Buttons -->
+                        <div class="d-flex gap-2 mt-2">
+                            <a href="{% url 'shops:mpesa_accounts' %}" class="btn btn-secondary btn-cancel">
+                                <i class="fas fa-times"></i> Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary btn-submit" id="submitBtn">
+                                <i class="fas fa-check"></i> Submit
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT COLUMN - Information & Guidelines -->
+        <div class="col-lg-5 right-column">
+            <!-- Quick Stats -->
+            <div class="row g-1 mb-2">
+                <div class="col-6">
+                    <div class="stats-card">
+                        <i class="fas fa-chart-line fa-lg text-success mb-1"></i>
+                        <div class="stats-label">Today's Adjustments</div>
+                        <div class="stats-number text-success" id="todayAdjustments">KES 0</div>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="stats-card">
+                        <i class="fas fa-calendar-week fa-lg text-primary mb-1"></i>
+                        <div class="stats-label">This Month</div>
+                        <div class="stats-number text-primary" id="monthAdjustments">KES 0</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Account Summary Card -->
+            <div class="card summary-card mb-2">
+                <div class="card-header bg-white border-0 pt-1 pb-0">
+                    <h6 class="mb-0">
+                        <i class="fas fa-chart-line text-primary"></i> Account Summary
+                    </h6>
+                </div>
+                <div class="card-body p-0">
+                    <div class="summary-item">
+                        <div class="summary-label">Total Injections</div>
+                        <div class="summary-value text-success">
+                            KES {{ account.total_injections_amount|default:0|floatformat:2|intcomma }}
+                        </div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-label">Total Withdrawals</div>
+                        <div class="summary-value text-danger">
+                            KES {{ account.total_manual_withdrawals_amount|default:0|floatformat:2|intcomma }}
+                        </div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-label">Net Change</div>
+                        <div class="summary-value">
+                            KES {{ net_change|default:0|floatformat:2|intcomma }}
+                        </div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-label">Total Sales</div>
+                        <div class="summary-value text-info">
+                            KES {{ account.total_sale_amount|default:0|floatformat:2|intcomma }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Warning Message -->
+            <div class="alert alert-warning-custom alert-custom mb-2">
+                <div class="d-flex">
+                    <div class="me-2">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                    <div>
+                        <strong>Important:</strong>
+                        {% if not request.user.is_superuser and not request.user.groups.filter.name == 'manager' %}
+                            Requires manager approval
+                        {% else %}
+                            Applied immediately
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Audit Info -->
+            <div class="alert alert-info-custom alert-custom mb-2">
+                <div class="d-flex">
+                    <div class="me-2">
+                        <i class="fas fa-shield-alt"></i>
+                    </div>
+                    <div>
+                        <strong>Audit Trail:</strong> Recorded with timestamp
+                    </div>
+                </div>
+            </div>
+
+            <!-- Guidelines Card -->
+            <div class="card info-card">
+                <div class="card-body p-2">
+                    <h6 class="mb-1">
+                        <i class="fas fa-gavel text-primary"></i> Quick Guidelines
+                    </h6>
+                    
+                    <div class="row">
+                        <div class="col-6">
+                            <small class="text-success d-block"><strong>Injections:</strong></small>
+                            <ul class="small mb-1" style="padding-left: 1rem;">
+                                <li>Add cash float</li>
+                                <li>Owner injection</li>
+                                <li>Correct under-report</li>
+                                <li>Emergency top-up</li>
+                            </ul>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-danger d-block"><strong>Withdrawals:</strong></small>
+                            <ul class="small mb-1" style="padding-left: 1rem;">
+                                <li>Take for expenses</li>
+                                <li>Owner drawings</li>
+                                <li>Transfer to bank</li>
+                                <li>Daily collection</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <hr class="my-1">
+                    
+                    <div class="text-center">
+                        <small class="text-muted">
+                            <i class="fas fa-headset"></i> Need help? Contact support
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const accountSelect = document.querySelector('#id_mpesa_account');
+        const amountInput = document.querySelector('#id_amount');
+        const typeSelect = document.querySelector('#id_adjustment_type');
+        const submitBtn = document.querySelector('#submitBtn');
+        const currentBalanceDisplay = document.querySelector('#currentBalanceDisplay');
+        const accountNameDisplay = document.querySelector('#accountNameDisplay');
+        const previewCurrentBalance = document.querySelector('#previewCurrentBalance');
+        const previewAmount = document.querySelector('#previewAmount');
+        const previewNewBalance = document.querySelector('#previewNewBalance');
+        
+        let currentBalance = 0;
+        
+        // Type selection visual
+        const typeOptions = document.querySelectorAll('.type-option');
+        typeOptions.forEach(option => {
+            option.addEventListener('click', function() {
+                const type = this.getAttribute('data-type');
+                typeSelect.value = type;
+                
+                // Update visual selection
+                typeOptions.forEach(opt => opt.classList.remove('active'));
+                this.classList.add('active');
+                
+                // Update preview
+                updatePreview();
+            });
+        });
+        
+        // Set initial active type
+        if (typeSelect.value) {
+            const activeOption = document.querySelector(`.type-option[data-type="${typeSelect.value}"]`);
+            if (activeOption) activeOption.classList.add('active');
+        }
+        
+        function updatePreview() {
+            const amount = parseFloat(amountInput.value) || 0;
+            const type = typeSelect.value;
+            
+            previewAmount.textContent = `KES ${amount.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+            
+            let newBalance = currentBalance;
+            if (type === 'injection') {
+                newBalance = currentBalance + amount;
+                previewAmount.parentElement.classList.add('text-success');
+            } else {
+                newBalance = currentBalance - amount;
+                previewAmount.parentElement.classList.remove('text-success');
+            }
+            
+            previewNewBalance.textContent = `KES ${newBalance.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+        }
+        
+        // Fetch current balance when account is selected
+        if (accountSelect) {
+            accountSelect.addEventListener('change', function() {
+                const accountId = this.value;
+                if (accountId && currentBalanceDisplay) {
+                    currentBalanceDisplay.textContent = 'Loading...';
+                    previewCurrentBalance.textContent = 'Loading...';
+                    
+                    fetch(`/shops/api/mpesa-account/${accountId}/balance/`)
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                currentBalance = parseFloat(data.balance);
+                                currentBalanceDisplay.textContent = `KES ${currentBalance.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+                                previewCurrentBalance.textContent = `KES ${currentBalance.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+                                if (accountNameDisplay) {
+                                    accountNameDisplay.textContent = data.account_name;
+                                }
+                                updatePreview();
+                            } else {
+                                currentBalanceDisplay.textContent = 'KES 0.00';
+                                previewCurrentBalance.textContent = 'KES 0.00';
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error fetching balance:', error);
+                            currentBalanceDisplay.textContent = 'KES 0.00';
+                            previewCurrentBalance.textContent = 'KES 0.00';
+                        });
+                }
+            });
+            
+            if (accountSelect.value) {
+                accountSelect.dispatchEvent(new Event('change'));
+            }
+        }
+        
+        // Amount input listener for preview
+        if (amountInput) {
+            amountInput.addEventListener('input', function() {
+                updatePreview();
+            });
+        }
+        
+        // Quick amount buttons
+        document.querySelectorAll('.quick-amount-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const amount = this.getAttribute('data-amount');
+                if (amountInput) {
+                    amountInput.value = amount;
+                    amountInput.dispatchEvent(new Event('input'));
+                }
+            });
+        });
+        
+        // Fetch adjustment stats
+        async function fetchAdjustmentStats() {
+            try {
+                const response = await fetch('/shops/api/mpesa-adjustment-stats/');
+                const data = await response.json();
+                if (data.success) {
+                    const todayElem = document.getElementById('todayAdjustments');
+                    const monthElem = document.getElementById('monthAdjustments');
+                    if (todayElem) todayElem.textContent = `KES ${data.today_total.toLocaleString()}`;
+                    if (monthElem) monthElem.textContent = `KES ${data.month_total.toLocaleString()}`;
+                }
+            } catch (error) {
+                console.error('Error fetching stats:', error);
+            }
+        }
+        fetchAdjustmentStats();
+        
+        // Validate amount before submit
+        if (submitBtn) {
+            submitBtn.addEventListener('click', function(e) {
+                const amount = parseFloat(amountInput.value);
+                const type = typeSelect.value;
+                
+                if (isNaN(amount) || amount <= 0) {
+                    e.preventDefault();
+                    alert('Please enter a valid amount greater than 0');
+                    return false;
+                }
+                
+                if (type === 'withdrawal' && amount > currentBalance) {
+                    e.preventDefault();
+                    alert(`Cannot withdraw KES ${amount.toLocaleString()}. Current balance is KES ${currentBalance.toLocaleString()}`);
+                    return false;
+                }
+                
+                const confirmMsg = confirm(`Confirm ${type === 'injection' ? 'injection' : 'withdrawal'} of KES ${amount.toLocaleString()}? This will update the account balance.`);
+                if (!confirmMsg) {
+                    e.preventDefault();
+                    return false;
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}

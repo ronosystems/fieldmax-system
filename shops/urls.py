@@ -64,4 +64,23 @@ urlpatterns = [
     # ==================== ALIASES ====================
     path('branches-list/', views.shop_branches, name='branches_list'),
     path('reports-list/', views.reports_list, name='reports_list_alias'),
+    
+    # ==================== MPESA ADJUSTMENTS ====================
+    path('mpesa-adjustments/', views.mpesa_adjustments_list, name='mpesa_adjustments_list'),
+    path('mpesa-adjustments/create/', views.mpesa_adjustment_create, name='mpesa_adjustment_create'),
+    path('mpesa-adjustments/pending/', views.mpesa_adjustments_pending, name='mpesa_adjustments_pending'),
+    path('mpesa-adjustments/<int:adjustment_id>/approve/', views.mpesa_adjustment_approve, name='mpesa_adjustment_approve'),
+    path('mpesa-adjustments/<int:adjustment_id>/reject/', views.mpesa_adjustment_reject, name='mpesa_adjustment_reject'),
+    path('mpesa-accounts/<int:account_id>/history/', views.mpesa_account_balance_history, name='mpesa_balance_history'),
+
+    # ==================== FINANCIAL DASHBOARD ====================
+    path('financial-dashboard/', views.financial_dashboard, name='financial_dashboard'),
+    path('api/financial-summary/', views.financial_summary_api, name='financial_summary_api'),
+  
+    # Account Injections
+    path('account-injections/', views.account_injections_report, name='account_injections_report'),
+    path('account-injections/create/', views.create_account_injection, name='create_account_injection'),
+
+    # ==================== MONTHLY FINANCIAL REPORT ====================
+    path('monthly-report/', views.monthly_financial_report, name='monthly_financial_report'),
 ]

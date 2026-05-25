@@ -18,13 +18,14 @@ from datetime import datetime, timedelta
 
 from .models import (
     ShopBranch, MpesaAccount, MpesaDailyBalance, BankAccount, BankDailyBalance,
-    CashAccount, CashDailyBalance, ShopExpense, DailyShopReport, 
+    CashAccount, CashDailyBalance, ShopExpense, DailyShopReport, AccountTransaction,
     DailyMpesaAccountReport, ShopConfiguration, BankClosingBalance, DynamicChoice
 )
 from .forms import (
     ShopBranchForm, BankAccountForm, DailyShopReportForm, CashAccountForm,
     MpesaAccountForm, MpesaDailyBalanceForm, BankDailyBalanceForm, 
-    CashDailyBalanceForm, ShopExpenseForm, DynamicChoiceForm, ShopConfigurationForm
+    CashDailyBalanceForm, ShopExpenseForm, DynamicChoiceForm, ShopConfigurationForm,
+    MpesaAdjustment, MpesaAdjustmentForm, AccountInjectionForm
 )
 import logging
 import json
@@ -1629,7 +1630,8 @@ def shop_branches(request):
 @login_required
 @user_passes_test(is_superuser)
 def mpesa_accounts(request):
-    """List all M-Pesa accounts"""
+    """List all M-Pesa accounts with effective balances (closing + post-report injections)"""
+    
     accounts = MpesaAccount.objects.all().select_related('shop', 'assigned_user')
     
     # Filter by shop
@@ -1656,15 +1658,57 @@ def mpesa_accounts(request):
             Q(store_number__icontains=search)
         )
     
+    # Enhance each account with effective balance (last closing + post-report injections)
+    accounts_with_balance = []
+    total_effective_balance = Decimal('0')
+    total_closing_balance = Decimal('0')
+    total_post_injections = Decimal('0')
+    
+    for account in accounts:
+        # Get the latest report for this specific M-Pesa account
+        latest_account_report = DailyMpesaAccountReport.objects.filter(
+            mpesa_account=account
+        ).order_by('-daily_report__report_date').first()
+        
+        if latest_account_report:
+            closing_balance = latest_account_report.closing_mpesa_float
+            report_date = latest_account_report.daily_report.report_date
+            
+            # Get injections AFTER this report
+            post_report_injections = AccountTransaction.objects.filter(
+                transaction_type='injection',
+                is_approved=True,
+                account_type='mpesa',
+                mpesa_account=account,
+                created_at__date__gt=report_date
+            ).aggregate(total=Sum('amount'))['total'] or Decimal('0')
+            
+            effective_balance = closing_balance + post_report_injections
+        else:
+            closing_balance = Decimal('0')
+            effective_balance = account.current_balance  # Fallback to current balance
+            post_report_injections = Decimal('0')
+            report_date = None
+        
+        # Store the calculated values on the account object
+        account.effective_balance = effective_balance
+        account.closing_balance = closing_balance
+        account.post_report_injections = post_report_injections
+        account.last_report_date = report_date
+        
+        accounts_with_balance.append(account)
+        total_effective_balance += effective_balance
+        total_closing_balance += closing_balance
+        total_post_injections += post_report_injections
+    
     # Calculate statistics
     total_accounts = accounts.count()
     active_accounts = accounts.filter(status='active', is_active=True).count()
-    total_balance = accounts.aggregate(total=Sum('current_balance'))['total'] or 0
     till_count = accounts.filter(account_type='till', status='active').count()
     paybill_count = accounts.filter(account_type='paybill', status='active').count()
     
-    # Pagination
-    paginator = Paginator(accounts, 20)
+    # Pagination on the list
+    paginator = Paginator(accounts_with_balance, 20)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
     
@@ -1677,7 +1721,9 @@ def mpesa_accounts(request):
         'search': search,
         'total_accounts': total_accounts,
         'active_accounts': active_accounts,
-        'total_balance': total_balance,
+        'total_closing_balance': total_closing_balance,
+        'total_post_injections': total_post_injections,
+        'total_effective_balance': total_effective_balance,
         'till_count': till_count,
         'paybill_count': paybill_count,
     }
@@ -2075,7 +2121,6 @@ def manage_choices(request):
     }
     return render(request, 'shops/manage_choices.html', context)
 
-
 @login_required
 @user_passes_test(is_superuser)
 def delete_choice(request, choice_id):
@@ -2085,3 +2130,1457 @@ def delete_choice(request, choice_id):
     choice.save()
     messages.success(request, f'Choice "{choice.value}" deactivated successfully!')
     return redirect('shops:manage_choices')
+
+
+
+
+
+
+# ==================== MPESA ADJUSTMENTS (INJECTION/WITHDRAWAL) ====================
+
+@login_required
+@user_passes_test(is_staff_or_admin)
+def mpesa_adjustments_list(request):
+    """List all M-Pesa adjustments"""
+    adjustments = MpesaAdjustment.objects.all().select_related('mpesa_account__shop', 'created_by', 'approved_by')
+    
+    # Filter by shop
+    shop_id = request.GET.get('shop')
+    if shop_id:
+        adjustments = adjustments.filter(mpesa_account__shop_id=shop_id)
+    
+    # Filter by type
+    adj_type = request.GET.get('type')
+    if adj_type:
+        adjustments = adjustments.filter(adjustment_type=adj_type)
+    
+    # Filter by approval status
+    approved = request.GET.get('approved')
+    if approved == 'true':
+        adjustments = adjustments.filter(is_approved=True)
+    elif approved == 'false':
+        adjustments = adjustments.filter(is_approved=False)
+    
+    # Filter by date range
+    from_date = request.GET.get('from_date')
+    to_date = request.GET.get('to_date')
+    if from_date:
+        adjustments = adjustments.filter(created_at__date__gte=from_date)
+    if to_date:
+        adjustments = adjustments.filter(created_at__date__lte=to_date)
+    
+    # Calculate totals
+    total_injections = adjustments.filter(adjustment_type='injection', is_approved=True).aggregate(
+        total=Sum('amount')
+    )['total'] or 0
+    
+    total_withdrawals = adjustments.filter(adjustment_type='withdrawal', is_approved=True).aggregate(
+        total=Sum('amount')
+    )['total'] or 0
+    
+    pending_approvals = adjustments.filter(is_approved=False).count()
+    
+    # Pagination
+    paginator = Paginator(adjustments, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    context = {
+        'adjustments': page_obj,
+        'shops': ShopBranch.objects.filter(is_active=True),
+        'selected_shop': shop_id,
+        'selected_type': adj_type,
+        'selected_approved': approved,
+        'from_date': from_date,
+        'to_date': to_date,
+        'total_injections': total_injections,
+        'total_withdrawals': total_withdrawals,
+        'net_change': total_injections - total_withdrawals,
+        'pending_approvals': pending_approvals,
+    }
+    return render(request, 'shops/mpesa_adjustments_list.html', context)
+
+
+@login_required
+@user_passes_test(is_staff_or_admin)
+def mpesa_adjustment_create(request):
+    """Create a new M-Pesa adjustment (injection or withdrawal)"""
+    
+    # Handle pre-selected account from GET parameter
+    initial_data = {}
+    account_id = request.GET.get('account')
+    adjustment_type = request.GET.get('type')
+    
+    if account_id:
+        try:
+            account = MpesaAccount.objects.get(id=account_id)
+            initial_data['mpesa_account'] = account
+        except MpesaAccount.DoesNotExist:
+            pass
+    
+    if adjustment_type in ['injection', 'withdrawal']:
+        initial_data['adjustment_type'] = adjustment_type
+    
+    if request.method == 'POST':
+        form = MpesaAdjustmentForm(request.POST, user=request.user)
+        if form.is_valid():
+            adjustment = form.save(commit=False)
+            adjustment.created_by = request.user
+            
+            # Auto-approve for superusers and managers
+            if request.user.is_superuser or request.user.groups.filter(name='manager').exists():
+                adjustment.is_approved = True
+                adjustment.approved_by = request.user
+                adjustment.approved_at = timezone.now()
+                messages.success(request, f'Adjustment completed and approved! New balance: KES {adjustment.mpesa_account.current_balance:,.2f}')
+            else:
+                messages.info(request, 'Adjustment created and pending approval.')
+            
+            adjustment.save()
+            
+            # Redirect based on user role
+            if adjustment.is_approved:
+                return redirect('shops:mpesa_accounts_detail', account_id=adjustment.mpesa_account.id)
+            else:
+                return redirect('shops:mpesa_adjustments_pending')
+    else:
+        form = MpesaAdjustmentForm(user=request.user, initial=initial_data)
+    
+    context = {
+        'form': form,
+        'title': 'Create M-Pesa Adjustment',
+        'preselected_account': account_id,
+        'preselected_type': adjustment_type,
+    }
+    return render(request, 'shops/mpesa_adjustment_form.html', context)
+
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser or u.groups.filter(name='manager').exists())
+def mpesa_adjustment_approve(request, adjustment_id):
+    """Approve a pending adjustment"""
+    adjustment = get_object_or_404(MpesaAdjustment, id=adjustment_id)
+    
+    if adjustment.is_approved:
+        messages.warning(request, 'This adjustment has already been approved.')
+        return redirect('shops:mpesa_adjustments_list')
+    
+    if request.method == 'POST':
+        adjustment.is_approved = True
+        adjustment.approved_by = request.user
+        adjustment.approved_at = timezone.now()
+        adjustment.save()
+        
+        # The balance was already updated when the adjustment was created
+        # But we need to ensure it's correct
+        adjustment.mpesa_account.refresh_from_db()
+        
+        messages.success(
+            request, 
+            f'Approved {adjustment.get_adjustment_type_display()} of KES {adjustment.amount:,.2f} '
+            f'for {adjustment.mpesa_account.account_name}. New balance: KES {adjustment.mpesa_account.current_balance:,.2f}'
+        )
+        return redirect('shops:mpesa_adjustments_list')
+    
+    context = {
+        'adjustment': adjustment,
+    }
+    return render(request, 'shops/mpesa_adjustment_approve.html', context)
+
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser)
+def mpesa_adjustment_reject(request, adjustment_id):
+    """Reject and delete a pending adjustment"""
+    adjustment = get_object_or_404(MpesaAdjustment, id=adjustment_id)
+    
+    if adjustment.is_approved:
+        messages.warning(request, 'Approved adjustments cannot be rejected.')
+        return redirect('shops:mpesa_adjustments_list')
+    
+    if request.method == 'POST':
+        # Revert the balance change
+        if adjustment.adjustment_type == 'injection':
+            adjustment.mpesa_account.current_balance -= adjustment.amount
+        else:
+            adjustment.mpesa_account.current_balance += adjustment.amount
+        
+        adjustment.mpesa_account.save()
+        adjustment.delete()
+        
+        messages.success(request, 'Adjustment rejected and removed.')
+        return redirect('shops:mpesa_adjustments_list')
+    
+    context = {
+        'adjustment': adjustment,
+    }
+    return render(request, 'shops/mpesa_adjustment_reject.html', context)
+
+
+@login_required
+@user_passes_test(is_staff_or_admin)
+def mpesa_adjustments_pending(request):
+    """View pending adjustments requiring approval"""
+    adjustments = MpesaAdjustment.objects.filter(
+        is_approved=False
+    ).select_related('mpesa_account__shop', 'created_by')
+    
+    context = {
+        'adjustments': adjustments,
+    }
+    return render(request, 'shops/mpesa_adjustments_pending.html', context)
+
+
+from django.utils import timezone
+from datetime import datetime, date, timedelta
+from django.db.models import Sum, F
+
+@login_required
+def mpesa_account_balance_history(request, account_id):
+    """View balance history for a specific M-Pesa account"""
+    account = get_object_or_404(MpesaAccount, id=account_id)
+    
+    history = []
+    
+    # ============================================
+    # 1. Get manual adjustments (injections/withdrawals)
+    # ============================================
+    adjustments = account.adjustments.filter(is_approved=True).order_by('-created_at')
+    
+    for adj in adjustments:
+        # Format the date
+        adj_date = adj.created_at
+        if timezone.is_naive(adj_date):
+            adj_date = timezone.make_aware(adj_date)
+        
+        # Calculate the amount change (for display)
+        if adj.adjustment_type == 'injection':
+            amount_change = adj.amount
+            change_type = 'positive'
+            display_type = 'Manual Injection'
+        else:
+            amount_change = -adj.amount
+            change_type = 'negative'
+            display_type = 'Manual Withdrawal'
+        
+        history.append({
+            'date': adj_date,
+            'date_display': adj_date.strftime('%Y-%m-%d %H:%M:%S'),
+            'type': display_type,
+            'amount': adj.amount,
+            'amount_change': amount_change,
+            'change_type': change_type,
+            'balance_after': adj.balance_after,
+            'reference': adj.reference_number or '-',
+            'reason': adj.reason,
+            'approved': adj.is_approved,
+            'source': 'adjustment',
+        })
+    
+    # ============================================
+    # 2. Get daily report closings with actual changes
+    # ============================================
+    daily_reports = DailyMpesaAccountReport.objects.filter(
+        mpesa_account=account
+    ).select_related('daily_report').order_by('-daily_report__report_date')
+    
+    # Get previous day's balance to calculate actual change
+    previous_balance = None
+    daily_reports_list = list(daily_reports)
+    
+    for i, dr in enumerate(daily_reports_list):
+        report_date = dr.daily_report.report_date
+        
+        # Get the closing balance from this report
+        current_balance = dr.closing_mpesa_float
+        
+        # Calculate the change from previous day
+        if i < len(daily_reports_list) - 1:
+            # Get next report (previous day) to calculate change
+            next_report = daily_reports_list[i + 1]
+            previous_balance = next_report.closing_mpesa_float
+            amount_change = current_balance - previous_balance
+        else:
+            # This is the oldest report, can't calculate change
+            # Get the balance from before this report (from opening balance or adjustments)
+            amount_change = None
+        
+        # Convert date to timezone-aware datetime
+        naive_datetime = datetime.combine(report_date, datetime.min.time())
+        aware_datetime = timezone.make_aware(naive_datetime)
+        
+        history.append({
+            'date': aware_datetime,
+            'date_display': report_date.strftime('%Y-%m-%d'),
+            'type': 'Daily Report',
+            'amount': current_balance,
+            'amount_change': amount_change,
+            'change_type': 'neutral',
+            'balance_after': current_balance,
+            'reference': f"Report #{dr.daily_report.id}",
+            'reason': f"Daily closing balance from {report_date}",
+            'approved': True,
+            'source': 'daily_report',
+        })
+    
+    # ============================================
+    # 3. Sort by date descending
+    # ============================================
+    history.sort(key=lambda x: x['date'], reverse=True)
+    
+    # ============================================
+    # 4. Calculate running balance (if needed)
+    # ============================================
+    running_balance = account.current_balance
+    for item in history:
+        if item['source'] == 'adjustment' and item['approved']:
+            # For adjustments, we already have balance_after
+            pass
+        elif item['source'] == 'daily_report':
+            # For daily reports, balance_after is the closing balance
+            pass
+    
+    # ============================================
+    # 5. Calculate summary statistics
+    # ============================================
+    total_injections = adjustments.filter(
+        adjustment_type='injection'
+    ).aggregate(total=Sum('amount'))['total'] or 0
+    
+    total_withdrawals = adjustments.filter(
+        adjustment_type='withdrawal'
+    ).aggregate(total=Sum('amount'))['total'] or 0
+    
+    # Calculate total sales from M-Pesa account
+    total_sales = account.total_sale_amount
+    
+    context = {
+        'account': account,
+        'history': history[:50],  # Last 50 entries
+        'total_injections': total_injections,
+        'total_withdrawals': total_withdrawals,
+        'total_sales': total_sales,
+    }
+    return render(request, 'shops/mpesa_balance_history.html', context)
+
+
+
+
+
+
+
+
+# ==================== FINANCIAL DASHBOARD VIEWS ====================
+
+from django.db.models import Sum, Count, Q, F, DecimalField, Avg
+from django.db.models.functions import Coalesce, TruncMonth, TruncDate
+from datetime import datetime, timedelta
+from decimal import Decimal
+
+
+@login_required
+@user_passes_test(is_staff_or_admin)
+def financial_dashboard(request):
+    """Comprehensive financial dashboard - Shows effective balances (last report closing + injections)"""
+    
+    # Get filter parameters
+    shop_id = request.GET.get('shop', 'all')
+    date_range = request.GET.get('date_range', 'month')
+    
+    # Date range logic
+    today = timezone.now().date()
+    if date_range == 'today':
+        start_date = today
+        end_date = today
+    elif date_range == 'week':
+        start_date = today - timedelta(days=7)
+        end_date = today
+    elif date_range == 'month':
+        start_date = today.replace(day=1)
+        end_date = today
+    elif date_range == 'quarter':
+        start_date = today - timedelta(days=90)
+        end_date = today
+    elif date_range == 'year':
+        start_date = today.replace(month=1, day=1)
+        end_date = today
+    else:
+        start_date = today.replace(day=1)
+        end_date = today
+    
+    # Base queryset for shops
+    shops = ShopBranch.objects.filter(is_active=True)
+    if shop_id != 'all':
+        shops = shops.filter(id=shop_id)
+    
+    # ============================================
+    # GET LAST REPORT CLOSING BALANCES
+    # ============================================
+    
+    last_report_mpesa = Decimal('0')
+    last_report_bank = Decimal('0')
+    last_report_cash = Decimal('0')
+    last_report_total = Decimal('0')
+    
+    for shop in shops:
+        # Get the most recent report
+        latest_report = DailyShopReport.objects.filter(shop=shop).order_by('-report_date').first()
+        
+        if latest_report:
+            # Get M-Pesa closing balances from the latest report
+            mpesa_reports = DailyMpesaAccountReport.objects.filter(daily_report=latest_report)
+            for mr in mpesa_reports:
+                last_report_mpesa += mr.closing_mpesa_float
+            
+            # Get Bank closing balances
+            bank_closings = BankClosingBalance.objects.filter(daily_report=latest_report, is_active=True)
+            for bc in bank_closings:
+                last_report_bank += bc.closing_balance
+            
+            # Get Cash balance
+            last_report_cash += latest_report.cash_balance or Decimal('0')
+    
+    last_report_total = last_report_mpesa + last_report_bank + last_report_cash
+    
+    # ============================================
+    # GET ALL INJECTIONS (for all time - these should be added to balances)
+    # ============================================
+    
+    # Get ALL injections (approved) - these represent money added to accounts
+    all_injections = AccountTransaction.objects.filter(
+        transaction_type='injection',
+        is_approved=True
+    )
+    if shop_id != 'all':
+        all_injections = all_injections.filter(
+            Q(mpesa_account__shop_id=shop_id) |
+            Q(bank_account__shop_id=shop_id) |
+            Q(cash_account__shop_id=shop_id)
+        )
+    
+    # Calculate injection totals BY ACCOUNT TYPE (ALL TIME)
+    mpesa_injections_all = all_injections.filter(account_type='mpesa').aggregate(total=Sum('amount'))['total'] or Decimal('0')
+    bank_injections_all = all_injections.filter(account_type='bank').aggregate(total=Sum('amount'))['total'] or Decimal('0')
+    cash_injections_all = all_injections.filter(account_type='cash').aggregate(total=Sum('amount'))['total'] or Decimal('0')
+    total_injections_all = mpesa_injections_all + bank_injections_all + cash_injections_all
+    
+    # ============================================
+    # EFFECTIVE BALANCES = Last report closing + ALL injections
+    # ============================================
+    
+    effective_mpesa = last_report_mpesa + mpesa_injections_all
+    effective_bank = last_report_bank + bank_injections_all
+    effective_cash = last_report_cash + cash_injections_all
+    effective_total = last_report_total + total_injections_all
+    
+    # ============================================
+    # PERIOD INJECTIONS (for display only - within date range)
+    # ============================================
+    
+    period_injections = AccountTransaction.objects.filter(
+        transaction_type='injection',
+        is_approved=True,
+        created_at__date__gte=start_date,
+        created_at__date__lte=end_date
+    )
+    if shop_id != 'all':
+        period_injections = period_injections.filter(
+            Q(mpesa_account__shop_id=shop_id) |
+            Q(bank_account__shop_id=shop_id) |
+            Q(cash_account__shop_id=shop_id)
+        )
+    
+    period_injections_total = period_injections.aggregate(total=Sum('amount'))['total'] or Decimal('0')
+    period_injections_count = period_injections.count()
+    
+    # Period injection breakdown
+    period_mpesa_inj = period_injections.filter(account_type='mpesa').aggregate(total=Sum('amount'))['total'] or Decimal('0')
+    period_bank_inj = period_injections.filter(account_type='bank').aggregate(total=Sum('amount'))['total'] or Decimal('0')
+    period_cash_inj = period_injections.filter(account_type='cash').aggregate(total=Sum('amount'))['total'] or Decimal('0')
+    
+    # Injections by account for display (period only)
+    injections_by_account = []
+    
+    mpesa_inj_group = period_injections.filter(account_type='mpesa').values(
+        'mpesa_account__account_name',
+        'mpesa_account__account_number'
+    ).annotate(total=Sum('amount'), count=Count('id')).order_by('-total')
+    
+    for inj in mpesa_inj_group:
+        injections_by_account.append({
+            'type': 'M-Pesa',
+            'name': inj['mpesa_account__account_name'],
+            'number': inj['mpesa_account__account_number'],
+            'total': inj['total'],
+            'count': inj['count']
+        })
+    
+    cash_inj_group = period_injections.filter(account_type='cash').values(
+        'cash_account__account_name'
+    ).annotate(total=Sum('amount'), count=Count('id')).order_by('-total')
+    
+    for inj in cash_inj_group:
+        injections_by_account.append({
+            'type': 'Cash',
+            'name': inj['cash_account__account_name'] or 'Main Cash',
+            'number': 'N/A',
+            'total': inj['total'],
+            'count': inj['count']
+        })
+    
+    bank_inj_group = period_injections.filter(account_type='bank').values(
+        'bank_account__bank_name',
+        'bank_account__account_name'
+    ).annotate(total=Sum('amount'), count=Count('id')).order_by('-total')
+    
+    for inj in bank_inj_group:
+        injections_by_account.append({
+            'type': 'Bank',
+            'name': f"{inj['bank_account__bank_name']} - {inj['bank_account__account_name']}",
+            'number': 'N/A',
+            'total': inj['total'],
+            'count': inj['count']
+        })
+    
+    # ============================================
+    # GET M-PESA ACCOUNTS WITH EFFECTIVE BALANCES
+    # ============================================
+    
+    mpesa_accounts_with_balances = []
+    mpesa_accounts = MpesaAccount.objects.filter(is_active=True, status='active')
+    if shop_id != 'all':
+        mpesa_accounts = mpesa_accounts.filter(shop_id=shop_id)
+    
+    for account in mpesa_accounts:
+        latest_account_report = DailyMpesaAccountReport.objects.filter(
+            mpesa_account=account
+        ).order_by('-daily_report__report_date').first()
+        
+        if latest_account_report:
+            closing_balance = latest_account_report.closing_mpesa_float
+            report_date = latest_account_report.daily_report.report_date
+        else:
+            closing_balance = Decimal('0')
+            report_date = None
+        
+        # Get ALL injections for this account
+        account_injections = AccountTransaction.objects.filter(
+            transaction_type='injection',
+            is_approved=True,
+            account_type='mpesa',
+            mpesa_account=account
+        ).aggregate(total=Sum('amount'))['total'] or Decimal('0')
+        
+        effective_balance = closing_balance + account_injections
+        
+        mpesa_accounts_with_balances.append({
+            'id': account.id,
+            'account_name': account.account_name,
+            'account_number': account.account_number,
+            'account_type': account.get_account_type_display(),
+            'shop_name': account.shop.name,
+            'closing_balance': closing_balance,
+            'total_injections': account_injections,
+            'effective_balance': effective_balance,
+            'report_date': report_date,
+        })
+    
+    # ============================================
+    # GET BANK ACCOUNTS WITH EFFECTIVE BALANCES
+    # ============================================
+    
+    bank_accounts_with_balances = []
+    bank_accounts = BankAccount.objects.filter(is_active=True)
+    if shop_id != 'all':
+        bank_accounts = bank_accounts.filter(shop_id=shop_id)
+    
+    for account in bank_accounts:
+        latest_bank_closing = BankClosingBalance.objects.filter(
+            bank_account=account, is_active=True
+        ).order_by('-daily_report__report_date').first()
+        
+        if latest_bank_closing:
+            closing_balance = latest_bank_closing.closing_balance
+            report_date = latest_bank_closing.daily_report.report_date
+        else:
+            closing_balance = Decimal('0')
+            report_date = None
+        
+        # Get ALL injections for this account
+        account_injections = AccountTransaction.objects.filter(
+            transaction_type='injection',
+            is_approved=True,
+            account_type='bank',
+            bank_account=account
+        ).aggregate(total=Sum('amount'))['total'] or Decimal('0')
+        
+        effective_balance = closing_balance + account_injections
+        
+        bank_accounts_with_balances.append({
+            'id': account.id,
+            'bank_name': account.bank_name,
+            'account_name': account.account_name,
+            'account_number': account.account_number,
+            'shop_name': account.shop.name,
+            'closing_balance': closing_balance,
+            'total_injections': account_injections,
+            'effective_balance': effective_balance,
+            'report_date': report_date,
+        })
+    
+    # ============================================
+    # EXPENSES SUMMARY (For information only)
+    # ============================================
+    
+    expenses = ShopExpense.objects.filter(
+        daily_report__report_date__gte=start_date,
+        daily_report__report_date__lte=end_date
+    )
+    if shop_id != 'all':
+        expenses = expenses.filter(daily_report__shop_id=shop_id)
+    
+    total_expenses_amount = expenses.aggregate(total=Coalesce(Sum('amount'), Decimal('0')))['total']
+    total_expenses_count = expenses.count()
+    
+    expense_by_category = []
+    category_totals = expenses.values('expense_category').annotate(
+        total=Coalesce(Sum('amount'), Decimal('0')),
+        count=Count('id')
+    ).order_by('-total')[:10]
+    
+    for cat in category_totals:
+        if total_expenses_amount > 0:
+            percentage = float(cat['total']) / float(total_expenses_amount) * 100
+        else:
+            percentage = 0
+        expense_by_category.append({
+            'expense_category': cat['expense_category'] or 'Uncategorized',
+            'total': cat['total'],
+            'count': cat['count'],
+            'percentage': percentage
+        })
+    
+    # ============================================
+    # REVENUE SUMMARY (For information only)
+    # ============================================
+    
+    reports_in_period = DailyShopReport.objects.filter(
+        report_date__gte=start_date,
+        report_date__lte=end_date
+    )
+    if shop_id != 'all':
+        reports_in_period = reports_in_period.filter(shop_id=shop_id)
+    
+    total_revenue = reports_in_period.aggregate(total=Coalesce(Sum('total_mpesa_amount'), Decimal('0')))['total']
+    total_transactions = reports_in_period.aggregate(total=Coalesce(Sum('total_mpesa_transactions'), 0))['total']
+    
+    net_profit = total_revenue - total_expenses_amount
+    profit_margin = float(net_profit) / float(total_revenue) * 100 if total_revenue > 0 else 0
+    total_inflow = total_revenue + period_injections_total
+    
+    # ============================================
+    # CHART DATA
+    # ============================================
+    
+    weekly_data_raw = []
+    for i in range(7):
+        date = today - timedelta(days=6-i)
+        day_reports = DailyShopReport.objects.filter(report_date=date)
+        day_expenses = ShopExpense.objects.filter(daily_report__report_date=date)
+        day_injections = AccountTransaction.objects.filter(
+            transaction_type='injection', is_approved=True, created_at__date=date
+        )
+        
+        if shop_id != 'all':
+            day_reports = day_reports.filter(shop_id=shop_id)
+            day_expenses = day_expenses.filter(daily_report__shop_id=shop_id)
+            day_injections = day_injections.filter(
+                Q(mpesa_account__shop_id=shop_id) |
+                Q(bank_account__shop_id=shop_id) |
+                Q(cash_account__shop_id=shop_id)
+            )
+        
+        weekly_data_raw.append({
+            'date': date.strftime('%a'),
+            'expenses': float(day_expenses.aggregate(total=Coalesce(Sum('amount'), Decimal('0')))['total']),
+            'sales': float(day_reports.aggregate(total=Coalesce(Sum('total_mpesa_amount'), Decimal('0')))['total']),
+            'injections': float(day_injections.aggregate(total=Coalesce(Sum('amount'), Decimal('0')))['total'])
+        })
+    
+    chart_labels = [item['date'] for item in weekly_data_raw]
+    chart_sales = [item['sales'] for item in weekly_data_raw]
+    chart_expenses = [item['expenses'] for item in weekly_data_raw]
+    chart_injections = [item['injections'] for item in weekly_data_raw]
+    
+    expense_labels = [item['expense_category'] for item in expense_by_category[:5]]
+    expense_values = [float(item['total']) for item in expense_by_category[:5]]
+    
+    account_breakdown = {
+        'labels': ['M-Pesa', 'Bank', 'Cash'],
+        'values': [float(effective_mpesa), float(effective_bank), float(effective_cash)],
+        'colors': ['#11998e', '#667eea', '#f39c12']
+    }
+    
+    # ============================================
+    # MONTHLY TRENDS
+    # ============================================
+    
+    monthly_trends = []
+    for i in range(6):
+        month_date = today.replace(day=1) - timedelta(days=30 * i)
+        month_start = month_date.replace(day=1)
+        if i == 0:
+            month_end = today
+        else:
+            next_month = month_start + timedelta(days=32)
+            month_end = next_month.replace(day=1) - timedelta(days=1)
+        
+        month_reports = DailyShopReport.objects.filter(
+            report_date__gte=month_start,
+            report_date__lte=month_end
+        )
+        month_expenses = ShopExpense.objects.filter(
+            daily_report__report_date__gte=month_start,
+            daily_report__report_date__lte=month_end
+        )
+        month_injections = AccountTransaction.objects.filter(
+            transaction_type='injection', is_approved=True,
+            created_at__date__gte=month_start, created_at__date__lte=month_end
+        )
+        
+        if shop_id != 'all':
+            month_reports = month_reports.filter(shop_id=shop_id)
+            month_expenses = month_expenses.filter(daily_report__shop_id=shop_id)
+            month_injections = month_injections.filter(
+                Q(mpesa_account__shop_id=shop_id) |
+                Q(bank_account__shop_id=shop_id) |
+                Q(cash_account__shop_id=shop_id)
+            )
+        
+        month_sales = month_reports.aggregate(total=Coalesce(Sum('total_mpesa_amount'), Decimal('0')))['total']
+        month_expenses_total = month_expenses.aggregate(total=Coalesce(Sum('amount'), Decimal('0')))['total']
+        month_injections_total = month_injections.aggregate(total=Coalesce(Sum('amount'), Decimal('0')))['total']
+        month_net = month_sales - month_expenses_total
+        month_margin = float(month_net) / float(month_sales) * 100 if month_sales > 0 else 0
+        
+        monthly_trends.insert(0, {
+            'month': month_start.strftime('%B %Y'),
+            'expenses': month_expenses_total,
+            'sales': month_sales,
+            'injections': month_injections_total,
+            'net': month_net,
+            'margin': month_margin
+        })
+    
+    context = {
+        # Effective Balances (Last Report Closing + ALL Injections)
+        'total_liquidity': effective_total,
+        'total_mpesa_balance': effective_mpesa,
+        'total_bank_balance': effective_bank,
+        'total_cash_balance': effective_cash,
+        
+        # Financial Metrics (For information only)
+        'total_expenses': total_expenses_amount,
+        'total_revenue': total_revenue,
+        'net_profit': net_profit,
+        'profit_margin': profit_margin,
+        'period_injections_total': period_injections_total,
+        'period_injections_count': period_injections_count,
+        'total_inflow': total_inflow,
+        
+        # Period Injection Breakdown
+        'mpesa_injections_total': period_mpesa_inj,
+        'mpesa_injections_count': period_injections.filter(account_type='mpesa').count(),
+        'bank_injections_total': period_bank_inj,
+        'bank_injections_count': period_injections.filter(account_type='bank').count(),
+        'cash_injections_total': period_cash_inj,
+        'cash_injections_count': period_injections.filter(account_type='cash').count(),
+        'injections_by_account': injections_by_account,
+        
+        # Account Lists with Effective Balances
+        'mpesa_accounts': mpesa_accounts_with_balances,
+        'bank_accounts': bank_accounts_with_balances,
+        
+        # Expense Data
+        'expense_summary': {
+            'total_expenses': total_expenses_amount,
+            'total_transactions': total_expenses_count,
+            'by_category': expense_by_category,
+        },
+        'top_expense_categories': expense_by_category[:5],
+        
+        # Revenue Data
+        'total_transactions_count': total_transactions,
+        
+        # Chart Data
+        'chart_labels': chart_labels,
+        'chart_sales': chart_sales,
+        'chart_expenses': chart_expenses,
+        'chart_injections': chart_injections,
+        'expense_labels': expense_labels,
+        'expense_values': expense_values,
+        'account_breakdown': account_breakdown,
+        
+        # Monthly Trends
+        'monthly_trends': monthly_trends,
+        
+        # Filters
+        'shops': ShopBranch.objects.filter(is_active=True),
+        'selected_shop': shop_id,
+        'date_range': date_range,
+        'start_date': start_date,
+        'end_date': end_date,
+    }
+    
+    return render(request, 'shops/financial_dashboard.html', context)
+
+
+
+@login_required
+@user_passes_test(is_staff_or_admin)
+def financial_summary_api(request):
+    """API endpoint for financial summary data (for charts)"""
+    shop_id = request.GET.get('shop', 'all')
+    period = request.GET.get('period', 'month')
+    
+    today = timezone.now().date()
+    if period == 'week':
+        start_date = today - timedelta(days=7)
+    elif period == 'month':
+        start_date = today - timedelta(days=30)
+    elif period == 'quarter':
+        start_date = today - timedelta(days=90)
+    elif period == 'year':
+        start_date = today - timedelta(days=365)
+    else:
+        start_date = today - timedelta(days=30)
+    
+    # Get expenses
+    expenses = ShopExpense.objects.filter(
+        daily_report__report_date__gte=start_date,
+        daily_report__report_date__lte=today
+    )
+    
+    # Get sales
+    sales = MpesaAccount.objects.filter(is_active=True)
+    
+    if shop_id != 'all':
+        expenses = expenses.filter(daily_report__shop_id=shop_id)
+        sales = sales.filter(shop_id=shop_id)
+    
+    # Daily breakdown
+    daily_data = []
+    for i in range(30):
+        date = today - timedelta(days=29-i)
+        daily_expenses = expenses.filter(daily_report__report_date=date).aggregate(
+            total=Coalesce(Sum('amount'), Decimal('0'))
+        )['total']
+        
+        daily_sales = sales.filter(
+            daily_reports__daily_report__report_date=date
+        ).aggregate(
+            total=Coalesce(Sum('total_sale_amount'), Decimal('0'))
+        )['total']
+        
+        daily_data.append({
+            'date': date.strftime('%Y-%m-%d'),
+            'expenses': float(daily_expenses),
+            'sales': float(daily_sales),
+            'net': float(daily_sales - daily_expenses)
+        })
+    
+    return JsonResponse({
+        'success': True,
+        'data': daily_data,
+        'summary': {
+            'total_expenses': float(expenses.aggregate(total=Coalesce(Sum('amount'), Decimal('0')))['total']),
+            'total_sales': float(sales.aggregate(total=Coalesce(Sum('total_sale_amount'), Decimal('0')))['total']),
+        }
+    })
+
+
+@login_required
+@user_passes_test(is_staff_or_admin)
+def account_injections_report(request):
+    """Show injections for all accounts (M-Pesa, Bank, Cash)"""
+    
+    # Get filter parameters
+    shop_id = request.GET.get('shop', 'all')
+    date_range = request.GET.get('date_range', 'month')
+    
+    today = timezone.now().date()
+    if date_range == 'today':
+        start_date = today
+        end_date = today
+    elif date_range == 'week':
+        start_date = today - timedelta(days=7)
+        end_date = today
+    elif date_range == 'month':
+        start_date = today.replace(day=1)
+        end_date = today
+    elif date_range == 'quarter':
+        start_date = today - timedelta(days=90)
+        end_date = today
+    elif date_range == 'year':
+        start_date = today.replace(month=1, day=1)
+        end_date = today
+    else:
+        start_date = today.replace(day=1)
+        end_date = today
+    
+    # Get all injections from AccountTransaction model
+    injections = AccountTransaction.objects.filter(
+        transaction_type='injection',
+        is_approved=True,
+        created_at__date__gte=start_date,
+        created_at__date__lte=end_date
+    )
+    
+    if shop_id != 'all':
+        # Filter by shop for each account type
+        mpesa_ids = MpesaAccount.objects.filter(shop_id=shop_id).values_list('id', flat=True)
+        bank_ids = BankAccount.objects.filter(shop_id=shop_id).values_list('id', flat=True)
+        cash_ids = CashAccount.objects.filter(shop_id=shop_id).values_list('id', flat=True)
+        
+        injections = injections.filter(
+            Q(mpesa_account_id__in=mpesa_ids) |
+            Q(bank_account_id__in=bank_ids) |
+            Q(cash_account_id__in=cash_ids)
+        )
+    
+    # Calculate totals
+    total_injected = injections.aggregate(total=Sum('amount'))['total'] or Decimal('0')
+    total_injection_count = injections.count()
+    
+    # Calculate average (in Python, not template)
+    average_injection = total_injected / total_injection_count if total_injection_count > 0 else Decimal('0')
+    
+    # Group injections by account
+    injections_by_account = []
+    
+    # M-Pesa injections
+    mpesa_injections = injections.filter(account_type='mpesa').values(
+        'mpesa_account__shop__name',
+        'mpesa_account__account_name',
+        'mpesa_account__account_number',
+        'mpesa_account__account_type'
+    ).annotate(
+        total=Sum('amount'),
+        count=Count('id')
+    ).order_by('-total')
+    
+    for inj in mpesa_injections:
+        # Get the current balance of this account
+        account = MpesaAccount.objects.filter(
+            account_name=inj['mpesa_account__account_name'],
+            account_number=inj['mpesa_account__account_number']
+        ).first()
+        
+        injections_by_account.append({
+            'shop': inj['mpesa_account__shop__name'],
+            'account_type': 'M-Pesa',
+            'account_name': inj['mpesa_account__account_name'],
+            'account_number': inj['mpesa_account__account_number'],
+            'sub_type': inj['mpesa_account__account_type'],
+            'total': inj['total'],
+            'count': inj['count'],
+            'current_balance': account.current_balance if account else Decimal('0')
+        })
+    
+    # Bank injections
+    bank_injections = injections.filter(account_type='bank').values(
+        'bank_account__shop__name',
+        'bank_account__bank_name',
+        'bank_account__account_name',
+        'bank_account__account_number'
+    ).annotate(
+        total=Sum('amount'),
+        count=Count('id')
+    ).order_by('-total')
+    
+    for inj in bank_injections:
+        account = BankAccount.objects.filter(
+            bank_name=inj['bank_account__bank_name'],
+            account_name=inj['bank_account__account_name'],
+            account_number=inj['bank_account__account_number']
+        ).first()
+        
+        injections_by_account.append({
+            'shop': inj['bank_account__shop__name'],
+            'account_type': 'Bank',
+            'account_name': f"{inj['bank_account__bank_name']} - {inj['bank_account__account_name']}",
+            'account_number': inj['bank_account__account_number'],
+            'sub_type': inj['bank_account__bank_name'],
+            'total': inj['total'],
+            'count': inj['count'],
+            'current_balance': account.current_balance if account else Decimal('0')
+        })
+    
+    # Cash injections
+    cash_injections = injections.filter(account_type='cash').values(
+        'cash_account__shop__name',
+        'cash_account__account_name'
+    ).annotate(
+        total=Sum('amount'),
+        count=Count('id')
+    ).order_by('-total')
+    
+    for inj in cash_injections:
+        account = CashAccount.objects.filter(
+            account_name=inj['cash_account__account_name']
+        ).first()
+        
+        injections_by_account.append({
+            'shop': inj['cash_account__shop__name'],
+            'account_type': 'Cash',
+            'account_name': inj['cash_account__account_name'],
+            'account_number': 'N/A',
+            'sub_type': 'Physical Cash',
+            'total': inj['total'],
+            'count': inj['count'],
+            'current_balance': account.current_balance if account else Decimal('0')
+        })
+    
+    # Sort by total amount
+    injections_by_account.sort(key=lambda x: x['total'], reverse=True)
+    
+    # Get individual transactions for detailed view
+    individual_transactions = injections.select_related(
+        'mpesa_account', 'bank_account', 'cash_account', 'created_by'
+    ).order_by('-created_at')[:50]
+    
+    context = {
+        'injections_by_account': injections_by_account,
+        'individual_transactions': individual_transactions,
+        'total_injected': total_injected,
+        'total_injection_count': total_injection_count,
+        'average_injection': average_injection,  # Added this
+        'start_date': start_date,
+        'end_date': end_date,
+        'date_range': date_range,
+        'shops': ShopBranch.objects.filter(is_active=True),
+        'selected_shop': shop_id,
+        'period_display': f"{start_date.strftime('%b %d')} - {end_date.strftime('%b %d, %Y')}",
+    }
+    
+    return render(request, 'shops/account_injections_report.html', context)
+
+# shops/views.py - Add this function
+
+@login_required
+@user_passes_test(is_staff_or_admin)
+def create_account_injection(request):
+    """Create a new account injection (add money to any account)"""
+    
+    if request.method == 'POST':
+        form = AccountInjectionForm(request.POST, user=request.user)
+        if form.is_valid():
+            transaction = form.save(commit=False)
+            transaction.transaction_type = 'injection'
+            transaction.created_by = request.user
+            
+            # Auto-approve for superusers and managers
+            if request.user.is_superuser or request.user.groups.filter(name='manager').exists():
+                transaction.is_approved = True
+                transaction.approved_by = request.user
+                transaction.approved_at = timezone.now()
+                messages.success(request, f'Injection of KES {transaction.amount:,.2f} completed and approved!')
+            else:
+                messages.info(request, 'Injection created and pending approval.')
+            
+            transaction.save()
+            
+            # Get account name for success message
+            account_name = ""
+            if transaction.mpesa_account:
+                account_name = transaction.mpesa_account.account_name
+            elif transaction.bank_account:
+                account_name = f"{transaction.bank_account.bank_name} - {transaction.bank_account.account_name}"
+            elif transaction.cash_account:
+                account_name = transaction.cash_account.account_name
+            
+            messages.success(
+                request, 
+                f'Successfully injected KES {transaction.amount:,.2f} into {account_name}'
+            )
+            
+            return redirect('shops:account_injections_report')
+    else:
+        form = AccountInjectionForm(user=request.user)
+        
+        # Pre-select account if passed in URL
+        account_type = request.GET.get('account_type')
+        account_id = request.GET.get('account_id')
+        
+        if account_type and account_id:
+            if account_type == 'mpesa':
+                form.fields['account_type'].initial = 'mpesa'
+                form.fields['mpesa_account'].initial = account_id
+            elif account_type == 'bank':
+                form.fields['account_type'].initial = 'bank'
+                form.fields['bank_account'].initial = account_id
+            elif account_type == 'cash':
+                form.fields['account_type'].initial = 'cash'
+                form.fields['cash_account'].initial = account_id
+    
+    context = {
+        'form': form,
+        'title': 'Create Account Injection',
+    }
+    return render(request, 'shops/account_injection_form.html', context)
+
+
+from django.db.models import Sum, Q, Count
+from datetime import datetime, timedelta
+from calendar import monthrange
+
+@login_required
+@user_passes_test(is_staff_or_admin)
+def monthly_financial_report(request):
+    """
+    Monthly Financial Report showing:
+    - Opening balance = Last report closing + All injections
+    - Closing balance = Opening balance (if no new report) OR Opening - Today's expenses (if report exists)
+    """
+    
+    # Get filter parameters
+    period_type = request.GET.get('period', 'month')
+    shop_id = request.GET.get('shop', 'all')
+    custom_date = request.GET.get('date', '')
+    
+    today = timezone.now().date()
+    
+    # Set date range based on period type
+    if custom_date:
+        try:
+            if period_type == 'day':
+                start_date = datetime.strptime(custom_date, '%Y-%m-%d').date()
+                end_date = start_date
+            elif period_type == 'week':
+                start_date = datetime.strptime(custom_date, '%Y-%m-%d').date()
+                end_date = start_date + timedelta(days=6)
+            elif period_type == 'month':
+                start_date = datetime.strptime(custom_date, '%Y-%m').date().replace(day=1)
+                last_day = monthrange(start_date.year, start_date.month)[1]
+                end_date = start_date.replace(day=last_day)
+            elif period_type == 'year':
+                start_date = datetime.strptime(custom_date, '%Y').date().replace(month=1, day=1)
+                end_date = start_date.replace(month=12, day=31)
+            else:
+                start_date = today.replace(day=1)
+                end_date = today
+        except ValueError:
+            start_date = today.replace(day=1)
+            end_date = today
+    else:
+        if period_type == 'day':
+            start_date = today
+            end_date = today
+        elif period_type == 'week':
+            start_date = today - timedelta(days=today.weekday())
+            end_date = start_date + timedelta(days=6)
+        elif period_type == 'month':
+            start_date = today.replace(day=1)
+            end_date = today
+        elif period_type == 'year':
+            start_date = today.replace(month=1, day=1)
+            end_date = today
+        else:
+            start_date = today.replace(day=1)
+            end_date = today
+    
+    # Get shops
+    shops = ShopBranch.objects.filter(is_active=True)
+    if shop_id != 'all':
+        shops = shops.filter(id=shop_id)
+    
+    # ============================================
+    # GET THE LAST REPORT CLOSING BALANCE
+    # ============================================
+    
+    last_report_mpesa = Decimal('0')
+    last_report_bank = Decimal('0')
+    last_report_cash = Decimal('0')
+    last_report_total = Decimal('0')
+    last_report_date = None
+    
+    for shop in shops:
+        # Get the most recent report
+        last_report = DailyShopReport.objects.filter(
+            shop=shop
+        ).order_by('-report_date').first()
+        
+        if last_report:
+            last_report_date = last_report.report_date
+            
+            # Get M-Pesa closing balances
+            mpesa_reports = DailyMpesaAccountReport.objects.filter(daily_report=last_report)
+            for mr in mpesa_reports:
+                last_report_mpesa += mr.closing_mpesa_float
+            
+            # Get Bank closing balances
+            bank_closings = BankClosingBalance.objects.filter(daily_report=last_report, is_active=True)
+            for bc in bank_closings:
+                last_report_bank += bc.closing_balance
+            
+            # Get Cash balance
+            last_report_cash += last_report.cash_balance or Decimal('0')
+    
+    last_report_total = last_report_mpesa + last_report_bank + last_report_cash
+    
+    # ============================================
+    # GET ALL INJECTIONS
+    # ============================================
+    
+    all_injections = AccountTransaction.objects.filter(
+        transaction_type='injection',
+        is_approved=True
+    )
+    if shop_id != 'all':
+        all_injections = all_injections.filter(
+            Q(mpesa_account__shop_id=shop_id) |
+            Q(bank_account__shop_id=shop_id) |
+            Q(cash_account__shop_id=shop_id)
+        )
+    
+    mpesa_injections = all_injections.filter(account_type='mpesa').aggregate(total=Sum('amount'))['total'] or Decimal('0')
+    bank_injections = all_injections.filter(account_type='bank').aggregate(total=Sum('amount'))['total'] or Decimal('0')
+    cash_injections = all_injections.filter(account_type='cash').aggregate(total=Sum('amount'))['total'] or Decimal('0')
+    total_injections = mpesa_injections + bank_injections + cash_injections
+    injection_count = all_injections.count()
+    
+    # ============================================
+    # OPENING BALANCE = Last report closing + Injections
+    # ============================================
+    
+    opening_balance_mpesa = last_report_mpesa + mpesa_injections
+    opening_balance_bank = last_report_bank + bank_injections
+    opening_balance_cash = last_report_cash + cash_injections
+    opening_balance_total = last_report_total + total_injections
+    
+    # ============================================
+    # CHECK IF THERE IS A REPORT FOR TODAY
+    # ============================================
+    
+    today_report_exists = False
+    for shop in shops:
+        report_today = DailyShopReport.objects.filter(
+            shop=shop,
+            report_date=today
+        ).exists()
+        if report_today:
+            today_report_exists = True
+            break
+    
+    # ============================================
+    # GET EXPENSES - ONLY FOR DATES THAT HAVE REPORTS
+    # ============================================
+    
+    # Get all report dates in the period
+    report_dates = DailyShopReport.objects.filter(
+        report_date__gte=start_date,
+        report_date__lte=end_date
+    ).values_list('report_date', flat=True).distinct()
+    
+    # Only get expenses for dates that actually have reports
+    expenses = ShopExpense.objects.filter(
+        daily_report__report_date__in=report_dates
+    )
+    if shop_id != 'all':
+        expenses = expenses.filter(daily_report__shop_id=shop_id)
+    
+    total_expenses = expenses.aggregate(total=Sum('amount'))['total'] or Decimal('0')
+    expense_count = expenses.count()
+    
+    # ============================================
+    # CLOSING BALANCE = Opening - Expenses (only if report exists for that date)
+    # If no report for today, closing = opening
+    # ============================================
+    
+    if today_report_exists:
+        # There is a report for today, so deduct expenses
+        closing_balance_mpesa = opening_balance_mpesa
+        closing_balance_bank = opening_balance_bank
+        closing_balance_cash = opening_balance_cash
+        closing_balance_total = opening_balance_total - total_expenses
+    else:
+        # No report for today, closing equals opening
+        closing_balance_mpesa = opening_balance_mpesa
+        closing_balance_bank = opening_balance_bank
+        closing_balance_cash = opening_balance_cash
+        closing_balance_total = opening_balance_total
+    
+    # ============================================
+    # COMMISSION (Revenue)
+    # ============================================
+    
+    reports_in_period = DailyShopReport.objects.filter(
+        report_date__gte=start_date,
+        report_date__lte=end_date
+    )
+    if shop_id != 'all':
+        reports_in_period = reports_in_period.filter(shop_id=shop_id)
+    
+    commission_received = reports_in_period.aggregate(
+        total=Sum('total_mpesa_amount')
+    )['total'] or Decimal('0')
+    
+    commission_transactions = reports_in_period.aggregate(
+        total=Sum('total_mpesa_transactions')
+    )['total'] or 0
+    
+    # ============================================
+    # INJECTIONS DETAILS
+    # ============================================
+    
+    injections_by_account = []
+    
+    mpesa_inj_group = all_injections.filter(account_type='mpesa').values(
+        'mpesa_account__account_name',
+        'mpesa_account__account_number'
+    ).annotate(total=Sum('amount'), count=Count('id')).order_by('-total')
+    
+    for inj in mpesa_inj_group:
+        injections_by_account.append({
+            'type': 'M-Pesa',
+            'name': inj['mpesa_account__account_name'],
+            'number': inj['mpesa_account__account_number'],
+            'total': inj['total'],
+            'count': inj['count']
+        })
+    
+    cash_inj_group = all_injections.filter(account_type='cash').values(
+        'cash_account__account_name'
+    ).annotate(total=Sum('amount'), count=Count('id')).order_by('-total')
+    
+    for inj in cash_inj_group:
+        injections_by_account.append({
+            'type': 'Cash',
+            'name': inj['cash_account__account_name'] or 'Main Cash',
+            'number': 'N/A',
+            'total': inj['total'],
+            'count': inj['count']
+        })
+    
+    bank_inj_group = all_injections.filter(account_type='bank').values(
+        'bank_account__bank_name',
+        'bank_account__account_name'
+    ).annotate(total=Sum('amount'), count=Count('id')).order_by('-total')
+    
+    for inj in bank_inj_group:
+        injections_by_account.append({
+            'type': 'Bank',
+            'name': f"{inj['bank_account__bank_name']} - {inj['bank_account__account_name']}",
+            'number': 'N/A',
+            'total': inj['total'],
+            'count': inj['count']
+        })
+    
+    # ============================================
+    # EXPENSES DETAILS (only for dates with reports)
+    # ============================================
+    
+    expenses_by_category = expenses.values('expense_category').annotate(
+        total=Sum('amount'),
+        count=Count('id')
+    ).order_by('-total')
+    
+    expenses_by_payment = expenses.values('payment_method').annotate(
+        total=Sum('amount'),
+        count=Count('id')
+    ).order_by('-total')
+    
+    recent_expenses = expenses.order_by('-created_at')[:10]
+    
+    # ============================================
+    # CALCULATIONS
+    # ============================================
+    
+    expected_closing = opening_balance_total - total_expenses if today_report_exists else opening_balance_total
+    actual_closing = closing_balance_total
+    variance = actual_closing - expected_closing
+    net_change = closing_balance_total - opening_balance_total
+    
+    # ============================================
+    # PERIOD SUMMARY
+    # ============================================
+    
+    period_summary = {
+        'start_date': start_date,
+        'end_date': end_date,
+        'period_type': period_type,
+        'total_days': (end_date - start_date).days + 1,
+        'total_reports': reports_in_period.count(),
+        'finalized_reports': reports_in_period.filter(is_finalized=True).count(),
+        'today_report_exists': today_report_exists,
+    }
+    
+    if period_type == 'day':
+        period_display = start_date.strftime('%B %d, %Y')
+    elif period_type == 'week':
+        period_display = f"{start_date.strftime('%b %d')} - {end_date.strftime('%b %d, %Y')}"
+    elif period_type == 'month':
+        period_display = start_date.strftime('%B %Y')
+    else:
+        period_display = start_date.strftime('%Y')
+    
+    context = {
+        'period_type': period_type,
+        'period_display': period_display,
+        'start_date': start_date,
+        'end_date': end_date,
+        'period_summary': period_summary,
+        
+        # Opening Balance
+        'opening_balance_mpesa': opening_balance_mpesa,
+        'opening_balance_bank': opening_balance_bank,
+        'opening_balance_cash': opening_balance_cash,
+        'opening_balance_total': opening_balance_total,
+        
+        # Closing Balance
+        'closing_balance_mpesa': closing_balance_mpesa,
+        'closing_balance_bank': closing_balance_bank,
+        'closing_balance_cash': closing_balance_cash,
+        'closing_balance_total': closing_balance_total,
+        
+        # Last Report Info
+        'last_report_total': last_report_total,
+        'last_report_date': last_report_date,
+        
+        # Commission
+        'commission_received': commission_received,
+        'commission_transactions': commission_transactions,
+        
+        # Injections
+        'money_injected': total_injections,
+        'injection_count': injection_count,
+        'injections_by_account': injections_by_account,
+        
+        # Expenses
+        'total_expenses': total_expenses,
+        'expense_count': expense_count,
+        'expenses_by_category': expenses_by_category,
+        'expenses_by_payment': expenses_by_payment,
+        'recent_expenses': recent_expenses,
+        
+        # Calculations
+        'expected_closing': expected_closing,
+        'actual_closing': actual_closing,
+        'variance': variance,
+        'net_change': net_change,
+        'today_report_exists': today_report_exists,
+        
+        # Charts
+        'chart_dates': ['Current'],
+        'chart_commission': [float(commission_received)],
+        'chart_expenses': [float(total_expenses) if today_report_exists else 0],
+        'chart_injections': [float(total_injections)],
+        'chart_closing': [float(closing_balance_total)],
+        
+        # Filters
+        'shops': ShopBranch.objects.filter(is_active=True),
+        'selected_shop': shop_id,
+        'selected_date': custom_date,
+    }
+    
+    return render(request, 'shops/monthly_financial_report.html', context)

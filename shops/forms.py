@@ -6,9 +6,9 @@ from decimal import Decimal
 from .models import (
     ShopBranch, MpesaAccount, MpesaDailyBalance, BankAccount, BankDailyBalance,
     CashAccount, CashDailyBalance, ShopExpense, DailyShopReport, 
-    DailyMpesaAccountReport, ShopConfiguration, DynamicChoice, BankClosingBalance
+    DailyMpesaAccountReport, ShopConfiguration, DynamicChoice, BankClosingBalance,
+    MpesaAdjustment, MpesaAccount
 )
-
 
 # ==================== DYNAMIC CHOICES FORM ====================
 
@@ -411,3 +411,107 @@ def get_expense_category_choices():
         ('transport', 'Transport'),
         ('other', 'Other'),
     ]
+
+# shops/forms.py
+
+from django import forms
+from .models import AccountTransaction, MpesaAccount, BankAccount, CashAccount, ShopBranch
+
+class AccountInjectionForm(forms.ModelForm):
+    class Meta:
+        model = AccountTransaction
+        fields = ['account_type', 'mpesa_account', 'bank_account', 'cash_account', 'amount', 'reference_number', 'reason', 'notes']
+        widgets = {
+            'reason': forms.Textarea(attrs={'rows': 3, 'placeholder': 'Explain why this injection is needed...'}),
+            'notes': forms.Textarea(attrs={'rows': 2, 'placeholder': 'Additional notes (optional)'}),
+            'reference_number': forms.TextInput(attrs={'placeholder': 'Receipt/Reference number (optional)'}),
+        }
+    
+    def __init__(self, *args, **kwargs):
+        user = kwargs.pop('user', None)
+        super().__init__(*args, **kwargs)
+        
+        # Set account type choices
+        self.fields['account_type'].choices = [
+            ('mpesa', 'M-Pesa Account'),
+            ('bank', 'Bank Account'),
+            ('cash', 'Cash Account'),
+        ]
+        
+        # Initialize empty querysets
+        self.fields['mpesa_account'].queryset = MpesaAccount.objects.none()
+        self.fields['bank_account'].queryset = BankAccount.objects.none()
+        self.fields['cash_account'].queryset = CashAccount.objects.none()
+        
+        # If user is not superuser, restrict to their shop
+        if user and not user.is_superuser:
+            if hasattr(user, 'staff_profile') and user.staff_profile:
+                assigned_shop = user.staff_profile.assigned_shop
+                self.fields['mpesa_account'].queryset = MpesaAccount.objects.filter(
+                    shop=assigned_shop, is_active=True, status='active'
+                )
+                self.fields['bank_account'].queryset = BankAccount.objects.filter(
+                    shop=assigned_shop, is_active=True
+                )
+                self.fields['cash_account'].queryset = CashAccount.objects.filter(
+                    shop=assigned_shop, is_active=True
+                )
+        else:
+            # For superuser, show all
+            self.fields['mpesa_account'].queryset = MpesaAccount.objects.filter(is_active=True, status='active')
+            self.fields['bank_account'].queryset = BankAccount.objects.filter(is_active=True)
+            self.fields['cash_account'].queryset = CashAccount.objects.filter(is_active=True)
+        
+        # Add shop filter for superuser
+        if user and user.is_superuser:
+            self.fields['shop_filter'] = forms.ModelChoiceField(
+                queryset=ShopBranch.objects.filter(is_active=True),
+                required=False,
+                label="Filter by Shop (Optional)"
+            )
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        account_type = cleaned_data.get('account_type')
+        amount = cleaned_data.get('amount')
+        
+        if amount and amount <= 0:
+            self.add_error('amount', 'Amount must be greater than 0')
+        
+        return cleaned_data
+
+class MpesaAdjustmentForm(forms.ModelForm):
+    class Meta:
+        model = MpesaAdjustment
+        fields = ['mpesa_account', 'adjustment_type', 'amount', 'reference_number', 'reason', 'notes']
+        widgets = {
+            'reason': forms.Textarea(attrs={'rows': 3, 'placeholder': 'Explain why this adjustment is needed...'}),
+            'notes': forms.Textarea(attrs={'rows': 2, 'placeholder': 'Additional notes (optional)'}),
+            'reference_number': forms.TextInput(attrs={'placeholder': 'Receipt/Reference number (optional)'}),
+        }
+    
+    def clean_amount(self):
+        amount = self.cleaned_data.get('amount')
+        adjustment_type = self.cleaned_data.get('adjustment_type')
+        mpesa_account = self.cleaned_data.get('mpesa_account')
+        
+        if adjustment_type == 'withdrawal' and mpesa_account:
+            if amount > mpesa_account.current_balance:
+                raise forms.ValidationError(
+                    f'Cannot withdraw KES {amount}. Current balance is KES {mpesa_account.current_balance:,.2f}'
+                )
+        return amount
+    
+    def __init__(self, *args, **kwargs):
+        user = kwargs.pop('user', None)
+        super().__init__(*args, **kwargs)
+        
+        if user and not user.is_superuser:
+            # Limit to user's assigned shop's M-Pesa accounts
+            if hasattr(user, 'staff_profile') and user.staff_profile:
+                assigned_shop = user.staff_profile.assigned_shop
+                self.fields['mpesa_account'].queryset = MpesaAccount.objects.filter(
+                    shop=assigned_shop,
+                    is_active=True,
+                    status='active'
+                )

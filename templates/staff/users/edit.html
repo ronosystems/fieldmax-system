@@ -5,350 +5,437 @@
 
 {% block extra_css %}
 <style>
-    .form-container {
-        max-width: 1200px;
-        margin: 0 auto;
-    }
-    
     .form-section {
-        background: white;
-        border-radius: 16px;
-        padding: 1.5rem;
-        margin-bottom: 1.5rem;
-        border: 1px solid #e9ecef;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 25px;
+        border: 1px solid #dee2e6;
     }
-    
-    .form-section h3 {
-        font-size: 1.2rem;
+    .form-section h4 {
+        color: #007bff;
+        margin-bottom: 20px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid #007bff;
+    }
+    .info-text {
+        font-size: 0.85rem;
+        color: #6c757d;
+        margin-top: 5px;
+    }
+    .badge-status {
+        font-size: 0.8rem;
+        padding: 5px 10px;
+    }
+    .avatar-circle {
+        width: 100px;
+        height: 100px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        font-size: 2.5rem;
         font-weight: 600;
-        color: #1e293b;
-        margin-bottom: 1.5rem;
-        padding-bottom: 0.75rem;
-        border-bottom: 2px solid #e9ecef;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
     }
-    
-    .form-section h3 i {
-        color: #2563eb;
+    .status-card {
+        border-left: 4px solid;
+        transition: all 0.3s ease;
+        margin-bottom: 1rem;
     }
-    
-    .form-label {
-        font-weight: 500;
-        color: #1e293b;
-        margin-bottom: 0.5rem;
+    .status-card.warning {
+        border-left-color: #ffc107;
+        background-color: #fff9e6;
     }
-    
-    .form-control, .form-select {
-        border-radius: 10px;
-        border: 1px solid #e2e8f0;
-        padding: 0.6rem 1rem;
-        transition: all 0.2s;
+    .status-card.danger {
+        border-left-color: #dc3545;
+        background-color: #fff5f5;
     }
-    
-    .form-control:focus, .form-select:focus {
-        border-color: #2563eb;
-        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    .status-card.info {
+        border-left-color: #17a2b8;
+        background-color: #e6f7ff;
     }
-    
-    .form-check-input:checked {
-        background-color: #2563eb;
-        border-color: #2563eb;
-    }
-    
-    .group-checkbox {
-        padding: 0.75rem;
-        border: 1px solid #e2e8f0;
-        border-radius: 10px;
-        margin-bottom: 0.5rem;
-        transition: all 0.2s;
-        cursor: pointer;
-    }
-    
-    .group-checkbox:hover {
-        background: #f8fafc;
-        border-color: #2563eb;
-    }
-    
-    .group-checkbox input {
-        margin-right: 0.75rem;
-    }
-    
-    .group-checkbox label {
-        cursor: pointer;
-        margin: 0;
-        font-weight: 500;
-    }
-    
-    .group-checkbox small {
-        display: block;
-        margin-left: 1.8rem;
-        color: #64748b;
-        font-size: 0.75rem;
-    }
-    
-    .btn-save {
-        background: #2563eb;
-        color: white;
-        padding: 0.75rem 2rem;
-        border-radius: 10px;
-        font-weight: 500;
-        transition: all 0.2s;
-    }
-    
-    .btn-save:hover {
-        background: #1d4ed8;
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
-    }
-    
-    .btn-cancel {
-        background: #64748b;
-        color: white;
-        padding: 0.75rem 2rem;
-        border-radius: 10px;
-        font-weight: 500;
-    }
-    
-    .btn-cancel:hover {
-        background: #475569;
-    }
-    
-    .status-badge {
-        display: inline-block;
-        padding: 0.25rem 0.75rem;
-        border-radius: 20px;
-        font-size: 0.75rem;
-        font-weight: 500;
-        margin-left: 0.5rem;
-    }
-    
-    .status-active {
-        background: #dcfce7;
-        color: #16a34a;
-    }
-    
-    .status-inactive {
-        background: #fee2e2;
-        color: #dc2626;
-    }
-    
-    .alert-warning {
-        background: #fffbeb;
-        border-color: #fde047;
-        color: #854d0e;
+    .status-card.success {
+        border-left-color: #28a745;
+        background-color: #e8f5e9;
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid form-container">
-    <!-- Page Header -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h2>
-                <i class="fas fa-edit me-2"></i>
-                Edit User: {{ user.username }}
-            </h2>
-            <nav aria-label="breadcrumb">
-                <ol class="breadcrumb">
-                    <li class="breadcrumb-item"><a href="{% url 'staff:staff_dashboard' %}">Dashboard</a></li>
-                    <li class="breadcrumb-item"><a href="{% url 'staff:user_list' %}">Users</a></li>
-                    <li class="breadcrumb-item"><a href="{% url 'staff:user_detail' user.id %}">{{ user.username }}</a></li>
-                    <li class="breadcrumb-item active">Edit</li>
-                </ol>
-            </nav>
-        </div>
-        <div>
-            <a href="{% url 'staff:user_detail' user.id %}" class="btn btn-secondary">
-                <i class="fas fa-arrow-left me-2"></i>Cancel
-            </a>
-        </div>
+<div class="container-fluid px-4">
+    <!-- Breadcrumb -->
+    <div class="mb-4">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'staff:staff_dashboard' %}">Dashboard</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'staff:user_list' %}">Users</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'staff:user_detail' user.id %}">{{ user.username }}</a></li>
+                <li class="breadcrumb-item active">Edit User</li>
+            </ol>
+        </nav>
     </div>
 
-    <form method="post">
-        {% csrf_token %}
-        
-        <!-- Basic Information -->
-        <div class="form-section">
-            <h3>
-                <i class="fas fa-user-circle"></i>
-                Basic Information
-            </h3>
-            <div class="row">
-                <div class="col-md-6 mb-3">
-                    <label class="form-label">Username *</label>
-                    <input type="text" name="username" class="form-control" value="{{ user.username }}" required>
-                    <small class="text-muted">Required. 150 characters or fewer. Letters, digits and @/./+/-/_ only.</small>
+    <div class="row">
+        <!-- LEFT COLUMN (35%) -->
+        <div class="col-md-4">
+            <!-- Profile Card -->
+            <div class="card mb-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="fas fa-user-circle me-2"></i>Profile Preview</h5>
                 </div>
-                <div class="col-md-6 mb-3">
-                    <label class="form-label">Email *</label>
-                    <input type="email" name="email" class="form-control" value="{{ user.email }}" required>
-                </div>
-                <div class="col-md-6 mb-3">
-                    <label class="form-label">First Name</label>
-                    <input type="text" name="first_name" class="form-control" value="{{ user.first_name }}">
-                </div>
-                <div class="col-md-6 mb-3">
-                    <label class="form-label">Last Name</label>
-                    <input type="text" name="last_name" class="form-control" value="{{ user.last_name }}">
-                </div>
-            </div>
-        </div>
-        
-        <!-- Contact Information -->
-        <div class="form-section">
-            <h3>
-                <i class="fas fa-address-card"></i>
-                Contact Information
-            </h3>
-            <div class="row">
-                <div class="col-md-6 mb-3">
-                    <label class="form-label">Phone Number</label>
-                    <input type="tel" name="phone_number" class="form-control" value="{{ profile.phone_number|default:'' }}">
-                </div>
-                <div class="col-md-6 mb-3">
-                    <label class="form-label">Address</label>
-                    <input type="text" name="address" class="form-control" value="{{ profile.address|default:'' }}">
-                </div>
-                <div class="col-md-6 mb-3">
-                    <label class="form-label">City</label>
-                    <input type="text" name="city" class="form-control" value="{{ profile.city|default:'' }}">
-                </div>
-                <div class="col-md-6 mb-3">
-                    <label class="form-label">Country</label>
-                    <input type="text" name="country" class="form-control" value="{{ profile.country|default:'' }}">
+                <div class="card-body text-center">
+                    <div class="avatar-circle rounded-circle d-flex align-items-center justify-content-center mx-auto text-white mb-3">
+                        {{ user.first_name|first|default:user.username|first|upper }}{{ user.last_name|first|default:''|upper }}
+                    </div>
+                    <h4 class="mb-1">{{ user.get_full_name|default:user.username }}</h4>
+                    <p class="text-muted mb-2">
+                        <i class="fas fa-envelope me-1"></i> {{ user.email|default:"No email" }}
+                    </p>
+                    <p class="mb-3">
+                        {% if user.is_superuser %}
+                            <span class="badge bg-danger">Super Admin</span>
+                        {% elif user.is_staff %}
+                            <span class="badge bg-primary">Staff</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Regular User</span>
+                        {% endif %}
+                        {% if profile.is_ceo %}
+                            <span class="badge bg-warning text-dark">CEO</span>
+                        {% endif %}
+                        {% if profile.is_verified %}
+                            <span class="badge bg-success">Verified</span>
+                        {% endif %}
+                    </p>
+                    <hr>
+                    <div class="text-start">
+                        <small class="text-muted">
+                            <i class="fas fa-calendar me-1"></i> Joined: {{ user.date_joined|date:"M d, Y" }}<br>
+                            <i class="fas fa-clock me-1"></i> Last Login: {{ user.last_login|date:"M d, Y H:i"|default:"Never" }}
+                        </small>
+                    </div>
                 </div>
             </div>
-        </div>
-        
-        <!-- Account Status -->
-        <div class="form-section">
-            <h3>
-                <i class="fas fa-toggle-on"></i>
-                Account Status
-            </h3>
-            <div class="row">
-                <div class="col-md-4 mb-3">
-                    <div class="form-check form-switch">
-                        <input type="checkbox" name="is_active" class="form-check-input" id="isActive" {% if user.is_active %}checked{% endif %}>
-                        <label class="form-check-label" for="isActive">
-                            Active Account
-                            {% if user.is_active %}
-                            <span class="status-badge status-active">Active</span>
+
+            <!-- Account Status Card -->
+            <div class="card mb-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="fas fa-shield-alt me-2"></i>Account Status</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-2">
+                        <label class="fw-bold">Account State:</label>
+                        {% if user.is_active %}
+                            <span class="badge bg-success">Active</span>
+                        {% else %}
+                            <span class="badge bg-danger">Deactivated</span>
+                        {% endif %}
+                    </div>
+                    <div class="mb-2">
+                        <label class="fw-bold">Staff Status:</label>
+                        {% if user.is_staff %}
+                            <span class="badge bg-primary">Staff Member</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Regular User</span>
+                        {% endif %}
+                    </div>
+                    <div class="mb-2">
+                        <label class="fw-bold">Superuser:</label>
+                        {% if user.is_superuser %}
+                            <span class="badge bg-danger">Yes</span>
+                        {% else %}
+                            <span class="badge bg-secondary">No</span>
+                        {% endif %}
+                    </div>
+                    <div class="mb-2">
+                        <label class="fw-bold">Identity Verified (ITP):</label>
+                        {% if staff_profile.is_identity_verified %}
+                            <span class="badge bg-success">Verified</span>
+                        {% else %}
+                            <span class="badge bg-warning">Pending</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Danger Zone Card (Account Management) -->
+            {% if request.user.is_superuser and user != request.user %}
+            <div class="card border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0"><i class="fas fa-exclamation-triangle me-2"></i>Account Management</h5>
+                </div>
+                <div class="card-body">
+                    <!-- Lock/Unlock Actions -->
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            {% if user.status.is_locked %}
+                                <h6 class="fw-bold text-info mb-0">Account Locked</h6>
+                                <small class="text-muted">Temporarily locked</small>
                             {% else %}
-                            <span class="status-badge status-inactive">Inactive</span>
+                                <h6 class="fw-bold text-warning mb-0">Lock Account</h6>
+                                <small class="text-muted">Temporarily restrict access</small>
                             {% endif %}
-                        </label>
+                        </div>
+                        {% if user.status.is_locked %}
+                        <a href="{% url 'staff:user_unlock_confirm' user.id %}" class="btn btn-info btn-sm">
+                            <i class="fas fa-unlock-alt me-1"></i> Unlock
+                        </a>
+                        {% else %}
+                        <a href="{% url 'staff:user_lock_confirm' user.id %}" class="btn btn-warning btn-sm">
+                            <i class="fas fa-lock me-1"></i> Lock
+                        </a>
+                        {% endif %}
                     </div>
-                    <small class="text-muted">Inactive users cannot log in to the system.</small>
-                </div>
-                <div class="col-md-4 mb-3">
-                    <div class="form-check form-switch">
-                        <input type="checkbox" name="is_staff" class="form-check-input" id="isStaff" {% if user.is_staff %}checked{% endif %}>
-                        <label class="form-check-label" for="isStaff">Staff Status</label>
+                    
+                    <hr>
+                    
+                    <!-- Suspend/Unsuspend Actions -->
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            {% if user.status.is_suspended %}
+                                <h6 class="fw-bold text-warning mb-0">Account Suspended</h6>
+                                <small class="text-muted">Disciplinary suspension</small>
+                            {% else %}
+                                <h6 class="fw-bold text-warning mb-0">Suspend Account</h6>
+                                <small class="text-muted">Temporary suspension</small>
+                            {% endif %}
+                        </div>
+                        {% if user.status.is_suspended %}
+                        <a href="{% url 'staff:user_unsuspend_confirm' user.id %}" class="btn btn-success btn-sm">
+                            <i class="fas fa-play me-1"></i> Unsuspend
+                        </a>
+                        {% else %}
+                        <a href="{% url 'staff:user_suspend_confirm' user.id %}" class="btn btn-warning btn-sm">
+                            <i class="fas fa-pause-circle me-1"></i> Suspend
+                        </a>
+                        {% endif %}
                     </div>
-                    <small class="text-muted">Staff users can access the admin panel.</small>
-                </div>
-                <div class="col-md-4 mb-3">
-                    <div class="form-check form-switch">
-                        <input type="checkbox" name="is_superuser" class="form-check-input" id="isSuperuser" {% if user.is_superuser %}checked{% endif %}>
-                        <label class="form-check-label" for="isSuperuser">Superuser Status</label>
+                    
+                    <hr>
+                    
+                    <!-- Deactivate/Activate Actions -->
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            {% if user.is_active %}
+                            <h6 class="fw-bold text-danger mb-0">Deactivate Account</h6>
+                            <small class="text-muted">Permanent deactivation</small>
+                            {% else %}
+                            <h6 class="fw-bold text-success mb-0">Activate Account</h6>
+                            <small class="text-muted">Restore access</small>
+                            {% endif %}
+                        </div>
+                        {% if user.is_active %}
+                        <a href="{% url 'staff:user_deactivate_confirm' user.id %}" class="btn btn-danger btn-sm">
+                            <i class="fas fa-ban me-1"></i> Deactivate
+                        </a>
+                        {% else %}
+                        <a href="{% url 'staff:user_activate_confirm' user.id %}" class="btn btn-success btn-sm">
+                            <i class="fas fa-check-circle me-1"></i> Activate
+                        </a>
+                        {% endif %}
                     </div>
-                    <small class="text-muted">Superusers have all permissions without explicitly assigning them.</small>
+                    
+                    <hr>
+                    
+                    <!-- Delete Action -->
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="fw-bold text-danger mb-0">Delete User Account</h6>
+                            <small class="text-muted">Permanently remove this user</small>
+                        </div>
+                        <a href="{% url 'staff:user_delete_confirm' user.id %}" class="btn btn-danger btn-sm">
+                            <i class="fas fa-trash me-1"></i> Delete
+                        </a>
+                    </div>
                 </div>
-            </div>
-            
-            {% if user.is_superuser %}
-            <div class="alert alert-warning mt-3">
-                <i class="fas fa-exclamation-triangle me-2"></i>
-                <strong>Warning:</strong> This user is a superuser. Removing superuser status may affect their permissions.
             </div>
             {% endif %}
         </div>
-        
-        <!-- Groups/Roles -->
-        <div class="form-section">
-            <h3>
-                <i class="fas fa-users"></i>
-                Roles & Groups
-            </h3>
-            <div class="row">
-                {% for group in groups %}
-                <div class="col-md-6">
-                    <div class="group-checkbox" onclick="toggleGroup(this, {{ group.id }})">
-                        <input type="checkbox" name="groups" id="group_{{ group.id }}" value="{{ group.id }}" 
-                               {% if group.id in selected_groups %}checked{% endif %}>
-                        <label for="group_{{ group.id }}">{{ group.name }}</label>
-                        <small>{{ group.permissions.count }} permissions | {{ group.user_set.count }} members</small>
+
+        <!-- RIGHT COLUMN (65%) -->
+        <div class="col-md-8">
+            <form method="post">
+                {% csrf_token %}
+                
+                <!-- Section 1: Basic Information -->
+                <div class="form-section">
+                    <h4><i class="fas fa-user me-2"></i>Basic Information</h4>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold">First Name</label>
+                            <input type="text" name="first_name" class="form-control" value="{{ user.first_name|default:'' }}">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold">Last Name</label>
+                            <input type="text" name="last_name" class="form-control" value="{{ user.last_name|default:'' }}">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold">Email Address</label>
+                            <input type="email" name="email" class="form-control" value="{{ user.email|default:'' }}">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold">Username</label>
+                            <input type="text" name="username" class="form-control" value="{{ user.username|default:'' }}">
+                            <div class="info-text">For staff members, this should match Staff ID (e.g., FM001)</div>
+                        </div>
                     </div>
                 </div>
-                {% empty %}
-                <div class="col-12">
-                    <p class="text-muted">No groups available. Create groups in the admin panel.</p>
+
+                <!-- Section 2: Staff Information -->
+                <div class="form-section">
+                    <h4><i class="fas fa-id-card me-2"></i>Staff Information</h4>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold">Staff ID</label>
+                            <input type="text" name="staff_id" class="form-control" value="{{ staff_profile.staff_id|default:'' }}">
+                            <div class="info-text">Format: FM001, FM002, FM003...</div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold">ID Number (National ID)</label>
+                            <input type="text" name="id_number" class="form-control" value="{{ staff_profile.id_number|default:'' }}">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold">Position</label>
+                            <input type="text" name="position" class="form-control" value="{{ staff_profile.position|default:'' }}">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold">Department</label>
+                            <input type="text" name="department" class="form-control" value="{{ staff_profile.department|default:'' }}">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-12 mb-3">
+                            <label class="form-label fw-bold">Assigned Shop Branch</label>
+                            <select name="assigned_shop" class="form-select">
+                                <option value="">-- Select Shop Branch --</option>
+                                {% for shop in shops %}
+                                <option value="{{ shop.id }}" {% if selected_shop == shop.id %}selected{% endif %}>
+                                    {{ shop.name }} ({{ shop.code }}) - {{ shop.location|default:"No location" }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <div class="info-text">Select the shop where this staff member works</div>
+                        </div>
+                    </div>
                 </div>
-                {% endfor %}
-            </div>
+
+                <!-- Section 3: Permissions & Status -->
+                <div class="form-section">
+                    <h4><i class="fas fa-lock me-2"></i>Permissions & Status</h4>
+                    <div class="row">
+                        <div class="col-md-3 mb-3">
+                            <div class="form-check">
+                                <input type="checkbox" name="is_active" class="form-check-input" id="is_active" {% if user.is_active %}checked{% endif %}>
+                                <label class="form-check-label fw-bold" for="is_active">Active Account</label>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="form-check">
+                                <input type="checkbox" name="is_staff" class="form-check-input" id="is_staff" {% if user.is_staff %}checked{% endif %}>
+                                <label class="form-check-label fw-bold" for="is_staff">Staff Status</label>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="form-check">
+                                <input type="checkbox" name="is_superuser" class="form-check-input" id="is_superuser" {% if user.is_superuser %}checked{% endif %}>
+                                <label class="form-check-label fw-bold" for="is_superuser">Superuser</label>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="form-check">
+                                <input type="checkbox" name="is_ceo" class="form-check-input" id="is_ceo" {% if profile.is_ceo %}checked{% endif %}>
+                                <label class="form-check-label fw-bold" for="is_ceo">CEO Status</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <div class="form-check">
+                                <input type="checkbox" name="is_verified" class="form-check-input" id="is_verified" {% if profile.is_verified %}checked{% endif %}>
+                                <label class="form-check-label fw-bold" for="is_verified">Profile Verified</label>
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <div class="form-check">
+                                <input type="checkbox" name="is_identity_verified" class="form-check-input" id="is_identity_verified" {% if staff_profile.is_identity_verified %}checked{% endif %}>
+                                <label class="form-check-label fw-bold" for="is_identity_verified">Identity Verified (ITP)</label>
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <div class="form-check">
+                                <input type="checkbox" name="password_changed" class="form-check-input" id="password_changed" {% if profile.password_changed %}checked{% endif %}>
+                                <label class="form-check-label fw-bold" for="password_changed">Password Changed</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <div class="form-check">
+                                <input type="checkbox" name="first_login" class="form-check-input" id="first_login" {% if profile.first_login %}checked{% endif %}>
+                                <label class="form-check-label fw-bold" for="first_login">First Login Required</label>
+                            </div>
+                            <div class="info-text">Require user to change password on next login</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 4: Role Groups -->
+                <div class="form-section">
+                    <h4><i class="fas fa-users-cog me-2"></i>Role Groups</h4>
+                    <div class="row">
+                        {% for group in groups %}
+                        <div class="col-md-4 mb-2">
+                            <div class="form-check">
+                                <input type="checkbox" name="groups" value="{{ group.id }}" class="form-check-input" id="group_{{ group.id }}" {% if group.id in selected_groups %}checked{% endif %}>
+                                <label class="form-check-label" for="group_{{ group.id }}">
+                                    <span class="badge bg-primary">{{ group.name }}</span>
+                                </label>
+                            </div>
+                        </div>
+                        {% empty %}
+                        <div class="col-12">
+                            <div class="alert alert-info">No groups available. Create groups in admin panel.</div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <div class="info-text mt-2">Role groups determine dashboard access and permissions</div>
+                </div>
+
+                <!-- Form Actions -->
+                <div class="d-flex justify-content-between mt-4 mb-5">
+                    <a href="{% url 'staff:user_detail' user.id %}" class="btn btn-secondary btn-lg px-4">
+                        <i class="fas fa-times me-2"></i>Cancel
+                    </a>
+                    <button type="submit" class="btn btn-primary btn-lg px-5">
+                        <i class="fas fa-save me-2"></i>Save Changes
+                    </button>
+                </div>
+            </form>
         </div>
-        
-        <!-- Form Actions -->
-        <div class="d-flex justify-content-end gap-3 mt-4">
-            <a href="{% url 'staff:user_detail' user.id %}" class="btn btn-cancel">
-                <i class="fas fa-times me-2"></i>Cancel
-            </a>
-            <button type="submit" class="btn btn-save">
-                <i class="fas fa-save me-2"></i>Save Changes
-            </button>
-        </div>
-    </form>
+    </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-function toggleGroup(element, groupId) {
-    const checkbox = document.getElementById(`group_${groupId}`);
-    checkbox.checked = !checkbox.checked;
-}
-
-// Form validation
-document.querySelector('form').addEventListener('submit', function(e) {
-    const username = document.querySelector('input[name="username"]').value.trim();
-    const email = document.querySelector('input[name="email"]').value.trim();
-    
-    if (!username) {
-        e.preventDefault();
-        alert('Username is required');
-        return false;
-    }
-    
-    if (!email) {
-        e.preventDefault();
-        alert('Email is required');
-        return false;
-    }
-    
-    // Email validation
-    const emailRegex = /^[^\s@]+@([^\s@]+\.)+[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-        e.preventDefault();
-        alert('Please enter a valid email address');
-        return false;
-    }
-    
-    return true;
-});
-
-// Warn about superuser removal
-document.getElementById('isSuperuser').addEventListener('change', function(e) {
-    if (!this.checked && {{ user.is_superuser|lower }}) {
-        if (!confirm('WARNING: You are about to remove superuser status from this user. They will lose all permissions. Are you sure?')) {
-            e.preventDefault();
-            this.checked = true;
+    document.addEventListener('DOMContentLoaded', function() {
+        // Preview staff ID as username hint
+        const staffIdInput = document.querySelector('input[name="staff_id"]');
+        const usernameInput = document.querySelector('input[name="username"]');
+        
+        if (staffIdInput && usernameInput) {
+            staffIdInput.addEventListener('input', function() {
+                if (usernameInput.value === '' || usernameInput.value === usernameInput.defaultValue) {
+                    usernameInput.value = this.value;
+                }
+            });
         }
-    }
-});
+        
+        // Tooltips
+        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[title]'));
+        tooltipTriggerList.map(function(tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    });
 </script>
 {% endblock %}

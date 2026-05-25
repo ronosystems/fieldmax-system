@@ -1,0 +1,313 @@
+{% extends "shops/base.html" %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}Account Injections Report{% endblock %}
+
+{% block extra_css %}
+<style>
+    .summary-card {
+        border: none;
+        border-radius: 15px;
+        transition: transform 0.3s;
+        margin-bottom: 1rem;
+    }
+    .summary-card:hover { transform: translateY(-3px); }
+    .filter-bar {
+        background: white;
+        border-radius: 12px;
+        padding: 1rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    }
+    .badge-mpesa { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
+    .badge-bank { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    .badge-cash { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+    .table-injections th {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .amount-positive {
+        color: #10b981;
+        font-weight: bold;
+    }
+    .injection-row:hover {
+        background-color: #f0fdf4;
+        cursor: pointer;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h2 mb-0">
+                <i class="fas fa-plus-circle text-success"></i> Account Injections Report
+            </h1>
+            <p class="text-muted mt-2">Track all money injected into M-Pesa, Bank, and Cash accounts</p>
+        </div>
+        <div>
+            <button type="button" class="btn btn-outline-primary" onclick="window.print()">
+                <i class="fas fa-print"></i> Print Report
+            </button>
+        </div>
+    </div>
+
+<!-- Add this after the header div -->
+<div class="mb-3">
+    <a href="{% url 'shops:create_account_injection' %}" class="btn btn-success">
+        <i class="fas fa-plus-circle"></i> New Injection
+    </a>
+    <button type="button" class="btn btn-outline-success ms-2" data-bs-toggle="modal" data-bs-target="#injectionHelpModal">
+        <i class="fas fa-question-circle"></i> Help
+    </button>
+</div>
+
+
+    <!-- Filter Bar -->
+    <div class="filter-bar">
+        <form method="get" class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label">Shop Branch</label>
+                <select name="shop" class="form-select">
+                    <option value="all" {% if selected_shop == 'all' %}selected{% endif %}>All Shops</option>
+                    {% for shop in shops %}
+                        <option value="{{ shop.id }}" {% if selected_shop|stringformat:"s" == shop.id|stringformat:"s" %}selected{% endif %}>{{ shop.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Date Range</label>
+                <select name="date_range" class="form-select">
+                    <option value="today" {% if date_range == 'today' %}selected{% endif %}>Today</option>
+                    <option value="week" {% if date_range == 'week' %}selected{% endif %}>This Week</option>
+                    <option value="month" {% if date_range == 'month' %}selected{% endif %}>This Month</option>
+                    <option value="quarter" {% if date_range == 'quarter' %}selected{% endif %}>This Quarter</option>
+                    <option value="year" {% if date_range == 'year' %}selected{% endif %}>This Year</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Period</label>
+                <div class="fw-bold pt-2 text-muted">{{ period_display }}</div>
+            </div>
+            <div class="col-md-3">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="fas fa-filter"></i> Apply Filters
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card bg-success text-white summary-card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-title opacity-75">Total Money Injected</h6>
+                            <h2 class="mb-0">KES {{ total_injected|floatformat:2|intcomma }}</h2>
+                            <small class="opacity-75">{{ total_injection_count }} total injections</small>
+                        </div>
+                        <i class="fas fa-money-bill-wave fa-3x opacity-25"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card bg-info text-white summary-card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-title opacity-75">Average per Injection</h6>
+                            <h2 class="mb-0">KES {{ average_injection|floatformat:2|intcomma }}</h2>
+                            <small class="opacity-75">Average amount per transaction</small>
+                        </div>
+                        <i class="fas fa-chart-line fa-3x opacity-25"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Injections by Account Table -->
+    <div class="card mb-4">
+        <div class="card-header bg-white">
+            <h6 class="mb-0">
+                <i class="fas fa-chart-bar text-primary"></i> Injections by Account
+            </h6>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover table-injections mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Shop</th>
+                            <th>Account Type</th>
+                            <th>Account Name</th>
+                            <th>Account Number</th>
+                            <th class="text-center">Injections</th>
+                            <th class="text-end">Total Injected</th>
+                            <th class="text-end">Current Balance</th>
+                         </tr>
+                    </thead>
+                    <tbody>
+                        {% for inj in injections_by_account %}
+                        <tr class="injection-row">
+                            <td>
+                                <strong>{{ inj.shop }}</strong>
+                            </td>
+                            <td>
+                                {% if inj.account_type == 'M-Pesa' %}
+                                    <span class="badge bg-success">M-Pesa</span>
+                                    <br>
+                                    <small class="text-muted">{{ inj.sub_type|title }}</small>
+                                {% elif inj.account_type == 'Bank' %}
+                                    <span class="badge bg-primary">Bank</span>
+                                    <br>
+                                    <small class="text-muted">{{ inj.sub_type }}</small>
+                                {% else %}
+                                    <span class="badge bg-warning text-dark">Cash</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <strong>{{ inj.account_name }}</strong>
+                            </td>
+                            <td>
+                                <code>{{ inj.account_number }}</code>
+                            </td>
+                            <td class="text-center">
+                                <span class="badge bg-secondary">{{ inj.count }} times</span>
+                            </td>
+                            <td class="text-end">
+                                <span class="amount-positive">+ KES {{ inj.total|floatformat:2|intcomma }}</span>
+                            </td>
+                            <td class="text-end">
+                                <strong>KES {{ inj.current_balance|floatformat:2|intcomma }}</strong>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center py-5">
+                                <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                                <p class="text-muted mb-0">No injections found for this period</p>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    {% if injections_by_account %}
+                    <tfoot class="table-light">
+                        <tr>
+                            <th colspan="5" class="text-end">Total:</th>
+                            <th class="text-end text-success">KES {{ total_injected|floatformat:2|intcomma }}</th>
+                            <th></th>
+                        </tr>
+                    </tfoot>
+                    {% endif %}
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Individual Transactions -->
+    <div class="card">
+        <div class="card-header bg-white">
+            <h6 class="mb-0">
+                <i class="fas fa-list text-primary"></i> Individual Injection Transactions
+            </h6>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover table-injections mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Date & Time</th>
+                            <th>Account Type</th>
+                            <th>Account</th>
+                            <th>Amount</th>
+                            <th>Reason</th>
+                            <th>Reference</th>
+                            <th>Created By</th>
+                            <th>Status</th>
+                         </tr>
+                    </thead>
+                    <tbody>
+                        {% for trans in individual_transactions %}
+                        <tr>
+                            <td>
+                                <small>{{ trans.created_at|date:"Y-m-d" }}</small>
+                                <br>
+                                <small class="text-muted">{{ trans.created_at|date:"H:i" }}</small>
+                            </td>
+                            <td>
+                                {% if trans.account_type == 'mpesa' %}
+                                    <span class="badge bg-success">M-Pesa</span>
+                                {% elif trans.account_type == 'bank' %}
+                                    <span class="badge bg-primary">Bank</span>
+                                {% else %}
+                                    <span class="badge bg-warning text-dark">Cash</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if trans.mpesa_account %}
+                                    <strong>{{ trans.mpesa_account.account_name }}</strong>
+                                    <br>
+                                    <small class="text-muted">{{ trans.mpesa_account.account_number }}</small>
+                                {% elif trans.bank_account %}
+                                    <strong>{{ trans.bank_account.bank_name }}</strong>
+                                    <br>
+                                    <small class="text-muted">{{ trans.bank_account.account_name }}</small>
+                                {% elif trans.cash_account %}
+                                    <strong>{{ trans.cash_account.account_name }}</strong>
+                                {% endif %}
+                            </td>
+                            <td class="amount-positive">
+                                + KES {{ trans.amount|floatformat:2|intcomma }}
+                            </td>
+                            <td>
+                                <small>{{ trans.reason|truncatechars:40 }}</small>
+                            </td>
+                            <td>
+                                <code>{{ trans.reference_number|default:"-" }}</code>
+                            </td>
+                            <td>
+                                <small>{{ trans.created_by.username }}</small>
+                            </td>
+                            <td>
+                                {% if trans.is_approved %}
+                                    <span class="badge bg-success">Approved</span>
+                                {% else %}
+                                    <span class="badge bg-warning">Pending</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="8" class="text-center py-5">
+                                <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                                <p class="text-muted mb-0">No individual transactions found</p>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+    // Add click handler for injection rows to show details
+    document.querySelectorAll('.injection-row').forEach(row => {
+        row.addEventListener('click', () => {
+            // You can add modal popup with more details here
+            console.log('Row clicked');
+        });
+    });
+</script>
+{% endblock %}
+{% endblock %}

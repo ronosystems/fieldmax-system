@@ -1,0 +1,196 @@
+{% extends "shops/base.html" %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}M-Pesa Adjustments{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0">
+                <i class="fas fa-exchange-alt text-primary"></i> 
+                M-Pesa Adjustments
+            </h1>
+            <p class="text-muted mb-0">Track all manual injections and withdrawals</p>
+        </div>
+        <div>
+            <a href="{% url 'shops:mpesa_adjustment_create' %}" class="btn btn-primary">
+                <i class="fas fa-plus"></i> New Adjustment
+            </a>
+            <a href="{% url 'shops:mpesa_adjustments_pending' %}" class="btn btn-warning">
+                <i class="fas fa-clock"></i> Pending Approvals ({{ pending_approvals }})
+            </a>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Total Injections</h6>
+                    <h3 class="mb-0">KES {{ total_injections|floatformat:2|intcomma }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-danger text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Total Withdrawals</h6>
+                    <h3 class="mb-0">KES {{ total_withdrawals|floatformat:2|intcomma }}</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Net Change</h6>
+                    <h3 class="mb-0">KES {{ net_change|floatformat:2|intcomma }}</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Shop</label>
+                    <select name="shop" class="form-select">
+                        <option value="">All Shops</option>
+                        {% for shop in shops %}
+                            <option value="{{ shop.id }}" {% if selected_shop|stringformat:"s" == shop.id|stringformat:"s" %}selected{% endif %}>
+                                {{ shop.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Type</label>
+                    <select name="type" class="form-select">
+                        <option value="">All Types</option>
+                        <option value="injection" {% if selected_type == 'injection' %}selected{% endif %}>Injection</option>
+                        <option value="withdrawal" {% if selected_type == 'withdrawal' %}selected{% endif %}>Withdrawal</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Status</label>
+                    <select name="approved" class="form-select">
+                        <option value="">All</option>
+                        <option value="true" {% if selected_approved == 'true' %}selected{% endif %}>Approved</option>
+                        <option value="false" {% if selected_approved == 'false' %}selected{% endif %}>Pending</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">From Date</label>
+                    <input type="date" name="from_date" class="form-control" value="{{ from_date }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">To Date</label>
+                    <input type="date" name="to_date" class="form-control" value="{{ to_date }}">
+                </div>
+                <div class="col-md-1">
+                    <label class="form-label">&nbsp;</label>
+                    <button type="submit" class="btn btn-primary w-100">Filter</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Adjustments Table -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">Adjustment History</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Date</th>
+                            <th>Shop</th>
+                            <th>Account</th>
+                            <th>Type</th>
+                            <th>Amount</th>
+                            <th>Before</th>
+                            <th>After</th>
+                            <th>Reason</th>
+                            <th>Status</th>
+                            <th>Created By</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for adj in adjustments %}
+                        <tr>
+                            <td>{{ adj.created_at|date:"Y-m-d H:i" }}</td>
+                            <td>{{ adj.mpesa_account.shop.name }}</td>
+                            <td>{{ adj.mpesa_account.account_name }}</td>
+                            <td>
+                                {% if adj.adjustment_type == 'injection' %}
+                                    <span class="badge bg-success">Injection</span>
+                                {% else %}
+                                    <span class="badge bg-warning">Withdrawal</span>
+                                {% endif %}
+                            </td>
+                            <td class="{% if adj.adjustment_type == 'injection' %}text-success{% else %}text-danger{% endif %}">
+                                {% if adj.adjustment_type == 'injection' %}+{% else %}-{% endif %}
+                                KES {{ adj.amount|floatformat:2|intcomma }}
+                            </td>
+                            <td>KES {{ adj.balance_before|floatformat:2|intcomma }}</td>
+                            <td>KES {{ adj.balance_after|floatformat:2|intcomma }}</td>
+                            <td>{{ adj.reason|truncatechars:50 }}</td>
+                            <td>
+                                {% if adj.is_approved %}
+                                    <span class="badge bg-success">Approved</span>
+                                {% else %}
+                                    <span class="badge bg-warning">Pending</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ adj.created_by.username }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="10" class="text-center py-4">
+                                <i class="fas fa-inbox fa-2x text-muted mb-2 d-block"></i>
+                                No adjustments found
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% if adjustments.has_other_pages %}
+        <div class="card-footer">
+            <nav aria-label="Page navigation">
+                <ul class="pagination justify-content-center mb-0">
+                    {% if adjustments.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ adjustments.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Previous</a>
+                        </li>
+                    {% endif %}
+                    
+                    {% for num in adjustments.paginator.page_range %}
+                        {% if adjustments.number == num %}
+                            <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                        {% elif num > adjustments.number|add:'-3' and num < adjustments.number|add:'3' %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ num }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">{{ num }}</a>
+                            </li>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if adjustments.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ adjustments.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}">Next</a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

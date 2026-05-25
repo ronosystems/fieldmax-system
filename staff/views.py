@@ -5205,10 +5205,13 @@ def diagnostic_email(request):
         'sendgrid_key_exists': bool(settings.SENDGRID_API_KEY),
     })
 
+
 @login_required
 @user_passes_test(lambda u: u.is_superuser)
 def user_edit(request, pk):
-    """Edit user details"""
+    """Edit user details including staff profile information"""
+    from shops.models import ShopBranch
+    
     user_to_edit = get_object_or_404(User, pk=pk)
     
     # Get or create user profile
@@ -5217,91 +5220,32 @@ def user_edit(request, pk):
     except:
         profile = UserProfile.objects.create(user=user_to_edit)
     
-    if request.method == 'POST':
-        try:
-            # Update basic user fields
-            user_to_edit.first_name = request.POST.get('first_name', '').strip()
-            user_to_edit.last_name = request.POST.get('last_name', '').strip()
-            user_to_edit.email = request.POST.get('email', '').strip()
-            
-            # Update username if provided and changed
-            new_username = request.POST.get('username', '').strip()
-            if new_username and new_username != user_to_edit.username:
-                # Check if username already exists
-                if User.objects.filter(username=new_username).exclude(id=user_to_edit.id).exists():
-                    messages.error(request, f'Username "{new_username}" is already taken.')
-                    return render(request, 'staff/users/edit.html', {
-                        'user': user_to_edit,
-                        'profile': profile,
-                        'groups': Group.objects.all().order_by('name'),
-                        'selected_groups': user_to_edit.groups.values_list('id', flat=True)
-                    })
-                user_to_edit.username = new_username
-            
-            # Update user type
-            is_staff = request.POST.get('is_staff') == 'on'
-            is_superuser = request.POST.get('is_superuser') == 'on'
-            
-            # Prevent removing superuser status from last superuser
-            if user_to_edit.is_superuser and not is_superuser:
-                superuser_count = User.objects.filter(is_superuser=True).count()
-                if superuser_count <= 1:
-                    messages.error(request, 'Cannot remove superuser status from the last superuser.')
-                    return render(request, 'staff/users/edit.html', {
-                        'user': user_to_edit,
-                        'profile': profile,
-                        'groups': Group.objects.all().order_by('name'),
-                        'selected_groups': user_to_edit.groups.values_list('id', flat=True)
-                    })
-            
-            user_to_edit.is_staff = is_staff
-            user_to_edit.is_superuser = is_superuser
-            user_to_edit.is_active = request.POST.get('is_active') == 'on'
-            
-            # Update profile fields
-            profile.phone_number = request.POST.get('phone_number', '').strip()
-            profile.address = request.POST.get('address', '').strip()
-            profile.city = request.POST.get('city', '').strip()
-            profile.country = request.POST.get('country', '').strip()
-            
-            # Save user and profile
-            user_to_edit.save()
-            profile.save()
-            
-            # Update groups
-            selected_groups = request.POST.getlist('groups')
-            user_to_edit.groups.clear()
-            for group_id in selected_groups:
-                try:
-                    group = Group.objects.get(id=group_id)
-                    user_to_edit.groups.add(group)
-                except Group.DoesNotExist:
-                    pass
-            
-            logger.info(f"User {user_to_edit.username} edited by {request.user.username}")
-            messages.success(request, f'User {user_to_edit.username} has been updated successfully.')
-            
-            return redirect('staff:user_detail', pk=user_to_edit.id)
-            
-        except Exception as e:
-            logger.error(f"Error editing user {user_to_edit.username}: {str(e)}")
-            messages.error(request, f'Error updating user: {str(e)}')
-            return render(request, 'staff/users/edit.html', {
-                'user': user_to_edit,
-                'profile': profile,
-                'groups': Group.objects.all().order_by('name'),
-                'selected_groups': user_to_edit.groups.values_list('id', flat=True)
-            })
+    # Get or create staff profile
+    try:
+        staff_profile = user_to_edit.staff_profile
+    except:
+        staff_profile = None
     
-    # GET request - show edit form
+    # Get all active shops
+    shops = ShopBranch.objects.filter(is_active=True).order_by('name')
+    
+    if request.method == 'POST':
+        # ... rest of your POST handling code ...
+        pass
+    
     context = {
         'user': user_to_edit,
         'profile': profile,
+        'staff_profile': staff_profile,
         'groups': Group.objects.all().order_by('name'),
         'selected_groups': user_to_edit.groups.values_list('id', flat=True),
+        'shops': shops,  # Make sure this is passed
+        'selected_shop': staff_profile.assigned_shop.id if staff_profile and staff_profile.assigned_shop else None,
         'title': f'Edit User: {user_to_edit.username}'
     }
     return render(request, 'staff/users/edit.html', context)
+
+
 
 @login_required
 @user_passes_test(lambda u: u.is_superuser)

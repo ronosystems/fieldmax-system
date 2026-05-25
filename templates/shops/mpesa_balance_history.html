@@ -1,0 +1,160 @@
+{% extends "shops/base.html" %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}Balance History - {{ account.account_name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0">
+                <i class="fas fa-history text-info"></i> 
+                Balance History
+            </h1>
+            <p class="text-muted mb-0">{{ account.account_name }} - {{ account.shop.name }}</p>
+        </div>
+        <div>
+            <a href="{% url 'shops:mpesa_accounts_detail' account.id %}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Back to Account
+            </a>
+        </div>
+    </div>
+
+    <!-- Current Balance Card -->
+    <div class="card bg-primary text-white mb-4">
+        <div class="card-body">
+            <h6 class="card-title">Current Balance</h6>
+            <h2 class="mb-0">KES {{ account.current_balance|floatformat:2|intcomma }}</h2>
+        </div>
+    </div>
+
+    <!-- Summary Stats -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Total Injections</h6>
+                    <h3 class="mb-0">KES {{ total_injections|floatformat:2|intcomma }}</h3>
+                    <small>{{ account.total_injections_count|default:0 }} transactions</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-danger text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Total Withdrawals</h6>
+                    <h3 class="mb-0">KES {{ total_withdrawals|floatformat:2|intcomma }}</h3>
+                    <small>{{ account.total_manual_withdrawals_count|default:0 }} transactions</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <h6 class="card-title">Total Sales</h6>
+                    <h3 class="mb-0">KES {{ total_sales|floatformat:2|intcomma }}</h3>
+                    <small>{{ account.total_sale_count }} transactions</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- History Table -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">Transaction History (Last 50 entries)</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Date</th>
+                            <th>Transaction Type</th>
+                            <th>Amount</th>
+                            <th>Change</th>
+                            <th>Balance After</th>
+                            <th>Reference</th>
+                            <th>Reason/Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for entry in history %}
+                        <tr>
+                            <td>{{ entry.date_display }}</td>
+                            <td>
+                                {% if 'Manual Injection' in entry.type %}
+                                    <span class="badge bg-success">
+                                        <i class="fas fa-plus-circle"></i> {{ entry.type }}
+                                    </span>
+                                {% elif 'Manual Withdrawal' in entry.type %}
+                                    <span class="badge bg-warning">
+                                        <i class="fas fa-minus-circle"></i> {{ entry.type }}
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-info">
+                                        <i class="fas fa-chart-line"></i> {{ entry.type }}
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td>KES {{ entry.amount|floatformat:2|intcomma }}</td>
+                            <td>
+                                {% if entry.change_type == 'positive' %}
+                                    <span class="text-success">
+                                        <i class="fas fa-arrow-up"></i> +KES {{ entry.amount_change|floatformat:2|intcomma }}
+                                    </span>
+                                {% elif entry.change_type == 'negative' %}
+                                    <span class="text-danger">
+                                        <i class="fas fa-arrow-down"></i> KES {{ entry.amount_change|floatformat:2|intcomma }}
+                                    </span>
+                                {% elif entry.amount_change is not None %}
+                                    {% if entry.amount_change > 0 %}
+                                        <span class="text-success">
+                                            <i class="fas fa-arrow-up"></i> +KES {{ entry.amount_change|floatformat:2|intcomma }}
+                                        </span>
+                                    {% elif entry.amount_change < 0 %}
+                                        <span class="text-danger">
+                                            <i class="fas fa-arrow-down"></i> KES {{ entry.amount_change|floatformat:2|intcomma }}
+                                        </span>
+                                    {% else %}
+                                        <span class="text-muted">
+                                            <i class="fas fa-minus"></i> No change
+                                        </span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="text-muted">
+                                        <i class="fas fa-question-circle"></i> First record
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td class="fw-bold">KES {{ entry.balance_after|floatformat:2|intcomma }}</td>
+                            <td><small>{{ entry.reference|default:"-" }}</small></td>
+                            <td><small>{{ entry.reason|truncatechars:60 }}</small></td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center py-4">
+                                <i class="fas fa-inbox fa-2x text-muted mb-2 d-block"></i>
+                                No history found
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Note -->
+    <div class="alert alert-info mt-3">
+        <i class="fas fa-info-circle"></i>
+        <strong>Note:</strong>
+        <ul class="mb-0 mt-2">
+            <li><strong>Manual Injections/Withdrawals</strong> - Direct adjustments made by staff/management</li>
+            <li><strong>Daily Reports</strong> - Closing balances from daily shop reports</li>
+            <li><strong>Sales</strong> - Transactions from M-Pesa payments (shown in total sales above)</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}

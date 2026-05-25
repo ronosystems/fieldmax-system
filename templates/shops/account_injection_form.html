@@ -1,0 +1,564 @@
+{% extends "shops/base.html" %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}Create Account Injection{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-card {
+        border: none;
+        border-radius: 12px;
+        box-shadow: 0 0 20px rgba(0,0,0,0.08);
+        overflow: hidden;
+        height: 100%;
+    }
+    .form-header {
+        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        color: white;
+        padding: 0.75rem 1rem;
+    }
+    .form-control, .form-select {
+        border-radius: 8px;
+        border: 1px solid #e0e0e0;
+        padding: 0.4rem 0.6rem;
+        font-size: 0.85rem;
+    }
+    .form-control:focus, .form-select:focus {
+        border-color: #11998e;
+        box-shadow: 0 0 0 0.2rem rgba(17, 153, 142, 0.1);
+    }
+    .form-label {
+        font-weight: 600;
+        margin-bottom: 0.2rem;
+        color: #333;
+        font-size: 0.8rem;
+    }
+    .btn-submit {
+        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        border: none;
+        border-radius: 8px;
+        padding: 0.4rem 1rem;
+        font-weight: 600;
+        width: 100%;
+        font-size: 0.85rem;
+    }
+    .btn-submit:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(17, 153, 142, 0.4);
+    }
+    .btn-cancel {
+        border-radius: 8px;
+        padding: 0.4rem 1rem;
+        font-weight: 600;
+        width: 100%;
+        font-size: 0.85rem;
+    }
+    .required-field::after {
+        content: "*";
+        color: red;
+        margin-left: 4px;
+    }
+    .info-card {
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        border: none;
+        border-radius: 12px;
+        height: 100%;
+    }
+    .summary-card {
+        background: white;
+        border-radius: 10px;
+        padding: 0.5rem;
+        margin-bottom: 0.5rem;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        text-align: center;
+    }
+    .stats-card {
+        background: white;
+        border-radius: 10px;
+        padding: 0.5rem;
+        text-align: center;
+        margin-bottom: 0.5rem;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+    .stats-card:hover {
+        transform: translateY(-2px);
+    }
+    .stats-card.active {
+        border: 2px solid #11998e;
+        background: #f0fdf4;
+    }
+    .stats-number {
+        font-size: 1rem;
+        font-weight: bold;
+    }
+    .stats-label {
+        font-size: 0.65rem;
+        color: #666;
+    }
+    .account-badge {
+        display: inline-block;
+        padding: 0.3rem 0.6rem;
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 0.7rem;
+        margin-bottom: 0.3rem;
+    }
+    .account-badge.mpesa { background: #d4edda; color: #155724; }
+    .account-badge.bank { background: #d1ecf1; color: #0c5460; }
+    .account-badge.cash { background: #fff3cd; color: #856404; }
+    .quick-amount-btn {
+        padding: 0.15rem 0.4rem;
+        font-size: 0.65rem;
+        margin: 0.1rem;
+    }
+    .expected-result {
+        background: #f0fdf4;
+        border-radius: 8px;
+        padding: 0.5rem;
+        margin-bottom: 0.5rem;
+    }
+    .expected-result hr {
+        margin: 0.3rem 0;
+    }
+    /* Animations */
+    @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in-up { animation: fadeInUp 0.5s ease-out; }
+    .right-column { animation: fadeInUp 0.5s ease-out 0.2s both; }
+    
+    /* Reduced spacing */
+    .mb-3 { margin-bottom: 0.5rem !important; }
+    .mb-4 { margin-bottom: 0.5rem !important; }
+    .mt-3 { margin-top: 0.5rem !important; }
+    .mt-4 { margin-top: 0.5rem !important; }
+    .py-4 { padding-top: 0.5rem !important; padding-bottom: 0.5rem !important; }
+    .p-4 { padding: 0.75rem !important; }
+    .gap-3 { gap: 0.5rem !important; }
+    .me-3 { margin-right: 0.5rem !important; }
+    .mb-2 { margin-bottom: 0.3rem !important; }
+    .mt-2 { margin-top: 0.3rem !important; }
+    .btn-sm { padding: 0.2rem 0.4rem; font-size: 0.7rem; }
+    
+    body { overflow: hidden; }
+    .container-fluid { height: 100vh; overflow-y: auto; }
+    .container-fluid::-webkit-scrollbar { width: 6px; }
+    .container-fluid::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 3px; }
+    .container-fluid::-webkit-scrollbar-thumb { background: #888; border-radius: 3px; }
+    
+    .account-type-option {
+        cursor: pointer;
+        transition: all 0.3s;
+        padding: 0.5rem !important;
+    }
+    .account-type-option i { font-size: 1.25rem !important; }
+    .account-type-option .fw-bold { font-size: 0.8rem; }
+    .account-type-option small { font-size: 0.65rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-2 animate-fade-in-up">
+    <!-- Header - Compressed -->
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <div>
+            <h5 class="mb-0">
+                <i class="fas fa-plus-circle text-success"></i> Create Account Injection
+            </h5>
+            <small class="text-muted">Add money to M-Pesa, Bank, or Cash accounts</small>
+        </div>
+        <div>
+            <a href="{% url 'shops:account_injections_report' %}" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-arrow-left"></i> Back
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- LEFT COLUMN - Form -->
+        <div class="col-lg-7">
+            <div class="card form-card">
+                <div class="form-header">
+                    <div class="d-flex align-items-center">
+                        <div class="me-2">
+                            <i class="fas fa-plus-circle"></i>
+                        </div>
+                        <div>
+                            <h6 class="mb-0">Injection Details</h6>
+                            <small class="opacity-75">Fill in the details below</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card-body p-2">
+                    <form method="post" id="injectionForm">
+                        {% csrf_token %}
+                        
+                        {% if form.non_field_errors %}
+                            <div class="alert alert-danger alert-custom mb-2">
+                                {% for error in form.non_field_errors %}
+                                    <i class="fas fa-exclamation-circle"></i> {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                        
+                        <!-- Account Type Selection - Visual Cards -->
+                        <div class="mb-2">
+                            <label class="form-label required-field">
+                                <i class="fas fa-layer-group me-1"></i>Select Account Type
+                            </label>
+                            <div class="row g-1">
+                                <div class="col-4">
+                                    <div class="account-type-option card text-center p-2" data-type="mpesa">
+                                        <i class="fas fa-mobile-alt text-success mb-1"></i>
+                                        <div class="fw-bold small">M-Pesa</div>
+                                        <small class="text-muted">Mobile</small>
+                                    </div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="account-type-option card text-center p-2" data-type="bank">
+                                        <i class="fas fa-university text-primary mb-1"></i>
+                                        <div class="fw-bold small">Bank</div>
+                                        <small class="text-muted">Account</small>
+                                    </div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="account-type-option card text-center p-2" data-type="cash">
+                                        <i class="fas fa-money-bill text-warning mb-1"></i>
+                                        <div class="fw-bold small">Cash</div>
+                                        <small class="text-muted">Physical</small>
+                                    </div>
+                                </div>
+                            </div>
+                            {{ form.account_type }}
+                        </div>
+                        
+                        <!-- M-Pesa Account Selection -->
+                        <div class="mb-2 account-selector" id="mpesa-selector" style="display: none;">
+                            <label class="form-label required-field">
+                                <i class="fas fa-mobile-alt me-1"></i>Select M-Pesa Account
+                            </label>
+                            {{ form.mpesa_account }}
+                            <div class="form-text small" id="mpesaBalanceInfo"></div>
+                        </div>
+                        
+                        <!-- Bank Account Selection -->
+                        <div class="mb-2 account-selector" id="bank-selector" style="display: none;">
+                            <label class="form-label required-field">
+                                <i class="fas fa-university me-1"></i>Select Bank Account
+                            </label>
+                            {{ form.bank_account }}
+                            <div class="form-text small" id="bankBalanceInfo"></div>
+                        </div>
+                        
+                        <!-- Cash Account - No selection needed -->
+                        <div class="mb-2 account-selector" id="cash-selector" style="display: none;">
+                            <div class="alert alert-info py-1 mb-0 small">
+                                <i class="fas fa-info-circle"></i> <strong>Cash Account:</strong> Main Cash - Physical cash in drawer
+                            </div>
+                        </div>
+                        
+                        <!-- Amount with Quick Amounts -->
+                        <div class="mb-2">
+                            <label class="form-label required-field">
+                                <i class="fas fa-coins me-1"></i>Amount (KES)
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light" style="padding: 0.3rem 0.5rem;">KES</span>
+                                {{ form.amount }}
+                            </div>
+                            <div class="quick-amounts mt-1">
+                                <small class="text-muted">Quick:</small>
+                                <button type="button" class="btn btn-outline-secondary btn-sm quick-amount-btn" data-amount="1000">1K</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm quick-amount-btn" data-amount="2000">2K</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm quick-amount-btn" data-amount="5000">5K</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm quick-amount-btn" data-amount="10000">10K</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm quick-amount-btn" data-amount="20000">20K</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm quick-amount-btn" data-amount="50000">50K</button>
+                            </div>
+                        </div>
+                        
+                        <!-- Reference Number -->
+                        <div class="mb-2">
+                            <label class="form-label">
+                                <i class="fas fa-hashtag me-1"></i>Reference Number
+                            </label>
+                            {{ form.reference_number }}
+                        </div>
+                        
+                        <!-- Reason -->
+                        <div class="mb-2">
+                            <label class="form-label required-field">
+                                <i class="fas fa-comment me-1"></i>Reason
+                            </label>
+                            {{ form.reason }}
+                        </div>
+                        
+                        <!-- Notes -->
+                        <div class="mb-2">
+                            <label class="form-label">
+                                <i class="fas fa-sticky-note me-1"></i>Notes
+                            </label>
+                            {{ form.notes }}
+                        </div>
+                        
+                        <!-- Expected Result Preview -->
+                        <div class="expected-result mb-2">
+                            <div class="d-flex justify-content-between mb-1">
+                                <small>Current Balance:</small>
+                                <strong id="currentBalanceDisplay">KES 0.00</strong>
+                            </div>
+                            <div class="d-flex justify-content-between mb-1 text-success">
+                                <small>+ Injection Amount:</small>
+                                <strong id="injectionAmountDisplay">KES 0.00</strong>
+                            </div>
+                            <hr>
+                            <div class="d-flex justify-content-between">
+                                <small>New Balance:</small>
+                                <strong class="text-success" id="newBalanceDisplay">KES 0.00</strong>
+                            </div>
+                        </div>
+                        
+                        <!-- Submit Buttons -->
+                        <div class="d-flex gap-2 mt-2">
+                            <a href="{% url 'shops:account_injections_report' %}" class="btn btn-secondary btn-cancel">
+                                <i class="fas fa-times"></i> Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary btn-submit" id="submitBtn">
+                                <i class="fas fa-check"></i> Confirm
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT COLUMN - Information & Guidelines -->
+        <div class="col-lg-5 right-column">
+            <!-- Quick Stats -->
+            <div class="row g-1 mb-2">
+                <div class="col-6">
+                    <div class="stats-card">
+                        <i class="fas fa-chart-line text-success mb-1"></i>
+                        <div class="stats-label">Today's Injections</div>
+                        <div class="stats-number text-success" id="todayInjections">KES 0</div>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="stats-card">
+                        <i class="fas fa-calendar-week text-primary mb-1"></i>
+                        <div class="stats-label">This Month</div>
+                        <div class="stats-number text-primary" id="monthInjections">KES 0</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Account Type Information Badges -->
+            <div class="card summary-card mb-2">
+                <div class="card-header bg-white border-0 pt-1 pb-0">
+                    <h6 class="mb-0 small">
+                        <i class="fas fa-info-circle text-primary"></i> Account Info
+                    </h6>
+                </div>
+                <div class="card-body p-1">
+                    <div class="account-badge mpesa w-100 text-center" id="mpesaInfo" style="display: none;">
+                        <i class="fas fa-mobile-alt"></i> M-Pesa Account
+                    </div>
+                    <div class="account-badge bank w-100 text-center" id="bankInfo" style="display: none;">
+                        <i class="fas fa-university"></i> Bank Account
+                    </div>
+                    <div class="account-badge cash w-100 text-center" id="cashInfo" style="display: none;">
+                        <i class="fas fa-money-bill"></i> Cash Account
+                    </div>
+                </div>
+            </div>
+
+            <!-- Warning Message -->
+            <div class="alert alert-warning alert-custom mb-2 py-1 small">
+                <div class="d-flex">
+                    <div class="me-2"><i class="fas fa-exclamation-triangle"></i></div>
+                    <div>
+                        {% if not request.user.is_superuser and not request.user.groups.filter.name == 'manager' %}
+                            Requires manager approval
+                        {% else %}
+                            Applied immediately - double-check amount
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Guidelines Card - Compressed -->
+            <div class="card info-card">
+                <div class="card-body p-2">
+                    <h6 class="mb-1 small">
+                        <i class="fas fa-gavel text-primary"></i> Quick Guidelines
+                    </h6>
+                    <div class="row small">
+                        <div class="col-6">
+                            <strong class="text-success">Injections:</strong>
+                            <ul class="mb-1 ps-3" style="font-size: 0.65rem;">
+                                <li>Add cash float</li>
+                                <li>Owner injection</li>
+                                <li>Correct under-report</li>
+                            </ul>
+                        </div>
+                        <div class="col-6">
+                            <strong class="text-danger">Note:</strong>
+                            <ul class="mb-1 ps-3" style="font-size: 0.65rem;">
+                                <li>Provide clear reason</li>
+                                <li>Keep receipts</li>
+                                <li>Audit trail kept</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <hr class="my-1">
+                    <div class="text-center">
+                        <small class="text-muted">
+                            <i class="fas fa-headset"></i> Contact support
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const accountTypeSelect = document.querySelector('#id_account_type');
+        const mpesaSelector = document.querySelector('#mpesa-selector');
+        const bankSelector = document.querySelector('#bank-selector');
+        const cashSelector = document.querySelector('#cash-selector');
+        const mpesaAccountSelect = document.querySelector('#id_mpesa_account');
+        const bankAccountSelect = document.querySelector('#id_bank_account');
+        const amountInput = document.querySelector('#id_amount');
+        const currentBalanceDisplay = document.querySelector('#currentBalanceDisplay');
+        const injectionAmountDisplay = document.querySelector('#injectionAmountDisplay');
+        const newBalanceDisplay = document.querySelector('#newBalanceDisplay');
+        
+        const mpesaInfo = document.querySelector('#mpesaInfo');
+        const bankInfo = document.querySelector('#bankInfo');
+        const cashInfo = document.querySelector('#cashInfo');
+        
+        const accountOptions = document.querySelectorAll('.account-type-option');
+        
+        function setActiveOption(type) {
+            accountOptions.forEach(opt => {
+                const card = opt;
+                if (opt.getAttribute('data-type') === type) {
+                    card.style.border = '2px solid #11998e';
+                    card.style.background = '#f0fdf4';
+                } else {
+                    card.style.border = '1px solid #e0e0e0';
+                    card.style.background = 'white';
+                }
+            });
+        }
+        
+        accountOptions.forEach(option => {
+            option.addEventListener('click', function() {
+                const type = this.getAttribute('data-type');
+                accountTypeSelect.value = type;
+                setActiveOption(type);
+                toggleSelectors();
+                
+                mpesaInfo.style.display = 'none';
+                bankInfo.style.display = 'none';
+                cashInfo.style.display = 'none';
+                
+                if (type === 'mpesa') mpesaInfo.style.display = 'block';
+                else if (type === 'bank') bankInfo.style.display = 'block';
+                else if (type === 'cash') cashInfo.style.display = 'block';
+            });
+        });
+        
+        function toggleSelectors() {
+            const selectedType = accountTypeSelect.value;
+            mpesaSelector.style.display = 'none';
+            bankSelector.style.display = 'none';
+            cashSelector.style.display = 'none';
+            
+            if (selectedType === 'mpesa') {
+                mpesaSelector.style.display = 'block';
+                fetchAccountBalance('mpesa');
+            } else if (selectedType === 'bank') {
+                bankSelector.style.display = 'block';
+                fetchAccountBalance('bank');
+            } else if (selectedType === 'cash') {
+                cashSelector.style.display = 'block';
+                updateBalanceDisplay(0, 0);
+            }
+        }
+        
+        async function fetchAccountBalance(type) {
+            let accountId = null;
+            if (type === 'mpesa' && mpesaAccountSelect) accountId = mpesaAccountSelect.value;
+            else if (type === 'bank' && bankAccountSelect) accountId = bankAccountSelect.value;
+            
+            if (accountId) {
+                try {
+                    const response = await fetch(`/shops/api/account-balance/?type=${type}&id=${accountId}`);
+                    const data = await response.json();
+                    if (data.success) {
+                        updateBalanceDisplay(parseFloat(data.balance), parseFloat(amountInput.value) || 0);
+                    }
+                } catch (error) { console.error('Error:', error); }
+            }
+        }
+        
+        function updateBalanceDisplay(currentBalance, amount) {
+            currentBalanceDisplay.textContent = `KES ${currentBalance.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+            injectionAmountDisplay.textContent = `KES ${amount.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+            newBalanceDisplay.textContent = `KES ${(currentBalance + amount).toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+        }
+        
+        if (mpesaAccountSelect) mpesaAccountSelect.addEventListener('change', () => fetchAccountBalance('mpesa'));
+        if (bankAccountSelect) bankAccountSelect.addEventListener('change', () => fetchAccountBalance('bank'));
+        
+        if (amountInput) {
+            amountInput.addEventListener('input', function() {
+                const amount = parseFloat(this.value) || 0;
+                const currentBalance = parseFloat(currentBalanceDisplay.textContent.replace('KES ', '').replace(/,/g, '')) || 0;
+                updateBalanceDisplay(currentBalance, amount);
+            });
+        }
+        
+        document.querySelectorAll('.quick-amount-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                if (amountInput) {
+                    amountInput.value = this.getAttribute('data-amount');
+                    amountInput.dispatchEvent(new Event('input'));
+                }
+            });
+        });
+        
+        if (accountTypeSelect.value) setActiveOption(accountTypeSelect.value);
+        else { accountTypeSelect.value = 'mpesa'; setActiveOption('mpesa'); }
+        toggleSelectors();
+        
+        async function fetchInjectionStats() {
+            try {
+                const response = await fetch('/shops/api/injection-stats/');
+                const data = await response.json();
+                if (data.success) {
+                    document.getElementById('todayInjections').textContent = `KES ${data.today_total.toLocaleString()}`;
+                    document.getElementById('monthInjections').textContent = `KES ${data.month_total.toLocaleString()}`;
+                }
+            } catch (error) { console.error('Error:', error); }
+        }
+        fetchInjectionStats();
+        
+        document.getElementById('injectionForm').addEventListener('submit', function(e) {
+            const amount = amountInput.value;
+            if (amount && parseFloat(amount) > 0) {
+                return confirm(`Inject KES ${parseFloat(amount).toLocaleString()}? This cannot be undone.`);
+            }
+            return true;
+        });
+    });
+</script>
+{% endblock %}
