@@ -1,0 +1,261 @@
+{% extends 'shops/base.html' %}
+{% load static %}
+
+{% block title %}Expenses Management - FieldMax{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-money-bill-wave me-2"></i>Expenses Management</h5>
+                    <div>
+                        <span class="badge bg-light text-dark me-2">
+                            <i class="fas fa-chart-line"></i> Total Expenses: KSH {{ total_expenses|floatformat:2 }}
+                        </span>
+                        <span class="badge bg-success">
+                            <i class="fas fa-check-circle"></i> Recovered: KSH {{ total_recovered|floatformat:2 }}
+                        </span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <!-- Filters -->
+                    <div class="row mb-4">
+                        <div class="col-md-3">
+                            <label class="form-label">Date From</label>
+                            <input type="date" id="dateFrom" class="form-control" value="{{ date_from|default:'' }}">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Date To</label>
+                            <input type="date" id="dateTo" class="form-control" value="{{ date_to|default:'' }}">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Category</label>
+                            <select id="categoryFilter" class="form-select">
+                                <option value="">All Categories</option>
+                                {% for cat in categories %}
+                                <option value="{{ cat }}" {% if selected_category == cat %}selected{% endif %}>{{ cat }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3 d-flex align-items-end">
+                            <button class="btn btn-primary w-100" id="filterBtn">
+                                <i class="fas fa-search me-2"></i>Filter
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Expenses Table -->
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover" id="expensesTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Type</th>
+                                    <th>Description</th>
+                                    <th>Amount (KSH)</th>
+                                    <th>Reported By</th>
+                                    <th>Status</th>
+                                    <th class="text-center">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="expensesTableBody">
+                                {% for expense in expenses %}
+                                <tr data-expense-id="{{ expense.id }}" data-expense-amount="{{ expense.amount }}">
+                                    <td>{{ expense.daily_report.report_date|date:"Y-m-d" }}</td>
+                                    <td>
+                                        <span class="badge bg-secondary">{{ expense.expense_category|default:"General" }}</span>
+                                    </td>
+                                    <td>{{ expense.description|truncatechars:50 }}</td>
+                                    <td class="text-end fw-bold text-danger">KSH {{ expense.amount|floatformat:2 }}</td>
+                                    <td>
+                                        <small>
+                                            <i class="fas fa-user-circle me-1"></i>
+                                            {{ expense.daily_report.submitted_by.get_full_name|default:expense.daily_report.submitted_by.username }}
+                                        </small>
+                                    </td>
+                                    <td>
+                                        {% if expense.is_recovered %}
+                                            <span class="badge bg-success">
+                                                <i class="fas fa-check-circle me-1"></i>Recovered
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-danger">
+                                                <i class="fas fa-clock me-1"></i>Pending Recovery
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center">
+                                        {% if not expense.is_recovered %}
+                                        <button class="btn btn-sm btn-success recover-expense-btn" 
+                                                data-id="{{ expense.id }}"
+                                                data-amount="{{ expense.amount }}"
+                                                data-description="{{ expense.description }}">
+                                            <i class="fas fa-undo-alt me-1"></i>Recover
+                                        </button>
+                                        {% else %}
+                                        <span class="text-muted">
+                                            <i class="fas fa-check-circle me-1 text-success"></i>
+                                            Recovered
+                                        </span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="7" class="text-center py-5">
+                                        <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                                        <p class="text-muted">No expenses found</p>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Pagination -->
+                    {% if expenses.has_other_pages %}
+                    <nav class="mt-4">
+                        <ul class="pagination justify-content-center">
+                            {% if expenses.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ expenses.previous_page_number }}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}{% if selected_category %}&category={{ selected_category }}{% endif %}">
+                                    &laquo; Previous
+                                </a>
+                            </li>
+                            {% endif %}
+                            {% for num in expenses.paginator.page_range %}
+                                {% if expenses.number == num %}
+                                <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                                {% elif num > expenses.number|add:'-3' and num < expenses.number|add:'3' %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ num }}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}{% if selected_category %}&category={{ selected_category }}{% endif %}">
+                                        {{ num }}
+                                    </a>
+                                </li>
+                                {% endif %}
+                            {% endfor %}
+                            {% if expenses.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ expenses.next_page_number }}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}{% if selected_category %}&category={{ selected_category }}{% endif %}">
+                                    Next &raquo;
+                                </a>
+                            </li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- SweetAlert2 for better modal -->
+<link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js"></script>
+
+<!-- Loading Overlay -->
+<div id="loadingOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; text-align: center; padding-top: 20%;">
+    <div class="spinner-border text-light" style="width: 3rem; height: 3rem;"></div>
+    <h5 class="text-light mt-3">Processing...</h5>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    $(document).ready(function() {
+        
+        // Recover expense button click - using SweetAlert for better modal
+        $(document).on('click', '.recover-expense-btn', function() {
+            const expenseId = $(this).data('id');
+            const amount = parseFloat($(this).data('amount')).toFixed(2);
+            const description = $(this).data('description');
+            
+            Swal.fire({
+                title: 'Recover Expense',
+                html: `
+                    <div style="text-align: left;">
+                        <p>Are you sure you want to recover this expense?</p>
+                        <div class="alert alert-info">
+                            <p class="mb-1"><strong>Description:</strong> ${description}</p>
+                            <p class="mb-0"><strong>Amount:</strong> KSH ${amount}</p>
+                        </div>
+                        <p class="text-success"><i class="fas fa-chart-line me-1"></i> This will increase Net Account balance by KSH ${amount}</p>
+                        <div class="mb-3">
+                            <label class="form-label">Recovery Notes (Optional)</label>
+                            <textarea id="recoveryNotesInput" class="form-control" rows="2" placeholder="e.g., Expense reversed, refund received, etc."></textarea>
+                        </div>
+                    </div>
+                `,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#28a745',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: '<i class="fas fa-check-circle me-1"></i> Confirm Recovery',
+                cancelButtonText: '<i class="fas fa-times me-1"></i> Cancel',
+                showLoaderOnConfirm: true,
+                preConfirm: () => {
+                    const notes = document.getElementById('recoveryNotesInput').value;
+                    
+                    return fetch(`/shops/expense/${expenseId}/recover/`, {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': '{{ csrf_token }}',
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: new URLSearchParams({
+                            'notes': notes
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (!data.success) {
+                            throw new Error(data.error || 'Failed to recover expense');
+                        }
+                        return data;
+                    })
+                    .catch(error => {
+                        Swal.showValidationMessage(`Error: ${error.message}`);
+                    });
+                },
+                allowOutsideClick: () => !Swal.isLoading()
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    Swal.fire({
+                        title: 'Recovered!',
+                        text: `Expense of KSH ${amount} has been recovered successfully.`,
+                        icon: 'success',
+                        confirmButtonColor: '#28a745',
+                        confirmButtonText: 'OK'
+                    }).then(() => {
+                        location.reload();
+                    });
+                }
+            });
+        });
+        
+        // Filter functionality
+        $('#filterBtn').click(function() {
+            const dateFrom = $('#dateFrom').val();
+            const dateTo = $('#dateTo').val();
+            const category = $('#categoryFilter').val();
+            
+            let url = '?';
+            if (dateFrom) url += `date_from=${dateFrom}&`;
+            if (dateTo) url += `date_to=${dateTo}&`;
+            if (category) url += `category=${category}&`;
+            
+            window.location.href = url.slice(0, -1);
+        });
+        
+        // Trigger filter on Enter key
+        $('#dateFrom, #dateTo, #categoryFilter').on('keypress', function(e) {
+            if (e.which === 13) {
+                $('#filterBtn').click();
+            }
+        });
+    });
+</script>
+{% endblock %}

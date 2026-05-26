@@ -1551,6 +1551,127 @@ def expense_distribution(request):
 
 
 
+@login_required
+@user_passes_test(is_superuser)
+def expenses_list(request):
+    """List all expenses with recover option"""
+    from django.core.paginator import Paginator
+    from shops.models import ShopExpense, DailyShopReport
+    from decimal import Decimal
+    from django.db.models import Sum, Q
+    
+    # Get filter parameters
+    date_from = request.GET.get('date_from')
+    date_to = request.GET.get('date_to')
+    category = request.GET.get('category')
+    
+    # Base queryset with select_related for performance
+    expenses = ShopExpense.objects.select_related(
+        'daily_report', 
+        'daily_report__submitted_by'
+    ).all().order_by('-daily_report__report_date', '-created_at')
+    
+    # Apply filters
+    if date_from:
+        expenses = expenses.filter(daily_report__report_date__gte=date_from)
+    if date_to:
+        expenses = expenses.filter(daily_report__report_date__lte=date_to)
+    if category:
+        expenses = expenses.filter(expense_category=category)
+    
+    # Calculate totals
+    total_expenses = expenses.aggregate(total=Sum('amount'))['total'] or Decimal('0')
+    total_recovered = expenses.filter(is_recovered=True).aggregate(total=Sum('amount'))['total'] or Decimal('0')
+    
+    # Get unique categories for filter dropdown
+    categories = ShopExpense.objects.exclude(expense_category__isnull=True).exclude(expense_category='').values_list('expense_category', flat=True).distinct()
+    categories = sorted(list(categories))
+    
+    # Pagination
+    paginator = Paginator(expenses, 50)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    context = {
+        'expenses': page_obj,
+        'total_expenses': total_expenses,
+        'total_recovered': total_recovered,
+        'categories': categories,
+        'date_from': date_from,
+        'date_to': date_to,
+        'selected_category': category,
+    }
+    return render(request, 'shops/expenses_list.html', context)
+
+
+
+@login_required
+@user_passes_test(is_superuser)
+def recover_expense(request, expense_id):
+    """Recover an expense - increases Net Account balance"""
+    from finance.models import NetAccount, NetTransaction
+    from shops.models import ShopExpense
+    from decimal import Decimal
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Invalid method'})
+    
+    try:
+        expense = get_object_or_404(ShopExpense, id=expense_id)
+        
+        # Check if already recovered
+        if expense.is_recovered:
+            return JsonResponse({'success': False, 'error': 'Expense already recovered'})
+        
+        notes = request.POST.get('notes', '')
+        recovery_amount = expense.amount
+        
+        # Get Net Account
+        net_account = NetAccount.get_account()
+        
+        # Add the expense amount back to Net Account
+        net_account.balance += recovery_amount
+        net_account.save()
+        
+        # Create NetTransaction record for audit - WITH net_account field
+        NetTransaction.objects.create(
+            net_account=net_account,  # ← Add this required field
+            amount=recovery_amount,
+            transaction_type='credit',
+            category='expense_recovery',
+            description=f'Expense recovery: {expense.description}',
+            reference=f'EXP-REC-{expense.id}',
+            created_by=request.user,
+        )
+        
+        # Mark expense as recovered
+        expense.is_recovered = True
+        expense.recovered_at = timezone.now()
+        expense.recovered_by = request.user
+        expense.recovery_notes = notes
+        expense.save()
+        
+        # Calculate updated totals
+        total_expenses = ShopExpense.objects.aggregate(total=Sum('amount'))['total'] or Decimal('0')
+        total_recovered = ShopExpense.objects.filter(is_recovered=True).aggregate(total=Sum('amount'))['total'] or Decimal('0')
+        
+        logger.info(f"Expense #{expense.id} recovered by {request.user.username}: KES {recovery_amount}")
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Expense recovered successfully',
+            'amount': float(recovery_amount),
+            'total_expenses': float(total_expenses),
+            'total_recovered': float(total_recovered),
+        })
+        
+    except Exception as e:
+        logger.error(f"Error recovering expense: {str(e)}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
 
 
 # ==================== SHOP BRANCH MANAGEMENT ====================

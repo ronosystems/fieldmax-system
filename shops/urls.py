@@ -83,4 +83,6 @@ urlpatterns = [
 
     # ==================== MONTHLY FINANCIAL REPORT ====================
     path('monthly-report/', views.monthly_financial_report, name='monthly_financial_report'),
+    path('expenses/', views.expenses_list, name='expenses_list'),
+    path('expense/<int:expense_id>/recover/', views.recover_expense, name='recover_expense'),
 ]

@@ -364,7 +364,18 @@ class ShopExpense(models.Model):
     
     receipt_number = models.CharField(max_length=50, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    
+    # Add these fields to ShopExpense model
+    is_recovered = models.BooleanField(default=False)
+    recovered_at = models.DateTimeField(null=True, blank=True)
+    recovered_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='recovered_expenses'
+    )
+    recovery_notes = models.TextField(blank=True, null=True)
+  
     class Meta:
         ordering = ['-created_at']
     
