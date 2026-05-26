@@ -104,10 +104,10 @@
         line-height: 1;
     }
 
-    /* Stats Cards - Empty/Simplified */
+    /* Stats Cards - Sales Performance */
     .stats-grid {
         display: grid;
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(3, 1fr);
         gap: 20px;
         margin-bottom: 30px;
     }
@@ -118,12 +118,38 @@
         padding: 20px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.05);
         border-left: 4px solid #667eea;
-        min-height: 100px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        transition: transform 0.2s;
+    }
+
+    .stat-card:hover {
+        transform: translateY(-3px);
+    }
+
+    .stat-title {
+        font-size: 14px;
+        color: #718096;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 10px;
+        font-weight: 700;
+    }
+
+    .stat-value {
+        font-size: 32px;
+        font-weight: 900;
+        color: #2d3748;
+        margin-bottom: 5px;
+    }
+
+    .stat-subtitle {
+        font-size: 12px;
         color: #a0aec0;
-        font-weight: 600;
+    }
+
+    .stat-icon {
+        font-size: 24px;
+        color: #667eea;
+        margin-bottom: 10px;
     }
 
     /* Search Section */
@@ -369,21 +395,6 @@
     .badge-featured {
         background: #ed8936;
         color: white;
-    }
-
-    .product-code {
-        color: #718096;
-        font-size: 13px;
-        margin-bottom: 10px;
-        font-weight: 600;
-    }
-
-    .product-name {
-        font-size: 16px;
-        font-weight: 800;
-        color: #2d3748;
-        margin-bottom: 15px;
-        line-height: 1.4;
     }
 
     .product-sku {
@@ -710,6 +721,28 @@
             </div>
         </div>
 
+        <!-- Sales Performance Stats -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon">📊</div>
+                <div class="stat-title">Today's Sales</div>
+                <div class="stat-value">KSh {{ my_sales_today.total|floatformat:2|default:"0.00" }}</div>
+                <div class="stat-subtitle">{{ my_sales_today.count|default:0 }} Transactions</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">📈</div>
+                <div class="stat-title">This Week</div>
+                <div class="stat-value">KSh {{ my_sales_week.total|floatformat:2|default:"0.00" }}</div>
+                <div class="stat-subtitle">{{ my_sales_week.count|default:0 }} Sales</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">🏆</div>
+                <div class="stat-title">Target Achievement</div>
+                <div class="stat-value">{{ target_achievement|floatformat:1|default:"0" }}%</div>
+                <div class="stat-subtitle">Daily Target: KSh {{ daily_target|floatformat:2 }}</div>
+            </div>
+        </div>
+
         <!-- Alert Messages -->
         <div id="alertContainer"></div>
 
@@ -720,7 +753,7 @@
                     type="text" 
                     id="productSearch" 
                     class="search-input" 
-                    placeholder="Search by Product Code, SKU, IMEI, Barcode, Name, Brand, or Model..."
+                    placeholder="Search by SKU Code, Name, Brand, Model..."
                     autocomplete="off"
                     autofocus
                 >
@@ -728,7 +761,7 @@
             </div>
             <div class="search-hint">
                 <i class="bi bi-info-circle me-1"></i>
-                Try: FSL00200, 123456789012345, Samsung, iPhone, Galaxy, etc. (min. 2 characters)
+                Try: FSL001, Samsung A07, iPhone, etc. (min. 2 characters)
             </div>
         </div>
 
@@ -740,7 +773,7 @@
 
         <!-- Product Display Cards (Shown when product found) -->
         <div class="product-display-grid" id="productDisplay" style="display: none;">
-            <!-- Left Card - Product Info with Larger Values -->
+            <!-- Left Card - Product Info -->
             <div class="info-card">
                 <div class="info-row">
                     <div class="info-label">
@@ -750,19 +783,25 @@
                 </div>
                 <div class="info-row">
                     <div class="info-label">
-                        <i class="bi bi-upc-scan me-2"></i>PRODUCT SKU / IMEI / BARCODE
+                        <i class="bi bi-upc-scan me-2"></i>SKU CODE
                     </div>
                     <div class="info-value small" id="displayProductSku">---</div>
                 </div>
                 <div class="info-row">
                     <div class="info-label">
-                        <i class="bi bi-qr-code me-2"></i>PRODUCT CODE
+                        <i class="bi bi-tag me-2"></i>BRAND / MODEL
                     </div>
-                    <div class="info-value small" id="displayProductCode">---</div>
+                    <div class="info-value small" id="displayProductBrand">---</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">
+                        <i class="bi bi-boxes me-2"></i>STOCK STATUS
+                    </div>
+                    <div class="info-value small" id="displayProductStock">---</div>
                 </div>
             </div>
 
-            <!-- Right Card - Price Display with Larger Price -->
+            <!-- Right Card - Price Display -->
             <div class="price-card">
                 <div class="price-header">
                     <div class="price-header-left active" id="sellingPriceTab" onclick="showSellingPrice()">
@@ -807,8 +846,8 @@
                     <tr>
                         <th>#</th>
                         <th>Product Name</th>
-                        <th>SKU / IMEI / Barcode</th>
-                        <th>Product Code</th>
+                        <th>SKU Code</th>
+                        <th>Brand</th>
                         <th>Price</th>
                     </tr>
                 </thead>
@@ -870,20 +909,11 @@
         document.getElementById('sellingPriceTab').classList.remove('active');
         document.getElementById('bestPriceTab').classList.add('active');
         
-        // Calculate best price
+        // Use best price from product or calculate
         let bestPrice = parseFloat(currentProduct.best_price || 0);
         
-        // If no best price, calculate from buying and selling
         if (bestPrice === 0) {
-            const buyingPrice = parseFloat(currentProduct.buying_price || 0);
-            const sellingPrice = parseFloat(currentProduct.selling_price || 0);
-            
-            if (buyingPrice > 0 && sellingPrice > 0) {
-                const profitMargin = sellingPrice - buyingPrice;
-                bestPrice = buyingPrice + (profitMargin * 0.5);
-            } else {
-                bestPrice = sellingPrice * 0.9;
-            }
+            bestPrice = parseFloat(currentProduct.selling_price || 0);
         }
         
         document.getElementById('displayPriceAmount').textContent = `KSh ${bestPrice.toFixed(2)}`;
@@ -958,13 +988,24 @@
         document.getElementById('productDisplay').style.display = 'grid';
         document.getElementById('noResults').classList.remove('active');
         
-        // Update left card with larger values
+        // Update left card
         document.getElementById('displayProductName').textContent = product.display_name || product.name || '---';
+        document.getElementById('displayProductSku').textContent = product.sku_code || 'N/A';
         
-        const sku = product.sku_value || product.barcode || 'N/A';
-        document.getElementById('displayProductSku').textContent = sku;
+        // Brand and model
+        let brandModel = `${product.brand || ''} ${product.model || ''}`.trim();
+        document.getElementById('displayProductBrand').textContent = brandModel || '---';
         
-        document.getElementById('displayProductCode').textContent = product.product_code || '---';
+        // Stock status
+        let stockText = '';
+        if (product.available_stock > 10) {
+            stockText = `✓ In Stock (${product.available_stock} units)`;
+        } else if (product.available_stock > 0) {
+            stockText = `⚠️ Low Stock (${product.available_stock} units left)`;
+        } else {
+            stockText = '❌ Out of Stock';
+        }
+        document.getElementById('displayProductStock').innerHTML = stockText;
         
         // Reset to selling price
         currentPriceMode = 'selling';
@@ -994,10 +1035,10 @@
             let stockClass = 'stock-available';
             let stockText = 'In Stock';
             
-            if (product.quantity <= 0) {
+            if (product.available_stock <= 0) {
                 stockClass = 'stock-out';
                 stockText = 'Out of Stock';
-            } else if (product.quantity <= 5) {
+            } else if (product.available_stock <= 5) {
                 stockClass = 'stock-low';
                 stockText = 'Low Stock';
             }
@@ -1007,35 +1048,24 @@
                 '<span class="product-badge badge-single"><i class="bi bi-phone"></i> Single</span>' : 
                 '<span class="product-badge badge-bulk"><i class="bi bi-boxes"></i> Bulk</span>';
             
-            // Add featured badge if applicable
-            const featuredBadge = product.is_featured ? 
-                '<span class="product-badge badge-featured"><i class="bi bi-star"></i> Featured</span>' : '';
-            
-            // Format SKU display
-            const skuDisplay = product.sku_value || product.barcode || 'N/A';
-            
             html += `
-                <div class="product-card" onclick="searchByCode('${product.product_code}')">
+                <div class="product-card" onclick="searchByCode('${product.sku_code}')">
                     ${typeBadge}
-                    ${featuredBadge}
-                    <div class="product-code">
-                        <i class="bi bi-upc-scan me-1"></i> ${product.product_code}
+                    <div class="product-sku">
+                        <i class="bi bi-upc-scan me-2"></i> ${product.sku_code}
                     </div>
                     <div class="product-name">
                         ${product.display_name || product.name}
-                    </div>
-                    <div class="product-sku">
-                        <i class="bi bi-upc-scan me-2"></i> ${skuDisplay}
                     </div>
                     <div class="product-price">
                         KSh ${(product.selling_price || 0).toFixed(2)}
                     </div>
                     <div class="product-stock">
                         <span class="stock-badge ${stockClass}">
-                            <i class="bi ${product.quantity > 0 ? 'bi-check-circle' : 'bi-x-circle'} me-1"></i>
+                            <i class="bi ${product.available_stock > 0 ? 'bi-check-circle' : 'bi-x-circle'} me-1"></i>
                             ${stockText}
                         </span>
-                        <span><i class="bi bi-box me-1"></i> ${product.quantity} units</span>
+                        <span><i class="bi bi-box me-1"></i> ${product.available_stock} units</span>
                     </div>
                     ${product.brand ? `<small class="text-muted"><i class="bi bi-tag me-1"></i> ${product.brand} ${product.model || ''}</small>` : ''}
                 </div>
@@ -1049,17 +1079,15 @@
     // RECENT LOOKUPS
     // ============================================
     function saveToRecent(product) {
-        const sku = product.sku_value || product.barcode || 'N/A';
-        
         // Remove duplicates
-        recentLookups = recentLookups.filter(item => item.code !== product.product_code);
+        recentLookups = recentLookups.filter(item => item.sku !== product.sku_code);
         
         // Add to beginning
         recentLookups.unshift({
             id: Date.now(),
             name: product.display_name || product.name,
-            sku: sku,
-            code: product.product_code,
+            sku: product.sku_code,
+            brand: product.brand,
             price: product.selling_price
         });
         
@@ -1085,19 +1113,19 @@
         section.style.display = 'block';
         
         tbody.innerHTML = recentLookups.map((item, index) => `
-            <tr onclick="searchByCode('${item.code}')">
+            <tr onclick="searchByCode('${item.sku}')">
                 <td>${index + 1}</td>
                 <td>${item.name}</td>
                 <td>${item.sku}</td>
-                <td>${item.code}</td>
+                <td>${item.brand || '-'}</td>
                 <td>KSh ${(item.price || 0).toFixed(2)}</td>
             </tr>
         `).join('');
     }
 
-    function searchByCode(code) {
-        document.getElementById('productSearch').value = code;
-        searchProducts(code);
+    function searchByCode(sku) {
+        document.getElementById('productSearch').value = sku;
+        searchProducts(sku);
     }
 
     function clearRecentLookups() {
@@ -1157,7 +1185,7 @@
     document.addEventListener('DOMContentLoaded', function() {
         displayRecentLookups();
         document.getElementById('productSearch').focus();
-        updateTime(); // Initial time update
+        updateTime();
     });
 </script>
 {% endblock %}

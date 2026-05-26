@@ -2070,19 +2070,23 @@ def store_manager_dashboard(request):
     return render(request, 'staff/dashboards/store_manager_dashboard.html', context)
 
 
+
+
 # ============================================
-# SALES AGENT DASHBOARD - WITH PRODUCT LOOKUP
+# SALES AGENT DASHBOARD - WITH PRODUCT LOOKUP (UPDATED FOR SKU SYSTEM)
 # ============================================
 @login_required
 @dashboard_for_role('Sales Agent')
 def sales_agent_dashboard(request):
-    """Dashboard for sales agents with product price lookup"""
+    """Dashboard for sales agents with product price lookup - Updated for SKU system"""
     from sales.models import Sale, SaleItem
     from inventory.models import Product, Category
-    from django.db.models import Sum, Count, Q
+    from django.db.models import Sum, Count, Q, F, Value, DecimalField
+    from django.db.models.functions import Coalesce
     from django.utils import timezone
     from datetime import timedelta
     from django.http import JsonResponse
+    from decimal import Decimal
     import json
     
     # Check if this is an AJAX lookup request
@@ -2095,12 +2099,12 @@ def sales_agent_dashboard(request):
     week_ago = today - timedelta(days=7)
     month_ago = today - timedelta(days=30)
     
-    # My Sales Performance
+    # My Sales Performance - FIXED: Added output_field for Decimal
     my_sales_today = Sale.objects.filter(
         seller=request.user,
         sale_date__date=today
     ).aggregate(
-        total=Sum('total_amount'),
+        total=Coalesce(Sum('total_amount'), Value(Decimal('0.00'), output_field=DecimalField())),
         count=Count('sale_id')
     )
     
@@ -2108,7 +2112,7 @@ def sales_agent_dashboard(request):
         seller=request.user,
         sale_date__date__gte=week_ago
     ).aggregate(
-        total=Sum('total_amount'),
+        total=Coalesce(Sum('total_amount'), Value(Decimal('0.00'), output_field=DecimalField())),
         count=Count('sale_id')
     )
     
@@ -2116,108 +2120,164 @@ def sales_agent_dashboard(request):
         seller=request.user,
         sale_date__date__gte=month_ago
     ).aggregate(
-        total=Sum('total_amount'),
+        total=Coalesce(Sum('total_amount'), Value(Decimal('0.00'), output_field=DecimalField())),
         count=Count('sale_id')
     )
     
     # Recent Sales
     recent_sales = Sale.objects.filter(
         seller=request.user
-    ).order_by('-sale_date')[:5]
+    ).select_related('seller').order_by('-sale_date')[:5]
     
-    # Top Products I Sold
+    # Top Products I Sold - Use product relationship
     top_products = SaleItem.objects.filter(
         sale__seller=request.user
-    ).values('product_name').annotate(
+    ).values(
+        'product__sku_code',
+        'product_name'
+    ).annotate(
         total_qty=Sum('quantity'),
         total_value=Sum('total_price')
     ).order_by('-total_qty')[:5]
     
+    # Convert top_products to list with proper values
+    top_products_list = []
+    for product in top_products:
+        top_products_list.append({
+            'sku_code': product.get('product__sku_code', 'N/A'),
+            'product_name': product.get('product_name', 'Unknown'),
+            'total_qty': product.get('total_qty', 0),
+            'total_value': float(product.get('total_value', 0)) if product.get('total_value') else 0,
+        })
+    
     # Get all categories for filter dropdown
     categories = Category.objects.filter(is_active=True)
     
+    # Get low stock products count for notification
+    low_stock_count = Product.objects.filter(
+        is_active=True,
+        is_discontinued=False,
+        category__item_type='bulk',
+        bulk_quantity__gt=0,
+        bulk_quantity__lte=F('reorder_level')
+    ).count()
+    
+    out_of_stock_count = Product.objects.filter(
+        is_active=True,
+        is_discontinued=False
+    ).filter(
+        Q(category__item_type='single', available_quantity=0) |
+        Q(category__item_type='bulk', bulk_quantity=0)
+    ).count()
+    
     # Daily targets
-    daily_target = 50000  # KSH 50,000
-    target_achievement = (my_sales_today['total'] or 0) / daily_target * 100 if daily_target > 0 else 0
+    daily_target = Decimal('50000')  # KSH 50,000 as Decimal
+    total_today = my_sales_today['total'] or Decimal('0')
+    target_achievement = float((total_today / daily_target * 100)) if daily_target > 0 else 0
     
     context = {
-        'my_sales_today': my_sales_today,
-        'my_sales_week': my_sales_week,
-        'my_sales_month': my_sales_month,
+        'my_sales_today': {
+            'total': float(my_sales_today['total']),
+            'count': my_sales_today['count']
+        },
+        'my_sales_week': {
+            'total': float(my_sales_week['total']),
+            'count': my_sales_week['count']
+        },
+        'my_sales_month': {
+            'total': float(my_sales_month['total']),
+            'count': my_sales_month['count']
+        },
         'recent_sales': recent_sales,
-        'top_products': top_products,
-        'daily_target': daily_target,
+        'top_products': top_products_list,
+        'daily_target': float(daily_target),
         'target_achievement': target_achievement,
         'categories': categories,
+        'low_stock_count': low_stock_count,
+        'out_of_stock_count': out_of_stock_count,
     }
     return render(request, 'staff/dashboards/sales_agent_dashboard.html', context)
 
 
-
 # ============================================
-# PRODUCT LOOKUP API - FOR SALES AGENT DASHBOARD
+# PRODUCT LOOKUP API - UPDATED FOR SKU SYSTEM
 # ============================================
 def product_lookup_api(request):
     """
-    API endpoint for product lookup dashboard.
-    Searches across all product fields: product_code, sku_value, barcode, name, brand, model
+    API endpoint for product lookup using new SKU system.
+    Searches across: sku_code, name, brand, model, specifications
     """
     import logging
+    from inventory.models import Product, Category
+    from django.db.models import Q
+    from decimal import Decimal
+    
     logger = logging.getLogger(__name__)
     
     search_term = request.GET.get('q', '').strip()
-    
-    # Log the request
-    logger.info(f"🔍 Product lookup request - Search term: '{search_term}'")
-    logger.info(f"🔍 GET params: {dict(request.GET)}")
+    category_id = request.GET.get('category', '')
     
     if not search_term or len(search_term) < 2:
         return JsonResponse({
             'success': False,
-            'message': 'Please enter at least 2 characters',
-            'debug': {'search_term': search_term}
+            'message': 'Please enter at least 2 characters'
         })
     
     try:
-        # Build search query across multiple fields
+        # Build search query using new Product model fields
         products = Product.objects.filter(
-            Q(product_code__icontains=search_term) |
-            Q(sku_value__icontains=search_term) |
-            Q(barcode__icontains=search_term) |
+            Q(sku_code__icontains=search_term) |
             Q(name__icontains=search_term) |
             Q(brand__icontains=search_term) |
             Q(model__icontains=search_term) |
-            Q(description__icontains=search_term)
-        ).select_related('category').filter(is_active=True)[:20]
+            Q(specifications__icontains=search_term)
+        ).filter(
+            is_active=True,
+            is_discontinued=False
+        ).select_related('category')
         
-        # Log the query and count
+        # Apply category filter if provided
+        if category_id:
+            products = products.filter(category_id=category_id)
+        
+        # Only show products with available stock
+        # For single items: check available_quantity > 0
+        # For bulk items: check bulk_quantity > 0
+        products = products.filter(
+            Q(category__item_type='single', available_quantity__gt=0) |
+            Q(category__item_type='bulk', bulk_quantity__gt=0)
+        )[:20]
+        
+        # Log the count
         logger.info(f"🔍 Products found: {products.count()}")
         
-        # Debug: Check if there are any products at all
         total_products = Product.objects.count()
         logger.info(f"🔍 Total products in database: {total_products}")
         
         if total_products == 0:
             return JsonResponse({
                 'success': False,
-                'message': 'No products in database',
-                'debug': {'total_products': 0}
+                'message': 'No products in database'
             })
         
         if not products.exists():
             return JsonResponse({
                 'success': False,
-                'message': 'No products found matching your search',
-                'debug': {
-                    'search_term': search_term,
-                    'total_products': total_products
-                }
+                'message': 'No products found matching your search'
             })
         
-        # Build products list
+        # Build products list with new fields
         products_list = []
         for product in products:
-            # Format specifications for display
+            # Get available stock
+            if product.category.is_single_item:
+                available_stock = product.available_quantity
+                stock_status = 'available'
+            else:
+                available_stock = product.bulk_quantity
+                stock_status = 'bulk'
+            
+            # Format specifications
             specs = {}
             if product.specifications and isinstance(product.specifications, dict):
                 specs = {
@@ -2229,44 +2289,33 @@ def product_lookup_api(request):
             
             products_list.append({
                 'id': product.id,
-                'product_code': product.product_code or '',
-                'name': product.name or '',
-                'display_name': product.display_name or '',
+                'sku_code': product.sku_code,
+                'name': product.name,
+                'display_name': product.display_name,
                 'selling_price': float(product.selling_price) if product.selling_price else 0,
                 'buying_price': float(product.buying_price) if product.buying_price else 0,
                 'best_price': float(product.best_price) if product.best_price else None,
-                'sku_value': product.sku_value or '',
-                'barcode': product.barcode or '',
-                'brand': product.brand or '',
-                'model': product.model or '',
-                'quantity': product.quantity or 0,
+                'brand': product.brand,
+                'model': product.model,
+                'available_stock': available_stock,
+                'stock_status': stock_status,
                 'category': product.category.name if product.category else '',
                 'category_id': product.category.id if product.category else None,
-                'status': product.status or '',
-                'stock_status': product.stock_status,
-                'stock_status_badge': getattr(product, 'stock_status_badge', ''),
-                'stock_status_icon': getattr(product, 'stock_status_icon', ''),
-                'condition': product.get_condition_display() if product.condition else 'New',
+                'is_single_item': product.category.is_single_item if product.category else False,
+                'condition': product.get_condition_display() if hasattr(product, 'get_condition_display') else 'New',
                 'warranty_months': product.warranty_months or 12,
                 'specifications': specs,
-                'is_featured': product.is_featured,
-                'is_single_item': product.category.is_single_item if product.category else False,
-                'created_at': product.created_at.isoformat() if product.created_at else None,
-                'updated_at': product.updated_at.isoformat() if product.updated_at else None,
+                'has_image': bool(product.image),
+                'image_url': product.image.url if product.image else None,
             })
         
         response_data = {
             'success': True,
             'products': products_list,
             'total_matches': len(products_list),
-            'message': f'Found {len(products_list)} product(s)',
-            'debug': {
-                'search_term': search_term,
-                'total_products': total_products
-            }
+            'message': f'Found {len(products_list)} product(s)'
         }
         
-        # Log the response
         logger.info(f"🔍 Sending response with {len(products_list)} products")
         return JsonResponse(response_data)
         
@@ -2274,9 +2323,9 @@ def product_lookup_api(request):
         logger.error(f"🔍 Product lookup error: {str(e)}", exc_info=True)
         return JsonResponse({
             'success': False,
-            'message': f'Error searching for products: {str(e)}',
-            'debug': {'error': str(e)}
+            'message': f'Error searching for products: {str(e)}'
         }, status=500)
+
 
 
 
