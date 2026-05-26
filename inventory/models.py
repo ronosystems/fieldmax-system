@@ -1572,6 +1572,12 @@ class ReturnRequest(models.Model):
         return "Return #{} - {}".format(self.return_id, self.product.sku_code)
 
 
+
+
+
+
+
+
 # ====================================
 # SIGNALS - Automatic Quantity Updates
 # ====================================
@@ -1662,14 +1668,8 @@ def validate_unit_identifiers(sender, instance, **kwargs):
             raise ValidationError(f"Serial {instance.serial_number} already exists for this product")
 
 
-
-
 @receiver(post_save, sender='inventory.StockEntry')
 def create_finance_transaction_for_stock_entry(sender, instance, created, **kwargs):
-    """
-    Create finance transaction when stock is purchased (added to inventory)
-    """
-    # ADD THIS IMPORT AT THE BEGINNING
     from finance.models import StockPurchase, FinancialTransaction, AccountTransaction, CashAccount, BankAccount, PurchaseAccount
     from decimal import Decimal
     
@@ -1711,18 +1711,23 @@ def create_finance_transaction_for_stock_entry(sender, instance, created, **kwar
             payment_method = 'cash'
             account_type = 'cash'
     
+    # ============================================
+    # ADD UNIQUE IDENTIFIER TO PREVENT DUPLICATES
+    # ============================================
+    unique_suffix = f"#{instance.id}-{instance.created_at.strftime('%Y%m%d%H%M%S%f')}"
+    
     try:
         from django.db import transaction
         
         with transaction.atomic():
-            # Create FinancialTransaction
+            # Create FinancialTransaction with unique description
             fin_trans = FinancialTransaction.objects.create(
                 transaction_type='expense',
                 category='operational',
                 amount=total_amount,
-                description=f"Stock Purchase: {product_name} ({sku_code}) - {instance.quantity} units @ KES {instance.unit_price}",
+                description=f"Stock Purchase: {product_name} ({sku_code}) - {instance.quantity} units @ KES {instance.unit_price} [{unique_suffix}]",
                 payment_method=payment_method,
-                payment_reference=instance.reference_id or f"STOCK-{instance.id}",
+                payment_reference=instance.reference_id or f"STOCK-{instance.id}-{unique_suffix}",
                 recipient_name=product.supplier.name if product.supplier else "",
                 created_by=instance.created_by,
                 notes=f"Stock Entry #{instance.id} - Added {instance.quantity} units"
@@ -1733,7 +1738,7 @@ def create_finance_transaction_for_stock_entry(sender, instance, created, **kwar
                 account_type=account_type,
                 transaction_type='expense',
                 amount=total_amount,
-                description=f"Stock Purchase: {product_name} ({sku_code})",
+                description=f"Stock Purchase: {product_name} ({sku_code}) [{unique_suffix}]",
                 reference=instance.reference_id or f"STOCK-{instance.id}",
                 created_by=instance.created_by,
                 notes=f"Stock Entry #{instance.id} - {instance.quantity} units @ KES {instance.unit_price}"
@@ -1747,16 +1752,13 @@ def create_finance_transaction_for_stock_entry(sender, instance, created, **kwar
                 bank_acc, _ = BankAccount.objects.get_or_create(id=1)
                 bank_acc.update_balance(total_amount, 'expense', instance.created_by)
             
-            # ============================================
-            # ADD THIS SECTION - Update PurchaseAccount
-            # ============================================
+            # Update PurchaseAccount
             purchase_account = PurchaseAccount.get_or_create_account()
             purchase_account.add_purchase_cost(
                 amount=total_amount,
                 product_reference=sku_code,
                 user=instance.created_by
             )
-            # ============================================
             
             # Create StockPurchase record
             stock_purchase = StockPurchase.objects.create(
@@ -1780,8 +1782,6 @@ def create_finance_transaction_for_stock_entry(sender, instance, created, **kwar
     except Exception as e:
         logger.error(f"Failed to create finance transaction for stock entry {instance.id}: {str(e)}")
         print(f"❌ Error: {str(e)}")
-
-
 
 
 
@@ -1880,7 +1880,6 @@ def get_stock_report():
         })
     
     return report
-
 
 
 __all__ = [

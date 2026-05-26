@@ -3477,20 +3477,22 @@ def credit_manager_dashboard(request):
     return render(request, 'staff/dashboards/credit_manager_dashboard.html', context)
 
 
+
+
 # ============================================
-# CREDIT OFFICER DASHBOARD
+# CREDIT OFFICER DASHBOARD - SEARCH BY IMEI/SERIAL
 # ============================================
 @login_required
 @dashboard_for_role('Credit Officer')
 def credit_officer_dashboard(request):
-    """Dashboard for credit officer showing only their assigned products and transactions"""
-    from credit.models import CreditTransaction, CreditCustomer, CreditCompany, CreditTransactionLog
-    from inventory.models import Product
-    from sales.models import Sale
+    """Dashboard for credit officer - search available units by IMEI/Serial"""
+    from credit.models import CreditTransaction, CreditCustomer, CreditCompany
+    from inventory.models import Product, ProductUnit, Category
     from django.db.models import Sum, Count, Q
     from django.utils import timezone
     from datetime import timedelta
     import json
+    from decimal import Decimal
     from django.core.serializers.json import DjangoJSONEncoder
     import logging
 
@@ -3507,93 +3509,68 @@ def credit_officer_dashboard(request):
     current_user = request.user
     
     # ============================================
-    # Get IDs of products that already have ANY credit transaction (SOLD)
+    # Get IDs of units that already have credit transactions
+    # Use 'product' field (not 'product_unit')
     # ============================================
-    products_with_credit = CreditTransaction.objects.values_list('product_id', flat=True).distinct()
+    units_with_credit = CreditTransaction.objects.filter(
+        product__isnull=False
+    ).values_list('product_id', flat=True).distinct()
     
     # ============================================
-    # PRODUCTS FOR SEARCH FUNCTIONALITY
-    # Only show products owned by this user that are:
-    # - Not sold (status='available')
-    # - Have stock > 0
+    # AVAILABLE UNITS FOR CREDIT (Individual units, not SKUs)
+    # Only show units that:
+    # - Are available (not sold)
+    # - Belong to single-item categories
     # - Have no existing credit transaction
+    # - Have IMEI or Serial Number
     # ============================================
-    products = Product.objects.filter(
-        owner=current_user,
-        is_active=True,
-        quantity__gt=0,
-        status='available',  # Only available items
-        category__item_type='single'  # Only single items for credit
+    available_units = ProductUnit.objects.filter(
+        product__is_active=True,
+        product__is_discontinued=False,
+        product__category__item_type='single',
+        status='available'
     ).exclude(
-        id__in=products_with_credit  # Exclude items already used for credit
-    ).select_related('category')[:50]
+        id__in=units_with_credit
+    ).select_related('product', 'product__category', 'supplier')[:100]
     
     # ============================================
-    # CONVERT PRODUCTS TO JSON FOR JAVASCRIPT
+    # CONVERT UNITS TO JSON FOR JAVASCRIPT
     # ============================================
-    products_json = json.dumps([
+    units_json = json.dumps([
         {
-            'id': p.id,
-            'code': p.product_code,
-            'name': p.display_name,
-            'price': float(p.selling_price),
-            'stock': p.quantity,
-            'sku': p.sku_value or '',
-        } for p in products
+            'id': unit.id,
+            'product_id': unit.product.id,
+            'sku_code': unit.product.sku_code,
+            'product_name': unit.product.display_name,
+            'imei_number': unit.imei_number,
+            'serial_number': unit.serial_number,
+            'identifier': unit.unique_identifier,
+            'selling_price': float(unit.effective_selling_price),
+            'brand': unit.product.brand,
+            'model': unit.product.model,
+            'specifications': unit.product.specifications,
+            'status': unit.status,
+        } for unit in available_units
     ], cls=DjangoJSONEncoder)
     
     # ============================================
-    # COMPANIES FOR DROPDOWN
-    # All active companies (this is system-wide)
+    # STATS CARDS
     # ============================================
-    companies = CreditCompany.objects.filter(is_active=True)
+    total_available_units = available_units.count()
     
-    # ============================================
-    # CUSTOMERS FOR DROPDOWN - FIXED: Only customers with NO credit transactions
-    # Customers this user has created/dealt with but haven't taken any credit
-    # ============================================
-    # Get IDs of customers who already have ANY credit transaction
-    customers_with_credit = CreditTransaction.objects.values_list('customer_id', flat=True).distinct()
-    
-    # Show customers who:
-    # 1. Were created by this user (transactions__dealer=current_user) OR
-    # 2. Are active
-    # 3. Have NO credit transactions (exclude customers_with_credit)
-    customers = CreditCustomer.objects.filter(
-        Q(transactions__dealer=current_user) | Q(created_by=current_user),  # Customers this user has dealt with or created
-        is_active=True
-    ).exclude(
-        id__in=customers_with_credit  # Exclude customers who already have credit
-    ).distinct().order_by('-created_at')[:100]
-    
-    # ============================================
-    # STATS CARD 1: My Available Stock Count
-    # Products owned by this user that are available for credit
-    # ============================================
-    total_products = products.count()
-    
-    # ============================================
-    # STATS CARD 2: My Daily Sales Count
-    # Sales made by this user today
-    # ============================================
+    # Daily credit sales by this user
     daily_sales = CreditTransaction.objects.filter(
         dealer=current_user,
         transaction_date__date=today
     ).count()
     
-    # ============================================
-    # STATS CARD 3: My Monthly Sales Count
-    # Sales made by this user in last 30 days
-    # ============================================
+    # Monthly credit sales by this user
     monthly_sales = CreditTransaction.objects.filter(
         dealer=current_user,
         transaction_date__date__gte=thirty_days_ago
     ).count()
     
-    # ============================================
-    # STATS CARD 4: My Customers
-    # Customers this user has dealt with
-    # ============================================
+    # Total customers this user has dealt with
     total_customers = CreditCustomer.objects.filter(
         transactions__dealer=current_user,
         is_active=True
@@ -3601,149 +3578,68 @@ def credit_officer_dashboard(request):
     
     # ============================================
     # CREDIT OVERVIEW STATS
-    # Only transactions created by this user
     # ============================================
     total_credit = CreditTransaction.objects.filter(
         dealer=current_user
     ).aggregate(
         total=Sum('ceiling_price')
-    )['total'] or 0
+    )['total'] or Decimal('0')
     
     total_paid = CreditTransaction.objects.filter(
         dealer=current_user,
         payment_status='paid'
-    ).aggregate(total=Sum('ceiling_price'))['total'] or 0
+    ).aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0')
     
     total_pending = CreditTransaction.objects.filter(
         dealer=current_user,
         payment_status='pending'
-    ).aggregate(total=Sum('ceiling_price'))['total'] or 0
-    
-    total_partial = CreditTransaction.objects.filter(
-        dealer=current_user,
-        payment_status='partial'
-    ).aggregate(total=Sum('ceiling_price'))['total'] or 0
+    ).aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0')
     
     # ============================================
-    # CUSTOMER STATS
-    # Customers with active credit from this user
+    # COMPANIES FOR DROPDOWN
     # ============================================
-    active_credit_customers = CreditCustomer.objects.filter(
-        transactions__dealer=current_user,
-        transactions__payment_status='pending'
-    ).distinct().count()
+    companies = CreditCompany.objects.filter(is_active=True)
     
     # ============================================
-    # TODAY'S CREDIT TRANSACTIONS
-    # Transactions by this user today
+    # CUSTOMERS FOR DROPDOWN
     # ============================================
-    today_credit = CreditTransaction.objects.filter(
-        dealer=current_user,
-        transaction_date__date=today
-    ).aggregate(
-        total=Sum('ceiling_price'),
-        count=Count('id')
-    )
-    
-    # ============================================
-    # MONTHLY CREDIT TRANSACTIONS
-    # Transactions by this user in last 30 days
-    # ============================================
-    month_credit = CreditTransaction.objects.filter(
-        dealer=current_user,
-        transaction_date__date__gte=thirty_days_ago
-    ).aggregate(
-        total=Sum('ceiling_price'),
-        count=Count('id')
-    )
+    customers = CreditCustomer.objects.filter(
+        Q(transactions__dealer=current_user) | Q(created_by=current_user),
+        is_active=True
+    ).distinct().order_by('-created_at')[:100]
     
     # ============================================
     # RECENT CREDIT TRANSACTIONS
-    # Recent transactions by this user
+    # Use 'product' field to access the ProductUnit
     # ============================================
     recent_credits = CreditTransaction.objects.filter(
         dealer=current_user
     ).select_related(
-        'customer', 'credit_company'
+        'customer', 'credit_company', 'product', 'product__product'
     ).order_by('-transaction_date')[:15]
     
-    # ============================================
-    # CREDIT BY COMPANY
-    # Only companies this user has transacted with
-    # ============================================
-    credit_by_company = CreditCompany.objects.filter(
-        transactions__dealer=current_user
-    ).annotate(
-        total_credit=Sum('transactions__ceiling_price', filter=Q(transactions__dealer=current_user)),
-        active_transactions=Count('transactions', filter=Q(transactions__dealer=current_user, transactions__payment_status='pending')),
-        paid_transactions=Count('transactions', filter=Q(transactions__dealer=current_user, transactions__payment_status='paid')),
-        total_customers=Count('transactions__customer', filter=Q(transactions__dealer=current_user), distinct=True)
-    ).order_by('-total_credit')[:5]
-    
-    # ============================================
-    # CREDIT TRANSACTIONS BY STATUS
-    # Only transactions by this user
-    # ============================================
-    status_counts = CreditTransaction.objects.filter(
-        dealer=current_user
-    ).values('payment_status').annotate(
-        count=Count('id'),
-        total=Sum('ceiling_price')
-    ).order_by('payment_status')
-    
-    # ============================================
-    # TOP CUSTOMERS BY CREDIT AMOUNT
-    # Only customers this user has dealt with
-    # ============================================
-    top_customers = CreditCustomer.objects.filter(
-        transactions__dealer=current_user
-    ).annotate(
-        total_credit=Sum('transactions__ceiling_price', filter=Q(transactions__dealer=current_user)),
-        transaction_count=Count('transactions', filter=Q(transactions__dealer=current_user)),
-        pending_balance=Sum('transactions__ceiling_price', 
-                           filter=Q(transactions__dealer=current_user, 
-                                   transactions__payment_status='pending'))
-    ).filter(transaction_count__gt=0).order_by('-total_credit')[:10]
-    
-    # ============================================
-    # PRODUCTS AVAILABLE FOR CREDIT
-    # Only products owned by this user that are available
-    # ============================================
-    available_products = products.count()
-    
     context = {
-        # Stats Card Values - All filtered by current user
-        'total_products': total_products,
+        # Stats
+        'total_available_units': total_available_units,
         'daily_sales': daily_sales,
         'monthly_sales': monthly_sales,
         'total_customers': total_customers,
         
-        # Credit Overview - All filtered by current user
-        'total_credit': total_credit,
-        'total_paid': total_paid,
-        'total_pending': total_pending,
-        'total_partial': total_partial,
-        'active_credit_customers': active_credit_customers,
-        'available_products': available_products,
+        # Credit Overview
+        'total_credit': float(total_credit),
+        'total_paid': float(total_paid),
+        'total_pending': float(total_pending),
         
-        # Credit Transactions - All filtered by current user
-        'today_credit': today_credit,
-        'month_credit': month_credit,
-        'recent_credits': recent_credits,
-        
-        # Analytics - All filtered by current user
-        'credit_by_company': credit_by_company,
-        'status_counts': status_counts,
-        'top_customers': top_customers,
-        
-        # Form Data - Filtered appropriately
-        'products': products,
-        'products_json': products_json,
+        # Data
+        'units_json': units_json,
         'companies': companies,
         'customers': customers,
+        'recent_credits': recent_credits,
     }
     
     return render(request, 'staff/dashboards/credit_officer_dashboard.html', context)
+
+
 
 
 # ============================================

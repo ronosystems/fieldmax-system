@@ -158,6 +158,7 @@ class CreditCustomer(models.Model):
     # Next of kin (optional but recommended)
     nok_name = models.CharField(max_length=200, blank=True)
     nok_phone = models.CharField(max_length=20, blank=True)
+    nok_relationship = models.CharField(max_length=100, blank=True, null=True) 
     
     # ====================================
     # CUSTOMER PHOTOS / DOCUMENTS
@@ -468,6 +469,9 @@ class SellerCommissionSummary(models.Model):
         return self
 
 
+
+
+
 # ====================================
 # CREDIT TRANSACTION (Main - Phone given to customer)
 # ====================================
@@ -527,11 +531,22 @@ class CreditTransaction(models.Model):
         help_text="Seller/Dealer who made the sale"
     )
     
+    # Link to ProductUnit (the individual device/phone)
     product = models.ForeignKey(
-        'inventory.Product',
+        'inventory.ProductUnit',  
         on_delete=models.PROTECT,
         related_name='credit_transactions',
-        help_text="Product sold on credit"
+        help_text="Product unit sold on credit"
+    )
+    
+    # Optional: Add product_sku field for bulk items (future use)
+    product_sku = models.ForeignKey(
+        'inventory.Product',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='credit_transactions',
+        help_text="Product SKU (for bulk items)"
     )
     
     # ============================================
@@ -728,7 +743,7 @@ class CreditTransaction(models.Model):
             models.Index(fields=['etr_receipt_number']),
             models.Index(fields=['commission_status']),
             models.Index(fields=['dealer', 'commission_status']),
-            models.Index(fields=['partial_payment_amount']),  # For partial payment queries
+            models.Index(fields=['partial_payment_amount']),
         ]
         constraints = [
             models.UniqueConstraint(
@@ -780,17 +795,25 @@ class CreditTransaction(models.Model):
         return "0000"
     
     # ============================================
-    # SAVE METHOD
+    # SAVE METHOD - FIXED for ProductUnit
     # ============================================
     def save(self, *args, **kwargs):
         # Auto-generate transaction ID in Sale format if not set
         if not self.transaction_id:
             self.transaction_id, self.etr_receipt_number = self._generate_sale_id_and_etr()
         
-        # Save product snapshot
+        # Save product snapshot - FIXED for ProductUnit
         if self.product and not self.product_name:
-            self.product_name = self.product.name
-            self.product_code = self.product.product_code
+            # product is ProductUnit, so get the actual Product from it
+            if hasattr(self.product, 'product') and self.product.product:
+                self.product_name = self.product.product.display_name
+                self.product_code = self.product.product.sku_code
+            elif hasattr(self.product, 'display_name'):
+                self.product_name = self.product.display_name
+                self.product_code = getattr(self.product, 'sku_code', '')
+            else:
+                self.product_name = str(self.product)
+                self.product_code = ''
         
         # Calculate commission amount if not set and ceiling_price exists
         if self.ceiling_price and self.commission_value and not self.commission_amount:
@@ -909,7 +932,7 @@ class CreditTransaction(models.Model):
         if self.payment_status == 'paid':
             from inventory.models import StockEntry
             StockEntry.objects.create(
-                product=self.product,
+                product_unit=self.product,  # Use product_unit field
                 quantity=-1,
                 entry_type='sale',
                 unit_price=self.ceiling_price,
@@ -977,14 +1000,12 @@ class CreditTransaction(models.Model):
         
         # Restore product availability
         if self.product:
-            if self.product.category.is_single_item:
-                self.product.status = 'available'
-                self.product.quantity = 1
-            else:
-                self.product.quantity += 1
-                if self.product.quantity > 0:
-                    self.product.status = 'available'
+            self.product.status = 'available'
+            self.product.sold_date = None
+            self.product.sold_by = None
+            self.product.sold_at_price = None
             self.product.save()
+            self.product.product.update_quantities()
         
         # Update commission record
         try:
@@ -1019,25 +1040,22 @@ class CreditTransaction(models.Model):
             raise ValidationError("Paid transactions cannot be reversed. Please contact admin.")
         
         with db_transaction.atomic():
-            old_status = self.payment_status
-            product = self.product
+            product_unit = self.product
             
-            # Restore product status
-            if product.category.is_single_item:
-                product.status = 'available'
-                product.quantity = 1
-            else:
-                product.quantity += 1
-                if product.quantity > 0:
-                    product.status = 'available'
-                if product.quantity <= product.reorder_level:
-                    product.status = 'lowstock'
-            product.save()
+            # Restore product unit status
+            product_unit.status = 'available'
+            product_unit.sold_date = None
+            product_unit.sold_by = None
+            product_unit.sold_at_price = None
+            product_unit.save()
+            
+            # Update product quantities
+            product_unit.product.update_quantities()
             
             # Create reversal stock entry
             from inventory.models import StockEntry
             StockEntry.objects.create(
-                product=product,
+                product_unit=product_unit,
                 quantity=1,
                 entry_type='reversal',
                 unit_price=self.ceiling_price,
@@ -1095,6 +1113,9 @@ class CreditTransaction(models.Model):
             'status': self.get_payment_status_display(),
             'is_fully_paid': self.is_fully_paid
         }
+
+
+
 
 
 # ====================================
@@ -1315,9 +1336,6 @@ def create_credit_transaction_with_commission(
     
     return transaction
 
-
-# Add commission-related methods to User via monkey-patching or mixin
-# These can be used in views by importing the functions
 
 def get_user_total_commission(user):
     """Get total commission earned by a user"""

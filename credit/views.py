@@ -23,10 +23,9 @@ from django.db import transaction as db_transaction
 from .models import (
     CreditCompany, CreditCustomer, CreditTransaction, 
     CompanyPayment, CreditTransactionLog,
-    # Commission models
     SellerCommission, SellerCommissionSummary
 )
-from inventory.models import Product
+from inventory.models import Product, ProductUnit,  StockEntry
 from django.contrib.auth import get_user_model
 
 
@@ -752,58 +751,57 @@ def customer_list(request):
 
 @login_required
 def customer_add(request):
-    """Add a new credit customer with photo uploads"""
+    """Add a new credit customer via AJAX modal"""
     if request.method == 'POST':
         try:
             # Check if this is an AJAX request
             is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
             
             # Get form data
-            full_name = request.POST.get('full_name')
-            id_number = request.POST.get('id_number')
-            phone_number = request.POST.get('phone_number')
-            nok_name = request.POST.get('nok_name', '')
-            nok_phone = request.POST.get('nok_phone', '')
-            email = request.POST.get('email', '')
-            alternate_phone = request.POST.get('alternate_phone', '')
-            county = request.POST.get('county', '')
-            town = request.POST.get('town', '')
-            physical_address = request.POST.get('physical_address', '')
+            full_name = request.POST.get('full_name', '').strip()
+            id_number = request.POST.get('id_number', '').strip()
+            phone_number = request.POST.get('phone_number', '').strip()
+            nok_name = request.POST.get('nok_name', '').strip()
+            nok_phone = request.POST.get('nok_phone', '').strip()
+            email = request.POST.get('email', '').strip()
+            alternate_phone = request.POST.get('alternate_phone', '').strip()
+            address = request.POST.get('address', '').strip()
+            nok_relationship = request.POST.get('nok_relationship', '').strip()
+            notes = request.POST.get('notes', '').strip()
+            
+            # Validate required fields
+            if not all([full_name, id_number, phone_number, nok_name, nok_phone]):
+                error_msg = "Please fill all required fields: Full Name, ID Number, Phone Number, Next of Kin Name, Next of Kin Phone"
+                if is_ajax:
+                    return JsonResponse({'success': False, 'error': error_msg})
+                messages.error(request, error_msg)
+                return redirect('credit:transaction_create')
             
             # Check if customer with this ID already exists
             existing_customer = CreditCustomer.objects.filter(id_number=id_number).first()
             if existing_customer:
-                # Check if this customer has any active credit transactions
-                active_transactions = CreditTransaction.objects.filter(
-                    customer=existing_customer,
-                    payment_status__in=['pending', 'Active']
-                ).exists()
-                
-                if active_transactions:
-                    error_message = f"⚠️ CUSTOMER WITH ID {id_number} HAS AN ACTIVE LOAN: {existing_customer.full_name} - Please verify before adding a new customer with the same ID."
-                else:
-                    error_message = f"Customer with ID {id_number} already exists: {existing_customer.full_name} - No active loans found, but please verify before adding a new customer with the same ID."
-                
+                error_msg = f"Customer with ID {id_number} already exists: {existing_customer.full_name}"
                 if is_ajax:
                     return JsonResponse({
                         'success': False,
-                        'error': error_message,
+                        'error': error_msg,
                         'existing_customer': {
                             'id': existing_customer.id,
                             'full_name': existing_customer.full_name,
-                            'phone_number': existing_customer.phone_number,
-                            'has_active_credit': active_transactions
+                            'phone_number': existing_customer.phone_number
                         }
                     })
-                else:
-                    messages.error(request, error_message)
-                    return render(request, 'credit/customers/add.html')
+                messages.error(request, error_msg)
+                return redirect('credit:transaction_create')
             
-            # Handle file uploads
-            passport_photo = request.FILES.get('passport_photo')
-            id_front_photo = request.FILES.get('id_front_photo')
-            id_back_photo = request.FILES.get('id_back_photo')
-            additional_document = request.FILES.get('additional_document')
+            # Check if phone number already exists
+            existing_phone = CreditCustomer.objects.filter(phone_number=phone_number).first()
+            if existing_phone:
+                error_msg = f"Phone number {phone_number} is already registered to: {existing_phone.full_name}"
+                if is_ajax:
+                    return JsonResponse({'success': False, 'error': error_msg})
+                messages.error(request, error_msg)
+                return redirect('credit:transaction_create')
             
             # Create new customer
             customer = CreditCustomer.objects.create(
@@ -814,19 +812,17 @@ def customer_add(request):
                 nok_phone=nok_phone,
                 email=email,
                 alternate_phone=alternate_phone,
-                county=county,
-                town=town,
-                physical_address=physical_address,
-                passport_photo=passport_photo,
-                id_front_photo=id_front_photo,
-                id_back_photo=id_back_photo,
-                additional_document=additional_document,
+                physical_address=address,
+                nok_relationship=nok_relationship,
+                notes=notes,
                 is_active=True,
                 created_by=request.user
             )
             
+            logger.info(f"New customer created: {customer.full_name} (ID: {customer.id_number}) by {request.user.username}")
+            
+            # Return JSON response for AJAX (modal submission)
             if is_ajax:
-                # Return JSON response for AJAX requests
                 return JsonResponse({
                     'success': True,
                     'customer': {
@@ -835,32 +831,23 @@ def customer_add(request):
                         'phone_number': customer.phone_number,
                         'id_number': customer.id_number,
                         'nok_name': customer.nok_name,
-                        'nok_phone': customer.nok_phone,
-                        'has_photos': customer.has_photos
+                        'nok_phone': customer.nok_phone
                     }
                 })
             else:
-                # Regular form submission
-                messages.success(request, f'Customer "{customer.full_name}" added successfully with photos.')
-                # Check if there's a next parameter
-                next_url = request.POST.get('next')
-                if next_url:
-                    return redirect(next_url)
-                return redirect('credit:customer_list')
+                # Fallback for non-AJAX (should not happen with modal)
+                messages.success(request, f'Customer "{customer.full_name}" added successfully.')
+                return redirect('credit:transaction_create')
                 
         except Exception as e:
             logger.error(f"Error adding customer: {str(e)}")
-            if is_ajax:
-                return JsonResponse({
-                    'success': False,
-                    'error': str(e)
-                })
-            else:
-                messages.error(request, f'Error adding customer: {str(e)}')
-                return render(request, 'credit/customers/add.html')
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'success': False, 'error': str(e)})
+            messages.error(request, f'Error adding customer: {str(e)}')
+            return redirect('credit:transaction_create')
     
-    # GET request - show form
-    return render(request, 'credit/customers/add.html')
+    # GET request - redirect to transaction page
+    return redirect('credit:transaction_create')
 
 
 @login_required
@@ -963,181 +950,180 @@ def transaction_list(request):
 
 @login_required
 def transaction_create(request):
-    """Create a new credit transaction - UPDATED WITH COMMISSION"""
+    """Create a new credit transaction"""
     if request.method == 'POST':
         try:
             with transaction.atomic():
                 # Get form data
                 company_id = request.POST.get('company')
                 customer_id = request.POST.get('customer')
-                product_id = request.POST.get('product')
-                ceiling_price = Decimal(request.POST.get('ceiling_price', '0'))
-                imei = request.POST.get('imei', '')
+                product_unit_id = request.POST.get('product_unit')
+                ceiling_price = request.POST.get('ceiling_price', '0')
                 notes = request.POST.get('notes', '')
                 
-                # Commission fields
-                commission_type = request.POST.get('commission_type', 'percentage')
-                commission_value = Decimal(request.POST.get('commission_value', '0'))
+                print("=" * 60)
+                print(f"POST Data: company={company_id}, customer={customer_id}, product_unit={product_unit_id}, price={ceiling_price}")
                 
-                # Get related objects
+                # Validate
+                if not all([company_id, customer_id, product_unit_id]):
+                    messages.error(request, 'Please fill all required fields')
+                    return redirect('credit:transaction_create')
+                
+                # Get objects
                 company = CreditCompany.objects.get(id=company_id)
                 customer = CreditCustomer.objects.get(id=customer_id)
-                product = Product.objects.get(id=product_id)
                 
-                # Check if product is available for credit
-                can_use, message = product.can_be_used_for_credit
-                if not can_use:
-                    messages.error(request, message)
+                # Get the product unit (this is ProductUnit)
+                product_unit = ProductUnit.objects.select_for_update().get(id=product_unit_id)
+                
+                print(f"Found unit: {product_unit.unique_identifier}, Status: {product_unit.status}")
+                
+                # Check availability
+                if product_unit.status != 'available':
+                    messages.error(request, f'Unit {product_unit.unique_identifier} is not available')
                     return redirect('credit:transaction_create')
                 
-                # Check if this product already has ANY credit transaction
-                existing_transaction = CreditTransaction.objects.filter(
-                    product=product
-                ).exists()
-                
-                if existing_transaction:
-                    messages.error(
-                        request, 
-                        f'Product {product.sku_code} already has a credit transaction. '
-                        f'Each product can only be used once for credit.'
-                    )
+                # Check if already has credit transaction
+                existing = CreditTransaction.objects.filter(product=product_unit).exists()
+                if existing:
+                    messages.error(request, 'This unit already has a credit transaction')
                     return redirect('credit:transaction_create')
                 
-                # Calculate commission amount
-                if commission_type == 'percentage':
-                    commission_amount = (ceiling_price * commission_value) / Decimal('100.00')
-                else:
-                    commission_amount = commission_value
+                # Convert price
+                ceiling_price_decimal = Decimal(str(ceiling_price))
                 
-                # Create transaction with commission
+                # Calculate commission (5%)
+                commission_amount = ceiling_price_decimal * Decimal('0.05')
+                
+                # ============================================
+                # STEP 1: Create StockEntry FIRST (while unit is still available)
+                # ============================================
+                from inventory.models import StockEntry
+                stock_entry = StockEntry.objects.create(
+                    product_unit=product_unit,
+                    quantity=-1,
+                    entry_type='sale',
+                    unit_price=ceiling_price_decimal,
+                    total_amount=ceiling_price_decimal,
+                    reference_id=f"CREDIT-{timezone.now().strftime('%Y%m%d%H%M%S')}",
+                    notes=f'Credit sale - {customer.full_name} via {company.name}',
+                    created_by=request.user
+                )
+                print(f"✅ StockEntry created: {stock_entry.id}")
+                
+                # ============================================
+                # STEP 2: Create Credit Transaction
+                # ============================================
                 credit_transaction = CreditTransaction.objects.create(
                     credit_company=company,
                     customer=customer,
                     dealer=request.user,
-                    product=product,
-                    ceiling_price=ceiling_price,
-                    imei=imei,
+                    product=product_unit,
+                    product_sku=product_unit.product,
+                    ceiling_price=ceiling_price_decimal,
+                    imei=product_unit.imei_number or product_unit.serial_number or '',
                     notes=notes,
-                    # Commission fields
-                    commission_type=commission_type,
-                    commission_value=commission_value,
-                    commission_amount=round(commission_amount, 2),
+                    commission_type='percentage',
+                    commission_value=Decimal('5'),
+                    commission_amount=commission_amount,
+                    payment_status='pending',
+                    commission_status='not_set',
                 )
                 
-                # Create commission record
+                print(f"✅ Transaction created: {credit_transaction.transaction_id}")
+                
+                # ============================================
+                # STEP 3: Mark unit as sold (NOW it's okay because StockEntry already recorded the sale)
+                # ============================================
+                product_unit.status = 'sold'
+                product_unit.sold_date = timezone.now()
+                product_unit.sold_by = request.user
+                product_unit.sold_at_price = ceiling_price_decimal
+                product_unit.save()
+                
+                # ============================================
+                # STEP 4: Update product quantities
+                # ============================================
+                product_unit.product.update_quantities()
+                
+                # ============================================
+                # STEP 5: Create commission record
+                # ============================================
                 SellerCommission.objects.create(
                     seller=request.user,
                     transaction=credit_transaction,
-                    amount=round(commission_amount, 2)
+                    amount=commission_amount
                 )
                 
                 # ============================================
-                # UPDATE PRODUCT STOCK (Single item only)
+                # STEP 6: Create log
                 # ============================================
-                if product.category.is_single_item:
-                    # For single items, find and mark a specific unit as sold
-                    # Get the first available unit (or the one with specific IMEI)
-                    if imei:
-                        unit = product.units.filter(imei_number=imei, status='available').first()
-                    else:
-                        unit = product.units.filter(status='available').first()
-                    
-                    if unit:
-                        unit.status = 'sold'
-                        unit.sold_date = timezone.now()
-                        unit.sold_by = request.user
-                        unit.sold_at_price = ceiling_price
-                        unit.save()
-                        
-                        # Create stock entry for inventory tracking
-                        from inventory.models import StockEntry
-                        StockEntry.objects.create(
-                            product_unit=unit,  # Link to the unit, not product
-                            quantity=-1,
-                            entry_type='sale',
-                            unit_price=ceiling_price,
-                            total_amount=ceiling_price,
-                            reference_id=credit_transaction.transaction_id,
-                            notes=f'Credit sale - {customer.full_name} via {company.name} (Commission: KSH {commission_amount})',
-                            created_by=request.user
-                        )
-                        
-                        # Update product quantities
-                        product.update_quantities()
-                    else:
-                        raise ValueError(f"No available unit found for product {product.sku_code}")
-                
-                # Create log
                 CreditTransactionLog.objects.create(
                     transaction=credit_transaction,
                     action='created',
                     performed_by=request.user,
-                    notes=f'Product {product.sku_code} - Commission: KSH {commission_amount}'
+                    notes=f'Credit transaction for {product_unit.product.sku_code}'
                 )
                 
-                # Update seller commission summary
-                summary, _ = SellerCommissionSummary.objects.get_or_create(seller=request.user)
-                summary.update_from_transactions()
-                
-                logger.info(
-                    f"[CREDIT TRANSACTION] Created: {credit_transaction.transaction_id} | "
-                    f"Product: {product.sku_code} | "
-                    f"Commission: KSH {commission_amount}"
-                )
-                
-                messages.success(
-                    request, 
-                    f'Credit transaction #{credit_transaction.transaction_id} created successfully. '
-                    f'Commission of KSH {commission_amount} will be paid when company pays.'
-                )
+                messages.success(request, f'✅ Credit transaction #{credit_transaction.transaction_id} created!')
                 return redirect('credit:transaction_receipt', pk=credit_transaction.pk)
                 
+        except CreditCompany.DoesNotExist:
+            messages.error(request, 'Selected company not found')
+            return redirect('credit:transaction_create')
+        except CreditCustomer.DoesNotExist:
+            messages.error(request, 'Selected customer not found')
+            return redirect('credit:transaction_create')
+        except ProductUnit.DoesNotExist:
+            messages.error(request, 'Selected unit not found')
+            return redirect('credit:transaction_create')
         except Exception as e:
-            logger.error(f"Error creating credit transaction: {str(e)}")
-            messages.error(request, f'Error creating transaction: {str(e)}')
+            print(f"Error: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            messages.error(request, f'Error: {str(e)}')
             return redirect('credit:transaction_create')
     
     # GET request - show form
     companies = CreditCompany.objects.filter(is_active=True)
     customers = CreditCustomer.objects.filter(is_active=True)
     
-    # Get IDs of products that already have ANY credit transaction
-    products_with_credit = CreditTransaction.objects.values_list('product_id', flat=True).distinct()
+    # Get available ProductUnits (single items)
+    units_with_credit = CreditTransaction.objects.filter(
+        product__isnull=False
+    ).values_list('product_id', flat=True).distinct()
     
-    # Filter products for single items with available units
-    # Get all single item products that have available units
-    available_products = []
-    products = Product.objects.filter(
-        category__item_type='single',
-        is_active=True,
-        is_discontinued=False
+    available_units = ProductUnit.objects.filter(
+        product__is_active=True,
+        product__is_discontinued=False,
+        product__category__item_type='single',
+        status='available'
     ).exclude(
-        id__in=products_with_credit
-    ).select_related('category')
+        id__in=units_with_credit
+    ).select_related('product')
     
-    # Filter only products with available units
-    for product in products:
-        if product.available_quantity > 0:
-            available_products.append(product)
-    
-    # Log for debugging
-    logger.info(f"Credit product selection - Single items available: {len(available_products)}")
-    
-    # If no products available, show warning
-    if len(available_products) == 0:
-        messages.warning(
-            request, 
-            'No single items available for credit. All available items either:\n'
-            '- Have existing credit transactions\n'
-            '- Have no available units\n'
-            '- Are out of stock'
-        )
+    units_json = json.dumps([
+        {
+            'id': unit.id,
+            'identifier': unit.unique_identifier,
+            'product_name': unit.product.display_name,
+            'selling_price': float(unit.effective_selling_price),
+            'sku_code': unit.product.sku_code,
+            'brand': unit.product.brand,
+            'model': unit.product.model,
+            'imei_number': unit.imei_number,
+            'serial_number': unit.serial_number,
+        } for unit in available_units
+    ])
     
     context = {
         'companies': companies,
         'customers': customers,
-        'products': available_products,
-        'commission_types': CreditTransaction._meta.get_field('commission_type').choices,
+        'units_json': units_json,
+        'total_available_units': available_units.count(),
+        'daily_sales': CreditTransaction.objects.filter(transaction_date__date=timezone.now().date()).count(),
+        'monthly_sales': CreditTransaction.objects.filter(transaction_date__date__gte=timezone.now().date() - timedelta(days=30)).count(),
+        'total_customers': customers.count(),
     }
     return render(request, 'credit/transactions/create.html', context)
 
@@ -1274,13 +1260,6 @@ def payment_list(request):
     
     context = {'payments': payments}
     return render(request, 'credit/payments/list.html', context)
-
-
-
-
-
-
-
 
 @login_required
 def payment_add(request):
@@ -1449,10 +1428,6 @@ def payment_add(request):
     
     return render(request, 'credit/company_payment.html', context)
 
-
-
-
-
 @login_required
 def payment_detail(request, pk):
     """View payment details - UPDATED WITH COMMISSION"""
@@ -1473,8 +1448,6 @@ def payment_detail(request, pk):
         'total_commission': total_commission,
     }
     return render(request, 'credit/payments/detail.html', context)
-
-
 
 
 @login_required
@@ -1648,8 +1621,6 @@ def credit_company_payment(request, company_id):
     }
     
     return render(request, 'credit/company_payment.html', context)
-
-
 
 
 @login_required

@@ -229,7 +229,9 @@
         
         .sidebar.collapsed .nav-link span,
         .sidebar.collapsed .sidebar-section-title,
-        .sidebar.collapsed .btn span {
+        .sidebar.collapsed .btn span,
+        .sidebar.collapsed .dashboard-dropdown .dropdown-toggle span,
+        .sidebar.collapsed .dashboard-dropdown .dropdown-arrow {
             display: none;
         }
         
@@ -237,6 +239,17 @@
             margin-right: 0;
             width: auto;
             font-size: 1.25rem;
+        }
+        
+        .sidebar.collapsed .dashboard-dropdown .dropdown-toggle i {
+            margin-right: 0;
+        }
+        
+        .sidebar.collapsed .dashboard-dropdown .dropdown-menu {
+            position: fixed;
+            left: 80px;
+            top: auto;
+            min-width: 200px;
         }
         
         .sidebar.show-mobile {
@@ -267,6 +280,10 @@
             
             body.sidebar-open::after {
                 display: block;
+            }
+            
+            .sidebar.collapsed ~ .main-content {
+                left: 0 !important;
             }
         }
         
@@ -350,6 +367,74 @@
             border-radius: 20px;
         }
         
+        /* Dashboard Dropdown Styles */
+        .dashboard-dropdown {
+            position: relative;
+        }
+        
+        .dashboard-dropdown .dropdown-toggle {
+            cursor: pointer;
+            position: relative;
+        }
+        
+        .dashboard-dropdown .dropdown-toggle .dropdown-arrow {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 0.75rem;
+            transition: transform 0.3s ease;
+        }
+        
+        .dashboard-dropdown .dropdown-toggle[aria-expanded="true"] .dropdown-arrow {
+            transform: translateY(-50%) rotate(180deg);
+        }
+        
+        .dashboard-dropdown .dropdown-menu {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            padding: 0.5rem 0;
+            min-width: 220px;
+            margin-top: 0.5rem;
+        }
+        
+        .dashboard-dropdown .dropdown-item {
+            padding: 0.75rem 1rem;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            transition: all 0.2s ease;
+        }
+        
+        .dashboard-dropdown .dropdown-item i {
+            width: 24px;
+            font-size: 1rem;
+            margin-right: 8px;
+        }
+        
+        .dashboard-dropdown .dropdown-item:hover {
+            background: var(--sidebar-hover);
+            color: var(--text-light);
+        }
+        
+        .dashboard-dropdown .dropdown-item.active {
+            background: var(--primary-color);
+            color: white;
+        }
+        
+        .dashboard-dropdown .dropdown-item .badge {
+            font-size: 0.7rem;
+            padding: 0.25rem 0.5rem;
+            margin-left: auto;
+        }
+        
+        .dashboard-dropdown .dropdown-divider {
+            margin: 0.25rem 0;
+            border-color: var(--border-color);
+        }
+        
         /* Logout button in sidebar */
         .sidebar .logout-btn {
             background: var(--danger-color);
@@ -403,7 +488,7 @@
             margin-right: 5px;
         }
         
-        /* Main Content Area - Ready for other HTMLs */
+        /* Main Content Area */
         .main-content {
             position: fixed;
             top: 70px;
@@ -416,7 +501,7 @@
             transition: left 0.3s ease;
         }
         
-        .sidebar.collapsed + .main-content {
+        .sidebar.collapsed ~ .main-content {
             left: 80px;
         }
         
@@ -439,7 +524,7 @@
             border-radius: 4px;
         }
         
-        /* Breadcrumb Navigation - Optional, can be used in child templates */
+        /* Breadcrumb Navigation */
         .breadcrumb {
             background: var(--card-bg);
             padding: 0.75rem 1rem;
@@ -455,6 +540,21 @@
         
         .breadcrumb-item.active {
             color: var(--text-secondary);
+        }
+        
+        /* Dark theme adjustments */
+        [data-theme="dark"] .dashboard-dropdown .dropdown-menu {
+            background: var(--card-bg);
+            border-color: var(--border-color);
+        }
+        
+        [data-theme="dark"] .dashboard-dropdown .dropdown-item {
+            color: var(--text-primary);
+        }
+        
+        [data-theme="dark"] .dashboard-dropdown .dropdown-item:hover {
+            background: var(--sidebar-hover);
+            color: var(--text-light);
         }
         
         /* Responsive */
@@ -510,7 +610,6 @@
                 {% endif %}
             </a>
             
-            <!-- Added a spacer div to create distance -->
             <div style="width: 20px;"></div>
             
             <div class="navbar-user" id="userMenu" role="button" aria-haspopup="true" aria-expanded="false">
@@ -540,23 +639,108 @@
     <!-- Fixed Sidebar -->
     <div class="sidebar" id="sidebar">
         <div class="sidebar-nav">
-            <!-- Main Navigation -->
+            <!-- Main Navigation Section with Dropdown -->
             <div class="sidebar-section">
                 <div class="sidebar-section-title">DASHBOARDS</div>
                 <nav class="nav flex-column" aria-label="Main navigation">
-                    <a class="nav-link {% if request.resolver_match.url_name == 'staff_dashboard' %}active{% endif %}" 
-                       href="{% url 'staff:staff_dashboard' %}">
-                        <i class="fas fa-tachometer-alt"></i> 
-                        <span>
-                            {% if request.user.is_superuser %}
-                                Main Dashboard
-                            {% else %}
-                                {% get_dashboard_name request.user as dashboard_name %}
-                                {{ dashboard_name }}
-                            {% endif %}
-                        </span>
-                    </a>
+                    <!-- Dashboard Dropdown Button -->
+                    <div class="dashboard-dropdown">
+                        <a class="nav-link dropdown-toggle" 
+                           href="#" 
+                           id="dashboardDropdown" 
+                           role="button" 
+                           data-bs-toggle="dropdown" 
+                           aria-expanded="false">
+                            <i class="fas fa-tachometer-alt"></i> 
+                            <span>
+                                {% if request.user.is_superuser %}
+                                    Dashboards
+                                {% else %}
+                                    {% get_dashboard_name request.user as dashboard_name %}
+                                    {{ dashboard_name }}
+                                {% endif %}
+                            </span>
+                        </a>
+                        <ul class="dropdown-menu" aria-labelledby="dashboardDropdown">
 
+                            <!-- Admin Dashboard Option (Superusers only) -->
+                            {% if request.user.is_superuser %}
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <a class="dropdown-item {% if request.resolver_match.url_name == 'admin_dashboard' %}active{% endif %}" 
+                                   href="{% url 'staff:admin_dashboard' %}">
+                                    <i class="fas fa-crown me-2"></i> 
+                                    <span>Administrator</span>
+                                </a>
+                            </li>
+                            {% endif %}
+
+                            <!-- Seller Dashboard Option -->
+                            {% if request.user.is_superuser or request.user|has_role:'sales_agent,sales_manager' %}
+                            <li>
+                                <a class="dropdown-item {% if request.resolver_match.url_name == 'sales_agent_dashboard' %}active{% endif %}" 
+                                   href="{% url 'staff:sales_agent_dashboard' %}">
+                                    <i class="fas fa-chart-line me-2"></i> 
+                                    <span>Seller</span>
+                                    {% if request.user|has_role:'sales_agent' %}
+                                    <span class="badge bg-success ms-2">Active</span>
+                                    {% endif %}
+                                </a>
+                            </li>
+                            {% endif %}
+                            
+                            <!-- Cashier Dashboard Option -->
+                            {% if request.user.is_superuser or request.user|has_role:'cashier' %}
+                            <li>
+                                <a class="dropdown-item {% if request.resolver_match.url_name == 'cashier_dashboard' %}active{% endif %}" 
+                                   href="{% url 'staff:cashier_dashboard' %}">
+                                    <i class="fas fa-cash-register me-2"></i> 
+                                    <span>Cashier</span>
+                                    {% if request.user|has_role:'cashier' %}
+                                    <span class="badge bg-success ms-2">Active</span>
+                                    {% endif %}
+                                </a>
+                            </li>
+                            {% endif %}
+                            
+                            
+                            <!-- credit  Dashboard -->
+                            {% if request.user.is_superuser or request.user|has_role:'sales_manager' %}
+                            <li>
+                                <a class="dropdown-item {% if request.resolver_match.url_name == 'credit_officer_dashboard' %}active{% endif %}" 
+                                   href="{% url 'staff:credit_officer_dashboard' %}">
+                                    <i class="fas fa-chart-simple me-2"></i> 
+                                    <span>Creditor</span>
+                                    {% if request.user|has_role:'credit_officer' %}
+                                    <span class="badge bg-success ms-2">Active</span>
+                                    {% endif %}
+                                </a>
+                            </li>
+                            {% endif %}
+                            
+                            <!-- Store Manager Dashboard -->
+                            {% if request.user.is_superuser or request.user|has_role:'store_manager,inventory_manager' %}
+                            <li>
+                                <a class="dropdown-item {% if request.resolver_match.url_name == 'store_manager_dashboard' %}active{% endif %}" 
+                                   href="{% url 'staff:store_manager_dashboard' %}">
+                                    <i class="fas fa-warehouse me-2"></i> 
+                                    <span>Inventory</span>
+                                </a>
+                            </li>
+                            {% endif %}
+                            
+                            <!-- Technician Dashboard -->
+                            {% if request.user.is_superuser or request.user|has_role:'technician' %}
+                            <li>
+                                <a class="dropdown-item {% if request.resolver_match.url_name == 'technician_dashboard' %}active{% endif %}" 
+                                   href="{% url 'staff:technician_dashboard' %}">
+                                    <i class="fas fa-tools me-2"></i> 
+                                    <span>Technician</span>
+                                </a>
+                            </li>
+                            {% endif %}
+                        </ul>
+                    </div>
                 </nav>
             </div>
 
@@ -586,23 +770,19 @@
                     {% endif %}
 
                     {% if request.user.is_superuser or request.user|has_role:'finance_manager,finance_officer,supervisor' %}
-                    <a class="nav-link {% if 'statistics' in request.path and 'finance' in request.path %}active{% endif %}" 
-                       href="#">
+                    <a class="nav-link" href="#">
                         <i class="fas fa-chart-area"></i> <span>Finance Statistics</span>
                     </a>
                     {% endif %}
 
                     {% if request.user.is_superuser or request.user|has_role:'mpesa_agent,mpesa_officer,supervisor' %}
-                    <a class="nav-link {% if 'statistics' in request.path and 'mpesa_agent' in request.path %}active{% endif %}" 
-                       href="{% url 'shops:shop_statistics' %}">
+                    <a class="nav-link" href="{% url 'shops:shop_statistics' %}">
                         <i class="fas fa-chart-pie"></i> <span>M-Pesa Statistics</span>
                     </a>
                     {% endif %}
-
                 </nav>
             </div>
 
-            
             <!-- Other Apps Section -->
             <div class="sidebar-section">
                 <div class="sidebar-section-title">MASTER APPS</div>
@@ -615,7 +795,7 @@
 
                     {% if request.user.is_superuser or request.user|has_role:'finance_manager,supervisor,finance_officer' %}
                     <a class="nav-link" href="{% url 'shops:dashboard' %}">
-                        <i class="fas fa-chart-line"></i> <span> M-pesa Master</span>
+                        <i class="fas fa-chart-line"></i> <span>M-pesa Master</span>
                     </a>
                     {% endif %}
 
@@ -639,33 +819,31 @@
                 </nav>
             </div>
 
-
-        <!-- 🔧 WORKSHOP SECTION --->
-        <div class="sidebar-section">
-            <div class="sidebar-section-title">WORKSHOP</div>
-            <nav class="nav flex-column" aria-label="Workshop navigation">
-                <a class="nav-link {% if 'workshop' in request.path and 'dashboard' in request.path %}active{% endif %}" 
-                   href="{% url 'workshop:dashboard' %}">
-                    <i class="fas fa-tools"></i> <span>Workshop Dashboard</span>
-                </a>
-                <a class="nav-link {% if 'workshop/jobs' in request.path and 'create' not in request.path %}active{% endif %}" 
-                   href="{% url 'workshop:job_list' %}">
-                    <i class="fas fa-list"></i> <span>All Repair Jobs</span>
-                    {% if pending_repair_count > 0 %}
-                    <span class="badge bg-warning text-dark">{{ pending_repair_count }}</span>
-                    {% endif %}
-                </a>
-                <a class="nav-link {% if 'workshop/jobs/create' in request.path %}active{% endif %}" 
-                   href="{% url 'workshop:job_create' %}">
-                    <i class="fas fa-plus-circle"></i> <span>New Repair Job</span>
-                </a>
-                <a class="nav-link {% if 'workshop/reports' in request.path %}active{% endif %}" 
-                   href="{% url 'workshop:reports' %}">
-                    <i class="fas fa-chart-line"></i> <span>Workshop Reports</span>
-                </a>
-            </nav>
-        </div>
-
+            <!-- Workshop Section -->
+            <div class="sidebar-section">
+                <div class="sidebar-section-title">WORKSHOP</div>
+                <nav class="nav flex-column" aria-label="Workshop navigation">
+                    <a class="nav-link {% if 'workshop' in request.path and 'dashboard' in request.path %}active{% endif %}" 
+                       href="{% url 'workshop:dashboard' %}">
+                        <i class="fas fa-tools"></i> <span>Workshop Dashboard</span>
+                    </a>
+                    <a class="nav-link {% if 'workshop/jobs' in request.path and 'create' not in request.path %}active{% endif %}" 
+                       href="{% url 'workshop:job_list' %}">
+                        <i class="fas fa-list"></i> <span>All Repair Jobs</span>
+                        {% if pending_repair_count > 0 %}
+                        <span class="badge bg-warning text-dark">{{ pending_repair_count }}</span>
+                        {% endif %}
+                    </a>
+                    <a class="nav-link {% if 'workshop/jobs/create' in request.path %}active{% endif %}" 
+                       href="{% url 'workshop:job_create' %}">
+                        <i class="fas fa-plus-circle"></i> <span>New Repair Job</span>
+                    </a>
+                    <a class="nav-link {% if 'workshop/reports' in request.path %}active{% endif %}" 
+                       href="{% url 'workshop:reports' %}">
+                        <i class="fas fa-chart-line"></i> <span>Workshop Reports</span>
+                    </a>
+                </nav>
+            </div>
 
             <!-- Management Section -->
             <div class="sidebar-section">
@@ -694,7 +872,7 @@
                 </nav>
             </div>
 
-            <!-- Logout Section (at bottom of sidebar) -->
+            <!-- Logout Section -->
             <div class="sidebar-section mt-4">
                 <form method="post" action="{% url 'staff:logout' %}" id="logoutForm">
                    {% csrf_token %}
@@ -706,7 +884,7 @@
         </div>
     </div>
 
-    <!-- Main Content Area - Ready for other HTMLs to extend -->
+    <!-- Main Content Area -->
     <div class="main-content" id="mainContent">
         <!-- Messages -->
         {% if messages %}
@@ -807,7 +985,6 @@
             
             // Initialize DataTables with lazy loading (only if tables exist)
             if ($('table.datatable').length) {
-                // Load DataTables dynamically only if needed
                 $.getScript("https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js")
                     .done(function() {
                         $.getScript("https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js")
