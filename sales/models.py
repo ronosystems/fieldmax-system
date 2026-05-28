@@ -200,7 +200,11 @@ class Sale(models.Model):
     tax_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
     total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     amount_paid = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
-    
+
+    cart_snapshot = models.JSONField(default=dict, blank=True)
+    is_completed = models.BooleanField(default=False)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
     # Payment details
     payment_method = models.CharField(
         max_length=20,
@@ -657,6 +661,10 @@ class PaymentRecord(models.Model):
     )
     method = models.CharField(max_length=20, choices=PAYMENT_METHODS)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
+    
+    # Add these two fields:
+    is_confirmed = models.BooleanField(default=False)
+    confirmed_at = models.DateTimeField(null=True, blank=True)
     
     # Cash specific fields
     cash_tendered = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)

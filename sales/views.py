@@ -94,347 +94,364 @@ def get_day_suffix(day):
 
 
 
+# ============================================
+# PERIOD DETAILS HELPER FUNCTIONS - COMPLETE FIX
+# ============================================
 
-def get_items_by_date(date_str):
-    """Get all items sold on a specific date - FIXED for SKU model"""
-    try:
-        # Parse the date string
-        date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
-        start_date = timezone.make_aware(timezone.datetime.combine(date_obj, timezone.datetime.min.time()))
-        end_date = timezone.make_aware(timezone.datetime.combine(date_obj, timezone.datetime.max.time()))
-        
-        # Get returned sale IDs to exclude
-        from inventory.models import ReturnRequest
-        
-        returned_sale_ids = ReturnRequest.objects.filter(
-            ~Q(status='rejected')
-        ).exclude(
-            Q(sale_id__isnull=True) | Q(sale_id='')
-        ).values_list('sale_id', flat=True).distinct()
-        
-        # Get active sales for the date
-        active_sales = Sale.objects.filter(
-            sale_date__range=[start_date, end_date],
-            is_reversed=False
-        ).exclude(
-            sale_id__in=returned_sale_ids
-        )
-        
-        # Get all items from these sales
-        items = SaleItem.objects.filter(
-            sale__in=active_sales
-        ).select_related('product', 'sale', 'product_unit')
-        
-        # Aggregate items by product SKU
-        product_totals = {}
-        for item in items:
-            # Get product SKU code
-            sku_code = item.sku_value or (item.product.sku_code if item.product else 'unknown')
-            
-            if sku_code not in product_totals:
-                # Get buying price for profit calculation
-                buying_price = Decimal('0')
-                if item.product_unit and item.product_unit.unit_buying_price:
-                    buying_price = item.product_unit.unit_buying_price
-                elif item.product and item.product.buying_price:
-                    buying_price = item.product.buying_price
-                
-                product_totals[sku_code] = {
-                    'product_name': item.product_name or (item.product.display_name if item.product else 'Unknown'),
-                    'product_code': item.product_code or sku_code,
-                    'sku_value': item.sku_value or sku_code,
-                    'buying_price': buying_price,
-                    'total_quantity': 0,
-                    'total_revenue': 0,
-                    'total_profit': 0,
-                    'sales_count': 0
-                }
-            
-            # Calculate profit for this item
-            buying_price = product_totals[sku_code]['buying_price']
-            revenue = float(item.total_price)
-            profit = revenue - (float(buying_price) * item.quantity)
-            
-            product_totals[sku_code]['total_quantity'] += item.quantity
-            product_totals[sku_code]['total_revenue'] += revenue
-            product_totals[sku_code]['total_profit'] += profit
-            product_totals[sku_code]['sales_count'] += 1
-        
-        # Convert to list and calculate margins
-        items_list = []
-        total_revenue = 0
-        total_profit = 0
-        total_items = 0
-        
-        for product_data in product_totals.values():
-            margin = (product_data['total_profit'] / product_data['total_revenue'] * 100) if product_data['total_revenue'] > 0 else 0
-            items_list.append({
-                'product_name': product_data['product_name'],
-                'product_code': product_data['product_code'],
-                'sku_value': product_data['sku_value'],
-                'total_quantity': product_data['total_quantity'],
-                'total_revenue': product_data['total_revenue'],
-                'total_profit': product_data['total_profit'],
-                'margin': margin,
-                'has_multiple_sales': product_data['sales_count'] > 1
-            })
-            total_revenue += product_data['total_revenue']
-            total_profit += product_data['total_profit']
-            total_items += product_data['total_quantity']
-        
-        # Sort by quantity sold (descending)
-        items_list.sort(key=lambda x: x['total_quantity'], reverse=True)
-        
-        avg_margin = (total_profit / total_revenue * 100) if total_revenue > 0 else 0
-        
-        return {
-            'success': True,
-            'items': items_list,
-            'total_items': total_items,
-            'total_revenue': total_revenue,
-            'total_profit': total_profit,
-            'avg_margin': avg_margin
-        }
-        
-    except Exception as e:
-        logger.error(f"Error getting items by date {date_str}: {str(e)}")
-        return {
-            'success': False,
-            'message': str(e),
-            'items': []
-        }
+from datetime import datetime, timedelta, date
+from django.utils import timezone
+from collections import defaultdict
+import calendar
 
-def get_items_by_week(week_number):
-    """Get all items sold during a specific week of the current month - FIXED for SKU model"""
-    today = timezone.now().date()
-    current_year = today.year
-    current_month = today.month
+
+def get_sales_by_date_range(start_date, end_date):
+    """Get sales within a date range - USING DATE FILTER ONLY"""
+    from sales.models import Sale
     
-    # Calculate week date range
-    last_day = calendar.monthrange(current_year, current_month)[1]
+    # Ensure we have date objects
+    if isinstance(start_date, str):
+        start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+    if isinstance(end_date, str):
+        end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+    if isinstance(start_date, datetime):
+        start_date = start_date.date()
+    if isinstance(end_date, datetime):
+        end_date = end_date.date()
     
-    week_ranges = {
-        1: (1, 7),
-        2: (8, 14),
-        3: (15, 21),
-        4: (22, 28),
-        5: (29, last_day)
-    }
+    print(f"[DEBUG] get_sales_by_date_range: {start_date} to {end_date}")
     
-    if week_number not in week_ranges:
-        return {
-            'success': False,
-            'message': 'Invalid week number',
-            'items': []
-        }
-    
-    start_day, end_day = week_ranges[week_number]
-    end_day = min(end_day, last_day)
-    
-    start_date = date(current_year, current_month, start_day)
-    end_date = date(current_year, current_month, end_day)
-    
-    start_date_aware = timezone.make_aware(timezone.datetime.combine(start_date, timezone.datetime.min.time()))
-    end_date_aware = timezone.make_aware(timezone.datetime.combine(end_date, timezone.datetime.max.time()))
-    
-    # Get returned sale IDs
-    from inventory.models import ReturnRequest
-    
-    returned_sale_ids = ReturnRequest.objects.filter(
-        ~Q(status='rejected')
-    ).exclude(
-        Q(sale_id__isnull=True) | Q(sale_id='')
-    ).values_list('sale_id', flat=True).distinct()
-    
-    # Get active sales for the week
-    active_sales = Sale.objects.filter(
-        sale_date__range=[start_date_aware, end_date_aware],
+    # CRITICAL: Use __date filter to ignore timezone
+    sales = Sale.objects.filter(
+        sale_date__date__gte=start_date,
+        sale_date__date__lte=end_date,
+        is_completed=True,
         is_reversed=False
-    ).exclude(
-        sale_id__in=returned_sale_ids
+    ).prefetch_related(
+        'items__product',
+        'items__product_unit',
+        'items__product__category'
     )
     
-    # Get all items from these sales
-    items = SaleItem.objects.filter(
-        sale__in=active_sales
-    ).select_related('product', 'sale', 'product_unit')
+    print(f"[DEBUG] Found {sales.count()} sales")
     
-    # Aggregate items by product SKU
-    product_totals = {}
-    for item in items:
-        sku_code = item.sku_value or (item.product.sku_code if item.product else 'unknown')
-        
-        if sku_code not in product_totals:
-            buying_price = Decimal('0')
-            if item.product_unit and item.product_unit.unit_buying_price:
-                buying_price = item.product_unit.unit_buying_price
-            elif item.product and item.product.buying_price:
-                buying_price = item.product.buying_price
+    # Debug: Print each sale found
+    for sale in sales:
+        print(f"[DEBUG]   Sale #{sale.sale_id}: Date={sale.sale_date}, Total={sale.total_amount}")
+    
+    return sales
+
+def get_items_by_date(target_date):
+    """Get all sale items for a specific date"""
+    from sales.models import Sale
+    
+    if isinstance(target_date, str):
+        target_date = datetime.strptime(target_date, '%Y-%m-%d').date()
+    
+    print(f"[DEBUG] get_items_by_date: Looking for sales on {target_date}")
+    
+    # This correctly handles timezone by using the date part
+    sales = Sale.objects.filter(
+        sale_date__date=target_date,
+        is_completed=True,
+        is_reversed=False
+    ).prefetch_related(
+        'items__product',
+        'items__product_unit'
+    )
+    
+    print(f"[DEBUG] Found {sales.count()} sales on {target_date}")
+    
+    return process_sales_aggregation(sales)
+
+def get_items_by_week(week_number, year=None):
+    """Get items sold during a specific week OF THE MONTH"""
+    from sales.models import Sale
+    
+    if year is None:
+        year = timezone.now().year
+    else:
+        year = int(year)
+    
+    week_number = int(week_number)
+    
+    # Get current month
+    current_month = timezone.now().month
+    
+    # Calculate the actual date range for the week of the current month
+    # Week 1: Days 1-7, Week 2: Days 8-14, Week 3: Days 15-21, Week 4: Days 22-28, Week 5: Days 29-31
+    start_day = (week_number - 1) * 7 + 1
+    end_day = min(week_number * 7, calendar.monthrange(year, current_month)[1])
+    
+    start_date = date(year, current_month, start_day)
+    end_date = date(year, current_month, end_day)
+    
+    # If week 5 and month has less than 35 days, adjust end date
+    if week_number == 5 and end_day < start_day:
+        end_date = date(year, current_month, calendar.monthrange(year, current_month)[1])
+    
+    print(f"[DEBUG] Week {week_number} of {current_month}/{year}: {start_date} to {end_date}")
+    
+    sales = Sale.objects.filter(
+        sale_date__date__gte=start_date,
+        sale_date__date__lte=end_date,
+        is_completed=True,
+        is_reversed=False
+    ).prefetch_related('items__product', 'items__product_unit')
+    
+    print(f"[DEBUG] Found {sales.count()} sales for week {week_number}")
+    
+    return process_sales_aggregation(sales)
+
+def get_items_by_month(month_name, year):
+    """Get items sold during a specific month"""
+    from sales.models import Sale
+    
+    # Month name to number mapping
+    month_names = {
+        'january': 1, 'jan': 1, '1': 1,
+        'february': 2, 'feb': 2, '2': 2,
+        'march': 3, 'mar': 3, '3': 3,
+        'april': 4, 'apr': 4, '4': 4,
+        'may': 5, '5': 5,
+        'june': 6, 'jun': 6, '6': 6,
+        'july': 7, 'jul': 7, '7': 7,
+        'august': 8, 'aug': 8, '8': 8,
+        'september': 9, 'sep': 9, '9': 9,
+        'october': 10, 'oct': 10, '10': 10,
+        'november': 11, 'nov': 11, '11': 11,
+        'december': 12, 'dec': 12, '12': 12,
+    }
+    
+    month_lower = str(month_name).lower()
+    month_number = month_names.get(month_lower, timezone.now().month)
+    year = int(year) if year else timezone.now().year
+    
+    # First day of month
+    start_date = date(year, month_number, 1)
+    # Last day of month
+    if month_number == 12:
+        end_date = date(year, 12, 31)
+    else:
+        end_date = date(year, month_number + 1, 1) - timedelta(days=1)
+    
+    print(f"[DEBUG] Month {month_name} {year}: {start_date} to {end_date}")
+    
+    sales = Sale.objects.filter(
+        sale_date__date__gte=start_date,
+        sale_date__date__lte=end_date,
+        is_completed=True,
+        is_reversed=False
+    ).prefetch_related('items__product', 'items__product_unit')
+    
+    print(f"[DEBUG] Found {sales.count()} sales for {month_name} {year}")
+    
+    return process_sales_aggregation(sales)
+
+def get_items_by_yesterday():
+    """Get items sold yesterday"""
+    yesterday = timezone.now().date() - timedelta(days=1)
+    return get_items_by_date(yesterday)
+
+
+def get_items_by_today():
+    """Get items sold today"""
+    today = timezone.now().date()
+    return get_items_by_date(today)
+
+
+def process_sales_aggregation(sales):
+    """Process sales data into aggregated format"""
+    
+    if sales.count() == 0:
+        print("[DEBUG] No sales found, returning empty result")
+        return {
+            'items': [],
+            'total_items': 0,
+            'total_revenue': 0.0,
+            'total_profit': 0.0,
+            'avg_margin': 0.0,
+        }
+    
+    product_data = defaultdict(lambda: {
+        'product_name': '',
+        'product_code': '',
+        'total_quantity': 0,
+        'total_revenue': 0.0,
+        'total_profit': 0.0,
+        'identifiers': [],
+        'bulk_serial': None,
+        'has_multiple_sales': False,
+    })
+    
+    for sale in sales:
+        print(f"[DEBUG] Processing sale: {sale.sale_id}")
+        for sale_item in sale.items.all():
+            product = sale_item.product
+            key = product.id
             
-            product_totals[sku_code] = {
-                'product_name': item.product_name or (item.product.display_name if item.product else 'Unknown'),
-                'product_code': item.product_code or sku_code,
-                'sku_value': item.sku_value or sku_code,
-                'buying_price': buying_price,
-                'total_quantity': 0,
-                'total_revenue': 0,
-                'total_profit': 0,
-                'sales_count': 0
-            }
-        
-        buying_price = product_totals[sku_code]['buying_price']
-        revenue = float(item.total_price)
-        profit = revenue - (float(buying_price) * item.quantity)
-        
-        product_totals[sku_code]['total_quantity'] += item.quantity
-        product_totals[sku_code]['total_revenue'] += revenue
-        product_totals[sku_code]['total_profit'] += profit
-        product_totals[sku_code]['sales_count'] += 1
+            # Initialize product data
+            if not product_data[key]['product_name']:
+                product_data[key]['product_name'] = sale_item.product_name or product.name
+                product_data[key]['product_code'] = product.sku_code
+                
+                # Capture bulk serial number from Product
+                if product.bulk_serial_number:
+                    product_data[key]['bulk_serial'] = product.bulk_serial_number
+                    product_data[key]['identifiers'].append({
+                        'type': 'Batch/S/N',
+                        'value': product.bulk_serial_number,
+                        'sale_id': sale.sale_id,
+                        'sale_date': sale.sale_date.strftime('%Y-%m-%d %H:%M'),
+                    })
+                    print(f"[DEBUG]   Added bulk serial: {product.bulk_serial_number}")
+            
+            # Add quantities
+            product_data[key]['total_quantity'] += sale_item.quantity
+            product_data[key]['total_revenue'] += float(sale_item.total_price or 0)
+            product_data[key]['total_profit'] += float(sale_item.profit or 0)
+            
+            # Add unit identifiers (IMEI/Serial)
+            if sale_item.product_unit:
+                unit = sale_item.product_unit
+                if unit.imei_number:
+                    product_data[key]['identifiers'].append({
+                        'type': 'IMEI',
+                        'value': unit.imei_number,
+                        'sale_id': sale.sale_id,
+                        'sale_date': sale.sale_date.strftime('%Y-%m-%d %H:%M'),
+                    })
+                    print(f"[DEBUG]   Added IMEI: {unit.imei_number}")
+                elif unit.serial_number:
+                    product_data[key]['identifiers'].append({
+                        'type': 'S/N',
+                        'value': unit.serial_number,
+                        'sale_id': sale.sale_id,
+                        'sale_date': sale.sale_date.strftime('%Y-%m-%d %H:%M'),
+                    })
+                    print(f"[DEBUG]   Added Serial: {unit.serial_number}")
     
-    # Convert to list
-    items_list = []
-    total_revenue = 0
-    total_profit = 0
-    total_items = 0
-    
-    for product_data in product_totals.values():
-        margin = (product_data['total_profit'] / product_data['total_revenue'] * 100) if product_data['total_revenue'] > 0 else 0
-        items_list.append({
-            'product_name': product_data['product_name'],
-            'product_code': product_data['product_code'],
-            'sku_value': product_data['sku_value'],
-            'total_quantity': product_data['total_quantity'],
-            'total_revenue': product_data['total_revenue'],
-            'total_profit': product_data['total_profit'],
+    # Build items list
+    items = []
+    for key, data in product_data.items():
+        margin = (data['total_profit'] / data['total_revenue'] * 100) if data['total_revenue'] > 0 else 0
+        
+        first_identifier = data['identifiers'][0] if data['identifiers'] else None
+        if not first_identifier and data['bulk_serial']:
+            first_identifier = {'type': 'Batch', 'value': data['bulk_serial']}
+        
+        items.append({
+            'product_name': data['product_name'],
+            'product_code': data['product_code'],
+            'total_quantity': data['total_quantity'],
+            'total_revenue': data['total_revenue'],
+            'total_profit': data['total_profit'],
             'margin': margin,
-            'has_multiple_sales': product_data['sales_count'] > 1
+            'has_multiple_sales': len(data['identifiers']) > 1,
+            'identifiers': data['identifiers'],
+            'first_identifier': first_identifier,
+            'bulk_serial': data['bulk_serial'],
         })
-        total_revenue += product_data['total_revenue']
-        total_profit += product_data['total_profit']
-        total_items += product_data['total_quantity']
     
-    items_list.sort(key=lambda x: x['total_quantity'], reverse=True)
+    total_items = sum(i['total_quantity'] for i in items)
+    total_revenue = sum(i['total_revenue'] for i in items)
+    total_profit = sum(i['total_profit'] for i in items)
     avg_margin = (total_profit / total_revenue * 100) if total_revenue > 0 else 0
     
+    print(f"[DEBUG] Processed {len(items)} products, {total_items} items sold, Revenue: {total_revenue}")
+    
     return {
-        'success': True,
-        'items': items_list,
+        'items': items,
         'total_items': total_items,
         'total_revenue': total_revenue,
         'total_profit': total_profit,
-        'avg_margin': avg_margin
+        'avg_margin': avg_margin,
     }
 
-def get_items_by_month(month_name, year):
-    """Get all items sold during a specific month - FIXED for SKU model"""
+
+# ============================================
+# PERIOD DETAILS VIEW - COMPLETE
+# ============================================
+@login_required
+def period_details(request):
+    """Display items sold during a specific period"""
+    period_type = request.GET.get('type', 'day')
+    context = {}
+    
+    print(f"\n[DEBUG] ========== PERIOD DETAILS ==========")
+    print(f"[DEBUG] Period Type: {period_type}")
+    print(f"[DEBUG] GET params: {dict(request.GET)}")
+    
     try:
-        # Convert month name to number
-        month_number = datetime.strptime(month_name, '%B').month
-        
-        # Get date range for the month
-        start_date = date(int(year), month_number, 1)
-        last_day = calendar.monthrange(int(year), month_number)[1]
-        end_date = date(int(year), month_number, last_day)
-        
-        start_date_aware = timezone.make_aware(timezone.datetime.combine(start_date, timezone.datetime.min.time()))
-        end_date_aware = timezone.make_aware(timezone.datetime.combine(end_date, timezone.datetime.max.time()))
-        
-        # Get returned sale IDs
-        from inventory.models import ReturnRequest
-        
-        returned_sale_ids = ReturnRequest.objects.filter(
-            ~Q(status='rejected')
-        ).exclude(
-            Q(sale_id__isnull=True) | Q(sale_id='')
-        ).values_list('sale_id', flat=True).distinct()
-        
-        # Get active sales for the month
-        active_sales = Sale.objects.filter(
-            sale_date__range=[start_date_aware, end_date_aware],
-            is_reversed=False
-        ).exclude(
-            sale_id__in=returned_sale_ids
-        )
-        
-        # Get all items from these sales
-        items = SaleItem.objects.filter(
-            sale__in=active_sales
-        ).select_related('product', 'sale', 'product_unit')
-        
-        # Aggregate items by product SKU
-        product_totals = {}
-        for item in items:
-            sku_code = item.sku_value or (item.product.sku_code if item.product else 'unknown')
+        if period_type == 'day':
+            date_str = request.GET.get('date')
+            if not date_str:
+                date_str = timezone.now().date().isoformat()
             
-            if sku_code not in product_totals:
-                buying_price = Decimal('0')
-                if item.product_unit and item.product_unit.unit_buying_price:
-                    buying_price = item.product_unit.unit_buying_price
-                elif item.product and item.product.buying_price:
-                    buying_price = item.product.buying_price
-                
-                product_totals[sku_code] = {
-                    'product_name': item.product_name or (item.product.display_name if item.product else 'Unknown'),
-                    'product_code': item.product_code or sku_code,
-                    'sku_value': item.sku_value or sku_code,
-                    'buying_price': buying_price,
-                    'total_quantity': 0,
-                    'total_revenue': 0,
-                    'total_profit': 0,
-                    'sales_count': 0
-                }
+            target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+            context['period_title'] = f"Sales for {target_date.strftime('%A, %B %d, %Y')}"
+            result = get_items_by_date(target_date)
             
-            buying_price = product_totals[sku_code]['buying_price']
-            revenue = float(item.total_price)
-            profit = revenue - (float(buying_price) * item.quantity)
+        elif period_type == 'week':
+            week = request.GET.get('week')
+            year = request.GET.get('year', timezone.now().year)
+            week_range = request.GET.get('range', '')
             
-            product_totals[sku_code]['total_quantity'] += item.quantity
-            product_totals[sku_code]['total_revenue'] += revenue
-            product_totals[sku_code]['total_profit'] += profit
-            product_totals[sku_code]['sales_count'] += 1
+            if not week:
+                # Get current week of month
+                today = timezone.now().date()
+                week = ((today.day - 1) // 7) + 1
+                year = today.year
+            
+            result = get_items_by_week(int(week), int(year))
+            
+            # Use the provided week_range or generate one
+            if week_range:
+                context['period_title'] = f"Sales for Week {week}: {week_range}"
+            else:
+                context['period_title'] = f"Sales for Week {week}"
+            
+        elif period_type == 'month':
+            month = request.GET.get('month')
+            year = request.GET.get('year', timezone.now().year)
+            
+            if not month:
+                month = timezone.now().strftime('%B')
+                year = timezone.now().year
+            
+            result = get_items_by_month(month, year)
+            context['period_title'] = f"Sales for {month} {year}"
+            
+        elif period_type == 'yesterday':
+            context['period_title'] = "Sales for Yesterday"
+            result = get_items_by_yesterday()
+            
+        elif period_type == 'today':
+            context['period_title'] = "Sales for Today"
+            result = get_items_by_today()
+            
+        else:
+            print(f"[DEBUG] Unknown period type, redirecting to dashboard")
+            return redirect('sales:dashboard')
         
-        # Convert to list
-        items_list = []
-        total_revenue = 0
-        total_profit = 0
-        total_items = 0
+        context.update(result)
         
-        for product_data in product_totals.values():
-            margin = (product_data['total_profit'] / product_data['total_revenue'] * 100) if product_data['total_revenue'] > 0 else 0
-            items_list.append({
-                'product_name': product_data['product_name'],
-                'product_code': product_data['product_code'],
-                'sku_value': product_data['sku_value'],
-                'total_quantity': product_data['total_quantity'],
-                'total_revenue': product_data['total_revenue'],
-                'total_profit': product_data['total_profit'],
-                'margin': margin,
-                'has_multiple_sales': product_data['sales_count'] > 1
-            })
-            total_revenue += product_data['total_revenue']
-            total_profit += product_data['total_profit']
-            total_items += product_data['total_quantity']
-        
-        items_list.sort(key=lambda x: x['total_quantity'], reverse=True)
-        avg_margin = (total_profit / total_revenue * 100) if total_revenue > 0 else 0
-        
-        return {
-            'success': True,
-            'items': items_list,
-            'total_items': total_items,
-            'total_revenue': total_revenue,
-            'total_profit': total_profit,
-            'avg_margin': avg_margin
-        }
+        print(f"[DEBUG] Final result: {len(result.get('items', []))} items, {result.get('total_items', 0)} quantity")
+        print(f"[DEBUG] Total revenue: {result.get('total_revenue', 0)}")
+        print(f"[DEBUG] =====================================\n")
         
     except Exception as e:
-        logger.error(f"Error getting items by month {month_name} {year}: {str(e)}")
-        return {
-            'success': False,
-            'message': str(e),
-            'items': []
-        }
-
+        print(f"[ERROR] period_details: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        context['error'] = str(e)
+        context['items'] = []
+        context['total_items'] = 0
+        context['total_revenue'] = 0.0
+        context['total_profit'] = 0.0
+        context['avg_margin'] = 0.0
+        context['period_title'] = "Error Loading Data"
+    
+    return render(request, 'sales/period_details.html', context)
 
 
 # ============================================
@@ -835,51 +852,7 @@ def sales_statistics(request):
 
 
 
-
-
-# ============================================
-# PERIOD DETAILS VIEW
-# ============================================
-@login_required
-def period_details(request):
-    """Display items sold during a specific period"""
-    period_type = request.GET.get('type')
-    context = {}
     
-    if period_type == 'day':
-        date = request.GET.get('date')
-        context['period_title'] = f"Sales for {date}"
-        result = get_items_by_date(date)
-        context['items'] = result.get('items', [])
-        context['total_items'] = result.get('total_items', 0)
-        context['total_revenue'] = result.get('total_revenue', 0)
-        context['total_profit'] = result.get('total_profit', 0)
-        context['avg_margin'] = result.get('avg_margin', 0)
-        
-    elif period_type == 'week':
-        week = request.GET.get('week')
-        week_range = request.GET.get('range')
-        context['period_title'] = f"Sales for Week {week}: {week_range}"
-        result = get_items_by_week(int(week))
-        context['items'] = result.get('items', [])
-        context['total_items'] = result.get('total_items', 0)
-        context['total_revenue'] = result.get('total_revenue', 0)
-        context['total_profit'] = result.get('total_profit', 0)
-        context['avg_margin'] = result.get('avg_margin', 0)
-        
-    elif period_type == 'month':
-        month = request.GET.get('month')
-        year = request.GET.get('year')
-        context['period_title'] = f"Sales for {month} {year}"
-        result = get_items_by_month(month, year)
-        context['items'] = result.get('items', [])
-        context['total_items'] = result.get('total_items', 0)
-        context['total_revenue'] = result.get('total_revenue', 0)
-        context['total_profit'] = result.get('total_profit', 0)
-        context['avg_margin'] = result.get('avg_margin', 0)
-    
-    return render(request, 'sales/period_details.html', context)
-
 
 # ========================================
 # API ENDPOINTS
@@ -4609,238 +4582,226 @@ def cancel_pending_mpesa(request):
     
     return JsonResponse({'success': False, 'error': 'Invalid method'})
 
+
+
 @require_http_methods(["POST"])
 @csrf_exempt
-def create_split_payment_sale(request):
-    """Handle split payment sales with multiple payment methods"""
+def finalize_split_payment_sale(request, sale_id):
+    """Step 2: Finalize sale and deduct stock - ONLY after all payments confirmed"""
     
     try:
-        data = json.loads(request.body)
+        from inventory.models import Product, StockEntry, ProductUnit
+        from .models import Sale, SaleItem, Customer
         
-        # Extract data
-        cart_items = data.get('cart_items', [])
-        split_payments = data.get('split_payments', [])
-        total_amount = Decimal(str(data.get('cart_total', 0)))
-        total_paid = Decimal(str(data.get('amount_paid', 0)))
-        points_redeemed_total = int(data.get('points_redeemed', 0))
-        points_redeemed_customer_id = data.get('points_redeemed_customer_id')
+        sale = get_object_or_404(Sale, sale_id=sale_id)
         
-        # Validate payment totals
-        calculated_total = sum(Decimal(str(p.get('amount', 0))) for p in split_payments)
-        if abs(calculated_total - total_paid) > 0.01:
+        # Prevent double completion
+        if sale.is_completed:
+            return JsonResponse({'error': 'Sale already completed'}, status=400)
+        
+        # Check if all payments are confirmed
+        pending_payments = sale.payment_records.filter(is_confirmed=False)
+        if pending_payments.exists():
             return JsonResponse({
-                'error': f'Payment total mismatch: {calculated_total} vs {total_paid}'
+                'error': f'{pending_payments.count()} payment(s) still pending confirmation'
             }, status=400)
         
-        # Start database transaction
+        # Check if fully paid
+        total_paid = sum(p.amount for p in sale.payment_records.all())
+        if total_paid < sale.total_amount:
+            return JsonResponse({
+                'error': f'Sale not fully paid. Paid: {total_paid}, Due: {sale.total_amount}'
+            }, status=400)
+        
         with transaction.atomic():
-            # ============================================
-            # FIRST: Get customer info for points redemption
-            # ============================================
+            # Get cart snapshot
+            cart_snapshot = sale.cart_snapshot
+            cart_items = cart_snapshot.get('cart_items', [])
+            
+            if not cart_items:
+                return JsonResponse({'error': 'No items found for this sale'}, status=400)
+            
+            # Get customer for loyalty points
             points_customer = None
-            buyer_name = data.get('buyer_name', 'Walk-in Customer')
-            buyer_phone = data.get('buyer_phone', '')
-            points_customer_id = None
+            points_customer_id = cart_snapshot.get('points_customer_id')
+            if points_customer_id:
+                points_customer = Customer.objects.get(id=points_customer_id)
             
-            if points_redeemed_total > 0 and points_redeemed_customer_id:
-                from .models import Customer
-                try:
-                    points_customer = Customer.objects.select_for_update().get(id=points_redeemed_customer_id)
-                    points_customer_id = points_customer.id
-                    
-                    # Check if customer has enough points
-                    if points_customer.points_balance < points_redeemed_total:
-                        raise ValueError(f"Insufficient points. Available: {points_customer.points_balance}, Requested: {points_redeemed_total}")
-                    
-                    # USE THE CUSTOMER'S NAME AND PHONE FOR THE SALE
-                    buyer_name = points_customer.full_name
-                    buyer_phone = points_customer.phone_number
-                    
-                    logger.info(f"✅ Points redemption by customer: {points_customer.full_name} ({points_customer.phone_number})")
-                    logger.info(f"   Redeeming {points_redeemed_total} points, current balance: {points_customer.points_balance}")
-                    
-                except Customer.DoesNotExist:
-                    logger.warning(f"Customer {points_redeemed_customer_id} not found for points redemption")
+            logger.info(f"💰 FINALIZING SALE {sale.sale_id} - Processing {len(cart_items)} items")
             
-            # Also check for regular customer lookup (without points redemption)
-            verified_customer_id = data.get('verified_customer_id')
-            if not points_customer and verified_customer_id:
-                from .models import Customer
-                try:
-                    regular_customer = Customer.objects.get(id=verified_customer_id)
-                    buyer_name = regular_customer.full_name
-                    buyer_phone = regular_customer.phone_number
-                    logger.info(f"✅ Regular customer: {regular_customer.full_name}")
-                except Customer.DoesNotExist:
-                    pass
+            total_cogs = Decimal('0.00')
+            items_processed = 0
             
-            # Calculate original subtotal (before points discount)
-            original_subtotal = total_amount + Decimal(str(points_redeemed_total))
-            
-            # Create sale record - LET THE MODEL GENERATE THE ID
-            sale = Sale.objects.create(
-                seller=request.user if request.user.is_authenticated else None,
-                buyer_name=buyer_name,
-                buyer_phone=buyer_phone,
-                buyer_id_number=points_customer.id_number if points_customer else data.get('buyer_id_number', ''),
-                total_amount=total_amount,
-                amount_paid=total_paid,
-                payment_method='Split',
-                is_split_payment=True,
-                is_credit=False,
-                points_redeemed=points_redeemed_total,
-                points_discount=Decimal(str(points_redeemed_total)),
-                original_subtotal=original_subtotal,
-                subtotal=original_subtotal,
-            )
-            
-            logger.info(f"✅ Split payment sale created: {sale.sale_id}")
-            
-            # Track change amount for cash payments
-            total_cash = sum(p.get('amount', 0) for p in split_payments if p.get('method') == 'Cash')
-            change_amount = max(Decimal('0'), Decimal(str(total_cash)) - total_amount)
-            
-            # ============================================
-            # Handle points redemption - DEDUCT POINTS
-            # ============================================
-            if points_redeemed_total > 0 and points_customer:
-                # Deduct points
-                points_customer.points_balance -= points_redeemed_total
-                points_customer.total_spent += original_subtotal
-                points_customer.total_purchases += 1
-                points_customer.last_purchase_date = timezone.now()
-                points_customer.save()
-                
-                # Record the redemption
-                from .models import LoyaltyTransaction
-                LoyaltyTransaction.objects.create(
-                    customer=points_customer,
-                    points=-points_redeemed_total,
-                    transaction_type='redeemed',
-                    sale=sale,
-                    description=f"Redeemed {points_redeemed_total} points for sale #{sale.sale_id}"
-                )
-                
-                logger.info(f"✅ Points redeemed: {points_redeemed_total} deducted from customer {points_customer.phone_number}")
-                logger.info(f"   New balance: {points_customer.points_balance}")
-            
-            # Create individual payment records
-            for payment in split_payments:
-                method = payment['method']
-                amount = Decimal(str(payment['amount']))
-                
-                payment_record = PaymentRecord.objects.create(
-                    sale=sale,
-                    method=method,
-                    amount=amount,
-                    processed_by=request.user if request.user.is_authenticated else None,
-                )
-                
-                # Set method-specific fields
-                if method == 'Cash':
-                    payment_record.cash_tendered = amount
-                    payment_record.cash_change = change_amount if payment == split_payments[-1] else Decimal('0')
-                    
-                elif method == 'M-Pesa':
-                    payment_record.mpesa_phone = payment.get('phone', '')
-                    payment_record.mpesa_transaction_id = payment.get('transactionId', '')
-                    payment_record.mpesa_checkout_request_id = payment.get('checkout_request_id', '')
-                    
-                elif method == 'Card':
-                    payment_record.bank_name = payment.get('bank', '')
-                    payment_record.card_last_four = payment.get('card_last_four', '')
-                    
-                elif method == 'Points':
-                    payment_record.points_redeemed = payment.get('points', 0)
-                    payment_record.customer = points_customer
-                
-                payment_record.save()
-            
-            # Store payment breakdown as JSON
-            sale.payment_breakdown = {
-                'payments': [
-                    {
-                        'method': p.method,
-                        'amount': float(p.amount),
-                        'details': {
-                            'bank': p.bank_name,
-                            'mpesa_transaction': p.mpesa_transaction_id,
-                            'points': p.points_redeemed
-                        }
-                    }
-                    for p in sale.payment_records.all()
-                ]
-            }
-            sale.save(update_fields=['payment_breakdown'])
-            
-            # Create sale items and process inventory
-            from inventory.models import Product
-            from .models import SaleItem
-            
+            # Process each cart item and deduct stock
             for item in cart_items:
-                product = Product.objects.select_for_update().get(
-                    sku_code=item.get('sku_code') or item.get('product_code')
-                )
+                sku_code = item.get('sku_code') or item.get('product_code')
+                logger.info(f"   Processing SKU: {sku_code}")
                 
+                # Get product with lock
+                product = Product.objects.select_for_update().get(sku_code=sku_code, is_active=True)
+                selling_price = Decimal(str(item.get('price', 0)))
                 quantity = item.get('quantity', 1)
-                unit_price = Decimal(str(item.get('price', 0)))
-                total_price = unit_price * quantity
                 
-                # Create sale item
-                sale_item = SaleItem.objects.create(
-                    sale=sale,
-                    product=product,
-                    product_code=product.sku_code,
-                    product_name=product.display_name,
-                    sku_value=product.sku_code,
-                    quantity=quantity,
-                    unit_price=unit_price,
-                    total_price=total_price
-                )
-                
-                # For single items, handle stock
                 if product.category.is_single_item:
-                    unit = product.units.filter(status='available').first()
-                    if unit:
-                        unit.mark_as_sold(
-                            customer=points_customer if points_customer else None,
-                            price=unit_price,
-                            sold_by=request.user
-                        )
-                        
-                        StockEntry.objects.create(
-                            product_unit=unit,
-                            quantity=-quantity,
-                            entry_type='sale',
-                            unit_price=unit_price,
-                            total_amount=total_price,
-                            reference_id=sale.sale_id,
-                            notes=f"Sale #{sale.sale_id}",
-                            created_by=request.user
-                        )
-                else:
-                    # Bulk items - reduce quantity
-                    product.bulk_quantity -= quantity
-                    product.save()
+                    # ============================================
+                    # SINGLE ITEM (Phones with IMEI/Serial)
+                    # ============================================
+                    logger.info(f"   Single item: {product.sku_code}")
                     
-                    StockEntry.objects.create(
+                    # Find the unit
+                    unit = None
+                    unit_id = item.get('unit_id')
+                    identifier = item.get('identifier')
+                    identifier_type = item.get('identifier_type')
+                    
+                    # Try to find by unit_id first
+                    if unit_id:
+                        try:
+                            unit = ProductUnit.objects.select_for_update().get(id=unit_id, product=product)
+                            logger.info(f"   Found unit by ID: {unit_id}")
+                        except ProductUnit.DoesNotExist:
+                            logger.warning(f"   Unit {unit_id} not found")
+                    
+                    # If not found by ID, try by identifier (IMEI/Serial)
+                    if not unit and identifier:
+                        if identifier_type == 'imei':
+                            unit = product.units.filter(imei_number=identifier, status='available').first()
+                        elif identifier_type == 'serial':
+                            unit = product.units.filter(serial_number=identifier, status='available').first()
+                        if unit:
+                            logger.info(f"   Found unit by {identifier_type}: {identifier}")
+                    
+                    # If still not found, get any available unit
+                    if not unit:
+                        unit = product.units.filter(status='available').select_for_update().first()
+                        if unit:
+                            logger.info(f"   Using first available unit: ID={unit.id}")
+                    
+                    if not unit:
+                        logger.error(f"   ❌ NO UNIT FOUND for {product.sku_code}")
+                        raise ValueError(f"No available unit found for {product.display_name}")
+                    
+                    # Check if unit is already sold
+                    if unit.status != 'available':
+                        raise ValueError(f"Unit {unit.unique_identifier} is already sold (status: {unit.status})")
+                    
+                    # Get buying price for COGS
+                    buying_price = unit.unit_buying_price or product.buying_price
+                    if not buying_price or buying_price == 0:
+                        logger.warning(f"   ⚠️ No buying price for {product.display_name}, using 0")
+                        buying_price = Decimal('0')
+                    
+                    logger.info(f"   Selling: {selling_price}, Cost: {buying_price}, Unit status: {unit.status}")
+                    
+                    # ============================================
+                    # 1. CREATE SaleItem FIRST (for revenue tracking)
+                    # ============================================
+                    sale_item = SaleItem.objects.create(
+                        sale=sale,
+                        product=product,
+                        product_code=product.sku_code,
+                        product_name=product.display_name,
+                        sku_value=product.sku_code,
+                        quantity=1,
+                        unit_price=selling_price,
+                        total_price=selling_price,
+                        product_unit=unit
+                    )
+                    logger.info(f"   ✅ SaleItem created: ID={sale_item.id}")
+                    
+                    # ============================================
+                    # 2. CREATE StockEntry for COGS (using BUYING PRICE)
+                    # ============================================
+                    stock_entry = StockEntry.objects.create(
+                        product_unit=unit,
+                        quantity=-1,
+                        entry_type='sale',
+                        unit_price=buying_price,  # ← BUYING PRICE for COGS!
+                        total_amount=buying_price,
+                        reference_id=sale.sale_id,
+                        notes=f"Sale #{sale.sale_id} - COGS (cost: {buying_price})",
+                        created_by=request.user
+                    )
+                    logger.info(f"   ✅ StockEntry created: ID={stock_entry.id} with COGS={buying_price}")
+                    total_cogs += buying_price
+                    
+                    # ============================================
+                    # 3. MARK UNIT AS SOLD
+                    # ============================================
+                    unit.mark_as_sold(
+                        customer=points_customer if points_customer else None,
+                        price=selling_price,
+                        sold_by=request.user
+                    )
+                    logger.info(f"   ✅ Unit {unit.id} marked as sold")
+                    items_processed += 1
+                    
+                else:
+                    # ============================================
+                    # BULK ITEM (Cables, Accessories without unique ID)
+                    # ============================================
+                    logger.info(f"   Bulk item: {product.sku_code}, Current stock: {product.bulk_quantity}")
+                    
+                    # Check stock
+                    if product.bulk_quantity < quantity:
+                        raise ValueError(f"Insufficient stock for {product.display_name}. Available: {product.bulk_quantity}")
+                    
+                    # Get buying price for COGS
+                    buying_price = product.buying_price
+                    if not buying_price or buying_price == 0:
+                        logger.warning(f"   ⚠️ No buying price for {product.display_name}, using 0")
+                        buying_price = Decimal('0')
+                    
+                    logger.info(f"   Selling: {selling_price}, Cost: {buying_price}, Quantity: {quantity}")
+                    
+                    # ============================================
+                    # 1. CREATE StockEntry for COGS FIRST
+                    # ============================================
+                    stock_entry = StockEntry.objects.create(
                         product_sku=product,
                         quantity=-quantity,
                         entry_type='sale',
-                        unit_price=unit_price,
-                        total_amount=total_price,
+                        unit_price=buying_price,  # ← BUYING PRICE for COGS!
+                        total_amount=buying_price * quantity,
                         reference_id=sale.sale_id,
-                        notes=f"Sale #{sale.sale_id}",
+                        notes=f"Sale #{sale.sale_id} - COGS (cost: {buying_price} each)",
                         created_by=request.user
                     )
+                    logger.info(f"   ✅ COGS StockEntry created: cost={buying_price} x {quantity} = {buying_price * quantity}")
+                    total_cogs += buying_price * quantity
+                    
+                    # ============================================
+                    # 2. UPDATE bulk quantity
+                    # ============================================
+                    product.bulk_quantity -= quantity
+                    product.save(update_fields=['bulk_quantity', 'updated_at'])
+                    logger.info(f"   ✅ Bulk quantity updated: {product.bulk_quantity} remaining")
+                    
+                    # ============================================
+                    # 3. CREATE SaleItem for revenue
+                    # ============================================
+                    sale_item = SaleItem.objects.create(
+                        sale=sale,
+                        product=product,
+                        product_code=product.sku_code,
+                        product_name=product.display_name,
+                        sku_value=product.sku_code,
+                        quantity=quantity,
+                        unit_price=selling_price,
+                        total_price=selling_price * quantity,
+                    )
+                    logger.info(f"   ✅ SaleItem created: revenue={selling_price} x {quantity} = {selling_price * quantity}")
+                    
+                    items_processed += 1
             
-            # Award loyalty points ONLY if points were NOT redeemed
-            points_earned = 0
-            new_balance = points_customer.points_balance if points_customer else 0
+            # Mark sale as completed
+            sale.is_completed = True
+            sale.completed_at = timezone.now()
+            sale.save(update_fields=['is_completed', 'completed_at'])
             
-            if points_redeemed_total == 0 and points_customer:
-                # Award points (1% of sale value)
-                points_to_award = int(total_amount / 100)
+            # Award loyalty points (if no points were redeemed)
+            if sale.points_redeemed == 0 and points_customer:
+                points_to_award = int(sale.total_amount / 100)
                 if points_to_award > 0:
                     points_customer.points_balance += points_to_award
                     points_customer.save()
@@ -4853,31 +4814,739 @@ def create_split_payment_sale(request):
                         sale=sale,
                         description=f"Points earned from split payment sale"
                     )
-                    points_earned = points_to_award
-                    new_balance = points_customer.points_balance
-                    logger.info(f"✅ Points awarded: {points_earned} to customer {points_customer.phone_number}")
+                    logger.info(f"✅ Points awarded: {points_to_award}")
             
-            # Return success response
+            # Update finance accounts
+            from finance.models import NetAccount, SavingsAccount, InventoryAsset
+            
+            net = NetAccount.get_account()
+            savings = SavingsAccount.get_account()
+            inventory_asset = InventoryAsset.get_account()
+            
+            profit = sale.total_amount - total_cogs
+            
+            logger.info(f"\n💰 UPDATING FINANCE ACCOUNTS:")
+            logger.info(f"   Total Revenue: KES {sale.total_amount:,.2f}")
+            logger.info(f"   Total COGS: KES {total_cogs:,.2f}")
+            logger.info(f"   Profit: KES {profit:,.2f}")
+            
+            if total_cogs > 0:
+                net.add_cogs(amount=total_cogs, sale_reference=sale.sale_id, user=request.user)
+                logger.info(f"   ✅ NET: +KES {total_cogs:,.2f} (COGS recouped)")
+            
+            if profit > 0:
+                savings.add_profit(amount=profit, sale_reference=sale.sale_id, user=request.user)
+                logger.info(f"   ✅ SAVINGS: +KES {profit:,.2f} (Profit)")
+            
+            if total_cogs > 0:
+                inventory_asset.deduct_cogs(
+                    amount=total_cogs,
+                    sku_code="MULTIPLE",
+                    quantity=0,
+                    unit_price=0,
+                    sale_reference=sale.sale_id,
+                    user=request.user
+                )
+                logger.info(f"   ✅ INVENTORY ASSET: -KES {total_cogs:,.2f} (COGS deducted)")
+            
+            logger.info(f"✅ SALE {sale.sale_id} COMPLETED!")
+            logger.info(f"   Items processed: {items_processed}")
+            logger.info(f"   SaleItems count: {sale.items.count()}")
+            
             return JsonResponse({
                 'success': True,
                 'sale_id': sale.sale_id,
-                'sale_number': sale.sale_id,
-                'message': 'Split payment sale completed successfully',
-                'payment_breakdown': [
-                    {'method': p.method, 'amount': float(p.amount)} 
-                    for p in sale.payment_records.all()
-                ],
-                'points_earned': points_earned,
-                'points_redeemed': points_redeemed_total,
-                'new_points_balance': new_balance,
-                'customer_name': buyer_name,
-                'customer_phone': buyer_phone,
-                'change_amount': float(change_amount) if change_amount > 0 else 0
+                'message': f'Sale completed! {items_processed} items processed.',
+                'items_count': sale.items.count(),
+                'receipt_url': f'/sales/receipt/{sale.sale_id}/'
             })
             
     except Exception as e:
-        logger.error(f"Split payment sale error: {str(e)}", exc_info=True)
-        return JsonResponse({'success': False, 'error': f'Sale failed: {str(e)}'}, status=500)
+        logger.error(f"Finalize sale error: {str(e)}", exc_info=True)
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def confirm_split_payment(request, sale_id, payment_id):
+    """Confirm a specific payment (e.g., after M-Pesa callback)"""
+    
+    try:
+        from .models import Sale, PaymentRecord
+        
+        data = json.loads(request.body) if request.body else {}
+        
+        sale = get_object_or_404(Sale, sale_id=sale_id)
+        payment = get_object_or_404(PaymentRecord, id=payment_id, sale=sale)
+        
+        # Prevent double confirmation
+        if payment.is_confirmed:
+            return JsonResponse({
+                'success': True,
+                'message': 'Payment already confirmed',
+                'sale_id': sale.sale_id
+            })
+        
+        # Update payment as confirmed
+        payment.is_confirmed = True
+        payment.confirmed_at = timezone.now()
+        
+        # Update M-Pesa specific fields if provided
+        if payment.method == 'M-Pesa':
+            if data.get('transaction_id'):
+                payment.mpesa_transaction_id = data.get('transaction_id')
+            if data.get('checkout_request_id'):
+                payment.mpesa_checkout_request_id = data.get('checkout_request_id')
+        
+        payment.save()
+        
+        logger.info(f"✅ Payment confirmed for sale {sale_id}: {payment.method} - KES {payment.amount}")
+        
+        # Check if all payments are now confirmed
+        pending_count = sale.payment_records.filter(is_confirmed=False).count()
+        all_confirmed = pending_count == 0
+        
+        # Check if fully paid
+        total_paid = sum(p.amount for p in sale.payment_records.all())
+        is_fully_paid = total_paid >= sale.total_amount
+        
+        response_data = {
+            'success': True,
+            'payment_confirmed': True,
+            'all_payments_confirmed': all_confirmed,
+            'is_fully_paid': is_fully_paid,
+            'sale_id': sale.sale_id
+        }
+        
+        # If all payments are confirmed AND fully paid, finalize the sale
+        if all_confirmed and is_fully_paid and not sale.is_completed:
+            logger.info(f"🎯 All payments confirmed and fully paid! Finalizing sale {sale_id}")
+            return finalize_split_payment_sale(request, sale_id)
+        
+        return JsonResponse(response_data)
+        
+    except Exception as e:
+        logger.error(f"Error confirming payment: {str(e)}", exc_info=True)
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def add_payment_to_split_sale(request, sale_id):
+    """Add a payment to an existing split sale"""
+    try:
+        data = json.loads(request.body)
+        method = data.get('method')
+        amount = Decimal(str(data.get('amount', 0)))
+        
+        sale = get_object_or_404(Sale, sale_id=sale_id)
+        
+        # Create payment record
+        payment_record = PaymentRecord.objects.create(
+            sale=sale,
+            method=method,
+            amount=amount,
+            processed_by=request.user if request.user.is_authenticated else None,
+            is_confirmed=(method == 'Cash')  # Cash confirmed immediately
+        )
+        
+        if method == 'Cash':
+            payment_record.confirmed_at = timezone.now()
+        
+        payment_record.save()
+        
+        # Update sale amount_paid
+        sale.amount_paid += amount
+        sale.save()
+        
+        # Update payment breakdown
+        sale.payment_breakdown = {
+            'payments': [
+                {
+                    'method': p.method,
+                    'amount': float(p.amount),
+                    'is_confirmed': p.is_confirmed
+                }
+                for p in sale.payment_records.all()
+            ]
+        }
+        sale.save(update_fields=['payment_breakdown'])
+        
+        return JsonResponse({
+            'success': True,
+            'payment_id': payment_record.id,
+            'message': f'{method} payment of KES {amount} added'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error adding payment: {str(e)}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def create_split_payment_sale(request):
+    """Step 1: Create pending split payment sale - WITH immediate stock reservation"""
+    
+    # ============================================
+    # ADD DUPLICATE PREVENTION HERE
+    # ============================================
+    import hashlib
+    from django.core.cache import cache
+    
+    try:
+        data = json.loads(request.body)
+        
+        # Get cart items from request body
+        cart_items = data.get('cart_items', [])
+        
+        if not cart_items:
+            return JsonResponse({
+                'error': 'Cart is empty. Please add items first.'
+            }, status=400)
+        
+        # Create hash from cart items to detect duplicates
+        cart_hash = hashlib.md5(json.dumps(cart_items, sort_keys=True).encode()).hexdigest()
+        cache_key = f"split_sale_processing_{cart_hash}"
+        
+        if cache.get(cache_key):
+            logger.warning(f"⚠️ DUPLICATE SPLIT SALE DETECTED! Cart hash: {cart_hash}")
+            return JsonResponse({
+                'success': False,
+                'error': 'Sale already being processed. Please wait.',
+                'duplicate': True
+            }, status=400)
+        
+        # Set cache to prevent duplicate (15 second timeout)
+        cache.set(cache_key, True, 15)
+        
+        # Also add idempotency key
+        import uuid
+        request_id = str(uuid.uuid4())
+        idempotency_key = f"split_sale_idempotent_{request_id}"
+        
+        if cache.get(idempotency_key):
+            cache.delete(cache_key)
+            logger.warning(f"⚠️ DUPLICATE REQUEST DETECTED! ID: {request_id}")
+            return JsonResponse({
+                'success': False,
+                'error': 'Duplicate request detected. Please wait.',
+                'duplicate': True
+            }, status=400)
+        
+        cache.set(idempotency_key, True, 60)  # 1 minute timeout
+        
+        # Log cart items for debugging
+        logger.info(f"📦 Creating split payment sale with {len(cart_items)} items")
+        for idx, item in enumerate(cart_items):
+            logger.info(f"   Item {idx}: SKU={item.get('sku_code')}, Qty={item.get('quantity')}, Price={item.get('price')}, Unit ID={item.get('unit_id')}, Is Single={item.get('is_single')}")
+        
+        split_payments = data.get('split_payments', [])
+        total_amount = Decimal(str(data.get('cart_total', 0)))
+        total_paid = Decimal(str(data.get('amount_paid', 0)))
+        points_redeemed_total = int(data.get('points_redeemed', 0))
+        points_redeemed_customer_id = data.get('points_redeemed_customer_id')
+        
+        # Validate split payments
+        if not split_payments:
+            cache.delete(cache_key)
+            cache.delete(idempotency_key)
+            return JsonResponse({
+                'error': 'No payment methods selected'
+            }, status=400)
+        
+        # Calculate and validate payment total
+        calculated_total = sum(Decimal(str(p.get('amount', 0))) for p in split_payments)
+        if abs(calculated_total - total_paid) > 0.01:
+            cache.delete(cache_key)
+            cache.delete(idempotency_key)
+            return JsonResponse({
+                'error': f'Payment total mismatch: {calculated_total} vs {total_paid}'
+            }, status=400)
+        
+        with transaction.atomic():
+            # Get customer info
+            points_customer = None
+            buyer_name = data.get('buyer_name', 'Walk-in Customer')
+            buyer_phone = data.get('buyer_phone', '')
+            
+            if points_redeemed_total > 0 and points_redeemed_customer_id:
+                from .models import Customer
+                try:
+                    points_customer = Customer.objects.select_for_update().get(id=points_redeemed_customer_id)
+                    if points_customer.points_balance < points_redeemed_total:
+                        raise ValueError(f"Insufficient points. Available: {points_customer.points_balance}")
+                    buyer_name = points_customer.full_name
+                    buyer_phone = points_customer.phone_number
+                except Customer.DoesNotExist:
+                    pass
+            
+            # Regular customer
+            verified_customer_id = data.get('verified_customer_id')
+            if not points_customer and verified_customer_id:
+                from .models import Customer
+                try:
+                    regular_customer = Customer.objects.get(id=verified_customer_id)
+                    buyer_name = regular_customer.full_name
+                    buyer_phone = regular_customer.phone_number
+                except Customer.DoesNotExist:
+                    pass
+            
+            # Calculate totals
+            original_subtotal = total_amount + Decimal(str(points_redeemed_total))
+            
+            # Store cart snapshot
+            cart_snapshot = {
+                'cart_items': cart_items,
+                'split_payments': split_payments,
+                'points_customer_id': points_customer.id if points_customer else None,
+                'original_subtotal': float(original_subtotal),
+                'total_amount': float(total_amount)
+            }
+            
+            # Create sale record with is_completed=False initially
+            sale = Sale.objects.create(
+                seller=request.user if request.user.is_authenticated else None,
+                buyer_name=buyer_name,
+                buyer_phone=buyer_phone,
+                buyer_id_number=points_customer.id_number if points_customer else data.get('buyer_id_number', ''),
+                total_amount=total_amount,
+                amount_paid=total_paid,
+                payment_method='Split',
+                is_split_payment=True,
+                is_credit=False,
+                is_completed=False,
+                points_redeemed=points_redeemed_total,
+                points_discount=Decimal(str(points_redeemed_total)),
+                original_subtotal=original_subtotal,
+                subtotal=original_subtotal,
+                cart_snapshot=cart_snapshot
+            )
+            
+            logger.info(f"✅ Pending split payment sale created: {sale.sale_id}")
+            logger.info(f"   Cart snapshot has {len(cart_snapshot['cart_items'])} items")
+            
+            # ============================================
+            # DOUBLE CHECK: Verify this sale wasn't already processed
+            # ============================================
+            from finance.models import NetTransaction
+            
+            already_processed = NetTransaction.objects.filter(
+                description__icontains=sale.sale_id,
+                category='cogs'
+            ).exists()
+            
+            if already_processed:
+                logger.warning(f"⚠️ Sale {sale.sale_id} already processed! Rolling back...")
+                cache.delete(cache_key)
+                cache.delete(idempotency_key)
+                raise transaction.TransactionManagementError("Sale already processed")
+            
+            # ============================================
+            # CRITICAL: Create SaleItems and StockEntries IMMEDIATELY
+            # ============================================
+            total_cogs = Decimal('0.00')
+            items_processed = 0
+            
+            for item in cart_items:
+                sku_code = item.get('sku_code') or item.get('product_code')
+                if not sku_code:
+                    logger.error(f"   ❌ Missing SKU code for item: {item}")
+                    continue
+                    
+                logger.info(f"   Processing SKU for immediate creation: {sku_code}")
+                
+                # Get product with lock
+                try:
+                    product = Product.objects.select_for_update().get(sku_code=sku_code, is_active=True)
+                except Product.DoesNotExist:
+                    logger.error(f"   ❌ Product not found: {sku_code}")
+                    continue
+                
+                selling_price = Decimal(str(item.get('price', 0)))
+                quantity = int(item.get('quantity', 1))
+                
+                if product.category and product.category.is_single_item:
+                    # ============================================
+                    # SINGLE ITEM - Create immediately
+                    # ============================================
+                    logger.info(f"   Single item: {product.sku_code}")
+                    
+                    # Find the unit
+                    unit = None
+                    unit_id = item.get('unit_id')
+                    identifier = item.get('identifier')
+                    identifier_type = item.get('identifier_type')
+                    
+                    # Try to find by unit_id first
+                    if unit_id:
+                        try:
+                            unit = ProductUnit.objects.select_for_update().get(id=unit_id, product=product)
+                            logger.info(f"   Found unit by ID: {unit_id}")
+                        except ProductUnit.DoesNotExist:
+                            logger.warning(f"   Unit {unit_id} not found")
+                    
+                    # If not found by ID, try by identifier
+                    if not unit and identifier:
+                        if identifier_type == 'imei':
+                            unit = product.units.filter(imei_number=identifier, status='available').first()
+                        elif identifier_type == 'serial':
+                            unit = product.units.filter(serial_number=identifier, status='available').first()
+                        if unit:
+                            logger.info(f"   Found unit by {identifier_type}: {identifier}")
+                    
+                    # If still not found, get any available unit
+                    if not unit:
+                        unit = product.units.filter(status='available').select_for_update().first()
+                        if unit:
+                            logger.info(f"   Using first available unit: ID={unit.id}")
+                    
+                    if not unit:
+                        logger.error(f"   ❌ NO UNIT FOUND for {product.sku_code}")
+                        raise ValueError(f"No available unit found for {product.display_name}")
+                    
+                    # Check if unit is already sold
+                    if unit.status != 'available':
+                        raise ValueError(f"Unit {unit.unique_identifier} is already sold (status: {unit.status})")
+                    
+                    # Check if this unit is already in another pending sale
+                    existing_sale_item = SaleItem.objects.filter(
+                        product_unit=unit,
+                        sale__is_completed=False
+                    ).exists()
+                    
+                    if existing_sale_item:
+                        raise ValueError(f"Unit {unit.unique_identifier} is already in another pending sale")
+                    
+                    # Get buying price for COGS
+                    buying_price = unit.unit_buying_price or product.buying_price
+                    if not buying_price or buying_price == 0:
+                        logger.warning(f"   ⚠️ No buying price for {product.display_name}, using 0")
+                        buying_price = Decimal('0')
+                    
+                    logger.info(f"   Selling: {selling_price}, Cost: {buying_price}")
+                    
+                    # 1. CREATE SaleItem
+                    sale_item = SaleItem.objects.create(
+                        sale=sale,
+                        product=product,
+                        product_code=product.sku_code,
+                        product_name=product.display_name,
+                        sku_value=product.sku_code,
+                        quantity=1,
+                        unit_price=selling_price,
+                        total_price=selling_price,
+                        product_unit=unit
+                    )
+                    logger.info(f"   ✅ SaleItem created: ID={sale_item.id}")
+                    
+                    # 2. CREATE StockEntry for COGS
+                    stock_entry = StockEntry.objects.create(
+                        product_unit=unit,
+                        quantity=-1,
+                        entry_type='sale',
+                        unit_price=buying_price,
+                        total_amount=buying_price,
+                        reference_id=sale.sale_id,
+                        notes=f"Sale #{sale.sale_id} - COGS (cost: {buying_price})",
+                        created_by=request.user
+                    )
+                    logger.info(f"   ✅ StockEntry created: ID={stock_entry.id}")
+                    total_cogs += buying_price
+                    
+                    # 3. MARK UNIT AS SOLD
+                    unit.mark_as_sold(
+                        customer=points_customer if points_customer else None,
+                        price=selling_price,
+                        sold_by=request.user
+                    )
+                    logger.info(f"   ✅ Unit {unit.id} marked as sold")
+                    items_processed += 1
+                    
+                else:
+                    # ============================================
+                    # BULK ITEM - Create immediately
+                    # ============================================
+                    logger.info(f"   Bulk item: {product.sku_code}, Current stock: {product.bulk_quantity}")
+                    
+                    # Check stock
+                    if product.bulk_quantity < quantity:
+                        raise ValueError(f"Insufficient stock for {product.display_name}. Available: {product.bulk_quantity}")
+                    
+                    # Get buying price
+                    buying_price = product.buying_price
+                    if not buying_price or buying_price == 0:
+                        logger.warning(f"   ⚠️ No buying price for {product.display_name}, using 0")
+                        buying_price = Decimal('0')
+                    
+                    logger.info(f"   Selling: {selling_price}, Cost: {buying_price}, Quantity: {quantity}")
+                    
+                    # 1. CREATE StockEntry for COGS
+                    stock_entry = StockEntry.objects.create(
+                        product_sku=product,
+                        quantity=-quantity,
+                        entry_type='sale',
+                        unit_price=buying_price,
+                        total_amount=buying_price * quantity,
+                        reference_id=sale.sale_id,
+                        notes=f"Sale #{sale.sale_id} - COGS (cost: {buying_price} each)",
+                        created_by=request.user
+                    )
+                    logger.info(f"   ✅ COGS StockEntry created: cost={buying_price} x {quantity} = {buying_price * quantity}")
+                    total_cogs += buying_price * quantity
+                    
+                    # 2. UPDATE bulk quantity
+                    product.bulk_quantity -= quantity
+                    product.save(update_fields=['bulk_quantity', 'updated_at'])
+                    logger.info(f"   ✅ Bulk quantity updated: {product.bulk_quantity} remaining")
+                    
+                    # 3. CREATE SaleItem
+                    sale_item = SaleItem.objects.create(
+                        sale=sale,
+                        product=product,
+                        product_code=product.sku_code,
+                        product_name=product.display_name,
+                        sku_value=product.sku_code,
+                        quantity=quantity,
+                        unit_price=selling_price,
+                        total_price=selling_price * quantity,
+                    )
+                    logger.info(f"   ✅ SaleItem created: revenue={selling_price} x {quantity} = {selling_price * quantity}")
+                    
+                    items_processed += 1
+            
+            logger.info(f"✅ Created {items_processed} SaleItems with total COGS: {total_cogs}")
+            
+            # Handle points redemption
+            if points_redeemed_total > 0 and points_customer:
+                points_customer.points_balance -= points_redeemed_total
+                points_customer.total_spent += original_subtotal
+                points_customer.total_purchases += 1
+                points_customer.last_purchase_date = timezone.now()
+                points_customer.save()
+                
+                from .models import LoyaltyTransaction
+                LoyaltyTransaction.objects.create(
+                    customer=points_customer,
+                    points=-points_redeemed_total,
+                    transaction_type='redeemed',
+                    sale=sale,
+                    description=f"Redeemed {points_redeemed_total} points for sale #{sale.sale_id}"
+                )
+            
+            # Create payment records
+            total_cash = sum(p.get('amount', 0) for p in split_payments if p.get('method') == 'Cash')
+            change_amount = max(Decimal('0'), Decimal(str(total_cash)) - total_amount)
+            
+            for payment in split_payments:
+                method = payment['method']
+                amount = Decimal(str(payment['amount']))
+                is_confirmed = (method == 'Cash')
+                
+                payment_record = PaymentRecord.objects.create(
+                    sale=sale,
+                    method=method,
+                    amount=amount,
+                    processed_by=request.user if request.user.is_authenticated else None,
+                    is_confirmed=is_confirmed
+                )
+                
+                if is_confirmed:
+                    payment_record.confirmed_at = timezone.now()
+                
+                if method == 'Cash':
+                    payment_record.cash_tendered = amount
+                    payment_record.cash_change = change_amount if payment == split_payments[-1] else Decimal('0')
+                elif method == 'M-Pesa':
+                    payment_record.mpesa_phone = payment.get('phone', '')
+                    payment_record.mpesa_transaction_id = payment.get('transactionId', '')
+                    payment_record.mpesa_checkout_request_id = payment.get('checkout_request_id', '')
+                elif method == 'Card':
+                    payment_record.bank_name = payment.get('bank', '')
+                    payment_record.card_last_four = payment.get('card_last_four', '')
+                
+                payment_record.save()
+            
+            # Store payment breakdown
+            sale.payment_breakdown = {
+                'payments': [
+                    {
+                        'method': p.method,
+                        'amount': float(p.amount),
+                        'is_confirmed': p.is_confirmed
+                    }
+                    for p in sale.payment_records.all()
+                ]
+            }
+            sale.save(update_fields=['payment_breakdown'])
+            
+            # Update finance accounts for this sale
+            from finance.models import NetAccount, SavingsAccount, InventoryAsset
+            
+            net = NetAccount.get_account()
+            savings = SavingsAccount.get_account()
+            inventory_asset = InventoryAsset.get_account()
+            
+            profit = total_amount - total_cogs
+            
+            if total_cogs > 0:
+                net.add_cogs(amount=total_cogs, sale_reference=sale.sale_id, user=request.user)
+                logger.info(f"   ✅ NET: +KES {total_cogs:,.2f} (COGS recouped)")
+            
+            if profit > 0:
+                savings.add_profit(amount=profit, sale_reference=sale.sale_id, user=request.user)
+                logger.info(f"   ✅ SAVINGS: +KES {profit:,.2f} (Profit)")
+            
+            if total_cogs > 0:
+                inventory_asset.deduct_cogs(
+                    amount=total_cogs,
+                    sku_code="MULTIPLE",
+                    quantity=0,
+                    unit_price=0,
+                    sale_reference=sale.sale_id,
+                    user=request.user
+                )
+                logger.info(f"   ✅ INVENTORY ASSET: -KES {total_cogs:,.2f} (COGS deducted)")
+            
+            # Mark sale as completed (since we've already deducted stock)
+            sale.is_completed = True
+            sale.completed_at = timezone.now()
+            sale.save(update_fields=['is_completed', 'completed_at'])
+            
+            logger.info(f"✅ SALE {sale.sale_id} COMPLETED IMMEDIATELY!")
+            logger.info(f"   Items processed: {items_processed}")
+            logger.info(f"   Total Revenue: KES {total_amount:,.2f}")
+            logger.info(f"   Total COGS: KES {total_cogs:,.2f}")
+            logger.info(f"   Profit: KES {profit:,.2f}")
+            
+            # Clear cache keys on success
+            cache.delete(cache_key)
+            cache.delete(idempotency_key)
+            
+            return JsonResponse({
+                'success': True,
+                'sale_id': sale.sale_id,
+                'message': f'Sale completed! {items_processed} items processed.',
+                'items_count': sale.items.count(),
+                'total_revenue': float(total_amount),
+                'total_cogs': float(total_cogs),
+                'gross_profit': float(profit),
+                'receipt_url': f'/sales/receipt/{sale.sale_id}/'
+            })
+            
+    except Product.DoesNotExist as e:
+        logger.error(f"Product not found: {str(e)}")
+        if 'cache_key' in locals():
+            cache.delete(cache_key)
+        if 'idempotency_key' in locals():
+            cache.delete(idempotency_key)
+        return JsonResponse({'success': False, 'error': f'Product not found: {str(e)}'}, status=400)
+        
+    except ProductUnit.DoesNotExist as e:
+        logger.error(f"Product unit not found: {str(e)}")
+        if 'cache_key' in locals():
+            cache.delete(cache_key)
+        if 'idempotency_key' in locals():
+            cache.delete(idempotency_key)
+        return JsonResponse({'success': False, 'error': f'Product unit not found: {str(e)}'}, status=400)
+        
+    except ValueError as e:
+        logger.error(f"Validation error: {str(e)}")
+        if 'cache_key' in locals():
+            cache.delete(cache_key)
+        if 'idempotency_key' in locals():
+            cache.delete(idempotency_key)
+        return JsonResponse({'success': False, 'error': str(e)}, status=400)
+        
+    except transaction.TransactionManagementError as e:
+        logger.error(f"Transaction error: {str(e)}")
+        if 'cache_key' in locals():
+            cache.delete(cache_key)
+        if 'idempotency_key' in locals():
+            cache.delete(idempotency_key)
+        return JsonResponse({'success': False, 'error': str(e)}, status=400)
+        
+    except Exception as e:
+        logger.error(f"Split payment creation error: {str(e)}", exc_info=True)
+        if 'cache_key' in locals():
+            cache.delete(cache_key)
+        if 'idempotency_key' in locals():
+            cache.delete(idempotency_key)
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+    
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def link_mpesa_to_split_payment(request, sale_id):
+    """Link M-Pesa transaction to split payment record"""
+    try:
+        data = json.loads(request.body)
+        checkout_id = data.get('checkout_request_id')
+        amount = Decimal(str(data.get('amount', 0)))
+        
+        sale = get_object_or_404(Sale, sale_id=sale_id)
+        
+        # Find the pending M-Pesa payment record
+        mpesa_payment = sale.payment_records.filter(
+            method='M-Pesa',
+            is_confirmed=False
+        ).first()
+        
+        if mpesa_payment:
+            mpesa_payment.mpesa_checkout_request_id = checkout_id
+            mpesa_payment.save()
+            logger.info(f"Linked M-Pesa checkout {checkout_id} to payment {mpesa_payment.id}")
+        
+        return JsonResponse({'success': True})
+        
+    except Exception as e:
+        logger.error(f"Error linking M-Pesa: {str(e)}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def confirm_mpesa_for_split_payment(request, sale_id):
+    """Confirm M-Pesa payment for split payment"""
+    try:
+        data = json.loads(request.body)
+        checkout_id = data.get('checkout_request_id')
+        amount = Decimal(str(data.get('amount', 0)))
+        
+        sale = get_object_or_404(Sale, sale_id=sale_id)
+        
+        # Find the M-Pesa payment record
+        mpesa_payment = sale.payment_records.filter(
+            method='M-Pesa',
+            mpesa_checkout_request_id=checkout_id,
+            is_confirmed=False
+        ).first()
+        
+        if mpesa_payment:
+            mpesa_payment.is_confirmed = True
+            mpesa_payment.confirmed_at = timezone.now()
+            mpesa_payment.save()
+            logger.info(f"Confirmed M-Pesa payment {checkout_id} for sale {sale_id}")
+            
+            # Check if all payments are now confirmed
+            all_confirmed = not sale.payment_records.filter(is_confirmed=False).exists()
+            
+            if all_confirmed:
+                from django.test import RequestFactory
+                factory = RequestFactory()
+                mock_request = factory.post(f'/sales/api/sale/split-payment/{sale_id}/finalize/')
+                mock_request.user = sale.seller
+                return finalize_split_payment_sale(mock_request, sale_id)
+        
+        return JsonResponse({'success': True})
+        
+    except Exception as e:
+        logger.error(f"Error confirming M-Pesa: {str(e)}")
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+
+
+
 
 @require_http_methods(["GET"])
 def get_sale_payment_details(request, sale_id):

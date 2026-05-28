@@ -1,6 +1,10 @@
 from django.urls import path
 from . import views
-
+from . views import (
+    confirm_mpesa_for_split_payment,
+    link_mpesa_to_split_payment,
+    add_payment_to_split_sale,
+)
 app_name = 'sales'
 
 urlpatterns = [
@@ -55,6 +59,7 @@ urlpatterns = [
     # Split payment endpoints
     path('api/sale/split-payment/', views.create_split_payment_sale, name='split_payment_sale'),
     path('api/sale/<str:sale_id>/payment-details/', views.get_sale_payment_details, name='sale_payment_details'),
+    path('api/sale/split-payment/<str:sale_id>/add-payment/', add_payment_to_split_sale, name='add_payment_split'),
     
     # M-PESA PAYMENT API
     path('api/check-payment/<str:sale_id>/', views.check_payment_status, name='check_payment_status'),
@@ -71,6 +76,8 @@ urlpatterns = [
     path('sale/<str:sale_id>/complete-payment/', views.complete_sale_payment, name='complete_sale_payment'),
     path('sale/<str:sale_id>/delete-pending/', views.delete_pending_sale, name='delete_pending_sale'),
     path('sale/<str:sale_id>/award-points/', views.award_points_to_sale, name='award_points_to_sale'),
+    path('api/sale/split-payment/<str:sale_id>/link-mpesa/', link_mpesa_to_split_payment, name='link_mpesa_split'),
+    path('api/sale/split-payment/<str:sale_id>/confirm-mpesa/', confirm_mpesa_for_split_payment, name='confirm_mpesa_split'),
     
     # ============================================
     # SALE DETAILS (specific sale_id patterns)

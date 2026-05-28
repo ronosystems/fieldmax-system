@@ -2186,6 +2186,7 @@ def mpesa_transaction_detail(request, reference):
         logger.error(f"Transaction detail error: {str(e)}")
         return JsonResponse({'status': 'error', 'error': str(e)}, status=500)
 
+
 @csrf_exempt
 def mpesa_callback(request):
     """Handle Kopo Kopo webhook callbacks"""
@@ -2227,7 +2228,18 @@ def mpesa_callback(request):
         # Find the sale by account_reference
         sale = None
         if account_reference:
-            sale_id_value = account_reference.replace('SALE', '').replace('sale', '')
+            # Handle different reference formats
+            sale_id_value = account_reference
+            if account_reference.startswith('SALE'):
+                sale_id_value = account_reference
+            elif account_reference.startswith('sale'):
+                sale_id_value = account_reference
+            elif account_reference.startswith('SPLIT'):
+                # Split payment reference format: SPLIT-{sale_id}-{timestamp}
+                parts = account_reference.split('-')
+                if len(parts) >= 2:
+                    sale_id_value = f"SALE-{parts[1]}"
+            
             try:
                 from sales.models import Sale
                 sale = Sale.objects.filter(sale_id=sale_id_value).first()
@@ -2264,12 +2276,47 @@ def mpesa_callback(request):
             transaction.save()
             logger.info(f"Updated transaction {transaction.id} - Status: {transaction.status}")
         
-        # Update sale if payment successful
+        # ============================================
+        # CRITICAL: Handle split payment confirmation
+        # ============================================
         if sale and status == 'Success' and amount:
-            sale.amount_paid = Decimal(str(amount))
-            sale.payment_method = 'M-Pesa'
-            sale.save()
-            logger.info(f"✅✅✅ Updated sale {sale.sale_id} with amount {amount}")
+            # Check if this is a split payment
+            if sale.is_split_payment:
+                logger.info(f"🔄 Split payment detected for sale {sale.sale_id}")
+                
+                # Find the pending M-Pesa payment record for this sale
+                from sales.models import PaymentRecord
+                
+                # Try to find by checkout_request_id or phone number
+                mpesa_payment = sale.payment_records.filter(
+                    method='M-Pesa',
+                    is_confirmed=False
+                ).first()
+                
+                if mpesa_payment:
+                    # Call the confirm_split_payment function from sales.views
+                    from sales.views import confirm_split_payment
+                    from django.test import RequestFactory
+                    
+                    # Create a mock request with the correct data
+                    factory = RequestFactory()
+                    mock_request = factory.post(f'/sales/api/sale/split-payment/{sale.sale_id}/confirm/{mpesa_payment.id}/')
+                    mock_request.user = sale.seller or None
+                    mock_request.body = json.dumps({
+                        'transaction_id': receipt,
+                        'checkout_request_id': payment_id
+                    }).encode('utf-8')
+                    
+                    # Call the confirm function
+                    response = confirm_split_payment(mock_request, sale.sale_id, mpesa_payment.id)
+                    logger.info(f"Confirm split payment response: {response.status_code}")
+                    
+            else:
+                # Regular (non-split) payment - just update the sale
+                sale.amount_paid = Decimal(str(amount))
+                sale.payment_method = 'M-Pesa'
+                sale.save()
+                logger.info(f"✅✅✅ Updated sale {sale.sale_id} with amount {amount}")
         
         return JsonResponse({"ResultCode": 0, "ResultDesc": "OK"})
         
@@ -2278,6 +2325,8 @@ def mpesa_callback(request):
         import traceback
         traceback.print_exc()
         return JsonResponse({"ResultCode": 0, "ResultDesc": "OK"})
+    
+
 
 
 

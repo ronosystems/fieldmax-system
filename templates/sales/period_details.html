@@ -91,7 +91,7 @@
                             <thead class="table-light">
                                 <tr>
                                     <th>Product Name</th>
-                                    <th>SKU / Barcode</th>
+                                    <th>Imei/Serial</th>
                                     <th>Product Code</th>
                                     <th class="text-end">Quantity Sold</th>
                                     <th class="text-end">Total Revenue</th>
@@ -111,15 +111,29 @@
                                             </span>
                                         {% endif %}
                                     </td>
-                                    <td>
-                                        {% if item.sku_value %}
-                                            <code class="text-primary">{{ item.sku_value }}</code>
-                                        {% elif item.barcode %}
-                                            <code class="text-success">{{ item.barcode }}</code>
-                                        {% else %}
-                                            <span class="text-muted">—</span>
-                                        {% endif %}
-                                    </td>
+<td class="align-middle">
+    {% if item.first_identifier %}
+        <span class="badge bg-secondary">{{ item.first_identifier.type }}: {{ item.first_identifier.value }}</span>
+        {% if item.has_multiple_sales %}
+            <br>
+            <small class="text-muted" data-bs-toggle="tooltip" title="
+                {% for id in item.identifiers %}
+                    {{ id.type }}: {{ id.value }}<br>
+                {% endfor %}
+            ">
+                <i class="fas fa-info-circle"></i> 
+                +{{ item.identifiers|length|add:"-1" }} more
+            </small>
+        {% endif %}
+    {% elif item.bulk_serial %}
+        <span class="badge bg-info">
+            <i class="fas fa-barcode"></i> 
+            Batch: {{ item.bulk_serial }}
+        </span>
+    {% else %}
+        <span class="text-muted">—</span>
+    {% endif %}
+</td>
                                     <td><code>{{ item.product_code }}</code></td>
                                     <td class="text-end">{{ item.total_quantity|intcomma }}</td>
                                     <td class="text-end text-primary">KES {{ item.total_revenue|floatformat:2|intcomma }}</td>
