@@ -3478,7 +3478,6 @@ def credit_manager_dashboard(request):
 
 
 
-
 # ============================================
 # CREDIT OFFICER DASHBOARD - SEARCH BY IMEI/SERIAL
 # ============================================
@@ -3510,19 +3509,13 @@ def credit_officer_dashboard(request):
     
     # ============================================
     # Get IDs of units that already have credit transactions
-    # Use 'product' field (not 'product_unit')
     # ============================================
     units_with_credit = CreditTransaction.objects.filter(
         product__isnull=False
     ).values_list('product_id', flat=True).distinct()
     
     # ============================================
-    # AVAILABLE UNITS FOR CREDIT (Individual units, not SKUs)
-    # Only show units that:
-    # - Are available (not sold)
-    # - Belong to single-item categories
-    # - Have no existing credit transaction
-    # - Have IMEI or Serial Number
+    # AVAILABLE UNITS FOR CREDIT
     # ============================================
     available_units = ProductUnit.objects.filter(
         product__is_active=True,
@@ -3570,11 +3563,25 @@ def credit_officer_dashboard(request):
         transaction_date__date__gte=thirty_days_ago
     ).count()
     
-    # Total customers this user has dealt with
-    total_customers = CreditCustomer.objects.filter(
-        transactions__dealer=current_user,
+    # ============================================
+    # GET IDs of customers WITH active credit (to exclude)
+    # ============================================
+    customers_with_active_credit_ids = CreditTransaction.objects.filter(
+        payment_status__in=['pending', 'partially_paid']
+    ).values_list('customer_id', flat=True).distinct()
+    
+    # ============================================
+    # CUSTOMERS FOR DROPDOWN - EXCLUDE THOSE WITH ACTIVE CREDIT
+    # ============================================
+    customers = CreditCustomer.objects.filter(
+        Q(transactions__dealer=current_user) | Q(created_by=current_user),
         is_active=True
-    ).distinct().count()
+    ).exclude(
+        id__in=customers_with_active_credit_ids  # ← FIX: Exclude customers with active credit
+    ).distinct().order_by('-created_at')[:100]
+    
+    # Total customers this user has dealt with (eligible ones only)
+    total_customers = customers.count()
     
     # ============================================
     # CREDIT OVERVIEW STATS
@@ -3601,16 +3608,7 @@ def credit_officer_dashboard(request):
     companies = CreditCompany.objects.filter(is_active=True)
     
     # ============================================
-    # CUSTOMERS FOR DROPDOWN
-    # ============================================
-    customers = CreditCustomer.objects.filter(
-        Q(transactions__dealer=current_user) | Q(created_by=current_user),
-        is_active=True
-    ).distinct().order_by('-created_at')[:100]
-    
-    # ============================================
     # RECENT CREDIT TRANSACTIONS
-    # Use 'product' field to access the ProductUnit
     # ============================================
     recent_credits = CreditTransaction.objects.filter(
         dealer=current_user
@@ -3638,7 +3636,6 @@ def credit_officer_dashboard(request):
     }
     
     return render(request, 'staff/dashboards/credit_officer_dashboard.html', context)
-
 
 
 

@@ -749,106 +749,6 @@ def customer_list(request):
     return render(request, 'credit/customers/list.html', context)
 
 
-@login_required
-def customer_add(request):
-    """Add a new credit customer via AJAX modal"""
-    if request.method == 'POST':
-        try:
-            # Check if this is an AJAX request
-            is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
-            
-            # Get form data
-            full_name = request.POST.get('full_name', '').strip()
-            id_number = request.POST.get('id_number', '').strip()
-            phone_number = request.POST.get('phone_number', '').strip()
-            nok_name = request.POST.get('nok_name', '').strip()
-            nok_phone = request.POST.get('nok_phone', '').strip()
-            email = request.POST.get('email', '').strip()
-            alternate_phone = request.POST.get('alternate_phone', '').strip()
-            address = request.POST.get('address', '').strip()
-            nok_relationship = request.POST.get('nok_relationship', '').strip()
-            notes = request.POST.get('notes', '').strip()
-            
-            # Validate required fields
-            if not all([full_name, id_number, phone_number, nok_name, nok_phone]):
-                error_msg = "Please fill all required fields: Full Name, ID Number, Phone Number, Next of Kin Name, Next of Kin Phone"
-                if is_ajax:
-                    return JsonResponse({'success': False, 'error': error_msg})
-                messages.error(request, error_msg)
-                return redirect('credit:transaction_create')
-            
-            # Check if customer with this ID already exists
-            existing_customer = CreditCustomer.objects.filter(id_number=id_number).first()
-            if existing_customer:
-                error_msg = f"Customer with ID {id_number} already exists: {existing_customer.full_name}"
-                if is_ajax:
-                    return JsonResponse({
-                        'success': False,
-                        'error': error_msg,
-                        'existing_customer': {
-                            'id': existing_customer.id,
-                            'full_name': existing_customer.full_name,
-                            'phone_number': existing_customer.phone_number
-                        }
-                    })
-                messages.error(request, error_msg)
-                return redirect('credit:transaction_create')
-            
-            # Check if phone number already exists
-            existing_phone = CreditCustomer.objects.filter(phone_number=phone_number).first()
-            if existing_phone:
-                error_msg = f"Phone number {phone_number} is already registered to: {existing_phone.full_name}"
-                if is_ajax:
-                    return JsonResponse({'success': False, 'error': error_msg})
-                messages.error(request, error_msg)
-                return redirect('credit:transaction_create')
-            
-            # Create new customer
-            customer = CreditCustomer.objects.create(
-                full_name=full_name,
-                id_number=id_number,
-                phone_number=phone_number,
-                nok_name=nok_name,
-                nok_phone=nok_phone,
-                email=email,
-                alternate_phone=alternate_phone,
-                physical_address=address,
-                nok_relationship=nok_relationship,
-                notes=notes,
-                is_active=True,
-                created_by=request.user
-            )
-            
-            logger.info(f"New customer created: {customer.full_name} (ID: {customer.id_number}) by {request.user.username}")
-            
-            # Return JSON response for AJAX (modal submission)
-            if is_ajax:
-                return JsonResponse({
-                    'success': True,
-                    'customer': {
-                        'id': customer.id,
-                        'full_name': customer.full_name,
-                        'phone_number': customer.phone_number,
-                        'id_number': customer.id_number,
-                        'nok_name': customer.nok_name,
-                        'nok_phone': customer.nok_phone
-                    }
-                })
-            else:
-                # Fallback for non-AJAX (should not happen with modal)
-                messages.success(request, f'Customer "{customer.full_name}" added successfully.')
-                return redirect('credit:transaction_create')
-                
-        except Exception as e:
-            logger.error(f"Error adding customer: {str(e)}")
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                return JsonResponse({'success': False, 'error': str(e)})
-            messages.error(request, f'Error adding customer: {str(e)}')
-            return redirect('credit:transaction_create')
-    
-    # GET request - redirect to transaction page
-    return redirect('credit:transaction_create')
-
 
 @login_required
 def customer_detail(request, pk):
@@ -911,10 +811,6 @@ def customer_edit(request, pk):
     return render(request, 'credit/customers/edit.html', context)
 
 
-# ====================================
-# TRANSACTION VIEWS - UPDATED WITH COMMISSION
-# ====================================
-
 @login_required
 def transaction_list(request):
     """List all credit transactions - UPDATED WITH COMMISSION FILTERS"""
@@ -947,10 +843,113 @@ def transaction_list(request):
     }
     return render(request, 'credit/transactions/list.html', context)
 
+@login_required
+def customer_add(request):
+    """Add a new credit customer via AJAX modal"""
+    if request.method == 'POST':
+        try:
+            # Check if this is an AJAX request
+            is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+            
+            # Get form data
+            full_name = request.POST.get('full_name', '').strip()
+            id_number = request.POST.get('id_number', '').strip()
+            phone_number = request.POST.get('phone_number', '').strip()
+            nok_name = request.POST.get('nok_name', '').strip()
+            nok_phone = request.POST.get('nok_phone', '').strip()
+            email = request.POST.get('email', '').strip()
+            alternate_phone = request.POST.get('alternate_phone', '').strip()
+            address = request.POST.get('address', '').strip()
+            nok_relationship = request.POST.get('nok_relationship', '').strip()
+            notes = request.POST.get('notes', '').strip()
+            
+            # Validate required fields
+            if not all([full_name, id_number, phone_number, nok_name, nok_phone]):
+                error_msg = "Please fill all required fields"
+                if is_ajax:
+                    return JsonResponse({'success': False, 'error': error_msg})
+                messages.error(request, error_msg)
+                return redirect('credit:transaction_create')
+            
+            # Check if customer with this ID already exists
+            existing_customer = CreditCustomer.objects.filter(id_number=id_number).first()
+            if existing_customer:
+                error_msg = f"Customer with ID {id_number} already exists: {existing_customer.full_name}"
+                if is_ajax:
+                    return JsonResponse({
+                        'success': False,
+                        'error': error_msg,
+                        'existing_customer': {
+                            'id': existing_customer.id,
+                            'full_name': existing_customer.full_name,
+                            'phone_number': existing_customer.phone_number
+                        }
+                    })
+                messages.error(request, error_msg)
+                return redirect('credit:transaction_create')
+            
+            # Check if phone number already exists
+            existing_phone = CreditCustomer.objects.filter(phone_number=phone_number).first()
+            if existing_phone:
+                error_msg = f"Phone number {phone_number} is already registered to: {existing_phone.full_name}"
+                if is_ajax:
+                    return JsonResponse({'success': False, 'error': error_msg})
+                messages.error(request, error_msg)
+                return redirect('credit:transaction_create')
+            
+            # Create new customer
+            customer = CreditCustomer.objects.create(
+                full_name=full_name,
+                id_number=id_number,
+                phone_number=phone_number,
+                nok_name=nok_name,
+                nok_phone=nok_phone,
+                email=email,
+                alternate_phone=alternate_phone,
+                physical_address=address,
+                nok_relationship=nok_relationship,
+                notes=notes,
+                is_active=True,
+                created_by=request.user
+            )
+            
+            logger.info(f"New customer created: {customer.full_name} (ID: {customer.id_number}) by {request.user.username}")
+            
+            # Return JSON response for AJAX
+            if is_ajax:
+                return JsonResponse({
+                    'success': True,
+                    'customer': {
+                        'id': customer.id,
+                        'full_name': customer.full_name,
+                        'phone_number': customer.phone_number,
+                        'id_number': customer.id_number,
+                        'nok_name': customer.nok_name,
+                        'nok_phone': customer.nok_phone
+                    }
+                })
+            else:
+                messages.success(request, f'Customer "{customer.full_name}" added successfully.')
+                return redirect('credit:transaction_create')
+                
+        except Exception as e:
+            logger.error(f"Error adding customer: {str(e)}")
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'success': False, 'error': str(e)})
+            messages.error(request, f'Error adding customer: {str(e)}')
+            return redirect('credit:transaction_create')
+    
+    return redirect('credit:transaction_create')
+
 
 @login_required
 def transaction_create(request):
-    """Create a new credit transaction"""
+    """Create a new credit transaction - with customer filtering"""
+    
+    # DEBUG: Print to verify view is being called
+    print("=" * 60)
+    print("TRANSACTION_CREATE VIEW CALLED")
+    
     if request.method == 'POST':
         try:
             with transaction.atomic():
@@ -961,33 +960,42 @@ def transaction_create(request):
                 ceiling_price = request.POST.get('ceiling_price', '0')
                 notes = request.POST.get('notes', '')
                 
-                print("=" * 60)
-                print(f"POST Data: company={company_id}, customer={customer_id}, product_unit={product_unit_id}, price={ceiling_price}")
-                
                 # Validate
                 if not all([company_id, customer_id, product_unit_id]):
                     messages.error(request, 'Please fill all required fields')
-                    return redirect('credit:transaction_create')
+                    return redirect('staff:credit_officer_dashboard')
                 
                 # Get objects
                 company = CreditCompany.objects.get(id=company_id)
                 customer = CreditCustomer.objects.get(id=customer_id)
                 
-                # Get the product unit (this is ProductUnit)
-                product_unit = ProductUnit.objects.select_for_update().get(id=product_unit_id)
+                # Check if customer already has an active credit device
+                active_transaction_exists = CreditTransaction.objects.filter(
+                    customer=customer,
+                    payment_status__in=['pending', 'partially_paid']
+                ).exists()
                 
-                print(f"Found unit: {product_unit.unique_identifier}, Status: {product_unit.status}")
+                if active_transaction_exists:
+                    messages.error(
+                        request, 
+                        f'❌ Customer "{customer.full_name}" already has an active credit device. '
+                        f'They cannot receive another device until the current one is fully paid.'
+                    )
+                    return redirect('staff:credit_officer_dashboard')
+                
+                # Get the product unit
+                product_unit = ProductUnit.objects.select_for_update().get(id=product_unit_id)
                 
                 # Check availability
                 if product_unit.status != 'available':
                     messages.error(request, f'Unit {product_unit.unique_identifier} is not available')
-                    return redirect('credit:transaction_create')
+                    return redirect('staff:credit_officer_dashboard')
                 
                 # Check if already has credit transaction
                 existing = CreditTransaction.objects.filter(product=product_unit).exists()
                 if existing:
                     messages.error(request, 'This unit already has a credit transaction')
-                    return redirect('credit:transaction_create')
+                    return redirect('staff:credit_officer_dashboard')
                 
                 # Convert price
                 ceiling_price_decimal = Decimal(str(ceiling_price))
@@ -995,9 +1003,7 @@ def transaction_create(request):
                 # Calculate commission (5%)
                 commission_amount = ceiling_price_decimal * Decimal('0.05')
                 
-                # ============================================
-                # STEP 1: Create StockEntry FIRST (while unit is still available)
-                # ============================================
+                # Create StockEntry
                 from inventory.models import StockEntry
                 stock_entry = StockEntry.objects.create(
                     product_unit=product_unit,
@@ -1009,11 +1015,8 @@ def transaction_create(request):
                     notes=f'Credit sale - {customer.full_name} via {company.name}',
                     created_by=request.user
                 )
-                print(f"✅ StockEntry created: {stock_entry.id}")
                 
-                # ============================================
-                # STEP 2: Create Credit Transaction
-                # ============================================
+                # Create Credit Transaction
                 credit_transaction = CreditTransaction.objects.create(
                     credit_company=company,
                     customer=customer,
@@ -1030,34 +1033,24 @@ def transaction_create(request):
                     commission_status='not_set',
                 )
                 
-                print(f"✅ Transaction created: {credit_transaction.transaction_id}")
-                
-                # ============================================
-                # STEP 3: Mark unit as sold (NOW it's okay because StockEntry already recorded the sale)
-                # ============================================
+                # Mark unit as sold
                 product_unit.status = 'sold'
                 product_unit.sold_date = timezone.now()
                 product_unit.sold_by = request.user
                 product_unit.sold_at_price = ceiling_price_decimal
                 product_unit.save()
                 
-                # ============================================
-                # STEP 4: Update product quantities
-                # ============================================
+                # Update product quantities
                 product_unit.product.update_quantities()
                 
-                # ============================================
-                # STEP 5: Create commission record
-                # ============================================
+                # Create commission record
                 SellerCommission.objects.create(
                     seller=request.user,
                     transaction=credit_transaction,
                     amount=commission_amount
                 )
                 
-                # ============================================
-                # STEP 6: Create log
-                # ============================================
+                # Create log
                 CreditTransactionLog.objects.create(
                     transaction=credit_transaction,
                     action='created',
@@ -1070,25 +1063,42 @@ def transaction_create(request):
                 
         except CreditCompany.DoesNotExist:
             messages.error(request, 'Selected company not found')
-            return redirect('credit:transaction_create')
+            return redirect('staff:credit_officer_dashboard')
         except CreditCustomer.DoesNotExist:
             messages.error(request, 'Selected customer not found')
-            return redirect('credit:transaction_create')
+            return redirect('staff:credit_officer_dashboard')
         except ProductUnit.DoesNotExist:
             messages.error(request, 'Selected unit not found')
-            return redirect('credit:transaction_create')
+            return redirect('staff:credit_officer_dashboard')
         except Exception as e:
             print(f"Error: {str(e)}")
             import traceback
             traceback.print_exc()
             messages.error(request, f'Error: {str(e)}')
-            return redirect('credit:transaction_create')
+            return redirect('staff:credit_officer_dashboard')
     
-    # GET request - show form
+    # GET request - show form with FILTERED customers
     companies = CreditCompany.objects.filter(is_active=True)
-    customers = CreditCustomer.objects.filter(is_active=True)
     
-    # Get available ProductUnits (single items)
+    # CRITICAL: Get customers with active credit to EXCLUDE them
+    customers_with_active_credit_ids = CreditTransaction.objects.filter(
+        payment_status__in=['pending', 'partially_paid']
+    ).values_list('customer_id', flat=True).distinct()
+    
+    print(f"Customers with active credit (to exclude): {list(customers_with_active_credit_ids)}")
+    
+    # Filter customers - EXCLUDE those with active credit
+    customers = CreditCustomer.objects.filter(
+        is_active=True
+    ).exclude(
+        id__in=customers_with_active_credit_ids
+    ).order_by('full_name')
+    
+    print(f"Eligible customers count: {customers.count()}")
+    for cust in customers:
+        print(f"  - {cust.full_name} (ID: {cust.id})")
+    
+    # Get available ProductUnits
     units_with_credit = CreditTransaction.objects.filter(
         product__isnull=False
     ).values_list('product_id', flat=True).distinct()
@@ -1119,6 +1129,7 @@ def transaction_create(request):
     context = {
         'companies': companies,
         'customers': customers,
+        'customers_with_active_count': customers_with_active_credit_ids.count(),
         'units_json': units_json,
         'total_available_units': available_units.count(),
         'daily_sales': CreditTransaction.objects.filter(transaction_date__date=timezone.now().date()).count(),
