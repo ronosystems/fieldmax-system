@@ -3508,6 +3508,11 @@ def credit_officer_dashboard(request):
     current_user = request.user
     
     # ============================================
+    # Get search query for prospects
+    # ============================================
+    search_query = request.GET.get('search', '').strip()
+    
+    # ============================================
     # Get IDs of units that already have credit transactions
     # ============================================
     units_with_credit = CreditTransaction.objects.filter(
@@ -3577,11 +3582,41 @@ def credit_officer_dashboard(request):
         Q(transactions__dealer=current_user) | Q(created_by=current_user),
         is_active=True
     ).exclude(
-        id__in=customers_with_active_credit_ids  # ← FIX: Exclude customers with active credit
+        id__in=customers_with_active_credit_ids
     ).distinct().order_by('-created_at')[:100]
     
-    # Total customers this user has dealt with (eligible ones only)
-    total_customers = customers.count()
+    # ============================================
+    # PROSPECTS FOR "MY PROSPECTS" TAB
+    # All eligible customers (without active credit)
+    # Superusers see all, regular users see only their own
+    # ============================================
+    if current_user.is_superuser:
+        # Superusers see ALL eligible customers
+        prospects = CreditCustomer.objects.filter(
+            is_active=True
+        ).exclude(
+            id__in=customers_with_active_credit_ids
+        ).order_by('-created_at')
+    else:
+        # Regular users see only customers they created or worked with
+        prospects = CreditCustomer.objects.filter(
+            Q(created_by=current_user) | Q(transactions__dealer=current_user),
+            is_active=True
+        ).exclude(
+            id__in=customers_with_active_credit_ids
+        ).distinct().order_by('-created_at')
+    
+    # Apply search filter if provided
+    if search_query:
+        prospects = prospects.filter(
+            Q(full_name__icontains=search_query) |
+            Q(phone_number__icontains=search_query) |
+            Q(id_number__icontains=search_query) |
+            Q(email__icontains=search_query)
+        )
+    
+    # Count prospects
+    prospects_count = prospects.count()
     
     # ============================================
     # CREDIT OVERVIEW STATS
@@ -3616,12 +3651,22 @@ def credit_officer_dashboard(request):
         'customer', 'credit_company', 'product', 'product__product'
     ).order_by('-transaction_date')[:15]
     
+    # ============================================
+    # Count customers with active credit (for info message)
+    # ============================================
+    customers_with_active_count = customers_with_active_credit_ids.count()
+    
     context = {
         # Stats
         'total_available_units': total_available_units,
         'daily_sales': daily_sales,
         'monthly_sales': monthly_sales,
-        'total_customers': total_customers,
+        'total_customers': customers.count(),  # For dropdown eligible customers
+        
+        # Prospects for the "My Prospects" tab
+        'prospects': prospects,
+        'prospects_count': prospects_count,
+        'search_query': search_query,
         
         # Credit Overview
         'total_credit': float(total_credit),
@@ -3633,6 +3678,8 @@ def credit_officer_dashboard(request):
         'companies': companies,
         'customers': customers,
         'recent_credits': recent_credits,
+        'customers_with_active_count': customers_with_active_count,
+        'is_administrator': current_user.is_superuser or current_user.is_staff,
     }
     
     return render(request, 'staff/dashboards/credit_officer_dashboard.html', context)
