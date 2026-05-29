@@ -1,0 +1,261 @@
+{% extends "loan_base.html" %}
+
+{% block title %}Extend Assignment - FieldMax{% endblock %}
+
+{% block header_icon %}fa-calendar-plus{% endblock %}
+
+{% block page_title %}EXTEND ASSIGNMENT PERIOD{% endblock %}
+
+{% block content %}
+<style>
+    .form-card {
+        background: white;
+        border-radius: 32px;
+        box-shadow: 0 12px 28px rgb(0, 0, 0);
+        overflow: hidden;
+        border: 1px solid #cde3f5;
+        margin-bottom: 30px;
+    }
+    .form-card-header {
+        background: #f9fcff;
+        padding: 18px 28px;
+        border-bottom: 2px solid #7ab3c8;
+    }
+    .info-card {
+        background: #eef6fe;
+        border-left: 6px solid #38bdf8;
+        border-radius: 20px;
+        padding: 20px;
+        margin-bottom: 25px;
+    }
+    .info-label {
+        font-weight: 600;
+        color: #1e3a5f;
+        margin-bottom: 5px;
+    }
+    .info-value {
+        color: #0284c7;
+        font-weight: 500;
+    }
+    .btn-primary-custom {
+        background: #0284c7;
+        border: none;
+        color: white;
+        font-weight: 600;
+        transition: 0.2s;
+        padding: 10px 24px;
+        border-radius: 8px;
+    }
+    .btn-primary-custom:hover {
+        background: #0369a1;
+        transform: translateY(-1px);
+    }
+    .btn-secondary-custom {
+        background: #6c757d;
+        border: none;
+        color: white;
+        font-weight: 600;
+        transition: 0.2s;
+        padding: 10px 24px;
+        border-radius: 8px;
+    }
+    .btn-secondary-custom:hover {
+        background: #5a6268;
+        transform: translateY(-1px);
+    }
+    .current-expiry {
+        background: #fef3c7;
+        border-left: 6px solid #f59e0b;
+        padding: 15px;
+        border-radius: 12px;
+        margin: 15px 0;
+    }
+    .new-expiry {
+        background: #d1fae5;
+        border-left: 6px solid #10b981;
+        padding: 15px;
+        border-radius: 12px;
+        margin: 15px 0;
+    }
+</style>
+
+<div class="container-fluid px-0">
+    <!-- Messages -->
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-3" role="alert">
+                <i class="fas fa-{% if message.tags == 'success' %}check-circle{% elif message.tags == 'error' %}exclamation-circle{% else %}info-circle{% endif %} me-2"></i>
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="form-card">
+        <div class="form-card-header">
+            <h5 class="mb-0 fw-bold">
+                <i class="fas fa-calendar-plus me-2" style="color:#0284c7;"></i>
+                EXTEND PRODUCT ASSIGNMENT
+            </h5>
+            <p class="text-muted small mt-2 mb-0">Extend the validity period of this product assignment</p>
+        </div>
+        
+        <div class="card-body p-4">
+            <!-- Assignment Information -->
+            <div class="info-card">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <div class="info-label"><i class="fas fa-microchip"></i> Device IMEI/Serial</div>
+                        <div class="info-value">{{ assignment.product_unit.unique_identifier }}</div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <div class="info-label"><i class="fas fa-mobile-alt"></i> Product Name</div>
+                        <div class="info-value">{{ assignment.product_unit.product.display_name }}</div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <div class="info-label"><i class="fas fa-tag"></i> SKU Code</div>
+                        <div class="info-value">{{ assignment.product_unit.product.sku_code }}</div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <div class="info-label"><i class="fas fa-user-tie"></i> Assigned To</div>
+                        <div class="info-value">{{ assignment.assigned_to.get_full_name|default:assignment.assigned_to.username }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Current Expiry Information -->
+            <div class="current-expiry">
+                <h6 class="mb-2"><i class="fas fa-calendar-alt me-2"></i>Current Assignment Details</h6>
+                <div class="row">
+                    <div class="col-md-6">
+                        <strong>Assigned Date:</strong><br>
+                        {{ assignment.assigned_at|date:"d M Y, H:i" }}
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Current Expiry Date:</strong><br>
+                        {% if assignment.expires_at %}
+                            {{ assignment.expires_at|date:"d M Y, H:i" }}
+                            <br>
+                            <small class="text-muted">({{ assignment.expires_at|timeuntil }} remaining)</small>
+                        {% else %}
+                            <span class="text-muted">No expiry (permanent assignment)</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Extend Form -->
+            <form method="POST" id="extendForm">
+                {% csrf_token %}
+                <div class="row g-4 mt-2">
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">
+                            <i class="fas fa-calendar-day me-1" style="color:#0284c7;"></i> 
+                            Extend By (Days)
+                        </label>
+                        <input type="number" name="days" class="form-control form-control-lg" 
+                               min="1" max="365" value="30" required>
+                        <small class="text-muted">Add this many days to the current expiry date</small>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">
+                            <i class="fas fa-calendar-week me-1" style="color:#0284c7;"></i> 
+                            New Expiry Date (Preview)
+                        </label>
+                        <div class="new-expiry" id="newExpiryPreview">
+                            <strong id="newExpiryDate">--</strong>
+                        </div>
+                        <small class="text-muted">New expiry date after extension</small>
+                    </div>
+                </div>
+
+                <hr class="my-4">
+
+                <!-- Form Actions -->
+                <div class="d-flex justify-content-end gap-3">
+                    <a href="{% url 'staff:manage_assignments' %}" class="btn btn-secondary-custom">
+                        <i class="fas fa-times me-2"></i>Cancel
+                    </a>
+                    <button type="submit" class="btn btn-primary-custom" id="submitBtn">
+                        <i class="fas fa-save me-2"></i>Extend Assignment
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Calculate and preview new expiry date
+    const daysInput = document.querySelector('input[name="days"]');
+    const newExpiryDateSpan = document.getElementById('newExpiryDate');
+    
+    // Get current expiry date
+    {% if assignment.expires_at %}
+        const currentExpiry = new Date("{{ assignment.expires_at|date:'Y-m-d H:i:s' }}");
+        const hasExpiry = true;
+    {% else %}
+        const currentExpiry = new Date();
+        const hasExpiry = false;
+    {% endif %}
+    
+    function updateNewExpiryPreview() {
+        const days = parseInt(daysInput.value) || 0;
+        
+        if (days > 0) {
+            let newDate;
+            if (hasExpiry) {
+                newDate = new Date(currentExpiry);
+                newDate.setDate(newDate.getDate() + days);
+            } else {
+                newDate = new Date();
+                newDate.setDate(newDate.getDate() + days);
+            }
+            
+            // Format the date
+            const options = { 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            };
+            newExpiryDateSpan.innerHTML = newDate.toLocaleDateString('en-US', options);
+        } else {
+            newExpiryDateSpan.innerHTML = '--';
+        }
+    }
+    
+    daysInput.addEventListener('input', updateNewExpiryPreview);
+    updateNewExpiryPreview();
+    
+    // Form validation
+    const extendForm = document.getElementById('extendForm');
+    if (extendForm) {
+        extendForm.addEventListener('submit', function(e) {
+            const days = parseInt(daysInput.value);
+            
+            if (!days || days < 1) {
+                e.preventDefault();
+                alert('Please enter a valid number of days (minimum 1 day).');
+                daysInput.focus();
+                return;
+            }
+            
+            if (days > 365) {
+                e.preventDefault();
+                alert('Maximum extension is 365 days.');
+                daysInput.focus();
+                return;
+            }
+            
+            // Confirm extension
+            let confirmMsg = `Are you sure you want to extend this assignment by ${days} days?`;
+            if (!confirm(confirmMsg)) {
+                e.preventDefault();
+            }
+        });
+    }
+</script>
+{% endblock %}

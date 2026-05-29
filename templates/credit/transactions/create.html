@@ -1,398 +1,697 @@
-{% extends 'credit/staff_base.html' %}
-{% load static %}
+{% extends "staff/dashboards/credit_officer_dashboard.html" %}
 
-{% block title %}New Credit Transaction{% endblock %}
+{% block page_title %}
+<i class="fas fa-plus-circle me-2"></i>GENERATE NEW ETR
+{% endblock %}
 
-{% block content %}
-<div class="mb-4">
-    <nav aria-label="breadcrumb">
-        <ol class="breadcrumb">
-            <li class="breadcrumb-item"><a href="{% url 'credit:dashboard' %}">Dashboard</a></li>
-            <li class="breadcrumb-item"><a href="{% url 'credit:transaction_list' %}">Transactions</a></li>
-            <li class="breadcrumb-item active">New Transaction</li>
-        </ol>
-    </nav>
-</div>
+{% block extra_content %}
+<style>
+    .form-card {
+        background: white;
+        border-radius: 32px;
+        box-shadow: 0 12px 28px rgb(0, 0, 0);
+        overflow: hidden;
+        border: 1px solid #cde3f5;
+        margin-bottom: 24px;
+    }
+    .form-card-header {
+        background: #f9fcff;
+        padding: 18px 28px;
+        border-bottom: 2px solid #7ab3c8;
+    }
+    .selected-unit-card {
+        background: #eef6fe;
+        border-left: 6px solid #38bdf8;
+        border-radius: 20px;
+        transition: all 0.3s ease;
+    }
+    .btn-primary-custom {
+        background: #0284c7;
+        border: none;
+        color: white;
+        font-weight: 600;
+        transition: 0.2s;
+        padding: 10px 24px;
+    }
+    .btn-primary-custom:hover {
+        background: #0369a1;
+        transform: translateY(-1px);
+    }
+    .unit-suggestion-item {
+        cursor: pointer;
+        transition: all 0.2s;
+        border-left: 3px solid transparent;
+    }
+    .unit-suggestion-item:hover {
+        background-color: #caf0f8;
+        border-left-color: #0284c7;
+        transform: translateX(5px);
+    }
+    .loading-spinner {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border: 3px solid #f3f3f3;
+        border-top: 3px solid #0284c7;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    .customer-badge {
+        background: #e8f4fd;
+        padding: 8px 12px;
+        border-radius: 12px;
+        font-size: 0.85rem;
+    }
+    .customer-badge i {
+        color: #0284c7;
+        margin-right: 6px;
+    }
+    .input-group-focus:focus-within {
+        box-shadow: 0 0 0 0.2rem rgba(2, 132, 199, 0.25);
+        border-radius: 8px;
+    }
+    .suggestions-dropdown {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        z-index: 1000;
+        max-height: 300px;
+        overflow-y: auto;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+        border: 1px solid #cde3f5;
+    }
+</style>
 
-<div class="card">
-    <div class="card-header bg-warning text-dark">
-        <h5 class="mb-0"><i class="fas fa-plus-circle me-2"></i>Create New Credit Transaction</h5>
+<div class="container-fluid px-0">
+    <!-- Warning if customer has active credit -->
+    {% if customers_with_active_count > 0 %}
+    <div class="alert alert-warning alert-dismissible fade show mb-4" role="alert">
+        <i class="fas fa-exclamation-triangle me-2"></i>
+        <strong>Note:</strong> A customer can only have ONE active credit device at a time. 
+        Customers with existing credit are hidden from the dropdown.
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
-    <div class="card-body">
-        <form method="post" id="transactionForm" action="{% url 'credit:transaction_create' %}">
-            {% csrf_token %}
+    {% endif %}
+
+    <!-- Main Form Card -->
+    <div class="form-card">
+        <div class="form-card-header">
+            <h5 class="mb-0 fw-bold">
+                <i class="fas fa-file-invoice-dollar me-2" style="color:#0284c7;"></i>
+                CREDIT TRANSACTION FORM
+            </h5>
+            <p class="text-muted small mt-2 mb-0">Fill in the details to generate a new Electronic Transaction Record</p>
+        </div>
+        
+        <div class="card-body p-4">
+            <div id="messageContainer"></div>
             
-            <div class="row">
-                <!-- Company Selection -->
-                <div class="col-md-6 mb-3">
-                    <label class="form-label">Credit Company <span class="text-danger">*</span></label>
-                    <select name="company" class="form-select" required id="companySelect">
-                        <option value="">Select Company</option>
-                        {% for company in companies %}
-                        <option value="{{ company.id }}">{{ company.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
+            <form method="post" id="transactionForm" action="{% url 'credit:transaction_create' %}">
+                {% csrf_token %}
                 
-                <!-- Customer Selection with Popup -->
-                <div class="col-md-6 mb-3">
-                    <label class="form-label">Customer <span class="text-danger">*</span></label>
-                    <div class="input-group">
-                        <select name="customer" class="form-select" required id="customerSelect">
-                            <option value="">Select Existing Customer</option>
-                            {% for customer in customers %}
-                            <option value="{{ customer.id }}">
-                                {{ customer.full_name }} - {{ customer.phone_number }}
+                <div class="row g-4">
+                    <!-- Financing Company -->
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">
+                            <i class="fas fa-building me-1" style="color:#0284c7;"></i> 
+                            FINANCING COMPANY <span class="text-danger">*</span>
+                        </label>
+                        <select name="company" class="form-select form-select-lg" required id="companySelect">
+                            <option value="">-- Select Financing Company --</option>
+                            {% for company in companies %}
+                            <option value="{{ company.id }}" data-code="{{ company.code|default:'' }}">
+                                {{ company.name }}
                             </option>
                             {% endfor %}
                         </select>
-                        <button type="button" class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#addCustomerModal">
-                            <i class="fas fa-user-plus"></i> New
-                        </button>
+                        <small class="text-muted">Select the credit financing partner</small>
                     </div>
-                </div>
-            </div>
-            
-            <!-- Product Search with Suggestions -->
-            <div class="row">
-                <div class="col-md-12 mb-3">
-                    <label class="form-label">Search Product <span class="text-danger">*</span></label>
-                    <div class="input-group">
-                        <input type="text" class="form-control" id="productSearch" placeholder="Type product code or SKU..." autocomplete="off">
-                        <input type="hidden" name="product" id="selectedProductId" required>
-                        <button class="btn btn-outline-warning" type="button" id="clearProductBtn">
-                            <i class="fas fa-times"></i>
-                        </button>
+                    
+                    <!-- Customer Selection -->
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">
+                            <i class="fas fa-user me-1" style="color:#0284c7;"></i> 
+                            CUSTOMER <span class="text-danger">*</span>
+                        </label>
+                        <div class="input-group">
+                            <select name="customer" class="form-select form-select-lg" required id="customerSelect">
+                                <option value="">-- Select Existing Customer --</option>
+                                {% for customer in customers %}
+                                <option value="{{ customer.id }}" 
+                                        data-phone="{{ customer.phone_number }}"
+                                        data-idnumber="{{ customer.id_number }}">
+                                    {{ customer.full_name }} - {{ customer.phone_number }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <button type="button" class="btn btn-outline-primary" 
+                                    data-bs-toggle="modal" data-bs-target="#addCustomerModal"
+                                    style="border-color:#0284c7; color:#0284c7;">
+                                <i class="fas fa-user-plus me-1"></i> New
+                            </button>
+                        </div>
+                        <small class="text-muted">Select an existing customer or register a new one</small>
                     </div>
-                    <div id="productSuggestions" class="list-group mt-1" style="max-height: 200px; overflow-y: auto; display: none;"></div>
-                </div>
-            </div>
-            
-            <!-- Selected Product Display -->
-            <div class="row" id="selectedProductCard" style="display: none;">
-                <div class="col-md-12">
-                    <div class="card bg-light mb-3">
-                        <div class="card-body">
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <strong>Product:</strong> <span id="selectedProductName"></span><br>
-                                    <strong>Code:</strong> <span id="selectedProductCode"></span>
-                                </div>
-                                <div class="col-md-6">
-                                    <strong>Price:</strong> KSH <span id="selectedProductPrice"></span><br>
-                                    <strong>Stock:</strong> <span id="selectedProductStock"></span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- IMEI and Price -->
-            <div class="row">
-                <div class="col-md-6 mb-3">
-                    <label class="form-label">IMEI (if applicable)</label>
-                    <input type="text" name="imei" class="form-control" placeholder="Enter IMEI number">
-                </div>
-                
-                <div class="col-md-6 mb-3">
-                    <label class="form-label">Ceiling Price (KSH) <span class="text-danger">*</span></label>
-                    <input type="number" name="ceiling_price" class="form-control" step="0.01" required id="priceInput">
-                    <small class="text-muted">Amount the credit company will pay you</small>
-                </div>
-            </div>
-            
-            <!-- Notes -->
-            <div class="row">
-                <div class="col-md-12 mb-3">
-                    <label class="form-label">Notes</label>
-                    <textarea name="notes" class="form-control" rows="2" placeholder="Any additional notes about this transaction..."></textarea>
-                </div>
-            </div>
-            
-            <div class="d-flex justify-content-end gap-2 mt-4">
-                <a href="{% url 'credit:transaction_list' %}" class="btn btn-secondary">
-                    <i class="fas fa-times"></i> Cancel
-                </a>
-                <button type="submit" class="btn btn-warning">
-                    <i class="fas fa-save"></i> Create Transaction
-                </button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<!-- Add Customer Modal with Next of Kin and Photo Uploads -->
-<div class="modal fade" id="addCustomerModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header bg-warning text-dark">
-                <h5 class="modal-title"><i class="fas fa-user-plus me-2"></i>Add New Customer</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <form method="post" action="{% url 'credit:customer_add' %}" id="addCustomerForm" enctype="multipart/form-data">
-                {% csrf_token %}
-                <div class="modal-body">
-                    <!-- Personal Information Section -->
-                    <div class="row">
-                        <div class="col-md-12">
-                            <h6 class="mb-3 text-warning">
-                                <i class="fas fa-user-circle me-2"></i>Personal Information
-                            </h6>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Full Name <span class="text-danger">*</span></label>
-                            <input type="text" name="full_name" class="form-control" required 
-                                   placeholder="e.g., John Doe">
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Phone Number <span class="text-danger">*</span></label>
-                            <input type="text" name="phone_number" class="form-control" required 
-                                   placeholder="e.g., 0712345678">
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">ID Number <span class="text-danger">*</span></label>
-                            <input type="text" name="id_number" class="form-control" required 
-                                   placeholder="e.g., 12345678">
-                        </div>
-                    </div>
-                
-                    <!-- Next of Kin Section -->
-                    <div class="row mt-2">
-                        <div class="col-md-12">
-                            <h6 class="mb-3 text-warning">
-                                <i class="fas fa-users me-2"></i>Next of Kin Information
-                            </h6>
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">NOK Full Name</label>
-                            <input type="text" name="nok_name" class="form-control">
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">NOK Phone Number</label>
-                            <input type="text" name="nok_phone" class="form-control">
+                    
+                    <!-- Selected Customer Info (dynamic) -->
+                    <div class="col-12" id="selectedCustomerInfo" style="display: none;">
+                        <div class="customer-badge">
+                            <i class="fas fa-check-circle"></i>
+                            <span id="selectedCustomerName"></span> | 
+                            <i class="fas fa-phone ms-2"></i> <span id="selectedCustomerPhone"></span> |
+                            <i class="fas fa-id-card ms-2"></i> <span id="selectedCustomerIdNumber"></span>
                         </div>
                     </div>
                     
-                    <!-- Photo Upload Section -->
-                    <div class="row mt-3">
-                        <div class="col-md-12">
-                            <h6 class="mb-3 text-warning">
-                                <i class="fas fa-camera me-2"></i>Customer Photos / Documents
+                    <!-- Device Search -->
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">
+                            <i class="fas fa-qrcode me-1" style="color:#0284c7;"></i> 
+                            DEVICE (IMEI or SERIAL NUMBER) <span class="text-danger">*</span>
+                        </label>
+                        <div class="position-relative">
+                            <div class="input-group input-group-focus">
+                                <span class="input-group-text bg-light">
+                                    <i class="fas fa-search"></i>
+                                </span>
+                                <input type="text" class="form-control form-control-lg" 
+                                       id="unitSearch" 
+                                       placeholder="Enter IMEI (15 digits) or Serial Number..." 
+                                       autocomplete="off">
+                                <input type="hidden" name="product_unit" id="selectedUnitId" required>
+                                <button class="btn btn-outline-secondary" type="button" id="clearUnitBtn">
+                                    <i class="fas fa-times"></i> Clear
+                                </button>
+                            </div>
+                            <div id="unitSuggestions" class="suggestions-dropdown" style="display: none;"></div>
+                        </div>
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle"></i> 
+                            Search by IMEI (15 digits) or Serial Number. Only devices assigned to you will appear.
+                        </small>
+                    </div>
+                    
+                    <!-- Selected Device Card -->
+                    <div id="selectedUnitCard" class="col-12 selected-unit-card p-4" style="display: none;">
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            <h6 class="mb-0 fw-bold">
+                                <i class="fas fa-mobile-alt me-2" style="color:#0284c7;"></i>
+                                SELECTED DEVICE
                             </h6>
-                            <small class="text-muted d-block mb-3">
-                                <i class="fas fa-info-circle me-1"></i>
-                                Upload clear photo  and ID documents to help with future verifications and claims.
-                            </small>
+                            <span class="badge bg-success">Available for Credit</span>
                         </div>
-                        
-                        <div class="col-md-4 mb-3">
-                            <label class="form-label">Passport Photo</label>
-                            <div class="input-group">
-                                <input type="file" name="passport_photo" class="form-control" accept="image/*">
-                                <span class="input-group-text bg-light">
-                                    <i class="fas fa-camera"></i>
-                                </span>
+                        <div class="row">
+                            <div class="col-md-6 mb-2">
+                                <strong><i class="fas fa-microchip me-1"></i> IMEI/Serial:</strong><br>
+                                <span id="selectedIdentifier" class="font-monospace"></span>
                             </div>
-                            <small class="text-muted">Upload passport-sized photo</small>
-                        </div>
-                        
-                        <div class="col-md-4 mb-3">
-                            <label class="form-label">ID Front Photo</label>
-                            <div class="input-group">
-                                <input type="file" name="id_front_photo" class="form-control" accept="image/*">
-                                <span class="input-group-text bg-light">
-                                    <i class="fas fa-id-card"></i>
-                                </span>
+                            <div class="col-md-6 mb-2">
+                                <strong><i class="fas fa-mobile-alt me-1"></i> Device:</strong><br>
+                                <span id="selectedProductName"></span>
                             </div>
-                            <small class="text-muted">Front side of national ID</small>
-                        </div>
-                        
-                        <div class="col-md-4 mb-3">
-                            <label class="form-label">ID Back Photo</label>
-                            <div class="input-group">
-                                <input type="file" name="id_back_photo" class="form-control" accept="image/*">
-                                <span class="input-group-text bg-light">
-                                    <i class="fas fa-id-card"></i>
-                                </span>
+                            <div class="col-md-4 mb-2">
+                                <strong><i class="fas fa-tag me-1"></i> SKU:</strong><br>
+                                <span id="selectedSku"></span>
                             </div>
-                            <small class="text-muted">Back side of national ID</small>
+                            <div class="col-md-4 mb-2">
+                                <strong><i class="fas fa-tachometer-alt me-1"></i> Price:</strong><br>
+                                <span class="fw-bold fs-5" style="color:#0f5b87;">KSH <span id="selectedPrice"></span></span>
+                            </div>
+                            <div class="col-md-4 mb-2">
+                                <strong><i class="fas fa-chart-line me-1"></i> Status:</strong><br>
+                                <span class="badge-active" id="deviceStatus">Available</span>
+                            </div>
+                            <div class="col-12">
+                                <strong><i class="fas fa-info-circle me-1"></i> Details:</strong><br>
+                                <span id="productDetails" class="text-muted"></span>
+                            </div>
                         </div>
                     </div>
                     
-                    <input type="hidden" name="next" value="{% url 'credit:transaction_create' %}">
+                    <!-- Ceiling Price -->
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">
+                            <i class="fas fa-money-bill-wave me-1" style="color:#0284c7;"></i> 
+                            CEILING PRICE (KSH) <span class="text-danger">*</span>
+                        </label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light fw-bold">KSH</span>
+                            <input type="number" name="ceiling_price" class="form-control form-control-lg" 
+                                   step="0.01" required id="priceInput" placeholder="0.00">
+                        </div>
+                        <small class="text-muted">Total amount to be financed (max device price)</small>
+                    </div>
+                    
+                    <!-- Down Payment (Optional) -->
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">
+                            <i class="fas fa-hand-holding-usd me-1" style="color:#0284c7;"></i> 
+                            DOWN PAYMENT (Optional)
+                        </label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light fw-bold">KSH</span>
+                            <input type="number" name="down_payment" class="form-control" 
+                                   step="0.01" id="downPaymentInput" placeholder="0.00" value="0">
+                        </div>
+                        <small class="text-muted">Initial payment amount (will be deducted from ceiling price)</small>
+                    </div>
+                    
+                    <!-- Balance After Down Payment (auto-calculated) -->
+                    <div class="col-md-6" id="balanceSection" style="display: none;">
+                        <label class="form-label fw-semibold">
+                            <i class="fas fa-calculator me-1" style="color:#0284c7;"></i> 
+                            BALANCE AFTER DOWN PAYMENT
+                        </label>
+                        <div class="alert alert-info mb-0">
+                            <strong>KSH <span id="balanceAmount">0.00</span></strong>
+                            <small class="d-block">This is the amount to be financed</small>
+                        </div>
+                    </div>
+                    
+                    <!-- Payment Terms -->
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">
+                            <i class="fas fa-calendar-alt me-1" style="color:#0284c7;"></i> 
+                            PAYMENT TERMS (Months)
+                        </label>
+                        <select name="payment_terms" class="form-select">
+                            <option value="1">1 month</option>
+                            <option value="3">3 months</option>
+                            <option value="6" selected>6 months</option>
+                            <option value="12">12 months</option>
+                            <option value="24">24 months</option>
+                        </select>
+                        <small class="text-muted">Credit repayment period</small>
+                    </div>
+                    
+                    <!-- Monthly Installment (auto-calculated) -->
+                    <div class="col-md-6" id="installmentSection" style="display: none;">
+                        <label class="form-label fw-semibold">
+                            <i class="fas fa-chart-line me-1" style="color:#0284c7;"></i> 
+                            ESTIMATED MONTHLY INSTALLMENT
+                        </label>
+                        <div class="alert alert-success mb-0">
+                            <strong>KSH <span id="monthlyInstallment">0.00</span></strong>
+                            <small class="d-block">Per month (excluding interest)</small>
+                        </div>
+                    </div>
+                    
+                    <!-- Notes -->
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">
+                            <i class="fas fa-sticky-note me-1" style="color:#0284c7;"></i> 
+                            NOTES / REMARKS
+                        </label>
+                        <textarea name="notes" class="form-control" rows="3" 
+                                  placeholder="Additional notes about the transaction, customer, or device..."></textarea>
+                    </div>
+                    
+                    <!-- Agreement Checkbox -->
+                    <div class="col-12">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="agreementCheckbox" required>
+                            <label class="form-check-label" for="agreementCheckbox">
+                                I confirm that all information provided is accurate and the customer has agreed to the credit terms.
+                            </label>
+                        </div>
+                    </div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-warning">Save Customer</button>
+                
+                <!-- Form Actions -->
+                <div class="d-flex justify-content-end gap-3 mt-5 pt-3 border-top">
+                    <a href="{% url 'staff:credit_officer_dashboard' %}" class="btn btn-secondary btn-lg px-4">
+                        <i class="fas fa-times me-2"></i>Cancel
+                    </a>
+                    <button type="submit" class="btn btn-primary-custom btn-lg px-5" id="submitBtn">
+                        <i class="fas fa-save me-2"></i>GENERATE ETR
+                    </button>
                 </div>
             </form>
         </div>
     </div>
 </div>
-{% endblock %}
 
-{% block extra_js %}
+<!-- Add Customer Modal -->
+<div class="modal fade" id="addCustomerModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header" style="background:#eef6fc;">
+                <h5 class="modal-title">
+                    <i class="fas fa-user-plus me-2" style="color:#0284c7;"></i>
+                    Register New Customer
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="{% url 'credit:customer_add' %}" id="addCustomerForm" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <h6 class="fw-bold border-bottom pb-2" style="color:#0f5b87;">
+                                <i class="fas fa-user-circle me-2"></i>Customer Information
+                            </h6>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-12 mb-3">
+                            <label class="form-label">Full Name <span class="text-danger">*</span></label>
+                            <input type="text" name="full_name" class="form-control" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Phone Number <span class="text-danger">*</span></label>
+                            <input type="tel" name="phone_number" class="form-control" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">ID Number <span class="text-danger">*</span></label>
+                            <input type="text" name="id_number" class="form-control" required>
+                        </div>
+                        <div class="col-md-12 mb-3">
+                            <label class="form-label">Email (Optional)</label>
+                            <input type="email" name="email" class="form-control">
+                        </div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-12">
+                            <h6 class="fw-bold border-bottom pb-2" style="color:#0f5b87;">
+                                <i class="fas fa-handshake me-2"></i>Next of Kin
+                            </h6>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">NOK Full Name <span class="text-danger">*</span></label>
+                            <input type="text" name="nok_name" class="form-control" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">NOK Phone <span class="text-danger">*</span></label>
+                            <input type="tel" name="nok_phone" class="form-control" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Relationship</label>
+                            <input type="text" name="nok_relationship" class="form-control" placeholder="e.g., Spouse, Parent, Sibling">
+                        </div>
+                    </div>
+                    <input type="hidden" name="next" value="{% url 'credit:transaction_create' %}">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn" style="background:#0284c7; color:white;">Register Customer</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+
+<!-- Add this at the bottom of the template, before the endblock -->
+<script id="unitsData" type="application/json">{{ units_json|safe }}</script>
+
+
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Product data from server
-    const products = [
-        {% for product in products %}
-        {
-            id: {{ product.id }},
-            code: "{{ product.product_code }}",
-            name: "{{ product.display_name|escapejs }}",
-            price: {{ product.selling_price }},
-            stock: {{ product.quantity }},
-            sku: "{{ product.sku_value|default:''|escapejs }}"
-        },
-        {% endfor %}
-    ];
+    // ============================================
+    // GLOBAL VARIABLES
+    // ============================================
+    let units = [];
+    let searchTimeout;
+    
+    // Load assigned units data
+    try {
+        const unitsElem = document.getElementById('unitsData');
+        if(unitsElem && unitsElem.textContent) {
+            units = JSON.parse(unitsElem.textContent) || [];
+            console.log(`Loaded ${units.length} assigned units`);
+        }
+    } catch(e) { 
+        console.warn('Error loading units data:', e); 
+    }
     
     // DOM Elements
-    const searchInput = document.getElementById('productSearch');
-    const suggestionsDiv = document.getElementById('productSuggestions');
-    const selectedProductId = document.getElementById('selectedProductId');
-    const selectedProductCard = document.getElementById('selectedProductCard');
-    const clearProductBtn = document.getElementById('clearProductBtn');
+    const searchInput = document.getElementById('unitSearch');
+    const suggestionsDiv = document.getElementById('unitSuggestions');
+    const selectedUnitId = document.getElementById('selectedUnitId');
+    const selectedCard = document.getElementById('selectedUnitCard');
+    const clearBtn = document.getElementById('clearUnitBtn');
     const priceInput = document.getElementById('priceInput');
+    const downPaymentInput = document.getElementById('downPaymentInput');
+    const balanceSection = document.getElementById('balanceSection');
+    const installmentSection = document.getElementById('installmentSection');
+    const balanceAmount = document.getElementById('balanceAmount');
+    const monthlyInstallment = document.getElementById('monthlyInstallment');
+    const paymentTermsSelect = document.querySelector('select[name="payment_terms"]');
     const transactionForm = document.getElementById('transactionForm');
-    const customerForm = document.getElementById('addCustomerForm');
+    const customerSelect = document.getElementById('customerSelect');
+    const selectedCustomerInfo = document.getElementById('selectedCustomerInfo');
     
-    // Product Search with Suggestions
-    if (searchInput) {
-        searchInput.addEventListener('input', function() {
-            const query = this.value.toLowerCase().trim();
-            
-            if (query.length < 2) {
-                suggestionsDiv.style.display = 'none';
-                return;
-            }
-            
-            const matches = products.filter(p => 
-                p.code.toLowerCase().includes(query) || 
-                p.sku.toLowerCase().includes(query)
-            ).slice(0, 5);
-            
-            if (matches.length > 0) {
-                suggestionsDiv.innerHTML = matches.map(p => `
-                    <a href="#" class="list-group-item list-group-item-action" 
-                       onclick="selectProduct(${p.id}, '${p.code}', '${p.name}', ${p.price}, ${p.stock}); return false;">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <strong>${p.code}</strong> - ${p.name}
-                            </div>
-                            <small class="text-muted">Stock: ${p.stock}</small>
-                        </div>
-                        <small class="text-muted">Price: KSH ${p.price}</small>
-                    </a>
-                `).join('');
-                suggestionsDiv.style.display = 'block';
+    // ============================================
+    // MESSAGE DISPLAY
+    // ============================================
+    function showMessage(msg, type) {
+        const container = document.getElementById('messageContainer');
+        if(!container) return;
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+        alertDiv.innerHTML = `
+            <i class="fas fa-${type === 'success' ? 'check-circle' : (type === 'danger' ? 'exclamation-circle' : 'info-circle')} me-2"></i>
+            ${msg}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        container.innerHTML = '';
+        container.appendChild(alertDiv);
+        setTimeout(() => alertDiv.remove(), 5000);
+    }
+    
+    // ============================================
+    // CUSTOMER SELECTION HANDLER
+    // ============================================
+    if(customerSelect) {
+        customerSelect.addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            if(this.value) {
+                const customerName = selectedOption.text.split(' - ')[0];
+                const customerPhone = selectedOption.dataset.phone || '';
+                const customerIdNumber = selectedOption.dataset.idnumber || '';
+                
+                document.getElementById('selectedCustomerName').innerText = customerName;
+                document.getElementById('selectedCustomerPhone').innerText = customerPhone;
+                document.getElementById('selectedCustomerIdNumber').innerText = customerIdNumber;
+                selectedCustomerInfo.style.display = 'block';
             } else {
-                suggestionsDiv.style.display = 'none';
+                selectedCustomerInfo.style.display = 'none';
             }
+        });
+    }
+    
+    // ============================================
+    // UNIT SEARCH FUNCTIONALITY
+    // ============================================
+    if(searchInput) {
+        searchInput.addEventListener('input', function() {
+            clearTimeout(searchTimeout);
+            const q = this.value.trim().toLowerCase();
+            
+            if(q.length < 2) { 
+                suggestionsDiv.style.display = 'none'; 
+                return; 
+            }
+            
+            searchTimeout = setTimeout(() => {
+                const matches = units.filter(u => 
+                    (u.imei_number || '').toLowerCase().includes(q) || 
+                    (u.serial_number || '').toLowerCase().includes(q) ||
+                    (u.identifier || '').toLowerCase().includes(q)
+                ).slice(0, 12);
+                
+                if(matches.length) {
+                    suggestionsDiv.innerHTML = matches.map(u => `
+                        <div class="list-group-item unit-suggestion-item p-3" 
+                             onclick="selectUnit(${u.id}, '${(u.identifier || u.imei_number || u.serial_number).replace(/'/g, "\\'")}', '${(u.product_name || '').replace(/'/g, "\\'")}', ${u.selling_price || 0}, '${(u.sku_code || '').replace(/'/g, "\\'")}', '${(u.brand || '').replace(/'/g, "\\'")}', '${(u.model || '').replace(/'/g, "\\'")}')">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong><i class="fas fa-microchip"></i> ${u.imei_number || u.serial_number}</strong>
+                                    <br>
+                                    <small class="text-muted">${u.product_name || 'Device'} | SKU: ${u.sku_code || 'N/A'}</small>
+                                </div>
+                                <div class="text-end">
+                                    <span class="fw-bold fs-5" style="color:#0f5b87;">KSH ${(u.selling_price || 0).toFixed(2)}</span>
+                                    <br>
+                                    <span class="badge-active">Available</span>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('');
+                    suggestionsDiv.style.display = 'block';
+                } else {
+                    suggestionsDiv.innerHTML = `
+                        <div class="list-group-item text-muted text-center py-3">
+                            <i class="fas fa-search"></i> No matching devices found
+                            <br><small>Try a different IMEI or serial number</small>
+                        </div>
+                    `;
+                    suggestionsDiv.style.display = 'block';
+                }
+            }, 300);
         });
         
-        // Hide suggestions when clicking outside
-        document.addEventListener('click', function(e) {
-            if (!searchInput.contains(e.target) && !suggestionsDiv.contains(e.target)) {
-                suggestionsDiv.style.display = 'none';
+        document.addEventListener('click', (e) => { 
+            if(!searchInput.contains(e.target) && !suggestionsDiv.contains(e.target)) {
+                suggestionsDiv.style.display = 'none'; 
             }
         });
     }
     
-    // Clear selected product
-    if (clearProductBtn) {
-        clearProductBtn.addEventListener('click', function() {
-            selectedProductId.value = '';
+    // ============================================
+    // SELECT UNIT FUNCTION
+    // ============================================
+    window.selectUnit = function(id, identifier, productName, price, sku, brand, model) {
+        selectedUnitId.value = id;
+        searchInput.value = identifier;
+        document.getElementById('selectedProductName').innerText = productName;
+        document.getElementById('selectedIdentifier').innerText = identifier;
+        document.getElementById('selectedPrice').innerText = price.toFixed(2);
+        document.getElementById('selectedSku').innerText = sku || '—';
+        
+        let details = [];
+        if(brand) details.push(`Brand: ${brand}`);
+        if(model) details.push(`Model: ${model}`);
+        document.getElementById('productDetails').innerText = details.join(' | ') || 'Standard device';
+        
+        if(priceInput) priceInput.value = price;
+        
+        selectedCard.style.display = 'block';
+        suggestionsDiv.style.display = 'none';
+        
+        // Trigger calculation
+        calculateBalanceAndInstallment();
+        
+        showMessage(`Device selected: ${identifier}`, 'success');
+    };
+    
+    // ============================================
+    // CLEAR SELECTION
+    // ============================================
+    if(clearBtn) {
+        clearBtn.addEventListener('click', () => {
+            selectedUnitId.value = '';
             searchInput.value = '';
-            selectedProductCard.style.display = 'none';
-            priceInput.value = '';
+            selectedCard.style.display = 'none';
+            if(priceInput) priceInput.value = '';
+            if(downPaymentInput) downPaymentInput.value = 0;
+            balanceSection.style.display = 'none';
+            installmentSection.style.display = 'none';
+            showMessage('Selection cleared', 'info');
         });
     }
     
-    // Make selectProduct function global
-    window.selectProduct = function(id, code, name, price, stock) {
-        selectedProductId.value = id;
-        searchInput.value = code;
-        document.getElementById('selectedProductName').textContent = name;
-        document.getElementById('selectedProductCode').textContent = code;
-        document.getElementById('selectedProductPrice').textContent = price;
-        document.getElementById('selectedProductStock').textContent = stock;
-        document.getElementById('priceInput').value = price;
-        selectedProductCard.style.display = 'block';
-        suggestionsDiv.style.display = 'none';
-    };
+    // ============================================
+    // CALCULATE BALANCE AND INSTALLMENT
+    // ============================================
+    function calculateBalanceAndInstallment() {
+        const ceilingPrice = parseFloat(priceInput?.value) || 0;
+        const downPayment = parseFloat(downPaymentInput?.value) || 0;
+        const paymentTerms = parseInt(paymentTermsSelect?.value) || 6;
+        
+        const balance = ceilingPrice - downPayment;
+        
+        if(ceilingPrice > 0) {
+            balanceAmount.innerText = balance.toFixed(2);
+            balanceSection.style.display = 'block';
+            
+            if(paymentTerms > 0 && balance > 0) {
+                const installment = balance / paymentTerms;
+                monthlyInstallment.innerText = installment.toFixed(2);
+                installmentSection.style.display = 'block';
+            }
+        } else {
+            balanceSection.style.display = 'none';
+            installmentSection.style.display = 'none';
+        }
+    }
     
-    // Handle transaction form submission - standard POST (not AJAX)
-    if (transactionForm) {
+    // Add event listeners for price calculations
+    if(priceInput) {
+        priceInput.addEventListener('input', calculateBalanceAndInstallment);
+    }
+    if(downPaymentInput) {
+        downPaymentInput.addEventListener('input', calculateBalanceAndInstallment);
+    }
+    if(paymentTermsSelect) {
+        paymentTermsSelect.addEventListener('change', calculateBalanceAndInstallment);
+    }
+    
+    // ============================================
+    // FORM VALIDATION
+    // ============================================
+    if(transactionForm) {
         transactionForm.addEventListener('submit', function(e) {
-            // Just validate, don't prevent default
-            if (!selectedProductId.value) {
+            // Check if unit is selected
+            if(!selectedUnitId.value) {
                 e.preventDefault();
-                alert('Please select a product');
+                showMessage('Please search and select a valid device by IMEI/Serial number', 'danger');
+                searchInput.focus();
                 return;
             }
             
-            // Let the form submit normally
-            return true;
+            // Check if company is selected
+            if(!document.getElementById('companySelect').value) {
+                e.preventDefault();
+                showMessage('Please select a financing company', 'danger');
+                document.getElementById('companySelect').focus();
+                return;
+            }
+            
+            // Check if customer is selected
+            if(!customerSelect.value) {
+                e.preventDefault();
+                showMessage('Please select a customer', 'danger');
+                customerSelect.focus();
+                return;
+            }
+            
+            // Check ceiling price
+            const priceVal = parseFloat(priceInput.value);
+            if(isNaN(priceVal) || priceVal <= 0) {
+                e.preventDefault();
+                showMessage('Please enter a valid ceiling price greater than zero', 'danger');
+                priceInput.focus();
+                return;
+            }
+            
+            // Check down payment not greater than ceiling price
+            const downPayment = parseFloat(downPaymentInput.value) || 0;
+            if(downPayment > priceVal) {
+                e.preventDefault();
+                showMessage('Down payment cannot exceed the ceiling price', 'danger');
+                downPaymentInput.focus();
+                return;
+            }
+            
+            // Check agreement checkbox
+            if(!document.getElementById('agreementCheckbox').checked) {
+                e.preventDefault();
+                showMessage('Please confirm the agreement terms', 'danger');
+                document.getElementById('agreementCheckbox').focus();
+                return;
+            }
+            
+            // Show loading state
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="loading-spinner"></span> Processing...';
         });
     }
     
-    // Handle customer form submission with AJAX
-    if (customerForm) {
-        customerForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            const formData = new FormData(customerForm);
-            
-            fetch(customerForm.action, {
-                method: 'POST',
-                body: formData,
-                headers: {'X-Requested-With': 'XMLHttpRequest'}
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    const customerSelect = document.getElementById('customerSelect');
-                    const newOption = new Option(
-                        data.customer.full_name + ' - ' + data.customer.phone_number,
-                        data.customer.id,
-                        true,
-                        true
-                    );
-                    customerSelect.add(newOption);
-                    
-                    // Close modal
-                    bootstrap.Modal.getInstance(document.getElementById('addCustomerModal')).hide();
-                    
-                    // Show success message
-                    const alertDiv = document.createElement('div');
-                    alertDiv.className = 'alert alert-success alert-dismissible fade show mt-3';
-                    alertDiv.innerHTML = `
-                        <i class="fas fa-check-circle me-2"></i>
-                        Customer "${data.customer.full_name}" added successfully!
-                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                    `;
-                    document.querySelector('.card-body').prepend(alertDiv);
-                    
-                    // Auto-hide alert after 3 seconds
-                    setTimeout(() => {
-                        alertDiv.remove();
-                    }, 3000);
-                    
-                    // Reset the form
-                    customerForm.reset();
-                } else {
-                    alert('Error: ' + data.error);
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('An error occurred while adding customer.');
-            });
-        });
-    }
-});
+    // ============================================
+    // INITIALIZE - Focus search
+    // ============================================
+    setTimeout(() => { 
+        if(searchInput) searchInput.focus(); 
+    }, 150);
 </script>
 {% endblock %}

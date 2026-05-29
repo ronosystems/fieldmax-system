@@ -104,5 +104,27 @@ urlpatterns = [
     # PRODUCT LOOKUP 
     # ============================================    
     path('api/product-lookup/', views.product_lookup_api, name='product_lookup_api'), 
+
+
+    # ============================================
+    # PRODUCT ASSIGNMENT URLs
+    # ============================================
+    path('assign-products/', views.assign_products_to_officer, name='assign_products'),
+    path('bulk-assign/', views.bulk_assign_products, name='bulk_assign_products'),
+    path('my-products/', views.my_assigned_products, name='my_assigned_products'),
+    path('api/assigned-units/', views.get_assigned_units_api, name='api_assigned_units'),
+    path('manage-assignments/', views.manage_assignments, name='manage_assignments'),
+    path('revoke-assignment/<int:assignment_id>/', views.revoke_assignment, name='revoke_assignment'),
+    path('extend-assignment/<int:assignment_id>/', views.extend_assignment, name='extend_assignment'),
+    
+    # Prospects List Page
+    path('prospects/', views.prospects_list, name='prospects_list'),
+    path('customer/<int:customer_id>/details/', views.customer_details, name='customer_details'),
+    
+        
+    # ===============================================
+    #  POWERED BY PAGE
+    #================================================
     path('powered-by/', views.powered_by_page, name='powered_by'),
+
 ]

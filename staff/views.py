@@ -42,6 +42,7 @@ import random
 import re
 import string
 import sys
+import json
 from functools import wraps
 from django.contrib import messages
 from django.contrib.auth import get_user_model
@@ -51,9 +52,15 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required, user_passes_test
 from .models import UserProfile
 from finance.utils import UnifiedFinanceCalculator
+
+
+
+
+
 email_queue = queue.Queue()
 worker_running = True
 worker_thread = None
+
 
 
 
@@ -1172,6 +1179,15 @@ def prepare_dashboard_messages(request, dashboard_name=None):
     return False
 
 
+
+def is_credit_officer(user):
+    """Check if user is a credit officer"""
+    return user.groups.filter(name='Credit Officer').exists() or user.is_superuser
+
+
+def is_administrator(user):
+    """Check if user is administrator"""
+    return user.is_superuser or user.is_staff
 
 
 
@@ -3477,40 +3493,28 @@ def credit_manager_dashboard(request):
     return render(request, 'staff/dashboards/credit_manager_dashboard.html', context)
 
 
+# ============================================
+# CREDIT OFFICER DASHBOARD
+# ============================================
 
-# ============================================
-# CREDIT OFFICER DASHBOARD - SEARCH BY IMEI/SERIAL
-# ============================================
 @login_required
 @dashboard_for_role('Credit Officer')
 def credit_officer_dashboard(request):
     """Dashboard for credit officer - search available units by IMEI/Serial"""
     from credit.models import CreditTransaction, CreditCustomer, CreditCompany
-    from inventory.models import Product, ProductUnit, Category
-    from django.db.models import Sum, Count, Q
-    from django.utils import timezone
-    from datetime import timedelta
-    import json
-    from decimal import Decimal
+    from inventory.models import ProductUnit, ProductAssignment
     from django.core.serializers.json import DjangoJSONEncoder
-    import logging
-
-    prepare_dashboard_messages(request, 'Credit Officer')
+    from django.db.models import Q
     
-    logger = logging.getLogger(__name__)
+    prepare_dashboard_messages(request, 'Credit Officer')
     
     today = timezone.now().date()
     thirty_days_ago = today - timedelta(days=30)
-    
-    # ============================================
-    # Get current user
-    # ============================================
     current_user = request.user
-    
-    # ============================================
-    # Get search query for prospects
-    # ============================================
     search_query = request.GET.get('search', '').strip()
+    
+    # Check if user is admin/superuser
+    is_admin = current_user.is_superuser or current_user.is_staff
     
     # ============================================
     # Get IDs of units that already have credit transactions
@@ -3520,22 +3524,45 @@ def credit_officer_dashboard(request):
     ).values_list('product_id', flat=True).distinct()
     
     # ============================================
-    # AVAILABLE UNITS FOR CREDIT
+    # BASE QUERY FOR AVAILABLE UNITS
     # ============================================
-    available_units = ProductUnit.objects.filter(
+    # First, get all available product units
+    all_available_units = ProductUnit.objects.filter(
         product__is_active=True,
         product__is_discontinued=False,
         product__category__item_type='single',
         status='available'
     ).exclude(
         id__in=units_with_credit
-    ).select_related('product', 'product__category', 'supplier')[:100]
+    ).select_related(
+        'product', 'product__category', 'supplier'
+    )
     
     # ============================================
-    # CONVERT UNITS TO JSON FOR JAVASCRIPT
+    # FILTER BASED ON USER ROLE
     # ============================================
-    units_json = json.dumps([
-        {
+    if is_admin:
+        # SUPERUSERS/ADMINS: See ALL available units (no assignment filter)
+        available_units = all_available_units
+        total_available_units = available_units.count()
+    else:
+        # REGULAR CREDIT OFFICERS: Only see products assigned to them
+        valid_assignments = ProductAssignment.objects.filter(
+            assigned_to=current_user,
+            is_active=True
+        ).filter(
+            Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now())
+        ).values_list('product_unit_id', flat=True)
+        
+        available_units = all_available_units.filter(id__in=valid_assignments)
+        total_available_units = available_units.count()
+    
+    # ============================================
+    # Convert to JSON for JavaScript search
+    # ============================================
+    units_json_list = []
+    for unit in available_units:
+        units_json_list.append({
             'id': unit.id,
             'product_id': unit.product.id,
             'sku_code': unit.product.sku_code,
@@ -3548,57 +3575,57 @@ def credit_officer_dashboard(request):
             'model': unit.product.model,
             'specifications': unit.product.specifications,
             'status': unit.status,
-        } for unit in available_units
-    ], cls=DjangoJSONEncoder)
+        })
+    
+    units_json = json.dumps(units_json_list, cls=DjangoJSONEncoder)
     
     # ============================================
     # STATS CARDS
     # ============================================
-    total_available_units = available_units.count()
-    
-    # Daily credit sales by this user
     daily_sales = CreditTransaction.objects.filter(
         dealer=current_user,
         transaction_date__date=today
     ).count()
     
-    # Monthly credit sales by this user
     monthly_sales = CreditTransaction.objects.filter(
         dealer=current_user,
         transaction_date__date__gte=thirty_days_ago
     ).count()
     
     # ============================================
-    # GET IDs of customers WITH active credit (to exclude)
+    # Customers with active credit
     # ============================================
     customers_with_active_credit_ids = CreditTransaction.objects.filter(
         payment_status__in=['pending', 'partially_paid']
     ).values_list('customer_id', flat=True).distinct()
     
     # ============================================
-    # CUSTOMERS FOR DROPDOWN - EXCLUDE THOSE WITH ACTIVE CREDIT
+    # Customers for dropdown
     # ============================================
-    customers = CreditCustomer.objects.filter(
-        Q(transactions__dealer=current_user) | Q(created_by=current_user),
-        is_active=True
-    ).exclude(
-        id__in=customers_with_active_credit_ids
-    ).distinct().order_by('-created_at')[:100]
+    if is_admin:
+        customers = CreditCustomer.objects.filter(
+            is_active=True
+        ).exclude(
+            id__in=customers_with_active_credit_ids
+        ).distinct().order_by('-created_at')[:100]
+    else:
+        customers = CreditCustomer.objects.filter(
+            Q(transactions__dealer=current_user) | Q(created_by=current_user),
+            is_active=True
+        ).exclude(
+            id__in=customers_with_active_credit_ids
+        ).distinct().order_by('-created_at')[:100]
     
     # ============================================
-    # PROSPECTS FOR "MY PROSPECTS" TAB
-    # All eligible customers (without active credit)
-    # Superusers see all, regular users see only their own
+    # Prospects (eligible customers)
     # ============================================
-    if current_user.is_superuser:
-        # Superusers see ALL eligible customers
+    if is_admin:
         prospects = CreditCustomer.objects.filter(
             is_active=True
         ).exclude(
             id__in=customers_with_active_credit_ids
         ).order_by('-created_at')
     else:
-        # Regular users see only customers they created or worked with
         prospects = CreditCustomer.objects.filter(
             Q(created_by=current_user) | Q(transactions__dealer=current_user),
             is_active=True
@@ -3606,7 +3633,6 @@ def credit_officer_dashboard(request):
             id__in=customers_with_active_credit_ids
         ).distinct().order_by('-created_at')
     
-    # Apply search filter if provided
     if search_query:
         prospects = prospects.filter(
             Q(full_name__icontains=search_query) |
@@ -3615,17 +3641,14 @@ def credit_officer_dashboard(request):
             Q(email__icontains=search_query)
         )
     
-    # Count prospects
     prospects_count = prospects.count()
     
     # ============================================
-    # CREDIT OVERVIEW STATS
+    # Credit overview stats
     # ============================================
     total_credit = CreditTransaction.objects.filter(
         dealer=current_user
-    ).aggregate(
-        total=Sum('ceiling_price')
-    )['total'] or Decimal('0')
+    ).aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0')
     
     total_paid = CreditTransaction.objects.filter(
         dealer=current_user,
@@ -3638,32 +3661,27 @@ def credit_officer_dashboard(request):
     ).aggregate(total=Sum('ceiling_price'))['total'] or Decimal('0')
     
     # ============================================
-    # COMPANIES FOR DROPDOWN
+    # Companies for dropdown
     # ============================================
     companies = CreditCompany.objects.filter(is_active=True)
     
     # ============================================
-    # RECENT CREDIT TRANSACTIONS
+    # Recent credit transactions
     # ============================================
     recent_credits = CreditTransaction.objects.filter(
         dealer=current_user
     ).select_related(
-        'customer', 'credit_company', 'product', 'product__product'
+        'customer', 'credit_company', 'product'
     ).order_by('-transaction_date')[:15]
-    
-    # ============================================
-    # Count customers with active credit (for info message)
-    # ============================================
-    customers_with_active_count = customers_with_active_credit_ids.count()
     
     context = {
         # Stats
         'total_available_units': total_available_units,
         'daily_sales': daily_sales,
         'monthly_sales': monthly_sales,
-        'total_customers': customers.count(),  # For dropdown eligible customers
+        'total_customers': customers.count(),
         
-        # Prospects for the "My Prospects" tab
+        # Prospects
         'prospects': prospects,
         'prospects_count': prospects_count,
         'search_query': search_query,
@@ -3673,18 +3691,16 @@ def credit_officer_dashboard(request):
         'total_paid': float(total_paid),
         'total_pending': float(total_pending),
         
-        # Data
+        # Data for forms
         'units_json': units_json,
         'companies': companies,
         'customers': customers,
         'recent_credits': recent_credits,
-        'customers_with_active_count': customers_with_active_count,
-        'is_administrator': current_user.is_superuser or current_user.is_staff,
+        'customers_with_active_count': customers_with_active_credit_ids.count(),
+        'is_administrator': is_admin,
     }
     
     return render(request, 'staff/dashboards/credit_officer_dashboard.html', context)
-
-
 
 # ============================================
 # CUSTOMER SERVICE DASHBOARD
@@ -5663,6 +5679,802 @@ def user_unsuspend_process(request, pk):  # Changed from user_id to pk
     return redirect('staff:user_detail', pk=pk)  # Changed to pk
 
 
+
+# ============================================
+# PRODUCT ASSIGNMENT VIEWS
+# ============================================
+
+@login_required
+@user_passes_test(is_administrator)
+def assign_products_to_officer(request):
+    """View for administrators to assign/transfer products to credit officers"""
+    from inventory.models import ProductUnit, ProductAssignment, Category
+    from django.contrib.auth.models import User, Group
+    from django.db.models import Q, OuterRef, Subquery, CharField
+    from django.core.paginator import Paginator
+    from django.utils import timezone
+    from datetime import timedelta
+    
+    if request.method == 'POST':
+        product_ids = request.POST.getlist('product_ids')
+        officer_id = request.POST.get('officer_id')
+        days_valid = request.POST.get('days_valid')
+        
+        if not product_ids or not officer_id:
+            messages.error(request, "Please select products and a credit officer")
+            return redirect('staff:assign_products')
+        
+        try:
+            officer = User.objects.get(id=officer_id)
+            assigned_count = 0
+            skipped_count = 0
+            transferred_count = 0
+            
+            for product_id in product_ids:
+                try:
+                    unit = ProductUnit.objects.get(id=product_id)
+                    
+                    # Check if already assigned to THIS SAME officer
+                    existing_same_officer = ProductAssignment.objects.filter(
+                        product_unit=unit,
+                        assigned_to=officer,
+                        is_active=True
+                    ).exists()
+                    
+                    if existing_same_officer:
+                        skipped_count += 1
+                        continue
+                    
+                    # Check if assigned to a DIFFERENT officer
+                    existing_different_officer = ProductAssignment.objects.filter(
+                        product_unit=unit,
+                        is_active=True
+                    ).exclude(assigned_to=officer).first()
+                    
+                    if existing_different_officer:
+                        transferred_count += 1
+                        # Store old owner name for message
+                        old_owner = existing_different_officer.assigned_to.get_full_name() or existing_different_officer.assigned_to.username
+                        # Deactivate the old assignment
+                        existing_different_officer.is_active = False
+                        existing_different_officer.save()
+                        logger.info(f"Transferred product {unit.unique_identifier} from {old_owner} to {officer.username}")
+                    
+                    # Deactivate any other active assignments for this unit
+                    ProductAssignment.objects.filter(
+                        product_unit=unit,
+                        is_active=True
+                    ).update(is_active=False)
+                    
+                    # Create new assignment
+                    expires_at = None
+                    if days_valid and days_valid.isdigit():
+                        expires_at = timezone.now() + timedelta(days=int(days_valid))
+                    
+                    ProductAssignment.objects.create(
+                        product_unit=unit,
+                        assigned_to=officer,
+                        assigned_by=request.user,
+                        expires_at=expires_at
+                    )
+                    assigned_count += 1
+                    
+                except ProductUnit.DoesNotExist:
+                    continue
+            
+            # Build success message
+            if assigned_count > 0:
+                if transferred_count > 0:
+                    messages.success(
+                        request, 
+                        f"✅ Successfully transferred {assigned_count} product(s) to {officer.username}. "
+                        f"({transferred_count} transferred from other officers)"
+                    )
+                else:
+                    messages.success(
+                        request, 
+                        f"✅ Successfully assigned {assigned_count} product(s) to {officer.username}."
+                    )
+            else:
+                if skipped_count > 0:
+                    messages.warning(
+                        request, 
+                        f"⚠️ No products were assigned. {skipped_count} product(s) are already assigned to {officer.username}.\n"
+                        f"💡 Tip: Use the 'Owner Status' filter to show only unassigned products."
+                    )
+                else:
+                    messages.warning(request, "⚠️ No products were selected for assignment.")
+            
+        except User.DoesNotExist:
+            messages.error(request, "Selected credit officer does not exist")
+        except Exception as e:
+            messages.error(request, f"Error assigning products: {str(e)}")
+        
+        return redirect('staff:assign_products')
+    
+    # GET request - show assignment form
+    selected_officer_id = request.GET.get('officer_filter')
+    
+    # Get all available units (not sold, not damaged)
+    available_units = ProductUnit.objects.filter(
+        product__is_active=True,
+        product__is_discontinued=False,
+        status='available'
+    ).select_related('product')
+    
+    # Annotate with current owner information
+    # Subquery to get current assignment with owner details
+    current_assignment_subquery = ProductAssignment.objects.filter(
+        product_unit=OuterRef('pk'),
+        is_active=True
+    ).select_related('assigned_to').values('assigned_to__username', 'assigned_to__first_name', 'assigned_to__last_name', 'assigned_at', 'expires_at')[:1]
+    
+    available_units = available_units.annotate(
+        current_owner_username=Subquery(
+            ProductAssignment.objects.filter(
+                product_unit=OuterRef('pk'),
+                is_active=True
+            ).values('assigned_to__username')[:1],
+            output_field=CharField()
+        ),
+        current_owner_name=Subquery(
+            ProductAssignment.objects.filter(
+                product_unit=OuterRef('pk'),
+                is_active=True
+            ).values('assigned_to__first_name')[:1],
+            output_field=CharField()
+        ),
+        assigned_at_date=Subquery(
+            ProductAssignment.objects.filter(
+                product_unit=OuterRef('pk'),
+                is_active=True
+            ).values('assigned_at')[:1],
+            output_field=CharField()
+        )
+    )
+    
+    # If an officer is selected for filtering, exclude products already assigned to them
+    if selected_officer_id:
+        assigned_to_officer_ids = ProductAssignment.objects.filter(
+            assigned_to_id=selected_officer_id,
+            is_active=True
+        ).values_list('product_unit_id', flat=True)
+        available_units = available_units.exclude(id__in=assigned_to_officer_ids)
+    
+    # Filter by category if specified
+    category_id = request.GET.get('category')
+    if category_id:
+        available_units = available_units.filter(product__category_id=category_id)
+    
+    # Filter by owner status
+    owner_status = request.GET.get('owner_status')
+    if owner_status == 'unassigned':
+        # Show only products with NO active assignment
+        assigned_unit_ids = ProductAssignment.objects.filter(
+            is_active=True
+        ).values_list('product_unit_id', flat=True)
+        available_units = available_units.exclude(id__in=assigned_unit_ids)
+    elif owner_status == 'assigned':
+        # Show only products with active assignment
+        assigned_unit_ids = ProductAssignment.objects.filter(
+            is_active=True
+        ).values_list('product_unit_id', flat=True)
+        available_units = available_units.filter(id__in=assigned_unit_ids)
+    
+    # Search by IMEI/Serial
+    search = request.GET.get('search')
+    if search:
+        available_units = available_units.filter(
+            Q(imei_number__icontains=search) |
+            Q(serial_number__icontains=search) |
+            Q(product__sku_code__icontains=search) |
+            Q(product__name__icontains=search)
+        )
+    
+    # Prefetch assignments for all units to avoid N+1 queries
+    unit_ids = list(available_units.values_list('id', flat=True)[:100])
+    assignments_dict = {}
+    assignments = ProductAssignment.objects.filter(
+        product_unit_id__in=unit_ids,
+        is_active=True
+    ).select_related('assigned_to')
+    
+    for assignment in assignments:
+        assignments_dict[assignment.product_unit_id] = assignment
+    
+    # Pagination
+    paginator = Paginator(available_units, 20)
+    page_number = request.GET.get('page')
+    units_page = paginator.get_page(page_number)
+    
+    # Get credit officers
+    try:
+        officer_group = Group.objects.get(name='Credit Officer')
+        credit_officers = officer_group.user_set.filter(is_active=True)
+    except Group.DoesNotExist:
+        credit_officers = User.objects.filter(
+            Q(is_superuser=True) | Q(is_staff=True),
+            is_active=True
+        )
+    
+    # Get categories for filtering
+    categories = Category.objects.filter(is_active=True, item_type='single')
+    
+    # Get counts for stats
+    total_available = ProductUnit.objects.filter(
+        product__is_active=True,
+        product__is_discontinued=False,
+        status='available'
+    ).count()
+    
+    assigned_today = ProductAssignment.objects.filter(
+        assigned_at__date=timezone.now().date()
+    ).count()
+    
+    context = {
+        'units': units_page,
+        'credit_officers': credit_officers,
+        'categories': categories,
+        'selected_category': category_id,
+        'selected_owner_status': owner_status,
+        'selected_officer_filter': selected_officer_id,
+        'search_query': search,
+        'total_available': total_available,
+        'assigned_count': assigned_today,
+        'assignments_dict': assignments_dict,  # Pass assignments to template
+    }
+    
+    return render(request, 'staff/assign_products.html', context)
+
+
+
+@login_required
+def my_assigned_products(request):
+    """View for credit officer to see all assigned products.
+       Superusers/Administrators can see ALL products (assigned and unassigned)
+    """
+    from inventory.models import ProductUnit, ProductAssignment
+    from django.db.models import Q, OuterRef, Subquery, CharField, Value
+    from django.db.models.functions import Coalesce
+    
+    current_user = request.user
+    is_admin = current_user.is_superuser or current_user.is_staff
+    
+    # For Superusers/Admins: Show ALL products (including unassigned) with correct owner info
+    if is_admin:
+        # Get all available units (not sold, not damaged)
+        products = ProductUnit.objects.filter(
+            product__is_active=True,
+            product__is_discontinued=False,
+            status='available'
+        ).select_related('product', 'product__category')
+        
+        # Get current assignments for all products
+        # Create a dictionary of assignments for quick lookup
+        assigned_unit_ids = ProductAssignment.objects.filter(
+            is_active=True
+        ).filter(
+            Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now())
+        ).values_list('product_unit_id', flat=True)
+        
+        # Fetch all active assignments
+        assignments_dict = {}
+        assignments = ProductAssignment.objects.filter(
+            product_unit_id__in=assigned_unit_ids,
+            is_active=True
+        ).filter(
+            Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now())
+        ).select_related('assigned_to', 'assigned_by', 'product_unit')
+        
+        for assignment in assignments:
+            assignments_dict[assignment.product_unit_id] = assignment
+        
+        # Filter by status (available/sold/all)
+        status_filter = request.GET.get('status', 'available')
+        if status_filter == 'available':
+            products = products.filter(status='available')
+        elif status_filter == 'sold':
+            products = products.filter(status='sold')
+        # 'all' shows everything including unassigned
+        
+        # Search
+        search = request.GET.get('search')
+        if search:
+            products = products.filter(
+                Q(imei_number__icontains=search) |
+                Q(serial_number__icontains=search) |
+                Q(product__sku_code__icontains=search) |
+                Q(product__name__icontains=search)
+            )
+        
+        # Pagination
+        paginator = Paginator(products, 20)
+        page_number = request.GET.get('page')
+        products_page = paginator.get_page(page_number)
+        
+        # Statistics
+        total_products = ProductUnit.objects.filter(
+            product__is_active=True,
+            product__is_discontinued=False,
+            status='available'
+        ).count()
+        
+        available_count = products.filter(status='available').count()
+        sold_count = products.filter(status='sold').count()
+        
+        # Count unassigned products (no active assignment)
+        assigned_ids = ProductAssignment.objects.filter(
+            is_active=True
+        ).filter(
+            Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now())
+        ).values_list('product_unit_id', flat=True)
+        
+        unassigned_count = products.exclude(id__in=assigned_ids).count()
+        
+        context = {
+            'products': products_page,
+            'assignments_dict': assignments_dict,  # Pass assignments to template
+            'total_products': total_products,
+            'available_count': available_count,
+            'sold_count': sold_count,
+            'unassigned_count': unassigned_count,
+            'status_filter': status_filter,
+            'search_query': search,
+            'is_admin': True,
+            'title': 'All Products (Administrator View)'
+        }
+        
+        return render(request, 'staff/all_products.html', context)
+    
+    # For regular Credit Officers: Show ONLY assigned products
+    else:
+        # Get active assignments for current user
+        assignments = ProductAssignment.objects.filter(
+            assigned_to=current_user,
+            is_active=True
+        ).filter(
+            Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now())
+        ).select_related(
+            'product_unit',
+            'product_unit__product',
+            'product_unit__product__category',
+            'assigned_by'
+        )
+        
+        # Filter by status
+        status_filter = request.GET.get('status', 'available')
+        if status_filter == 'available':
+            assignments = assignments.filter(product_unit__status='available')
+        elif status_filter == 'sold':
+            assignments = assignments.filter(product_unit__status='sold')
+        
+        # Search
+        search = request.GET.get('search')
+        if search:
+            assignments = assignments.filter(
+                Q(product_unit__imei_number__icontains=search) |
+                Q(product_unit__serial_number__icontains=search) |
+                Q(product_unit__product__sku_code__icontains=search) |
+                Q(product_unit__product__name__icontains=search)
+            )
+        
+        # Pagination
+        paginator = Paginator(assignments, 20)
+        page_number = request.GET.get('page')
+        assignments_page = paginator.get_page(page_number)
+        
+        # Statistics
+        total_assigned = assignments.count()
+        available_count = assignments.filter(product_unit__status='available').count()
+        sold_count = assignments.filter(product_unit__status='sold').count()
+        
+        context = {
+            'assignments': assignments_page,
+            'total_assigned': total_assigned,
+            'available_count': available_count,
+            'sold_count': sold_count,
+            'status_filter': status_filter,
+            'search_query': search,
+            'is_admin': False,
+            'title': 'My Assigned Products'
+        }
+        
+        return render(request, 'staff/my_assigned_products.html', context)
+
+
+@login_required
+def get_assigned_units_api(request):
+    """API endpoint to get assigned units for AJAX search"""
+    from inventory.models import ProductUnit, ProductAssignment
+    from django.http import JsonResponse
+    
+    current_user = request.user
+    search_term = request.GET.get('term', '').strip()
+    
+    if len(search_term) < 2:
+        return JsonResponse([], safe=False)
+    
+    # Get valid assignments
+    valid_assignments = ProductAssignment.objects.filter(
+        assigned_to=current_user,
+        is_active=True
+    ).filter(
+        Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now())
+    ).values_list('product_unit_id', flat=True)
+    
+    # Search units
+    units = ProductUnit.objects.filter(
+        id__in=valid_assignments,
+        product__is_active=True,
+        status='available'
+    ).filter(
+        Q(imei_number__icontains=search_term) |
+        Q(serial_number__icontains=search_term)
+    ).select_related('product')[:20]
+    
+    results = []
+    for unit in units:
+        results.append({
+            'id': unit.id,
+            'identifier': unit.unique_identifier,
+            'product_name': unit.product.display_name,
+            'price': float(unit.effective_selling_price),
+            'sku': unit.product.sku_code,
+        })
+    
+    return JsonResponse(results, safe=False)
+
+
+# ============================================
+# BULK ASSIGNMENT VIEWS
+# ============================================
+
+@login_required
+@user_passes_test(is_administrator)
+def bulk_assign_products(request):
+    """Bulk assign products using CSV upload"""
+    import csv
+    from io import TextIOWrapper
+    from inventory.models import ProductUnit, ProductAssignment
+    from django.contrib.auth.models import User
+    
+    if request.method == 'POST':
+        csv_file = request.FILES.get('csv_file')
+        officer_id = request.POST.get('officer_id')
+        
+        if not csv_file or not officer_id:
+            messages.error(request, "Please provide CSV file and select credit officer")
+            return redirect('staff:bulk_assign_products')
+        
+        if not csv_file.name.endswith('.csv'):
+            messages.error(request, "Please upload a CSV file")
+            return redirect('staff:bulk_assign_products')
+        
+        try:
+            officer = User.objects.get(id=officer_id)
+            data = TextIOWrapper(csv_file.file, encoding='utf-8')
+            reader = csv.DictReader(data)
+            
+            assigned_count = 0
+            errors = []
+            
+            for row in reader:
+                identifier = row.get('imei') or row.get('serial') or row.get('identifier')
+                if not identifier:
+                    errors.append(f"Missing identifier in row: {row}")
+                    continue
+                
+                # Find unit by IMEI or serial
+                unit = ProductUnit.objects.filter(
+                    Q(imei_number=identifier) | Q(serial_number=identifier)
+                ).first()
+                
+                if not unit:
+                    errors.append(f"Unit not found: {identifier}")
+                    continue
+                
+                # Deactivate old assignments
+                ProductAssignment.objects.filter(
+                    product_unit=unit,
+                    is_active=True
+                ).update(is_active=False)
+                
+                # Create new assignment
+                ProductAssignment.objects.create(
+                    product_unit=unit,
+                    assigned_to=officer,
+                    assigned_by=request.user
+                )
+                assigned_count += 1
+            
+            if errors:
+                messages.warning(
+                    request, 
+                    f"Assigned {assigned_count} units. Errors: {', '.join(errors[:5])}"
+                )
+            else:
+                messages.success(
+                    request, 
+                    f"Successfully assigned {assigned_count} units to {officer.username}"
+                )
+                
+        except User.DoesNotExist:
+            messages.error(request, "Selected credit officer does not exist")
+        except Exception as e:
+            messages.error(request, f"Error processing CSV: {str(e)}")
+        
+        return redirect('staff:assign_products')
+    
+    # GET request
+    from django.contrib.auth.models import Group, User
+    
+    try:
+        officer_group = Group.objects.get(name='Credit Officer')
+        credit_officers = officer_group.user_set.filter(is_active=True)
+    except Group.DoesNotExist:
+        credit_officers = User.objects.filter(
+            Q(is_superuser=True) | Q(is_staff=True),
+            is_active=True
+        )
+    
+    context = {
+        'credit_officers': credit_officers,
+    }
+    
+    return render(request, 'staff/bulk_assign_products.html', context)
+
+
+# ============================================
+# ASSIGNMENT MANAGEMENT
+# ============================================
+
+@login_required
+@user_passes_test(is_administrator)
+def manage_assignments(request):
+    """View all assignments for management"""
+    from inventory.models import ProductAssignment
+    
+    assignments = ProductAssignment.objects.select_related(
+        'product_unit', 'assigned_to', 'assigned_by'
+    ).order_by('-assigned_at')
+    
+    # Filters
+    officer_id = request.GET.get('officer')
+    if officer_id:
+        assignments = assignments.filter(assigned_to_id=officer_id)
+    
+    status = request.GET.get('status')
+    if status == 'active':
+        assignments = assignments.filter(is_active=True)
+    elif status == 'expired':
+        assignments = assignments.filter(is_active=False)
+    
+    search = request.GET.get('search')
+    if search:
+        assignments = assignments.filter(
+            Q(product_unit__imei_number__icontains=search) |
+            Q(product_unit__serial_number__icontains=search) |
+            Q(product_unit__product__sku_code__icontains=search)
+        )
+    
+    # Pagination
+    paginator = Paginator(assignments, 50)
+    page_number = request.GET.get('page')
+    assignments_page = paginator.get_page(page_number)
+    
+    # Get officers for filter
+    from django.contrib.auth.models import User
+    officers = User.objects.filter(
+        Q(groups__name='Credit Officer') | Q(is_superuser=True)
+    ).distinct()
+    
+    context = {
+        'assignments': assignments_page,
+        'officers': officers,
+        'selected_officer': officer_id,
+        'selected_status': status,
+        'search_query': search,
+    }
+    
+    return render(request, 'staff/manage_assignments.html', context)
+
+
+@login_required
+@user_passes_test(is_administrator)
+def revoke_assignment(request, assignment_id):
+    """Revoke a product assignment"""
+    from inventory.models import ProductAssignment
+    
+    assignment = get_object_or_404(ProductAssignment, id=assignment_id)
+    
+    if request.method == 'POST':
+        assignment.is_active = False
+        assignment.save()
+        messages.success(
+            request, 
+            f"Assignment revoked for {assignment.product_unit.unique_identifier}"
+        )
+        return redirect(request.META.get('HTTP_REFERER', 'staff:manage_assignments'))
+    
+    context = {'assignment': assignment}
+    return render(request, 'staff/revoke_assignment.html', context)
+
+
+@login_required
+@user_passes_test(is_administrator)
+def extend_assignment(request, assignment_id):
+    """Extend assignment expiry date"""
+    from inventory.models import ProductAssignment
+    
+    assignment = get_object_or_404(ProductAssignment, id=assignment_id)
+    
+    if request.method == 'POST':
+        days = int(request.POST.get('days', 30))
+        if assignment.expires_at:
+            assignment.expires_at += timedelta(days=days)
+        else:
+            assignment.expires_at = timezone.now() + timedelta(days=days)
+        assignment.save()
+        messages.success(
+            request, 
+            f"Assignment extended by {days} days for {assignment.product_unit.unique_identifier}"
+        )
+        return redirect('staff:manage_assignments')
+    
+    context = {'assignment': assignment}
+    return render(request, 'staff/extend_assignment.html', context)
+
+@login_required
+def prospects_list(request):
+    """Display list of prospects (eligible customers)"""
+    from credit.models import CreditCustomer, CreditTransaction
+    from django.contrib.auth.models import User
+    from django.db.models import Q, Count
+    from django.core.paginator import Paginator
+    from datetime import datetime, timedelta
+    
+    current_user = request.user
+    search_query = request.GET.get('search', '').strip()
+    selected_user_id = request.GET.get('user_id', '')
+    
+    # Check if user is superuser
+    is_superuser = current_user.is_superuser
+    
+    # Get IDs of customers with active credit
+    customers_with_active_credit_ids = CreditTransaction.objects.filter(
+        payment_status__in=['pending', 'partially_paid']
+    ).values_list('customer_id', flat=True).distinct()
+    
+    # Base query for all prospects (without user filter)
+    all_prospects = CreditCustomer.objects.filter(
+        is_active=True
+    ).exclude(
+        id__in=customers_with_active_credit_ids
+    )
+    
+    # Get total count for all prospects (unfiltered)
+    total_unfiltered_count = all_prospects.count()
+    
+    # Get user statistics (for dropdown - always based on ALL prospects)
+    user_stats_data = all_prospects.values('created_by', 'created_by__first_name', 'created_by__last_name', 'created_by__username').annotate(
+        count=Count('id')
+    ).order_by('-count')
+    
+    users_with_prospects = []
+    unassigned_count = 0
+    
+    for user_data in user_stats_data:
+        user_id = user_data['created_by']
+        if user_id:
+            name = f"{user_data['created_by__first_name']} {user_data['created_by__last_name']}".strip() or user_data['created_by__username']
+            users_with_prospects.append({
+                'id': user_id,
+                'name': name,
+                'count': user_data['count']
+            })
+        else:
+            unassigned_count = user_data['count']
+    
+    # Apply user filter to get current displayed prospects
+    if is_superuser and selected_user_id:
+        if selected_user_id == 'all':
+            prospects = all_prospects
+            current_total_count = all_prospects.count()
+        elif selected_user_id == 'unassigned':
+            prospects = all_prospects.filter(created_by__isnull=True)
+            current_total_count = prospects.count()
+        else:
+            try:
+                user_id = int(selected_user_id)
+                prospects = all_prospects.filter(created_by_id=user_id)
+                current_total_count = prospects.count()
+            except ValueError:
+                prospects = all_prospects
+                current_total_count = all_prospects.count()
+                selected_user_id = 'all'
+    else:
+        # Non-superusers only see their own prospects
+        if is_superuser:
+            prospects = all_prospects
+            current_total_count = all_prospects.count()
+        else:
+            prospects = CreditCustomer.objects.filter(
+                Q(created_by=current_user) | Q(transactions__dealer=current_user),
+                is_active=True
+            ).exclude(
+                id__in=customers_with_active_credit_ids
+            ).distinct()
+            current_total_count = prospects.count()
+    
+    # Apply search filter
+    if search_query:
+        prospects = prospects.filter(
+            Q(full_name__icontains=search_query) |
+            Q(phone_number__icontains=search_query) |
+            Q(id_number__icontains=search_query) |
+            Q(email__icontains=search_query)
+        )
+    
+    # Count new customers today (from filtered prospects)
+    today = datetime.now().date()
+    new_today = prospects.filter(created_at__date=today).count()
+    
+    # Eligible count (filtered prospects count)
+    eligible_count = prospects.count()
+    
+    # Get selected user stats
+    selected_user_stats = None
+    if selected_user_id and selected_user_id not in ['all', 'unassigned']:
+        try:
+            selected_user = User.objects.get(id=int(selected_user_id))
+            selected_user_stats = {
+                'name': selected_user.get_full_name() or selected_user.username,
+                'count': all_prospects.filter(created_by_id=selected_user_id).count()
+            }
+        except User.DoesNotExist:
+            pass
+    
+    # Pagination
+    paginator = Paginator(prospects, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    
+    context = {
+        'prospects': page_obj,
+        'search_query': search_query,
+        'new_today': new_today,
+        'eligible_count': eligible_count,  # Current filtered count
+        'total_count': total_unfiltered_count,  # Total in system (for stats)
+        'current_total_count': current_total_count,  # Total after filter
+        'unassigned_count': unassigned_count,
+        'is_superuser': is_superuser,
+        'is_administrator': is_superuser,
+        'selected_user_id': selected_user_id,
+        'users_with_prospects': users_with_prospects,
+        'selected_user_stats': selected_user_stats,
+    }
+    
+    return render(request, 'staff/prospects_list.html', context)
+
+@login_required
+def customer_details(request, customer_id):
+    """View customer details"""
+    from credit.models import CreditCustomer
+    
+    customer = get_object_or_404(CreditCustomer, id=customer_id)
+    
+    # Check permission
+    if not (request.user.is_superuser or request.user.is_staff or 
+            customer.created_by == request.user or 
+            customer.transactions.filter(dealer=request.user).exists()):
+        messages.error(request, "You don't have permission to view this customer.")
+        return redirect('staff:prospects_list')
+    
+    context = {
+        'customer': customer,
+    }
+    
+    return render(request, 'staff/customer_details.html', context)
 
 # ============================================
 # POWERED BY PAGE

@@ -1,0 +1,370 @@
+{% extends "loan_base.html" %}
+
+{% block title %}All Products - FieldMax{% endblock %}
+
+{% block header_icon %}fa-boxes{% endblock %}
+
+{% block page_title %}ALL PRODUCTS (Administrator View){% endblock %}
+
+{% block content %}
+<style>
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 22px;
+        margin-bottom: 32px;
+    }
+    .stat-card {
+        background: white;
+        border-radius: 24px;
+        padding: 1.2rem 1.2rem;
+        box-shadow: 0 6px 14px rgb(0, 0, 0);
+        border: 1px solid #cde3f5;
+        transition: 0.2s;
+    }
+    .stat-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 12px 20px rgba(0,0,0,0.1);
+    }
+    .stat-card h3 {
+        color: #0c4e6e;
+        font-weight: 800;
+        font-size: 1.8rem;
+    }
+    .stat-card p {
+        color: #2c3e50;
+        margin-bottom: 0;
+    }
+    .filter-section {
+        background: #f8fafc;
+        border-radius: 15px;
+        padding: 20px;
+        margin-bottom: 25px;
+        border: 1px solid #cde3f5;
+    }
+    .data-table-container {
+        background: white;
+        border-radius: 20px;
+        overflow-x: auto;
+        box-shadow: 0 12px 28px rgb(0, 0, 0);
+        border: 1px solid #cde3f5;
+    }
+    .data-table {
+        width: 100%;
+        margin-bottom: 0;
+        min-width: 900px;
+    }
+    .data-table th {
+        background: #f8fafc;
+        padding: 15px;
+        font-weight: 700;
+        color: #1e3a5f;
+        border-bottom: 2px solid #e2e8f0;
+        text-align: left;
+        vertical-align: middle;
+    }
+    .data-table td {
+        padding: 12px 15px;
+        vertical-align: middle;
+        border-bottom: 1px solid #e2e8f0;
+    }
+    .data-table tr:hover {
+        background: #f0f9ff;
+    }
+    .badge-available {
+        background: #10b981;
+        color: white;
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 600;
+        display: inline-block;
+    }
+    .badge-sold {
+        background: #ef4444;
+        color: white;
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 600;
+        display: inline-block;
+    }
+    .badge-assigned {
+        background: #f59e0b;
+        color: white;
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 600;
+        display: inline-block;
+    }
+    .owner-cell {
+        font-size: 0.85rem;
+        min-width: 180px;
+    }
+    .current-owner {
+        color: #f59e0b;
+        font-weight: 600;
+        margin-bottom: 4px;
+    }
+    .no-owner {
+        color: #10b981;
+        font-style: italic;
+        margin-bottom: 4px;
+    }
+    .days-badge {
+        background: #e0f2fe;
+        color: #0369a1;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        display: inline-block;
+    }
+    .btn-primary-custom {
+        background: #0284c7;
+        border: none;
+        color: white;
+        font-weight: 600;
+        transition: 0.2s;
+        padding: 10px 24px;
+        border-radius: 8px;
+    }
+    .btn-primary-custom:hover {
+        background: #0369a1;
+        transform: translateY(-1px);
+    }
+    .pagination {
+        margin-top: 25px;
+    }
+    .page-link {
+        color: #0284c7;
+        border-radius: 8px;
+        margin: 0 3px;
+    }
+    .page-item.active .page-link {
+        background: #0284c7;
+        border-color: #0284c7;
+    }
+    @media (max-width: 768px) {
+        .stats-grid {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+        }
+        .filter-section .row {
+            flex-direction: column;
+        }
+        .filter-section .col-md-3,
+        .filter-section .col-md-4,
+        .filter-section .col-md-2 {
+            margin-bottom: 10px;
+        }
+    }
+</style>
+
+<div class="container-fluid px-0">
+    <!-- Admin Notice -->
+    <div class="alert alert-info mb-4">
+        <i class="fas fa-user-shield me-2"></i>
+        <strong>Administrator View:</strong> You are seeing all products in the system, including unassigned ones.
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <h3 class="fw-bold mb-0">{{ total_products|default:"0" }}</h3>
+                    <p class="mb-0 text-secondary">TOTAL PRODUCTS</p>
+                    <small class="text-muted">All available units</small>
+                </div>
+                <div class="bg-info bg-opacity-10 p-3 rounded-3">
+                    <i class="fas fa-mobile-alt fs-2 text-info"></i>
+                </div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <h3 class="fw-bold mb-0">{{ available_count|default:"0" }}</h3>
+                    <p class="mb-0 text-secondary">AVAILABLE</p>
+                    <small class="text-muted">In stock</small>
+                </div>
+                <div class="bg-success bg-opacity-10 p-3 rounded-3">
+                    <i class="fas fa-check-circle fs-2 text-success"></i>
+                </div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <h3 class="fw-bold mb-0">{{ unassigned_count|default:"0" }}</h3>
+                    <p class="mb-0 text-secondary">UNASSIGNED</p>
+                    <small class="text-muted">No current owner</small>
+                </div>
+                <div class="bg-warning bg-opacity-10 p-3 rounded-3">
+                    <i class="fas fa-user-plus fs-2 text-warning"></i>
+                </div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <h3 class="fw-bold mb-0">{{ sold_count|default:"0" }}</h3>
+                    <p class="mb-0 text-secondary">SOLD</p>
+                    <small class="text-muted">Already sold</small>
+                </div>
+                <div class="bg-danger bg-opacity-10 p-3 rounded-3">
+                    <i class="fas fa-shopping-cart fs-2 text-danger"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Section -->
+    <div class="filter-section">
+        <form method="GET" class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">Status</label>
+                <select name="status" class="form-select" onchange="this.form.submit()">
+                    <option value="available" {% if status_filter == 'available' %}selected{% endif %}>Available Only</option>
+                    <option value="sold" {% if status_filter == 'sold' %}selected{% endif %}>Sold Only</option>
+                    <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All Products</option>
+                </select>
+            </div>
+            <div class="col-md-7">
+                <label class="form-label fw-semibold">Search</label>
+                <input type="text" name="search" class="form-control" 
+                       placeholder="Search by IMEI, Serial, SKU, or Product Name..." 
+                       value="{{ search_query }}">
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary-custom w-100">Search</button>
+            </div>
+        </form>
+    </div>
+
+<!-- Products Table -->
+<div class="data-table-container">
+    <table class="data-table table">
+        <thead>
+            <tr>
+                <th>IMEI / Serial Number</th>
+                <th>Product Name & SKU</th>
+                <th>Price (KSH)</th>
+                <th>Current Owner</th>
+                <th>Days Since Assignment</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for product in products %}
+            <tr>
+                <td>
+                    <strong>{{ product.unique_identifier }}</strong>
+                    <br>
+                    <small class="text-muted">{{ product.product.sku_code }}</small>
+                </td>
+                <td>
+                    <strong>{{ product.product.display_name|truncatechars:40 }}</strong>
+                    <br>
+                    <small class="text-muted">{{ product.product.brand }} {{ product.product.model }}</small>
+                </td>
+                <td class="fw-bold" style="color:#0f5b87;">
+                    KSH {{ product.effective_selling_price|floatformat:2 }}
+                </td>
+                <td class="owner-cell">
+                    {% with found=False %}
+                        {% for key, value in assignments_dict.items %}
+                            {% if key == product.id %}
+                                <div class="current-owner">
+                                    <i class="fas fa-user-check"></i>
+                                    {{ value.assigned_to.get_full_name|default:value.assigned_to.username }}
+                                </div>
+                                <small class="text-muted">
+                                    <i class="fas fa-calendar-alt"></i> {{ value.assigned_at|date:"d M Y" }}
+                                </small>
+                            {% endif %}
+                        {% endfor %}
+                    {% endwith %}
+                    
+                </td>
+                <td class="days-cell">
+                    {% with found=False %}
+                        {% for key, value in assignments_dict.items %}
+                            {% if key == product.id %}
+                                <span class="days-badge">
+                                    <i class="fas fa-calendar-day"></i> 
+                                    {{ value.assigned_at|timesince }}
+                                </span>
+                            {% endif %}
+                        {% endfor %}
+                    {% endwith %}
+                    
+                    {% with has_owner=False %}
+                        {% for key, value in assignments_dict.items %}
+                            {% if key == product.id %}
+                                {% with has_owner=True %}{% endwith %}
+                            {% endif %}
+                        {% endfor %}
+                        {% if not has_owner %}
+                            <span class="text-muted"></span>
+                        {% endif %}
+                    {% endwith %}
+                </td>
+                <td>
+                    {% if product.status == 'available' %}
+                        <span class="badge-available">Available</span>
+                    {% elif product.status == 'sold' %}
+                        <span class="badge-sold">Sold</span>
+                    {% else %}
+                        <span class="badge-assigned">{{ product.get_status_display }}</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="6" class="text-center py-5">
+                    <i class="fas fa-box-open fa-4x text-muted mb-3"></i>
+                    <h5>No products found</h5>
+                    <p class="text-muted">No products match your search criteria.</p>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+    <!-- Pagination -->
+    {% if products.paginator.num_pages > 1 %}
+    <nav class="mt-4">
+        <ul class="pagination justify-content-center">
+            {% if products.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?page=1{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}">«</a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?page={{ products.previous_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}">‹</a>
+            </li>
+            {% endif %}
+            
+            <li class="page-item active"><a class="page-link" href="#">{{ products.number }}</a></li>
+            
+            {% if products.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ products.next_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}">›</a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?page={{ products.paginator.num_pages }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}">»</a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+
+<script>
+    // Add custom filter for dictionary lookup if not already present
+    // Create templatetags/custom_filters.py if needed
+</script>
+{% endblock %}

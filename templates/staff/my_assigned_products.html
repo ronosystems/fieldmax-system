@@ -1,0 +1,509 @@
+{% extends "loan_base.html" %}
+
+{% block title %}MY PRODUCTS{% endblock %}
+
+{% block header_icon %}fa-box{% endblock %}
+
+{% block page_title %}MY ASSIGNED PRODUCTS{% endblock %}
+
+{% block content %}
+<style>
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 22px;
+        margin-bottom: 32px;
+    }
+    .stat-card {
+        background: white;
+        border-radius: 24px;
+        padding: 1.2rem 1.2rem;
+        box-shadow: 0 6px 14px rgb(0, 0, 0);
+        border: 1px solid #cde3f5;
+        transition: 0.2s;
+    }
+    .stat-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 12px 20px rgba(0,0,0,0.1);
+    }
+    .stat-card h3 {
+        color: #0c4e6e;
+        font-weight: 800;
+        font-size: 1.8rem;
+    }
+    .stat-card p {
+        color: #2c3e50;
+        margin-bottom: 0;
+    }
+    .filter-section {
+        background: #f8fafc;
+        border-radius: 15px;
+        padding: 20px;
+        margin-bottom: 25px;
+        border: 1px solid #cde3f5;
+    }
+    .data-table-container {
+        background: white;
+        border-radius: 20px;
+        overflow-x: auto;
+        box-shadow: 0 12px 28px rgb(0, 0, 0);
+        border: 1px solid #cde3f5;
+    }
+    .data-table {
+        width: 100%;
+        margin-bottom: 0;
+        min-width: 800px;
+    }
+    .data-table th {
+        background: #f8fafc;
+        padding: 15px;
+        font-weight: 700;
+        color: #1e3a5f;
+        border-bottom: 2px solid #e2e8f0;
+    }
+    .data-table td {
+        padding: 12px 15px;
+        vertical-align: middle;
+        border-bottom: 1px solid #e2e8f0;
+    }
+    .data-table tr:hover {
+        background: #f0f9ff;
+        cursor: pointer;
+    }
+    .badge-available {
+        background: #10b981;
+        color: white;
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 600;
+        display: inline-block;
+    }
+    .badge-sold {
+        background: #ef4444;
+        color: white;
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 600;
+        display: inline-block;
+    }
+    .badge-reserved {
+        background: #f59e0b;
+        color: white;
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 600;
+        display: inline-block;
+    }
+    .badge-damaged {
+        background: #6b7280;
+        color: white;
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 600;
+        display: inline-block;
+    }
+    .btn-primary-custom {
+        background: #0284c7;
+        border: none;
+        color: white;
+        font-weight: 600;
+        transition: 0.2s;
+        padding: 8px 20px;
+        border-radius: 8px;
+    }
+    .btn-primary-custom:hover {
+        background: #0369a1;
+        transform: translateY(-1px);
+    }
+    .btn-success-custom {
+        background: #10b981;
+        border: none;
+        color: white;
+        font-weight: 600;
+        transition: 0.2s;
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-size: 12px;
+    }
+    .btn-success-custom:hover {
+        background: #059669;
+        transform: translateY(-1px);
+    }
+    .btn-outline-info {
+        border: 1px solid #06b6d4;
+        color: #0891b2;
+        background: transparent;
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-size: 12px;
+        transition: 0.2s;
+    }
+    .btn-outline-info:hover {
+        background: #06b6d4;
+        color: white;
+    }
+    .pagination {
+        margin-top: 25px;
+    }
+    .page-link {
+        color: #0284c7;
+        border-radius: 8px;
+        margin: 0 3px;
+    }
+    .page-item.active .page-link {
+        background: #0284c7;
+        border-color: #0284c7;
+    }
+    .device-info {
+        font-size: 0.85rem;
+    }
+    .device-info strong {
+        color: #0284c7;
+    }
+    .expiry-warning {
+        font-size: 11px;
+        color: #f59e0b;
+    }
+    .expiry-danger {
+        font-size: 11px;
+        color: #ef4444;
+    }
+    .quick-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    @media (max-width: 768px) {
+        .stats-grid {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+        }
+        .filter-section .row {
+            flex-direction: column;
+        }
+        .filter-section .col-md-3,
+        .filter-section .col-md-7,
+        .filter-section .col-md-2 {
+            margin-bottom: 10px;
+        }
+        .quick-actions {
+            flex-direction: column;
+        }
+    }
+</style>
+
+<div class="container-fluid px-0">
+    <!-- Stats Cards -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <h3 class="fw-bold mb-0">{{ total_assigned|default:"0" }}</h3>
+                    <p class="mb-0 text-secondary">TOTAL ASSIGNED</p>
+                    <small class="text-muted">All products assigned to you</small>
+                </div>
+                <div class="bg-info bg-opacity-10 p-3 rounded-3">
+                    <i class="fas fa-boxes fs-2 text-info"></i>
+                </div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <h3 class="fw-bold mb-0">{{ available_count|default:"0" }}</h3>
+                    <p class="mb-0 text-secondary">AVAILABLE</p>
+                    <small class="text-muted">Ready for sale</small>
+                </div>
+                <div class="bg-success bg-opacity-10 p-3 rounded-3">
+                    <i class="fas fa-check-circle fs-2 text-success"></i>
+                </div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <h3 class="fw-bold mb-0">{{ sold_count|default:"0" }}</h3>
+                    <p class="mb-0 text-secondary">SOLD</p>
+                    <small class="text-muted">Already sold</small>
+                </div>
+                <div class="bg-danger bg-opacity-10 p-3 rounded-3">
+                    <i class="fas fa-shopping-cart fs-2 text-danger"></i>
+                </div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <h3 class="fw-bold mb-0">{{ expiring_soon_count|default:"0" }}</h3>
+                    <p class="mb-0 text-secondary">EXPIRING SOON</p>
+                    <small class="text-muted">Within 7 days</small>
+                </div>
+                <div class="bg-warning bg-opacity-10 p-3 rounded-3">
+                    <i class="fas fa-clock fs-2 text-warning"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Section -->
+    <div class="filter-section">
+        <form method="GET" class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">
+                    <i class="fas fa-flag me-1"></i>Status
+                </label>
+                <select name="status" class="form-select" onchange="this.form.submit()">
+                    <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All Products</option>
+                    <option value="available" {% if status_filter == 'available' %}selected{% endif %}>Available</option>
+                    <option value="sold" {% if status_filter == 'sold' %}selected{% endif %}>Sold</option>
+                    <option value="reserved" {% if status_filter == 'reserved' %}selected{% endif %}>Reserved</option>
+                </select>
+            </div>
+            <div class="col-md-7">
+                <label class="form-label fw-semibold">
+                    <i class="fas fa-search me-1"></i>Search
+                </label>
+                <input type="text" name="search" class="form-control" 
+                       placeholder="Search by IMEI, Serial, SKU, or Product Name..." 
+                       value="{{ search_query }}">
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary-custom w-100">
+                    <i class="fas fa-search me-2"></i>Search
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Products Table -->
+    <div class="data-table-container">
+        <table class="data-table table">
+            <thead>
+                <tr>
+                    <th><i class="fas fa-microchip"></i> IMEI / Serial Number</th>
+                    <th><i class="fas fa-mobile-alt"></i> Product Details</th>
+                    <th><i class="fas fa-tag"></i> SKU</th>
+                    <th><i class="fas fa-money-bill"></i> Price (KSH)</th>
+                    <th><i class="fas fa-chart-line"></i> Status</th>
+                    <th><i class="fas fa-calendar"></i> Assignment Info</th>
+                    <th><i class="fas fa-cog"></i> Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for assignment in assignments %}
+                <tr>
+                    <td>
+                        <div class="device-info">
+                            <strong><i class="fas fa-qrcode"></i> {{ assignment.product_unit.unique_identifier }}</strong>
+                            <br>
+                            <small class="text-muted">{{ assignment.product_unit.imei_number|default:assignment.product_unit.serial_number }}</small>
+                        </div>
+                    </td>
+                    <td>
+                        <strong>{{ assignment.product_unit.product.display_name }}</strong>
+                        <br>
+                        <small class="text-muted">
+                            {{ assignment.product_unit.product.brand }} {{ assignment.product_unit.product.model }}
+                        </small>
+                        {% if assignment.product_unit.product.specifications %}
+                        <br>
+                        <small class="text-muted">
+                            {% if assignment.product_unit.product.specifications.ram %}
+                                RAM: {{ assignment.product_unit.product.specifications.ram }} |
+                            {% endif %}
+                            {% if assignment.product_unit.product.specifications.storage %}
+                                Storage: {{ assignment.product_unit.product.specifications.storage }}
+                            {% endif %}
+                        </small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <code>{{ assignment.product_unit.product.sku_code }}</code>
+                    </td>
+                    <td class="fw-bold" style="color:#0f5b87;">
+                        KSH {{ assignment.product_unit.effective_selling_price|floatformat:2 }}
+                        {% if assignment.product_unit.unit_selling_price %}
+                        <br><small class="text-muted">(Custom price)</small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if assignment.product_unit.status == 'available' %}
+                            <span class="badge-available">
+                                <i class="fas fa-check-circle"></i> Available
+                            </span>
+                        {% elif assignment.product_unit.status == 'sold' %}
+                            <span class="badge-sold">
+                                <i class="fas fa-shopping-cart"></i> Sold
+                            </span>
+                        {% elif assignment.product_unit.status == 'reserved' %}
+                            <span class="badge-reserved">
+                                <i class="fas fa-clock"></i> Reserved
+                            </span>
+                        {% else %}
+                            <span class="badge-damaged">
+                                <i class="fas fa-exclamation-triangle"></i> {{ assignment.product_unit.get_status_display }}
+                            </span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <small>
+                            <i class="fas fa-calendar-plus"></i> {{ assignment.assigned_at|date:"d M Y" }}
+                        </small>
+                        {% if assignment.expires_at %}
+                            <br>
+                            {% if assignment.is_valid %}
+                                <small class="expiry-warning">
+                                    <i class="fas fa-hourglass-half"></i> Expires: {{ assignment.expires_at|date:"d M Y" }}
+                                    <br>({{ assignment.expires_at|timeuntil }} left)
+                                </small>
+                            {% else %}
+                                <small class="expiry-danger">
+                                    <i class="fas fa-exclamation-circle"></i> Expired: {{ assignment.expires_at|date:"d M Y" }}
+                                </small>
+                            {% endif %}
+                        {% else %}
+                            <br>
+                            <small class="text-muted">
+                                <i class="fas fa-infinity"></i> No expiry
+                            </small>
+                        {% endif %}
+                     </td>
+                    <td>
+                        <div class="quick-actions">
+                            {% if assignment.product_unit.status == 'available' %}
+                            <button class="btn btn-success-custom" 
+                                    onclick="useForTransaction({{ assignment.product_unit.id }}, '{{ assignment.product_unit.unique_identifier }}', {{ assignment.product_unit.effective_selling_price }})">
+                                <i class="fas fa-credit-card"></i> Use for ETR
+                            </button>
+                            <button class="btn btn-outline-info" 
+                                    onclick="viewProductDetails({{ assignment.product_unit.id }})"
+                                    title="View Details">
+                                <i class="fas fa-eye"></i> Details
+                            </button>
+                            {% elif assignment.product_unit.status == 'sold' %}
+                            <button class="btn btn-secondary btn-sm" disabled>
+                                <i class="fas fa-check"></i> Already Sold
+                            </button>
+                            {% else %}
+                            <button class="btn btn-secondary btn-sm" disabled>
+                                <i class="fas fa-lock"></i> Not Available
+                            </button>
+                            {% endif %}
+                        </div>
+                     </td>
+                 </tr>
+                {% empty %}
+                 <tr>
+                    <td colspan="7" class="text-center py-5">
+                        <i class="fas fa-box-open fa-4x text-muted mb-3"></i>
+                        <h5>No products assigned to you</h5>
+                        <p class="text-muted">
+                            {% if search_query or status_filter != 'all' %}
+                                Try adjusting your search or filter criteria
+                            {% else %}
+                                You don't have any products assigned yet.<br>
+                                Contact your administrator to get products assigned to you.
+                            {% endif %}
+                        </p>
+                        <a href="{% url 'staff:credit_officer_dashboard' %}" class="btn btn-primary-custom mt-2">
+                            <i class="fas fa-home me-2"></i>Go to Dashboard
+                        </a>
+                    </td>
+                 </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination -->
+    {% if assignments.paginator.num_pages > 1 %}
+    <nav class="mt-4">
+        <ul class="pagination justify-content-center">
+            {% if assignments.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?page=1{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter != 'all' %}&status={{ status_filter }}{% endif %}">
+                    <i class="fas fa-angle-double-left"></i>
+                </a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?page={{ assignments.previous_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter != 'all' %}&status={{ status_filter }}{% endif %}">
+                    <i class="fas fa-angle-left"></i>
+                </a>
+            </li>
+            {% endif %}
+            
+            <li class="page-item active">
+                <a class="page-link" href="#">{{ assignments.number }}</a>
+            </li>
+            
+            {% if assignments.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ assignments.next_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter != 'all' %}&status={{ status_filter }}{% endif %}">
+                    <i class="fas fa-angle-right"></i>
+                </a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?page={{ assignments.paginator.num_pages }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter != 'all' %}&status={{ status_filter }}{% endif %}">
+                    <i class="fas fa-angle-double-right"></i>
+                </a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+
+<script>
+    // Use product for ETR transaction
+    function useForTransaction(unitId, identifier, price) {
+        // Store in localStorage
+        localStorage.setItem('selectedUnitId', unitId);
+        localStorage.setItem('selectedIdentifier', identifier);
+        localStorage.setItem('selectedPrice', price);
+        
+        // Show confirmation
+        if (confirm(`Use this device for a new ETR?\n\nDevice: ${identifier}\nPrice: KSH ${price.toFixed(2)}\n\nYou will be redirected to the ETR form.`)) {
+            window.location.href = "{% url 'credit:transaction_create' %}";
+        }
+    }
+    
+    // View product details
+    function viewProductDetails(unitId) {
+        // You can implement a modal or redirect to product details
+        alert(`Product details for Unit ID: ${unitId}\n\nFull details will be shown in a modal.`);
+        // Alternatively: window.location.href = `/inventory/unit/${unitId}/details/`;
+    }
+    
+    // Auto-fill from localStorage when page loads
+    document.addEventListener('DOMContentLoaded', function() {
+        const selectedUnit = localStorage.getItem('selectedUnitId');
+        if (selectedUnit && window.location.pathname === "{% url 'credit:transaction_create' %}") {
+            // Clear after use
+            localStorage.removeItem('selectedUnitId');
+            localStorage.removeItem('selectedIdentifier');
+            localStorage.removeItem('selectedPrice');
+        }
+    });
+    
+    // Copy phone number function (if needed)
+    function copyToClipboard(text) {
+        navigator.clipboard.writeText(text).then(function() {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = 'alert alert-success alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3';
+            alertDiv.style.zIndex = '9999';
+            alertDiv.style.minWidth = '300px';
+            alertDiv.innerHTML = `
+                <i class="fas fa-check-circle me-2"></i>
+                Copied: ${text}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.body.appendChild(alertDiv);
+            setTimeout(() => alertDiv.remove(), 2000);
+        });
+    }
+</script>
+{% endblock %}

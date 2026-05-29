@@ -1,0 +1,499 @@
+{% extends "loan_base.html" %}
+
+{% block title %}My Prospects - FieldMax{% endblock %}
+
+{% block header_icon %}fa-users{% endblock %}
+
+{% block page_title %}PROSPECTS MANAGEMENT{% endblock %}
+
+{% block content %}
+<style>
+    .prospects-table-container {
+        background: white;
+        border-radius: 20px;
+        overflow: hidden;
+        box-shadow: 0 12px 28px rgb(0, 0, 0);
+        border: 1px solid #cde3f5;
+    }
+    .prospects-table {
+        width: 100%;
+        margin-bottom: 0;
+    }
+    .prospects-table th {
+        background: #f8fafc;
+        padding: 15px;
+        font-weight: 700;
+        color: #1e3a5f;
+        border-bottom: 2px solid #e2e8f0;
+    }
+    .prospects-table td {
+        padding: 12px 15px;
+        vertical-align: middle;
+        border-bottom: 1px solid #e2e8f0;
+    }
+    .prospects-table tr:hover {
+        background: #f0f9ff;
+    }
+    .action-buttons {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    .action-btn {
+        padding: 6px 12px;
+        border-radius: 8px;
+        font-size: 0.8rem;
+        transition: all 0.2s;
+    }
+    .search-bar {
+        background: white;
+        border-radius: 15px;
+        padding: 15px 20px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        border: 1px solid #cde3f5;
+    }
+    .filter-section {
+        background: #f8fafc;
+        border-radius: 15px;
+        padding: 20px;
+        margin-bottom: 20px;
+        border: 1px solid #cde3f5;
+    }
+    .badge-eligible {
+        background: #10b981;
+        color: white;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 600;
+    }
+    .btn-primary-custom {
+        background: #0284c7;
+        border: none;
+        color: white;
+        font-weight: 600;
+        transition: 0.2s;
+    }
+    .btn-primary-custom:hover {
+        background: #0369a1;
+        transform: translateY(-1px);
+    }
+    .stats-card {
+        background: white;
+        border-radius: 20px;
+        padding: 20px;
+        text-align: center;
+        border: 1px solid #cde3f5;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        transition: transform 0.2s;
+    }
+    .stats-card:hover {
+        transform: translateY(-3px);
+    }
+    .stats-card h2 {
+        color: #0284c7;
+        font-weight: 800;
+        font-size: 2rem;
+    }
+    .creator-badge {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 600;
+    }
+    .creator-self {
+        background: #d1fae5;
+        color: #065f46;
+    }
+    .creator-other {
+        background: #e0f2fe;
+        color: #0369a1;
+    }
+    .user-summary-card {
+        background: linear-gradient(135deg, #0284c7, #0369a1);
+        color: white;
+        border-radius: 16px;
+        padding: 12px;
+        margin-bottom: 10px;
+        transition: all 0.2s;
+        text-align: center;
+    }
+    .user-summary-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .user-summary-card .user-name {
+        font-size: 13px;
+        font-weight: 600;
+        margin-bottom: 5px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .user-summary-card .user-count {
+        font-size: 20px;
+        font-weight: 800;
+    }
+    .user-summary-card .user-count small {
+        font-size: 10px;
+        font-weight: normal;
+        opacity: 0.8;
+    }
+    .user-select-dropdown {
+        border: 2px solid #cde3f5;
+        border-radius: 12px;
+        padding: 12px;
+        font-size: 15px;
+        font-weight: 500;
+    }
+    .user-select-dropdown:focus {
+        border-color: #0284c7;
+        box-shadow: 0 0 0 0.2rem rgba(2, 132, 199, 0.25);
+    }
+    @media (max-width: 768px) {
+        .action-buttons {
+            flex-direction: column;
+        }
+        .prospects-table {
+            font-size: 12px;
+        }
+        .prospects-table th, .prospects-table td {
+            padding: 8px 10px;
+        }
+        .user-summary-card {
+            padding: 8px;
+        }
+        .user-summary-card .user-count {
+            font-size: 16px;
+        }
+        .user-summary-card .user-name {
+            font-size: 11px;
+        }
+    }
+</style>
+
+<div class="container-fluid px-0">
+    <!-- Stats Row -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-3 col-sm-6">
+            <div class="stats-card">
+                <i class="fas fa-users fa-2x mb-2" style="color:#0284c7;"></i>
+                <h2 class="mb-0">{{ current_total_count|default:eligible_count }}</h2>
+                <p class="text-muted mb-0">
+                    {% if selected_user_id and selected_user_id != 'all' %}
+                        Filtered Prospects
+                    {% else %}
+                        Total Prospects
+                    {% endif %}
+                </p>
+                {% if selected_user_id and selected_user_id != 'all' %}
+                <small class="text-muted">({{ total_count }} total in system)</small>
+                {% endif %}
+            </div>
+        </div>
+        <div class="col-md-3 col-sm-6">
+            <div class="stats-card">
+                <i class="fas fa-user-plus fa-2x mb-2" style="color:#10b981;"></i>
+                <h2 class="mb-0">{{ new_today|default:"0" }}</h2>
+                <p class="text-muted mb-0">New Today</p>
+            </div>
+        </div>
+        <div class="col-md-3 col-sm-6">
+            <div class="stats-card">
+                <i class="fas fa-credit-card fa-2x mb-2" style="color:#f59e0b;"></i>
+                <h2 class="mb-0">{{ eligible_count|default:"0" }}</h2>
+                <p class="text-muted mb-0">Eligible for Credit</p>
+            </div>
+        </div>
+        <div class="col-md-3 col-sm-6">
+            <div class="stats-card">
+                <i class="fas fa-chart-line fa-2x mb-2" style="color:#0891b2;"></i>
+                <h2 class="mb-0">{{ prospects.paginator.num_pages|default:"0" }}</h2>
+                <p class="text-muted mb-0">Total Pages</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Filter Section (Only visible to superusers) -->
+    {% if is_superuser %}
+    <div class="filter-section">
+        <div class="row">
+            <div class="col-md-5">
+                <label class="form-label fw-semibold">
+                    <i class="fas fa-user-filter me-1"></i>Filter by User
+                </label>
+                <select name="user_id" class="form-select user-select-dropdown" id="userFilterSelect" onchange="filterByUser(this.value)">
+                    <option value="all" {% if selected_user_id == 'all' or not selected_user_id %}selected{% endif %}>
+                        📊 All Users ({{ total_count }} prospects)
+                    </option>
+                    <option value="unassigned" {% if selected_user_id == 'unassigned' %}selected{% endif %}>
+                        🤖 Unassigned / System ({{ unassigned_count }} prospects)
+                    </option>
+                    {% for user in users_with_prospects %}
+                    <option value="{{ user.id }}" {% if selected_user_id == user.id|stringformat:"s" %}selected{% endif %}>
+                        👤 {{ user.name }} ({{ user.count }} prospects)
+                    </option>
+                    {% endfor %}
+                </select>
+                <small class="text-muted mt-2 d-block">
+                    <i class="fas fa-info-circle"></i> Select a user to see only their created prospects
+                </small>
+            </div>
+            
+            <div class="col-md-7">
+                <label class="form-label fw-semibold">
+                    <i class="fas fa-chart-pie me-1"></i>Top Users by Prospects
+                </label>
+                <div class="row">
+                    {% for user in users_with_prospects|slice:":2" %}
+                    <div class="col-md-6 mb-2">
+                        <div class="user-summary-card text-center">
+                            <div class="user-name">
+                                <i class="fas fa-trophy me-1"></i> 
+                                {% if forloop.first %}🥇{% elif forloop.second %}🥈{% endif %}
+                                {{ user.name|truncatechars:25 }}
+                            </div>
+                            <div class="user-count">{{ user.count }} <small>prospects</small></div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="col-12">
+                        <div class="user-summary-card text-center">
+                            <div class="user-name">No users yet</div>
+                            <div class="user-count">0 <small>prospects</small></div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% if users_with_prospects|length > 2 %}
+                <div class="text-center mt-2">
+                    <small class="text-muted">+ {{ users_with_prospects|length|add:"-2" }} more users</small>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Selected User Info Alert -->
+        {% if selected_user_id and selected_user_id != 'all' and selected_user_id != 'unassigned' and selected_user_stats %}
+        <div class="alert alert-info mt-3 mb-0">
+            <i class="fas fa-info-circle me-2"></i>
+            <strong>Filter Active:</strong> Showing {{ eligible_count }} prospects created by <strong>{{ selected_user_stats.name }}</strong>
+            <button type="button" class="btn-close float-end" onclick="clearFilter()"></button>
+        </div>
+        {% elif selected_user_id == 'unassigned' %}
+        <div class="alert alert-warning mt-3 mb-0">
+            <i class="fas fa-info-circle me-2"></i>
+            <strong>Filter Active:</strong> Showing {{ eligible_count }} prospects with no assigned creator (system created)
+            <button type="button" class="btn-close float-end" onclick="clearFilter()"></button>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Search Bar -->
+    <div class="search-bar">
+        <form method="GET" class="row g-3" id="searchForm">
+            {% if selected_user_id %}
+            <input type="hidden" name="user_id" value="{{ selected_user_id }}">
+            {% endif %}
+            <div class="col-md-10">
+                <div class="input-group">
+                    <span class="input-group-text bg-light">
+                        <i class="fas fa-search"></i>
+                    </span>
+                    <input type="text" name="search" class="form-control form-control-lg" 
+                           placeholder="Search by name, phone number, or ID number..." 
+                           value="{{ search_query|default:'' }}">
+                </div>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary-custom w-100 py-2">
+                    <i class="fas fa-search me-2"></i>Search
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Prospects Table -->
+    <div class="prospects-table-container">
+        <table class="prospects-table table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th><i class="fas fa-user"></i> Full Name</th>
+                    <th><i class="fas fa-phone"></i> Phone Number</th>
+                    <th><i class="fas fa-id-card"></i> ID Number</th>
+                    <th><i class="fas fa-calendar"></i> Registered</th>
+                    {% if is_superuser %}
+                    <th><i class="fas fa-user-plus"></i> Created By</th>
+                    {% endif %}
+                    <th><i class="fas fa-credit-card"></i> Status</th>
+                    <th><i class="fas fa-cog"></i> Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for prospect in prospects %}
+                <tr>
+                    <td>
+                        {{ forloop.counter|add:prospects.start_index|add:"-1" }}
+                    </td>
+                    <td>
+                        <strong>{{ prospect.full_name }}</strong><br>
+                        <small class="text-muted">{{ prospect.email|default:"No email" }}</small>
+                    </td>
+                    <td>{{ prospect.phone_number }}</td>
+                    <td>{{ prospect.id_number }}</td>
+                    <td>{{ prospect.created_at|date:"d M Y" }}</td>
+                    {% if is_superuser %}
+                    <td>
+                        {% with creator=prospect.created_by %}
+                            {% if creator %}
+                                {% if creator == request.user %}
+                                    <span class="creator-badge creator-self">
+                                        <i class="fas fa-user-check"></i> {{ creator.get_full_name|default:creator.username }}
+                                    </span>
+                                {% else %}
+                                    <span class="creator-badge creator-other">
+                                        <i class="fas fa-user"></i> {{ creator.get_full_name|default:creator.username }}
+                                    </span>
+                                {% endif %}
+                            {% else %}
+                                <span class="text-muted">System</span>
+                            {% endif %}
+                        {% endwith %}
+                    </td>
+                    {% endif %}
+                    <td>
+                        <span class="badge-eligible">
+                            <i class="fas fa-check-circle"></i> Eligible
+                        </span>
+                    </td>
+                    <td>
+                        <div class="action-buttons">
+                            <a href="{% url 'credit:transaction_create' %}?customer={{ prospect.id }}" 
+                               class="btn btn-sm btn-primary action-btn"
+                               title="Create ETR for this customer">
+                                <i class="fas fa-credit-card"></i> Create ETR
+                            </a>
+                            <button class="btn btn-sm btn-outline-secondary action-btn" 
+                                    onclick="copyPhone('{{ prospect.phone_number }}')"
+                                    title="Copy Phone Number">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-info action-btn" 
+                                    onclick="viewCustomerDetails({{ prospect.id }})"
+                                    title="View Details">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="{% if is_superuser %}8{% else %}7{% endif %}" class="text-center py-5">
+                        <i class="fas fa-users fa-3x text-muted mb-3"></i>
+                        <h5>No prospects found</h5>
+                        <p class="text-muted">
+                            {% if search_query %}
+                                Try a different search term
+                            {% else %}
+                                You don't have any eligible customers yet.<br>
+                                Add customers by creating new transactions.
+                            {% endif %}
+                        </p>
+                        <a href="{% url 'credit:transaction_create' %}" class="btn btn-primary-custom mt-3">
+                            <i class="fas fa-plus-circle me-2"></i>Create New ETR
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination -->
+    {% if prospects.paginator.num_pages > 1 %}
+    <nav class="mt-4">
+        <ul class="pagination justify-content-center">
+            {% if prospects.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?page=1{% if search_query %}&search={{ search_query }}{% endif %}{% if selected_user_id %}&user_id={{ selected_user_id }}{% endif %}">
+                    <i class="fas fa-angle-double-left"></i>
+                </a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?page={{ prospects.previous_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if selected_user_id %}&user_id={{ selected_user_id }}{% endif %}">
+                    <i class="fas fa-angle-left"></i>
+                </a>
+            </li>
+            {% endif %}
+            
+            <li class="page-item active">
+                <a class="page-link" href="#">{{ prospects.number }}</a>
+            </li>
+            
+            {% if prospects.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ prospects.next_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if selected_user_id %}&user_id={{ selected_user_id }}{% endif %}">
+                    <i class="fas fa-angle-right"></i>
+                </a>
+            </li>
+            <li class="page-item">
+                <a class="page-link" href="?page={{ prospects.paginator.num_pages }}{% if search_query %}&search={{ search_query }}{% endif %}{% if selected_user_id %}&user_id={{ selected_user_id }}{% endif %}">
+                    <i class="fas fa-angle-double-right"></i>
+                </a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+
+<script>
+    function copyPhone(phone) {
+        navigator.clipboard.writeText(phone).then(function() {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = 'alert alert-success alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3';
+            alertDiv.style.zIndex = '9999';
+            alertDiv.style.minWidth = '300px';
+            alertDiv.innerHTML = `
+                <i class="fas fa-check-circle me-2"></i>
+                Phone number copied: ${phone}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.body.appendChild(alertDiv);
+            setTimeout(() => alertDiv.remove(), 3000);
+        });
+    }
+    
+    function viewCustomerDetails(customerId) {
+        window.location.href = `/staff/customer/${customerId}/details/`;
+    }
+    
+    function filterByUser(userId) {
+        const currentUrl = new URL(window.location.href);
+        const searchQuery = currentUrl.searchParams.get('search') || '';
+        
+        let newUrl = window.location.pathname + '?';
+        if (userId && userId !== 'all') {
+            newUrl += `user_id=${userId}`;
+        }
+        if (searchQuery) {
+            newUrl += `${userId && userId !== 'all' ? '&' : ''}search=${searchQuery}`;
+        }
+        window.location.href = newUrl;
+    }
+    
+    function clearFilter() {
+        const currentUrl = new URL(window.location.href);
+        const searchQuery = currentUrl.searchParams.get('search') || '';
+        let newUrl = window.location.pathname + '?';
+        if (searchQuery) {
+            newUrl += `search=${searchQuery}`;
+        }
+        window.location.href = newUrl;
+    }
+</script>
+{% endblock %}

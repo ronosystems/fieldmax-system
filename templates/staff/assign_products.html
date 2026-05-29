@@ -1,0 +1,604 @@
+{% extends "loan_base.html" %}
+
+{% block title %}PRODUCT TRANSFER{% endblock %}
+
+{% block header_icon %}fa-exchange-alt{% endblock %}
+
+{% block page_title %}TRANSFER / ASSIGN PRODUCTS TO CREDIT OFFICERS{% endblock %}
+
+{% block content %}
+<style>
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 22px;
+        margin-bottom: 32px;
+    }
+    .stat-card {
+        background: white;
+        border-radius: 24px;
+        padding: 1.2rem 1.2rem;
+        box-shadow: 0 6px 14px rgb(0, 0, 0);
+        border: 1px solid #cde3f5;
+        transition: 0.2s;
+    }
+    .stat-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 12px 20px rgba(0,0,0,0.1);
+    }
+    .stat-card h3 {
+        color: #0c4e6e;
+        font-weight: 800;
+        font-size: 1.8rem;
+    }
+    .stat-card p {
+        color: #2c3e50;
+        margin-bottom: 0;
+    }
+    .filter-section {
+        background: #f8fafc;
+        border-radius: 15px;
+        padding: 20px;
+        margin-bottom: 25px;
+        border: 1px solid #cde3f5;
+    }
+    .form-card {
+        background: white;
+        border-radius: 32px;
+        box-shadow: 0 12px 28px rgb(0, 0, 0);
+        overflow: hidden;
+        border: 1px solid #cde3f5;
+        margin-bottom: 30px;
+    }
+    .form-card-header {
+        background: #f9fcff;
+        padding: 18px 28px;
+        border-bottom: 2px solid #7ab3c8;
+    }
+    .data-table-container {
+        background: white;
+        border-radius: 20px;
+        overflow-x: auto;
+        box-shadow: 0 12px 28px rgb(0, 0, 0);
+        border: 1px solid #cde3f5;
+    }
+    .data-table {
+        width: 100%;
+        margin-bottom: 0;
+        min-width: 900px;
+    }
+    .data-table th {
+        background: #f8fafc;
+        padding: 15px;
+        font-weight: 700;
+        color: #1e3a5f;
+        border-bottom: 2px solid #e2e8f0;
+        text-align: left;
+        vertical-align: middle;
+    }
+    .data-table td {
+        padding: 12px 15px;
+        vertical-align: middle;
+        border-bottom: 1px solid #e2e8f0;
+    }
+    .data-table tr:hover {
+        background: #f0f9ff;
+    }
+    .checkbox-col {
+        width: 50px;
+        text-align: center;
+    }
+    .unit-checkbox {
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+    }
+    .select-all-checkbox {
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+    }
+    .col-b {
+        min-width: 200px;
+    }
+    .identifier-text {
+        font-weight: 600;
+        color: #0284c7;
+        font-family: monospace;
+        font-size: 0.9rem;
+        margin-bottom: 4px;
+    }
+    .sku-text {
+        font-size: 0.75rem;
+        color: #6c757d;
+        font-family: monospace;
+    }
+    .col-c {
+        min-width: 220px;
+    }
+    .product-name-text {
+        font-weight: 600;
+        color: #1e3a5f;
+        margin-bottom: 4px;
+        font-size: 0.9rem;
+    }
+    .specs-text {
+        font-size: 0.75rem;
+        color: #6c757d;
+    }
+    .price-cell {
+        font-weight: 700;
+        color: #0f5b87;
+        white-space: nowrap;
+        font-size: 0.95rem;
+        min-width: 100px;
+    }
+    .owner-cell {
+        font-size: 0.85rem;
+        min-width: 180px;
+    }
+    .current-owner {
+        color: #f59e0b;
+        font-weight: 600;
+        margin-bottom: 4px;
+    }
+    .no-owner {
+        color: #10b981;
+        font-style: italic;
+        margin-bottom: 4px;
+    }
+    .days-cell {
+        font-size: 0.85rem;
+        white-space: nowrap;
+        min-width: 100px;
+    }
+    .days-badge {
+        background: #e0f2fe;
+        color: #0369a1;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        display: inline-block;
+    }
+    .status-cell {
+        white-space: nowrap;
+        min-width: 100px;
+    }
+    .badge-available {
+        background: #10b981;
+        color: white;
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 600;
+        display: inline-block;
+    }
+    .badge-assigned {
+        background: #f59e0b;
+        color: white;
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 600;
+        display: inline-block;
+    }
+    .btn-primary-custom {
+        background: #0284c7;
+        border: none;
+        color: white;
+        font-weight: 600;
+        transition: 0.2s;
+        padding: 10px 24px;
+        border-radius: 8px;
+    }
+    .btn-primary-custom:hover {
+        background: #0369a1;
+        transform: translateY(-1px);
+    }
+    .btn-outline-secondary {
+        border: 1px solid #cbd5e1;
+        color: #475569;
+        background: transparent;
+        padding: 8px 16px;
+        border-radius: 8px;
+        transition: 0.2s;
+    }
+    .btn-outline-secondary:hover {
+        background: #f1f5f9;
+        border-color: #94a3b8;
+    }
+    .pagination {
+        margin-top: 25px;
+    }
+    .page-link {
+        color: #0284c7;
+        border-radius: 8px;
+        margin: 0 3px;
+    }
+    .page-item.active .page-link {
+        background: #0284c7;
+        border-color: #0284c7;
+    }
+    .bulk-upload-section {
+        background: #fef3c7;
+        border: 1px solid #fde68a;
+        border-radius: 20px;
+        padding: 20px;
+        margin-top: 20px;
+    }
+    @media (max-width: 768px) {
+        .stats-grid {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+        }
+        .filter-section .row {
+            flex-direction: column;
+        }
+        .data-table td, .data-table th {
+            padding: 8px 10px;
+        }
+    }
+</style>
+
+<div class="container-fluid px-0">
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-3" role="alert">
+                <i class="fas fa-{% if message.tags == 'success' %}check-circle{% elif message.tags == 'error' %}exclamation-circle{% else %}info-circle{% endif %} me-2"></i>
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <!-- Stats Cards -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <h3 class="fw-bold mb-0">{{ total_available|default:"0" }}</h3>
+                    <p class="mb-0 text-secondary">AVAILABLE UNITS</p>
+                    <small class="text-muted">Ready for assignment</small>
+                </div>
+                <div class="bg-info bg-opacity-10 p-3 rounded-3">
+                    <i class="fas fa-mobile-alt fs-2 text-info"></i>
+                </div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <h3 class="fw-bold mb-0">{{ credit_officers.count|default:"0" }}</h3>
+                    <p class="mb-0 text-secondary">CREDIT OFFICERS</p>
+                    <small class="text-muted">Active staff members</small>
+                </div>
+                <div class="bg-success bg-opacity-10 p-3 rounded-3">
+                    <i class="fas fa-user-check fs-2 text-success"></i>
+                </div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <h3 class="fw-bold mb-0">{{ assigned_count|default:"0" }}</h3>
+                    <p class="mb-0 text-secondary">ASSIGNED TODAY</p>
+                    <small class="text-muted">Today's assignments</small>
+                </div>
+                <div class="bg-primary bg-opacity-10 p-3 rounded-3">
+                    <i class="fas fa-tasks fs-2 text-primary"></i>
+                </div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <h3 class="fw-bold mb-0">{{ units.paginator.num_pages|default:"0" }}</h3>
+                    <p class="mb-0 text-secondary">PAGES</p>
+                    <small class="text-muted">Total pages</small>
+                </div>
+                <div class="bg-warning bg-opacity-10 p-3 rounded-3">
+                    <i class="fas fa-chart-line fs-2 text-warning"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter Section -->
+    <div class="filter-section">
+        <form method="GET" class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">Category</label>
+                <select name="category" class="form-select" onchange="this.form.submit()">
+                    <option value="">All Categories</option>
+                    {% for category in categories %}
+                    <option value="{{ category.id }}" {% if selected_category == category.id|stringformat:"s" %}selected{% endif %}>
+                        {{ category.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">Owner Status</label>
+                <select name="owner_status" class="form-select" onchange="this.form.submit()">
+                    <option value="">All Units</option>
+                    <option value="unassigned" {% if selected_owner_status == 'unassigned' %}selected{% endif %}>Unassigned Only</option>
+                    <option value="assigned" {% if selected_owner_status == 'assigned' %}selected{% endif %}>Currently Assigned</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label fw-semibold">Search</label>
+                <input type="text" name="search" class="form-control" 
+                       placeholder="Search by IMEI, Serial, SKU, or Product Name..." 
+                       value="{{ search_query }}">
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary-custom w-100">Search</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Assignment Form -->
+    <div class="form-card">
+        <div class="form-card-header">
+            <div class="row align-items-center justify-content-between">
+                <div class="col-md-6">
+                    <h5 class="mb-0 fw-bold">
+                        <i class="fas fa-exchange-alt me-2" style="color:#0284c7;"></i>
+                        TRANSFER / ASSIGN PRODUCTS TO CREDIT OFFICER
+                    </h5>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="selectAllBtn">Select All</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm ms-2" id="deselectAllBtn">Deselect All</button>
+                </div>
+            </div>
+        </div>
+        <div class="card-body p-4">
+            <form method="POST" id="assignForm">
+                {% csrf_token %}
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">Transfer To (Credit Officer) <span class="text-danger">*</span></label>
+                        <select name="officer_id" class="form-select form-select-lg" required id="officerSelect">
+                            <option value="">-- Select Credit Officer --</option>
+                            {% for officer in credit_officers %}
+                            <option value="{{ officer.id }}">
+                                {{ officer.get_full_name|default:officer.username }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Validity Period (Optional)</label>
+                        <input type="number" name="days_valid" class="form-control" 
+                               placeholder="Days (leave empty for permanent)" min="1" max="365">
+                    </div>
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-primary-custom w-100">Transfer</button>
+                    </div>
+                </div>
+
+                <hr class="my-4">
+
+                <!-- Units Table -->
+                <div class="data-table-container">
+                    <table class="data-table table">
+                        <thead>
+                            <tr>
+                                <th class="checkbox-col" style="text-align: center;"><br>SELECT</th>
+                                <th><br>IMEI/SERIAL : SKU CODE</th>
+                                <th><br>PRODUCT NAME & SPECS</th>
+                                <th><br>PRICE (KSH)</th>
+                                <th><br>CURRENT OWNER</th>
+                                <th><br>DAYS SINCE</th>
+                                <th><br>STATUS</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for unit in units %}
+                            <tr>
+                                <!-- COLUMN A -->
+                                <td class="checkbox-col" style="text-align: center;">
+                                    <input type="checkbox" name="product_ids" value="{{ unit.id }}" class="unit-checkbox">
+                                </td>
+                                
+                                <!-- COLUMN B -->
+                                <td class="col-b">
+                                    <div class="identifier-text">
+                                        <i class="fas fa-qrcode"></i> {{ unit.unique_identifier }}
+                                    </div>
+                                    <div class="sku-text">
+                                        <i class="fas fa-tag"></i> {{ unit.product.sku_code }}
+                                    </div>
+                                 </td>
+                                
+                                <!-- COLUMN C -->
+                                <td class="col-c">
+                                    <div class="product-name-text">
+                                        <i class="fas fa-mobile-alt"></i> {{ unit.product.display_name|truncatechars:50 }}
+                                    </div>
+                                    <div class="specs-text">
+                                        <i class="fas fa-microchip"></i>
+                                        RAM: {{ unit.product.specifications.ram|default:"N/A" }} / 
+                                        Storage: {{ unit.product.specifications.storage|default:"N/A" }}
+                                    </div>
+                                  </td>
+                                
+                                <!-- COLUMN D -->
+                                <td class="price-cell">
+                                    KSH {{ unit.effective_selling_price|floatformat:2 }}
+                                  </td>
+                                
+                                <!-- COLUMN E & F -->
+                                {% with found=False %}
+                                    {% for key, value in assignments_dict.items %}
+                                        {% if key == unit.id %}
+                                            <!-- COLUMN E: HAS OWNER -->
+                                            <td class="owner-cell">
+                                                <div class="current-owner">
+                                                    <i class="fas fa-user-check"></i> 
+                                                    {{ value.assigned_to.get_full_name|default:value.assigned_to.username }}
+                                                </div>
+                                                <small class="text-muted">
+                                                    <i class="fas fa-calendar-alt"></i> {{ value.assigned_at|date:"d M Y" }}
+                                                </small>
+                                                {% if value.expires_at %}
+                                                    <br>
+                                                    <small class="text-warning">
+                                                        <i class="fas fa-clock"></i> Expires: {{ value.expires_at|date:"d M Y" }}
+                                                    </small>
+                                                {% endif %}
+                                              </td>
+                                            <!-- COLUMN F: DAYS SINCE -->
+                                            <td class="days-cell">
+                                                <span class="days-badge">
+                                                    <i class="fas fa-calendar-day"></i> 
+                                                    {{ value.assigned_at|timesince }}
+                                                </span>
+                                              </td>
+                                            {% with found=True %}{% endwith %}
+                                        {% endif %}
+                                    {% endfor %}
+                                    
+                                {% endwith %}
+                                
+                                <!-- COLUMN G -->
+                                <td class="status-cell">
+                                    {% if unit.status == 'available' %}
+                                        <span class="badge-available">Available</span>
+                                    {% else %}
+                                        <span class="badge-assigned">{{ unit.get_status_display }}</span>
+                                    {% endif %}
+                                  </td>
+                              </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="7" class="text-center py-5">
+                                    <i class="fas fa-box-open fa-4x text-muted mb-3"></i>
+                                    <h5>No available units found</h5>
+                                    <p class="text-muted">No products are available for assignment at this time.</p>
+                                  </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                {% if units.paginator.num_pages > 1 %}
+                <nav class="mt-4">
+                    <ul class="pagination justify-content-center">
+                        {% if units.has_previous %}
+                        <li class="page-item"><a class="page-link" href="?page=1{% if search_query %}&search={{ search_query }}{% endif %}{% if selected_category %}&category={{ selected_category }}{% endif %}{% if selected_owner_status %}&owner_status={{ selected_owner_status }}{% endif %}">«</a></li>
+                        <li class="page-item"><a class="page-link" href="?page={{ units.previous_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if selected_category %}&category={{ selected_category }}{% endif %}{% if selected_owner_status %}&owner_status={{ selected_owner_status }}{% endif %}">‹</a></li>
+                        {% endif %}
+                        <li class="page-item active"><a class="page-link" href="#">{{ units.number }}</a></li>
+                        {% if units.has_next %}
+                        <li class="page-item"><a class="page-link" href="?page={{ units.next_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if selected_category %}&category={{ selected_category }}{% endif %}{% if selected_owner_status %}&owner_status={{ selected_owner_status }}{% endif %}">›</a></li>
+                        <li class="page-item"><a class="page-link" href="?page={{ units.paginator.num_pages }}{% if search_query %}&search={{ search_query }}{% endif %}{% if selected_category %}&category={{ selected_category }}{% endif %}{% if selected_owner_status %}&owner_status={{ selected_owner_status }}{% endif %}">»</a></li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+
+    <!-- Bulk Upload Section -->
+    <div class="bulk-upload-section">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <h6 class="fw-bold mb-2">Bulk Transfer via CSV Upload</h6>
+                <p class="small text-muted mb-3">
+                    Upload a CSV file with IMEI or Serial numbers to transfer multiple products at once.
+                </p>
+                <form method="POST" action="{% url 'staff:bulk_assign_products' %}" enctype="multipart/form-data" class="row g-2">
+                    {% csrf_token %}
+                    <div class="col-md-5">
+                        <select name="officer_id" class="form-select" required>
+                            <option value="">-- Select Credit Officer --</option>
+                            {% for officer in credit_officers %}
+                            <option value="{{ officer.id }}">{{ officer.get_full_name|default:officer.username }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-5">
+                        <input type="file" name="csv_file" class="form-control" accept=".csv" required>
+                    </div>
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-warning w-100">Upload</button>
+                    </div>
+                </form>
+            </div>
+            <div class="col-md-4">
+                <div class="alert alert-info mb-0">
+                    <strong>CSV Template:</strong><br>
+                    <code>imei<br>123456789012345</code>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+    const selectAllBtn = document.getElementById('selectAllBtn');
+    const deselectAllBtn = document.getElementById('deselectAllBtn');
+    const unitCheckboxes = document.querySelectorAll('.unit-checkbox');
+    
+    if (selectAllCheckbox) {
+        selectAllCheckbox.addEventListener('change', function() {
+            unitCheckboxes.forEach(cb => cb.checked = this.checked);
+        });
+    }
+    
+    if (selectAllBtn) {
+        selectAllBtn.addEventListener('click', function() {
+            unitCheckboxes.forEach(cb => cb.checked = true);
+            if (selectAllCheckbox) selectAllCheckbox.checked = true;
+        });
+    }
+    
+    if (deselectAllBtn) {
+        deselectAllBtn.addEventListener('click', function() {
+            unitCheckboxes.forEach(cb => cb.checked = false);
+            if (selectAllCheckbox) selectAllCheckbox.checked = false;
+        });
+    }
+    
+    unitCheckboxes.forEach(cb => {
+        cb.addEventListener('change', function() {
+            if (selectAllCheckbox) {
+                selectAllCheckbox.checked = Array.from(unitCheckboxes).every(c => c.checked);
+            }
+        });
+    });
+    
+    const assignForm = document.getElementById('assignForm');
+    if (assignForm) {
+        assignForm.addEventListener('submit', function(e) {
+            const officerSelect = document.getElementById('officerSelect');
+            const selectedCheckboxes = document.querySelectorAll('.unit-checkbox:checked');
+            
+            if (!officerSelect.value) {
+                e.preventDefault();
+                alert('Please select a credit officer to transfer the products to.');
+                officerSelect.focus();
+                return;
+            }
+            
+            if (selectedCheckboxes.length === 0) {
+                e.preventDefault();
+                alert('Please select at least one product to transfer.');
+                return;
+            }
+            
+            let confirmMsg = `Transfer ${selectedCheckboxes.length} product(s) to ${officerSelect.options[officerSelect.selectedIndex].text}?`;
+            if (!confirm(confirmMsg)) {
+                e.preventDefault();
+            }
+        });
+    }
+</script>
+{% endblock %}

@@ -67,6 +67,21 @@ def is_manager_or_admin(user):
     return user.is_staff or user.groups.filter(name='Manager').exists()
 
 
+
+def get_current_assignment(self):
+    """Get the current active assignment for this unit"""
+    from .models import ProductAssignment
+    try:
+        return ProductAssignment.objects.filter(
+            product_unit=self,
+            is_active=True
+        ).filter(
+            Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now())
+        ).select_related('assigned_to').first()
+    except:
+        return None
+
+
 @login_required
 def export_statistics(request):
     """Export store statistics to CSV"""
@@ -1787,9 +1802,6 @@ def get_product_details(request, product_id):
     except Product.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Product not found'}, status=404)
 
-
-
-
 @login_required
 def product_edit(request, pk):
     """Edit existing product SKU"""
@@ -2029,8 +2041,6 @@ def product_edit(request, pk):
     }
     return render(request, 'inventory/products/edit.html', context)
 
-
-
 @login_required
 def product_delete(request, pk):
     """Delete product SKU"""
@@ -2257,6 +2267,7 @@ def process_restock(request):
     except Exception as e:
         logger.error(f"Restock error: {str(e)}")
         return JsonResponse({'success': False, 'message': f'Error: {str(e)}'}, status=500)
+
 
 
 # ===========================================

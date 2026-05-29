@@ -1,678 +1,264 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>FIELDMAX ETR</title>
-    
-    <!-- Bootstrap 5 CSS + Icons + Fonts -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
-    
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+{% extends "loan_base.html" %}
 
-        body {
-            font-family: 'Inter', sans-serif;
-            background: #eef5ff;
-            overflow-x: hidden;
-        }
+{% block title %}GENERATE ETR{% endblock %}
 
-        /* ========= SIDEBAR (SKY BLUE / LIGHT BLUE THEME) ========= */
-        .sidebar {
-            width: 280px;
-            background: linear-gradient(145deg, #ffffff 0%, #f0f8ff 100%);
-            border-right: 1px solid #cde3f5;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            position: fixed;
-            top: 0;
-            left: 0;
-            bottom: 0;
-            z-index: 1050;
-            overflow-y: auto;
-            box-shadow: 6px 0 18px rgba(0, 80, 120, 0.08);
-        }
+{% block header_icon %}fa-plus-circle{% endblock %}
 
-        .sidebar-header {
-            padding: 28px 20px 20px 24px;
-            border-bottom: 1px solid #000000;
-            background: #ffffff;
-        }
+{% block page_title %}GENERATE NEW ETR{% endblock %}
 
-        .sidebar-header h3 {
-            font-weight: 800;
-            font-size: 1.7rem;
-            background: linear-gradient(135deg, #0077b6, #00b4d8);
-            -webkit-background-clip: text;
-            background-clip: text;
-            color: transparent;
-            margin: 0;
-            letter-spacing: -0.3px;
-        }
+{% block content %}
+<style>
+    /* Form Card */
+    .form-card {
+        background: white;
+        border-radius: 32px;
+        box-shadow: 0 12px 28px rgb(0, 0, 0);
+        overflow: hidden;
+        border: 1px solid #cde3f5;
+    }
+    .form-card-header {
+        background: #f9fcff;
+        padding: 18px 28px;
+        border-bottom: 2px solid #7ab3c8;
+    }
+    .btn-warning-custom {
+        background: #0284c7;
+        border: none;
+        color: white;
+        font-weight: 600;
+        transition: 0.2s;
+        padding: 10px 24px;
+    }
+    .btn-warning-custom:hover {
+        background: #0369a1;
+        transform: translateY(-1px);
+    }
+    .selected-unit-card {
+        background: #eef6fe;
+        border-left: 6px solid #38bdf8;
+        border-radius: 20px;
+    }
+    .list-group-item-action:hover {
+        background-color: #caf0f8;
+    }
+    .suggestions-dropdown {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        z-index: 1000;
+        max-height: 300px;
+        overflow-y: auto;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+        border: 1px solid #cde3f5;
+    }
+    .unit-suggestion-item {
+        cursor: pointer;
+        transition: all 0.2s;
+        border-left: 3px solid transparent;
+    }
+    .unit-suggestion-item:hover {
+        background-color: #caf0f8;
+        border-left-color: #0284c7;
+    }
+    .loading-spinner {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border: 3px solid #f3f3f3;
+        border-top: 3px solid #0284c7;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+</style>
 
-        .sidebar-header p {
-            font-size: 0.7rem;
-            color: #2c5f8a;
-            margin-top: 6px;
-            font-weight: 500;
-        }
+<div class="container-fluid px-0">
 
-        .sidebar-nav {
-            padding: 24px 0 20px;
-        }
-
-        .nav-item-custom {
-            padding: 12px 24px;
-            margin: 4px 12px;
-            display: flex;
-            align-items: center;
-            gap: 14px;
-            color: #1e3a5f;
-            transition: 0.2s;
-            font-weight: 500;
-            border-radius: 14px;
-            background: transparent;
-            cursor: pointer;
-            box-shadow: 0 2px 6px rgb(0, 0, 0);
-        }
-
-        .nav-item-custom i {
-            width: 26px;
-            font-size: 1.2rem;
-            color: #2c7da0;
-        }
-
-        .nav-item-custom:hover {
-            background: #caf0f8;
-            color: #0077b6;
-        }
-
-        .nav-item-custom:hover i {
-            color: #0077b6;
-        }
-
-        .nav-active {
-            background: #caf0f8;
-            color: #023e8a;
-            font-weight: 600;
-            box-shadow: 0 2px 6px rgb(0, 0, 0);
-        }
-        .nav-active i {
-            color: #0077b6;
-        }
-
-        /* logout button inside sidebar */
-        .sidebar-logout-area {
-            padding: 20px 20px 30px;
-            margin-top: 20px;
-            border-top: 1px solid #cfe3f0;
-        }
-        .btn-exit-sidebar {
-            background: #ff0000;
-            border: 1px solid #000000;
-            box-shadow: 0 4px 12px rgb(0, 0, 0);
-            border-radius: 40px;
-            padding: 12px 16px;
-            width: 100%;
-            font-weight: 600;
-            color: white;
-            transition: all 0.2s;
-            text-align: center;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-        }
-        .btn-exit-sidebar:hover {
-            background: #cc0000;
-            border-color: #000000;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgb(0, 0, 0);
-        }
-        .btn-exit-sidebar i {
-            font-size: 1rem;
-        }
-
-        /* Admin Dashboard button in sidebar area */
-        .sidebar-admin-area {
-            padding: 0px 20px 10px 20px;
-            margin-top: 10px;
-        }
-        .btn-admin-sidebar {
-            background: linear-gradient(135deg, #0284c7, #0369a1);
-            box-shadow: 0 4px 12px rgb(0, 0, 0);
-            border: none;
-            border-radius: 40px;
-            padding: 12px 16px;
-            width: 100%;
-            font-weight: 600;
-            color: white;
-            transition: all 0.2s;
-            text-align: center;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            cursor: pointer;
-        }
-        .btn-admin-sidebar:hover {
-            background: linear-gradient(135deg, #0369a1, #0284c7);
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgb(0, 0, 0);
-        }
-        .btn-admin-sidebar i {
-            font-size: 1rem;
-        }
-
-        /* MAIN CONTENT */
-        .main-content {
-            flex: 1;
-            margin-left: 280px;
-            width: calc(100% - 280px);
-            transition: margin 0.3s ease;
-            padding: 24px 32px;
-        }
-
-        /* Top Header Bar */
-        .top-header-bar {
-            background: white;
-            border-radius: 28px;
-            padding: 12px 28px;
-            margin-bottom: 30px;
-            box-shadow: 0 5px 14px rgb(0, 0, 0);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 16px;
-            border: 1px solid #d4e7f5;
-        }
-
-        .menu-toggle {
-            display: none;
-            background: white;
-            border: 1px solid #bdd9ec;
-            border-radius: 40px;
-            padding: 8px 14px;
-            font-size: 1.2rem;
-            cursor: pointer;
-            color: #0369a1;
-        }
-
-        .page-title h4 {
-            font-weight: 700;
-            margin: 0;
-            color: #0a2f44;
-        }
-        .page-title p {
-            margin: 0;
-            font-size: 0.75rem;
-            color: #2c7da0;
-        }
-
-        .user-badge {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-        .user-info-card {
-            background: #f0f9ff;
-            box-shadow: 0 4px 12px rgb(0, 0, 0);
-            padding: 6px 18px;
-            border-radius: 50px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-        .avatar-sm {
-            width: 38px;
-            height: 38px;
-            background: linear-gradient(145deg, #38bdf8, #0284c7);
-            box-shadow: 0 4px 12px rgb(0, 0, 0);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 700;
-            color: white;
-        }
-
-        /* STATS CARDS */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 22px;
-            margin-bottom: 32px;
-        }
-        .stat-card {
-            background: white;
-            border-radius: 24px;
-            padding: 1.2rem 1.2rem;
-            box-shadow: 0 6px 14px rgb(0, 0, 0);
-            border: 1px solid #000000;
-            transition: 0.2s;
-        }
-        .stat-card h3 {
-            color: #0c4e6e;
-            font-weight: 800;
-        }
-        .stat-card p {
-            color: #2c3e50;
-        }
-
-        /* Tab Buttons */
-        .tab-buttons {
-            display: flex;
-            gap: 15px;
-            margin-bottom: 25px;
-        }
-        .tab-btn {
-            flex: 1;
-            padding: 15px 25px;
-            background: white;
-            border: 2px solid #cde3f5;
-            border-radius: 15px;
-            font-weight: 700;
-            font-size: 1.1rem;
-            color: #1e3a5f;
-            cursor: pointer;
-            transition: all 0.3s;
-            text-align: center;
-        }
-        .tab-btn i {
-            margin-right: 10px;
-            font-size: 1.2rem;
-        }
-        .tab-btn.active {
-            background: linear-gradient(135deg, #0284c7, #0369a1);
-            color: white;
-            border-color: #0284c7;
-            box-shadow: 0 4px 12px rgb(0, 0, 0);
-        }
-        .tab-btn:hover:not(.active) {
-            background: #caf0f8;
-            border-color: #7ab3c8;
-        }
-
-        /* Tab Content */
-        .tab-content {
-            display: none;
-        }
-        .tab-content.active {
-            display: block;
-            animation: fadeIn 0.3s ease;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        /* Prospects Table */
-        .prospects-table-container {
-            background: white;
-            border-radius: 20px;
-            overflow: hidden;
-            box-shadow: 0 12px 28px rgb(0, 0, 0);
-            border: 1px solid #cde3f5;
-        }
-        .prospects-table {
-            width: 100%;
-            margin-bottom: 0;
-        }
-        .prospects-table th {
-            background: #f8fafc;
-            padding: 15px;
-            font-weight: 700;
-            color: #1e3a5f;
-            border-bottom: 2px solid #e2e8f0;
-        }
-        .prospects-table td {
-            padding: 12px 15px;
-            vertical-align: middle;
-            border-bottom: 1px solid #e2e8f0;
-        }
-        .prospects-table tr:hover {
-            background: #f0f9ff;
-            cursor: pointer;
-        }
-        .action-buttons {
-            display: flex;
-            gap: 8px;
-        }
-        .action-btn {
-            padding: 6px 12px;
-            border-radius: 8px;
-            font-size: 0.8rem;
-            transition: all 0.2s;
-        }
-
-        /* Search Bar */
-        .search-bar {
-            background: white;
-            border-radius: 15px;
-            padding: 15px 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-        }
-
-        /* Form Card */
-        .form-card {
-            background: white;
-            border-radius: 32px;
-            box-shadow: 0 12px 28px rgb(0, 0, 0);
-            overflow: hidden;
-            border: 1px solid #cde3f5;
-        }
-        .form-card-header {
-            background: #f9fcff;
-            padding: 18px 28px;
-            border-bottom: 2px solid #7ab3c8;
-        }
-        .btn-warning-custom {
-            background: #0284c7;
-            border: none;
-            color: white;
-            font-weight: 600;
-            transition: 0.2s;
-        }
-        .btn-warning-custom:hover {
-            background: #0369a1;
-            transform: translateY(-1px);
-        }
-        .selected-unit-card {
-            background: #eef6fe;
-            border-left: 6px solid #38bdf8;
-            border-radius: 20px;
-        }
-
-        @media (max-width: 992px) {
-            .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 16px; }
-        }
-        @media (max-width: 768px) {
-            .sidebar { transform: translateX(-100%); width: 280px; }
-            .sidebar.open-mobile { transform: translateX(0); }
-            .main-content { margin-left: 0; width: 100%; padding: 16px; }
-            .menu-toggle { display: block; }
-            .stats-grid { grid-template-columns: 1fr; }
-            .tab-buttons { flex-direction: column; }
-        }
-        @media (max-width: 480px) {
-            .top-header-bar { flex-direction: column; align-items: stretch; }
-            .user-badge { justify-content: space-between; }
-            .prospects-table { font-size: 12px; }
-            .action-buttons { flex-direction: column; }
-        }
-
-        .list-group-item-action:hover { background-color: #caf0f8; }
-        .badge-eligible {
-            background: #10b981;
-            color: white;
-            padding: 4px 10px;
-            border-radius: 20px;
-            font-size: 11px;
-            font-weight: 600;
-        }
-    </style>
-</head>
-<body>
-
-<div class="app-wrapper">
-    <!-- SIDEBAR -->
-    <aside class="sidebar" id="mainSidebar">
-        <div class="sidebar-header">
-            <h3><i class="fas fa-cloud-sun me-2"></i>FieldMax</h3>
-            <p>Financing Smartphone Devices</p>
+    <!-- Main Form Card -->
+    <div class="form-card">
+        <div class="form-card-header">
+            <h5 class="mb-0 fw-bold">
+                <i class="fas fa-file-invoice-dollar me-2" style="color:#0284c7;"></i>
+                ETR FORM
+            </h5>
+            <p class="text-muted small mt-2 mb-0">Fill in the details to generate a new Electronic Transaction Record</p>
         </div>
-        <div class="sidebar-nav">
-            <div class="nav-item-custom nav-active" onclick="switchTab('dashboard')">
-                <i class="fas fa-plus"></i> <span>New ETR</span>
-            </div>
-            <div class="nav-item-custom nav active" onclick="switchTab('prospects')">
-                <i class="fas fa-users"></i> <span>Prospects</span>
-            </div>
-        </div>
-
-        {% if is_administrator %}
-        <div class="sidebar-admin-area">
-            <a href="{% url 'staff:staff_dashboard' %}" class="btn-admin-sidebar text-decoration-none">
-                <i class="fas fa-user-shield"></i> Admin Dashboard
-            </a>
-        </div>
-        {% endif %}
         
-        <div class="sidebar-logout-area">
-            <form method="post" action="{% url 'staff:logout' %}" id="logoutSidebarForm">
+        <div class="card-body p-4">
+            <div id="messageContainer"></div>
+            
+            <form method="post" id="transactionForm" action="{% url 'credit:transaction_create' %}">
                 {% csrf_token %}
-                <button type="submit" class="btn-exit-sidebar">
-                    <i class="fas fa-sign-out-alt"></i> Exit & Logout
-                </button>
+                
+                <div class="row g-4">
+                    <!-- Financing Company -->
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">
+                            <i class="fas fa-building me-1" style="color:#0284c7;"></i> 
+                            FINANCING COMPANY <span class="text-danger">*</span>
+                        </label>
+                        <select name="company" class="form-select form-select-lg" required id="companySelect">
+                            <option value="">-- Select --</option>
+                            {% for company in companies %}
+                            <option value="{{ company.id }}">{{ company.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted">financing company</small>
+                    </div>
+                    
+                    <!-- Customer Selection -->
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">
+                            <i class="fas fa-user me-1" style="color:#0284c7;"></i> 
+                            CUSTOMER <span class="text-danger">*</span>
+                        </label>
+                        <div class="input-group">
+                            <select name="customer" class="form-select form-select-lg" required id="customerSelect">
+                                <option value="">-- Select --</option>
+                                {% for customer in customers %}
+                                <option value="{{ customer.id }}" 
+                                        data-phone="{{ customer.phone_number }}"
+                                        data-idnumber="{{ customer.id_number }}">
+                                    {{ customer.full_name }} - {{ customer.phone_number }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <button type="button" class="btn" style="background:#e6f4ff; border:1px solid #7ab3c8; color:#0369a1;" 
+                                    data-bs-toggle="modal" data-bs-target="#addCustomerModal">
+                                <i class="fas fa-user-plus"></i> New
+                            </button>
+                        </div>
+                        <small class="text-muted">Select an existing customer or register a new one</small>
+                    </div>
+                    
+                    <!-- Selected Customer Info (dynamic) -->
+                    <div class="col-12" id="selectedCustomerInfo" style="display: none;">
+                        <div class="alert alert-info">
+                            <i class="fas fa-check-circle me-2"></i>
+                            <strong>Selected Customer:</strong> 
+                            <span id="selectedCustomerName"></span> | 
+                            <i class="fas fa-phone"></i> <span id="selectedCustomerPhone"></span> |
+                            <i class="fas fa-id-card"></i> <span id="selectedCustomerIdNumber"></span>
+                        </div>
+                    </div>
+                    
+                    <!-- Device Search -->
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">
+                            <i class="fas fa-qrcode me-1" style="color:#0284c7;"></i> 
+                            DEVICE (IMEI or SERIAL NUMBER) <span class="text-danger">*</span>
+                        </label>
+                        <div class="position-relative">
+                            <div class="input-group">
+                                <span class="input-group-text bg-light">
+                                    <i class="fas fa-search"></i>
+                                </span>
+                                <input type="text" class="form-control form-control-lg" 
+                                       id="unitSearch" 
+                                       placeholder="Enter IMEI (15 digits) or Serial Number..." 
+                                       autocomplete="off">
+                                <input type="hidden" name="product_unit" id="selectedUnitId" required>
+                                <button class="btn btn-outline-secondary" type="button" id="clearUnitBtn">
+                                    <i class="fas fa-times"></i> Clear
+                                </button>
+                            </div>
+                            <div id="unitSuggestions" class="suggestions-dropdown" style="display: none;"></div>
+                        </div>
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle"></i> 
+                            Search by IMEI (15 digits) or Serial Number
+                        </small>
+                    </div>
+                    
+                    <!-- Selected Device Card -->
+                    <div id="selectedUnitCard" class="col-12 selected-unit-card p-4" style="display: none;">
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            <h6 class="mb-0 fw-bold">
+                                <i class="fas fa-mobile-alt me-2" style="color:#0284c7;"></i>
+                                SELECTED DEVICE
+                            </h6>
+                            <span class="badge bg-success">Available for Credit</span>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-2">
+                                <strong><i class="fas fa-microchip me-1"></i> IMEI/Serial:</strong><br>
+                                <span id="selectedIdentifier" class="font-monospace"></span>
+                            </div>
+                            <div class="col-md-6 mb-2">
+                                <strong><i class="fas fa-mobile-alt me-1"></i> Device:</strong><br>
+                                <span id="selectedProductName"></span>
+                            </div>
+                            <div class="col-md-4 mb-2">
+                                <strong><i class="fas fa-tag me-1"></i> SKU:</strong><br>
+                                <span id="selectedSku"></span>
+                            </div>
+                            <div class="col-md-4 mb-2">
+                                <strong><i class="fas fa-tachometer-alt me-1"></i> Price:</strong><br>
+                                <span class="fw-bold fs-5" style="color:#0f5b87;">KSH <span id="selectedPrice"></span></span>
+                            </div>
+                            <div class="col-md-4 mb-2">
+                                <strong><i class="fas fa-chart-line me-1"></i> Status:</strong><br>
+                                <span class="badge bg-success" id="deviceStatus">Available</span>
+                            </div>
+                            <div class="col-12">
+                                <strong><i class="fas fa-info-circle me-1"></i> Details:</strong><br>
+                                <span id="productDetails" class="text-muted"></span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Ceiling Price -->
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">
+                            <i class="fas fa-money-bill-wave me-1" style="color:#0284c7;"></i> 
+                            CEILING PRICE (KSH) <span class="text-danger">*</span>
+                        </label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light fw-bold">KSH</span>
+                            <input type="number" name="ceiling_price" class="form-control form-control-lg" 
+                                   step="0.01" required id="priceInput" placeholder="0.00">
+                        </div>
+                        <small class="text-muted">Total amount to be financed</small>
+                    </div>
+                    
+                    <!-- Notes -->
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">
+                            <i class="fas fa-sticky-note me-1" style="color:#0284c7;"></i> 
+                            NOTES / REMARKS
+                        </label>
+                        <textarea name="notes" class="form-control" rows="2" 
+                                  placeholder="Additional notes about the transaction..."></textarea>
+                    </div>
+                    
+                    <!-- Agreement Checkbox -->
+                    <div class="col-12">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="agreementCheckbox" required>
+                            <label class="form-check-label" for="agreementCheckbox">
+                                I confirm that all information provided is accurate and the customer has agreed to the credit terms.
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Form Actions -->
+                <div class="d-flex justify-content-end gap-3 mt-5 pt-3 border-top">
+                    <a href="{% url 'credit:transaction_list' %}" class="btn btn-secondary btn-lg px-4">
+                        <i class="fas fa-times me-2"></i>CANCEL
+                    </a>
+                    <button type="submit" class="btn btn-warning-custom btn-lg px-5" id="submitBtn">
+                        <i class="fas fa-save me-2"></i>GENERATE ETR
+                    </button>
+                </div>
             </form>
         </div>
-        <div class="p-3 small text-center text-muted">Help centre</div>
-        <p> 📞 CALL 0722 558 544 HR</p>
-        <P> 📩 support@fieldmax.com</P>
-
-    </aside>
-
-    <!-- MAIN CONTENT -->
-    <div class="main-content">
-        <!-- Top Header -->
-        <div class="top-header-bar">
-            <div class="d-flex align-items-center gap-3">
-                <button class="menu-toggle" id="mobileMenuToggle"><i class="fas fa-bars"></i></button>
-                <div class="page-title">
-                    <h4><i class="fas fa-chart-line text-primary me-2"></i>ETR GENERATION DASHBOARD</h4>
-                    <p><span id="currentDateHeader"></span> • <span id="currentTimeHeader"></span></p>
-                </div>
-            </div>
-            <div class="user-badge">
-                <div class="user-info-card">
-                    <div class="avatar-sm">{{ request.user.first_name|default:request.user.username|first|upper }}</div>
-                    <div>
-                        <div class="fw-semibold">{{ request.user.get_full_name|default:request.user.username }}</div>
-                        <div class="small fw-bold" style="color:#0284c7;">Credit Officer</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- STATS CARDS (Always visible) -->
-        <div class="stats-grid">
-            <div class="stat-card d-flex align-items-center gap-3">
-                <div class="bg-info bg-opacity-10 p-3 rounded-3"><i class="fas fa-mobile-alt fs-2 text-info"></i></div>
-                <div><h3 class="fw-bold mb-0">{{ total_available_units|default:"0" }}</h3><p class="mb-0 text-secondary">MY PRODUCTS</p><small>Assigned items</small></div>
-            </div>
-            <div class="stat-card d-flex align-items-center gap-3">
-                <div class="bg-primary bg-opacity-10 p-3 rounded-3"><i class="fas fa-shopping-cart fs-2 text-primary"></i></div>
-                <div><h3 class="fw-bold mb-0">{{ daily_sales|default:"0" }}</h3><p class="mb-0 text-secondary">TODAY SALES</p><small>Today's volume</small></div>
-            </div>
-            <div class="stat-card d-flex align-items-center gap-3">
-                <div class="bg-light-blue bg-opacity-10 p-3 rounded-3"><i class="fas fa-calendar-alt fs-2" style="color:#0f67b3;"></i></div>
-                <div><h3 class="fw-bold mb-0">{{ monthly_sales|default:"0" }}</h3><p class="mb-0 text-secondary">MONTHLY SALES</p><small>Last 30 days</small></div>
-            </div>
-            <div class="stat-card d-flex align-items-center gap-3">
-                <div class="bg-cyan-100 p-3 rounded-3"><i class="fas fa-users fs-2" style="color:#0891b2;"></i></div>
-                <div><h3 class="fw-bold mb-0">{{ prospects_count|default:"0" }}</h3><p class="mb-0 text-secondary">MY PROSPECTS</p><small>Eligible customers</small></div>
-            </div>
-        </div>
-
-        <!-- Tab Buttons -->
-        <div class="tab-buttons">
-            <button class="tab-btn active" id="tabFormBtn" onclick="showFormTab()">
-                <i class="fas fa-plus-circle"></i> Generate New ETR
-            </button>
-            <button class="tab-btn" id="tabProspectsBtn" onclick="showProspectsTab()">
-                <i class="fas fa-users"></i> My Prospects (<span id="prospectsCount">{{ prospects|length }}</span>)
-            </button>
-        </div>
-
-        <!-- TAB 1: Generate ETR Form -->
-        <div id="formTab" class="tab-content active">
-            <div class="form-card">
-                <div class="form-card-header">
-                    <h5 class="mb-0 fw-bold"><i class="fas fa-plus-circle me-2" style="color:#0284c7;"></i>GENERATE NEW ETR</h5>
-                </div>
-
-                {% if customers_with_active_count > 0 %}
-                <div class="alert alert-info alert-dismissible fade show m-3" role="alert">
-                    <i class="fas fa-info-circle me-2"></i>
-                    <strong>Note:</strong> {{ customers_with_active_count }} customer(s) have active credit devices and are not shown in the list. 
-                    A customer can only have ONE active credit device at a time.
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                </div>
-                {% endif %}
-
-                <div class="card-body p-4">
-                    <div id="messageContainer"></div>
-                    <form method="post" id="transactionForm" action="{% url 'credit:transaction_create' %}">
-                        {% csrf_token %}
-                        <div class="row g-3">
-                            <div class="col-md-6">
-                                <label class="form-label fw-semibold"><i class="fas fa-building me-1"></i> FINANCING COMPANY <span class="text-danger">*</span></label>
-                                <select name="company" class="form-select" required id="companySelect">
-                                    <option value="">-- Select Company --</option>
-                                    {% for company in companies %}
-                                    <option value="{{ company.id }}">{{ company.name }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label fw-semibold"><i class="fas fa-user me-1"></i> CUSTOMER <span class="text-danger">*</span></label>
-                                <div class="input-group">
-                                    <select name="customer" class="form-select" required id="customerSelect">
-                                        <option value="">-- Select Existing Customer --</option>
-                                        {% for customer in customers %}
-                                        <option value="{{ customer.id }}">{{ customer.full_name }} - {{ customer.phone_number }}</option>
-                                        {% endfor %}
-                                    </select>
-                                    <button type="button" class="btn" style="background:#e6f4ff; border:1px solid #7ab3c8; color:#0369a1;" data-bs-toggle="modal" data-bs-target="#addCustomerModal">
-                                        <i class="fas fa-user-plus"></i> New
-                                    </button>
-                                </div>
-                            </div>
-                            <div class="col-12 position-relative">
-                                <label class="form-label fw-semibold"><i class="fas fa-qrcode me-1"></i>IMEI or SERIAL <span class="text-danger">*</span></label>
-                                <div class="input-group">
-                                    <input type="text" class="form-control" id="unitSearch" placeholder="Enter IMEI (15 digits) or Serial Number..." autocomplete="off">
-                                    <input type="hidden" name="product_unit" id="selectedUnitId" required>
-                                    <button class="btn btn-outline-secondary" type="button" id="clearUnitBtn"><i class="fas fa-times"></i></button>
-                                </div>
-                                <div id="unitSuggestions" class="list-group mt-2" style="display: none;"></div>
-                                <small class="text-muted">Search by IMEI or serial to Generate ETR</small>
-                            </div>
-                            <div id="selectedUnitCard" class="selected-unit-card p-3" style="display: none;">
-                                <div class="row">
-                                    <div class="col-md-6"><strong><i class="fas fa-mobile-alt me-1"></i> Device:</strong> <span id="selectedProductName"></span></div>
-                                    <div class="col-md-6"><strong><i class="fas fa-qrcode me-1"></i> IMEI/Serial:</strong> <span id="selectedIdentifier"></span></div>
-                                    <div class="col-md-6 mt-2"><strong><i class="fas fa-tag me-1"></i> Price:</strong> KSH <span id="selectedPrice"></span></div>
-                                    <div class="col-md-6 mt-2"><strong><i class="fas fa-box me-1"></i> SKU:</strong> <span id="selectedSku"></span></div>
-                                    <div class="col-12 mt-2"><strong><i class="fas fa-info-circle"></i> Details:</strong> <span id="productDetails"></span></div>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label fw-semibold"><i class="fas fa-money-bill-wave me-1"></i> CEILING PRICE (KSH) <span class="text-danger">*</span></label>
-                                <div class="input-group"><span class="input-group-text bg-light">KSH</span><input type="number" name="ceiling_price" class="form-control" step="0.01" required id="priceInput" placeholder="0.00"></div>
-                                <small class="text-muted">Total Ceiling Price</small>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label fw-semibold"><i class="fas fa-sticky-note"></i> NOTES</label>
-                                <textarea name="notes" class="form-control" rows="2" placeholder="Additional notes..."></textarea>
-                            </div>
-                        </div>
-                        <div class="d-flex justify-content-end gap-2 mt-4 pt-2">
-                            <a href="{% url 'credit:transaction_list' %}" class="btn btn-secondary"><i class="fas fa-times me-1"></i>CANCEL</a>
-                            <button type="submit" class="btn btn-warning-custom px-4"><i class="fas fa-save me-1"></i>SAVE</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
-
-        <!-- TAB 2: My Prospects List -->
-        <div id="prospectsTab" class="tab-content">
-            <div class="search-bar">
-                <form method="GET" id="searchForm" class="row g-3">
-                    <div class="col-md-10">
-                        <div class="input-group">
-                            <span class="input-group-text"><i class="fas fa-search"></i></span>
-                            <input type="text" name="search" id="searchInput" class="form-control" 
-                                   placeholder="Search by name, phone, or ID number..." 
-                                   value="{{ search_query|default:'' }}">
-                        </div>
-                    </div>
-                    <div class="col-md-2">
-                        <button type="submit" class="btn btn-primary w-100">
-                            <i class="fas fa-search me-2"></i>Search
-                        </button>
-                    </div>
-                </form>
-            </div>
-
-            <div class="prospects-table-container">
-                <table class="prospects-table table">
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th><i class="fas fa-user"></i> Full Name</th>
-                            <th><i class="fas fa-phone"></i> Phone</th>
-                            <th><i class="fas fa-id-card"></i> ID Number</th>
-                            <th><i class="fas fa-calendar"></i> Registered</th>
-                            <th><i class="fas fa-cog"></i> Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for prospect in prospects %}
-                        <tr>
-                            <td>{{ forloop.counter }}</td>
-                            <td><strong>{{ prospect.full_name }}</strong><br>
-                                <span class="badge-eligible"><i class="fas fa-check-circle"></i> Eligible</span>
-                             </td>
-                            <td>{{ prospect.phone_number }}</td>
-                            <td>{{ prospect.id_number }}</td>
-                            <td>{{ prospect.created_at|date:"d M Y" }}</td>
-                            <td>
-                                <div class="action-buttons">
-                                    <button class="btn btn-sm btn-outline-primary action-btn" 
-                                            onclick="selectCustomerForTransaction({{ prospect.id }}, '{{ prospect.full_name|escapejs }}', '{{ prospect.phone_number|escapejs }}')"
-                                            title="Select for ETR">
-                                        <i class="fas fa-credit-card"></i> Select
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-secondary action-btn" 
-                                            onclick="copyPhone('{{ prospect.phone_number }}')"
-                                            title="Copy Phone">
-                                        <i class="fas fa-copy"></i>
-                                    </button>
-                                </div>
-                             </td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="6" class="text-center py-5">
-                                <i class="fas fa-users fa-3x text-muted mb-3"></i>
-                                <h5>No prospects found</h5>
-                                <p class="text-muted">
-                                    {% if search_query %}
-                                        Try a different search term
-                                    {% else %}
-                                        You don't have any eligible customers yet.<br>
-                                        Add customers by creating new transactions.
-                                    {% endif %}
-                                </p>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <footer class="text-center mt-4 text-muted small">© FieldMax  Device financing • Secure Loan processing</footer>
     </div>
 </div>
 
@@ -681,27 +267,63 @@
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header" style="background:#eef6fc;">
-                <h5 class="modal-title"><i class="fas fa-user-plus me-2" style="color:#0284c7;"></i>Register New Customer</h5>
+                <h5 class="modal-title">
+                    <i class="fas fa-user-plus me-2" style="color:#0284c7;"></i>
+                    Register New Customer
+                </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form method="post" action="{% url 'credit:customer_add' %}" id="addCustomerForm" enctype="multipart/form-data">
                 {% csrf_token %}
                 <div class="modal-body">
-                    <div class="row mb-3"><div class="col-12"><h6 class="fw-bold border-bottom pb-2" style="color:#0f5b87;"><i class="fas fa-user-circle me-2"></i>Customer Information</h6></div></div>
-                    <div class="row">
-                        <div class="col-md-12 mb-3"><label class="form-label">Full Name <span class="text-danger">*</span></label><input type="text" name="full_name" class="form-control" required></div>
-                        <div class="col-md-6 mb-3"><label class="form-label">Phone Number <span class="text-danger">*</span></label><input type="tel" name="phone_number" class="form-control" required></div>
-                        <div class="col-md-6 mb-3"><label class="form-label">ID Number <span class="text-danger">*</span></label><input type="text" name="id_number" class="form-control" required></div>
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <h6 class="fw-bold border-bottom pb-2" style="color:#0f5b87;">
+                                <i class="fas fa-user-circle me-2"></i>Customer Information
+                            </h6>
+                        </div>
                     </div>
-                    <div class="row mt-2"><div class="col-12"><h6 class="fw-bold border-bottom pb-2" style="color:#0f5b87;"><i class="fas fa-handshake me-2"></i>Next of Kin</h6></div></div>
                     <div class="row">
-                        <div class="col-md-6 mb-3"><label class="form-label">NOK Full Name <span class="text-danger">*</span></label><input type="text" name="nok_name" class="form-control" required></div>
-                        <div class="col-md-6 mb-3"><label class="form-label">NOK Phone <span class="text-danger">*</span></label><input type="tel" name="nok_phone" class="form-control" required></div>
-                        <div class="col-md-6 mb-3"><label class="form-label">Relationship (Optional)</label><input type="text" name="nok_relationship" class="form-control"></div>
+                        <div class="col-md-12 mb-3">
+                            <label class="form-label">Full Name <span class="text-danger">*</span></label>
+                            <input type="text" name="full_name" class="form-control" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Phone Number <span class="text-danger">*</span></label>
+                            <input type="tel" name="phone_number" class="form-control" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">ID Number <span class="text-danger">*</span></label>
+                            <input type="text" name="id_number" class="form-control" required>
+                        </div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-12">
+                            <h6 class="fw-bold border-bottom pb-2" style="color:#0f5b87;">
+                                <i class="fas fa-handshake me-2"></i>Next of Kin
+                            </h6>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">NOK Full Name <span class="text-danger">*</span></label>
+                            <input type="text" name="nok_name" class="form-control" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">NOK Phone <span class="text-danger">*</span></label>
+                            <input type="tel" name="nok_phone" class="form-control" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Relationship</label>
+                            <input type="text" name="nok_relationship" class="form-control" placeholder="e.g., Spouse, Parent, Sibling">
+                        </div>
                     </div>
                     <input type="hidden" name="next" value="{% url 'credit:transaction_create' %}">
                 </div>
-                <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn" style="background:#0284c7; color:white;">Register Customer</button></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn" style="background:#0284c7; color:white;">Register Customer</button>
+                </div>
             </form>
         </div>
     </div>
@@ -709,95 +331,26 @@
 
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<!-- ========== UNITS DATA - MUST BE BEFORE THE MAIN JAVASCRIPT ========== -->
 <script id="unitsData" type="application/json">{{ units_json|safe }}</script>
+
 <script>
-    // ============================================
-    // TAB SWITCHING
-    // ============================================
-    function showFormTab() {
-        document.getElementById('formTab').classList.add('active');
-        document.getElementById('prospectsTab').classList.remove('active');
-        document.getElementById('tabFormBtn').classList.add('active');
-        document.getElementById('tabProspectsBtn').classList.remove('active');
-        localStorage.setItem('activeTab', 'form');
-    }
-
-    function showProspectsTab() {
-        document.getElementById('prospectsTab').classList.add('active');
-        document.getElementById('formTab').classList.remove('active');
-        document.getElementById('tabProspectsBtn').classList.add('active');
-        document.getElementById('tabFormBtn').classList.remove('active');
-        localStorage.setItem('activeTab', 'prospects');
-    }
-
-    function switchTab(tabName) {
-        if (tabName === 'prospects') {
-            showProspectsTab();
-        } else {
-            showFormTab();
-        }
-    }
-
-    // Load last active tab from localStorage
-    const savedTab = localStorage.getItem('activeTab');
-    if (savedTab === 'prospects') {
-        showProspectsTab();
-    } else {
-        showFormTab();
-    }
-
-    // ============================================
-    // SELECT CUSTOMER FROM PROSPECTS AND SWITCH TO FORM TAB
-    // ============================================
-    function selectCustomerForTransaction(customerId, customerName, customerPhone) {
-        // Switch to form tab
-        showFormTab();
-        
-        // Set the customer in dropdown
-        const customerSelect = document.getElementById('customerSelect');
-        if (customerSelect) {
-            for (let i = 0; i < customerSelect.options.length; i++) {
-                if (customerSelect.options[i].value == customerId) {
-                    customerSelect.selectedIndex = i;
-                    break;
-                }
-            }
-        }
-        
-        // Show success message
-        showMessage(`Customer "${customerName}" selected. Complete the form to generate ETR.`, 'success');
-        
-        // Scroll to form
-        document.querySelector('.form-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-
-    function copyPhone(phone) {
-        navigator.clipboard.writeText(phone).then(function() {
-            showMessage(`Phone number copied: ${phone}`, 'success');
-        });
-    }
-
-    // ============================================
-    // DATE/TIME UPDATE
-    // ============================================
-    function updateDateTimeUI() {
-        const now = new Date();
-        const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-        const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        if(document.getElementById('currentDateHeader')) document.getElementById('currentDateHeader').innerText = dateStr;
-        if(document.getElementById('currentTimeHeader')) document.getElementById('currentTimeHeader').innerText = timeStr;
-    }
-    updateDateTimeUI();
-    setInterval(updateDateTimeUI, 1000);
-
-    // ============================================
-    // UNIT SEARCH FUNCTIONALITY    // ============================================
+    // Load units data - now unitsData exists because it's above
     let units = [];
     try {
         const unitsElem = document.getElementById('unitsData');
-        if(unitsElem && unitsElem.textContent) units = JSON.parse(unitsElem.textContent) || [];
-    } catch(e) { console.warn(e); }
+        if(unitsElem && unitsElem.textContent) {
+            units = JSON.parse(unitsElem.textContent) || [];
+            console.log('✅ Loaded ' + units.length + ' units for search');
+        } else {
+            console.log('❌ unitsData element not found or empty');
+        }
+    } catch(e) { 
+        console.warn('Error loading units data:', e); 
+    }
 
+    // DOM Elements
     const searchInput = document.getElementById('unitSearch');
     const suggestionsDiv = document.getElementById('unitSuggestions');
     const selectedUnitId = document.getElementById('selectedUnitId');
@@ -805,7 +358,10 @@
     const clearBtn = document.getElementById('clearUnitBtn');
     const priceInput = document.getElementById('priceInput');
     const transactionForm = document.getElementById('transactionForm');
+    const customerSelect = document.getElementById('customerSelect');
+    const selectedCustomerInfo = document.getElementById('selectedCustomerInfo');
 
+    // Message display
     function showMessage(msg, type) {
         const container = document.getElementById('messageContainer');
         if(!container) return;
@@ -817,30 +373,71 @@
         setTimeout(() => alertDiv.remove(), 5000);
     }
 
+    // Customer selection handler
+    if(customerSelect) {
+        customerSelect.addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            if(this.value) {
+                const customerName = selectedOption.text.split(' - ')[0];
+                const customerPhone = selectedOption.dataset.phone || '';
+                const customerIdNumber = selectedOption.dataset.idnumber || '';
+                
+                document.getElementById('selectedCustomerName').innerText = customerName;
+                document.getElementById('selectedCustomerPhone').innerText = customerPhone;
+                document.getElementById('selectedCustomerIdNumber').innerText = customerIdNumber;
+                selectedCustomerInfo.style.display = 'block';
+            } else {
+                selectedCustomerInfo.style.display = 'none';
+            }
+        });
+    }
+
+    // Unit search
     if(searchInput) {
         searchInput.addEventListener('input', function() {
             const q = this.value.trim().toLowerCase();
-            if(q.length < 2) { suggestionsDiv.style.display = 'none'; return; }
+            if(q.length < 2) { 
+                suggestionsDiv.style.display = 'none'; 
+                return; 
+            }
+            
+            console.log('Searching for:', q, 'Available units:', units.length);
+            
             const matches = units.filter(u => 
                 (u.imei_number || '').toLowerCase().includes(q) || 
                 (u.serial_number || '').toLowerCase().includes(q)
             ).slice(0, 12);
+            
+            console.log('Found matches:', matches.length);
+            
             if(matches.length) {
                 suggestionsDiv.innerHTML = matches.map(u => `
-                    <a href="#" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" onclick="selectUnit(${u.id}, '${(u.identifier || u.imei_number || u.serial_number).replace(/'/g, "\\'")}', '${(u.product_name || '').replace(/'/g, "\\'")}', ${u.selling_price || 0}, '${(u.sku_code || '').replace(/'/g, "\\'")}', '${(u.brand || '').replace(/'/g, "\\'")}', '${(u.model || '').replace(/'/g, "\\'")}'); return false;">
-                        <div><strong><i class="fas fa-microchip"></i> ${u.imei_number || u.serial_number}</strong><br><small>${u.product_name || 'Device'} | SKU: ${u.sku_code || 'N/A'}</small></div>
-                        <span class="fw-bold" style="color:#0f5b87;">KSH ${(u.selling_price || 0).toFixed(2)}</span>
-                    </a>
+                    <div class="list-group-item unit-suggestion-item p-3" 
+                         onclick="selectUnit(${u.id}, '${(u.identifier || u.imei_number || u.serial_number).replace(/'/g, "\\'")}', '${(u.product_name || '').replace(/'/g, "\\'")}', ${u.selling_price || 0}, '${(u.sku_code || '').replace(/'/g, "\\'")}', '${(u.brand || '').replace(/'/g, "\\'")}', '${(u.model || '').replace(/'/g, "\\'")}')">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong><i class="fas fa-microchip"></i> ${u.imei_number || u.serial_number}</strong>
+                                <br><small class="text-muted">${u.product_name || 'Device'} | SKU: ${u.sku_code || 'N/A'}</small>
+                            </div>
+                            <span class="fw-bold" style="color:#0f5b87;">KSH ${(u.selling_price || 0).toFixed(2)}</span>
+                        </div>
+                    </div>
                 `).join('');
                 suggestionsDiv.style.display = 'block';
             } else {
-                suggestionsDiv.innerHTML = '<div class="list-group-item text-muted"><i class="fas fa-search"></i> No matching units found</div>';
+                suggestionsDiv.innerHTML = '<div class="list-group-item text-muted text-center py-3"><i class="fas fa-search"></i> No matching units found</div>';
                 suggestionsDiv.style.display = 'block';
             }
         });
-        document.addEventListener('click', (e) => { if(!searchInput.contains(e.target) && !suggestionsDiv.contains(e.target)) suggestionsDiv.style.display = 'none'; });
+        
+        document.addEventListener('click', (e) => { 
+            if(!searchInput.contains(e.target) && !suggestionsDiv.contains(e.target)) {
+                suggestionsDiv.style.display = 'none'; 
+            }
+        });
     }
 
+    // Select unit function
     window.selectUnit = function(id, identifier, productName, price, sku, brand, model) {
         selectedUnitId.value = id;
         searchInput.value = identifier;
@@ -853,9 +450,10 @@
         if(priceInput) priceInput.value = price;
         selectedCard.style.display = 'block';
         suggestionsDiv.style.display = 'none';
-        showMessage(`Unit selected: ${identifier}`, 'success');
+        showMessage(`Device selected: ${identifier}`, 'success');
     };
 
+    // Clear selection
     if(clearBtn) {
         clearBtn.addEventListener('click', () => {
             selectedUnitId.value = '';
@@ -866,19 +464,20 @@
         });
     }
 
+    // Form validation
     if(transactionForm) {
         transactionForm.addEventListener('submit', function(e) {
             if(!selectedUnitId.value) {
                 e.preventDefault();
-                showMessage('Please search and select a valid unit by IMEI/Serial number', 'danger');
+                showMessage('Please search and select a valid device by IMEI/Serial number', 'danger');
                 return;
             }
             if(!document.getElementById('companySelect').value) {
                 e.preventDefault();
-                showMessage('Please select a credit company', 'danger');
+                showMessage('Please select a financing company', 'danger');
                 return;
             }
-            if(!document.getElementById('customerSelect').value) {
+            if(!customerSelect.value) {
                 e.preventDefault();
                 showMessage('Please select a customer', 'danger');
                 return;
@@ -889,21 +488,27 @@
                 showMessage('Please enter a valid ceiling price greater than zero', 'danger');
                 return;
             }
+            if(!document.getElementById('agreementCheckbox').checked) {
+                e.preventDefault();
+                showMessage('Please confirm the agreement terms', 'danger');
+                return;
+            }
+            
+            // Show loading
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="loading-spinner"></span> Processing...';
         });
     }
 
-    // Mobile sidebar toggle
-    const toggleBtn = document.getElementById('mobileMenuToggle');
-    const sidebar = document.getElementById('mainSidebar');
-    if(toggleBtn && sidebar) {
-        toggleBtn.addEventListener('click', (e) => { e.stopPropagation(); sidebar.classList.toggle('open-mobile'); });
-        document.addEventListener('click', (event) => {
-            if(window.innerWidth <= 768 && sidebar.classList.contains('open-mobile') && !sidebar.contains(event.target) && !toggleBtn.contains(event.target)) {
-                sidebar.classList.remove('open-mobile');
-            }
-        });
-    }
-    setTimeout(() => { if(searchInput) searchInput.focus(); }, 150);
+    // Initialize - focus search
+    setTimeout(() => { 
+        if(searchInput) searchInput.focus(); 
+        console.log('Units available for search:', units.length);
+        if(units.length === 0) {
+            console.warn('⚠️ No units loaded! Check if units_json is empty in your view.');
+        }
+    }, 150);
 </script>
-</body>
-</html>
+
+{% endblock %}

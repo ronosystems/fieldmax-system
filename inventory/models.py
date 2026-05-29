@@ -1320,9 +1320,6 @@ class StockAlert(models.Model):
         logger.info(f"Alert reactivated for {self.product.sku_code}")
 
 
-
-
-
 # ====================================
 # PRODUCT REVIEW MODEL 📦
 # ====================================
@@ -1572,14 +1569,67 @@ class ReturnRequest(models.Model):
         return "Return #{} - {}".format(self.return_id, self.product.sku_code)
 
 
-
-
-
+# ====================================
+# PRODUCT ASSIGNMENT MODEL 📦
+# ====================================
+class ProductAssignment(models.Model):
+    """Track product assignments to credit officers"""
+    product_unit = models.ForeignKey(
+        'ProductUnit', 
+        on_delete=models.CASCADE,
+        related_name='assignments'
+    )
+    assigned_to = models.ForeignKey(
+        User, 
+        on_delete=models.CASCADE,
+        related_name='assigned_products'
+    )
+    assigned_by = models.ForeignKey(
+        User, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        related_name='assigned_by_me'
+    )
+    assigned_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    
+    class Meta:
+        unique_together = ['product_unit', 'assigned_to', 'is_active']
+        ordering = ['-assigned_at']
+        indexes = [
+            models.Index(fields=['assigned_to', 'is_active']),
+            models.Index(fields=['product_unit', 'is_active']),
+            models.Index(fields=['expires_at']),
+        ]
+        verbose_name = 'Product Assignment'
+        verbose_name_plural = 'Product Assignments'
+    
+    def __str__(self):
+        return f"{self.product_unit.unique_identifier} → {self.assigned_to.username}"
+    
+    @property
+    def is_expired(self):
+        """Check if assignment has expired"""
+        if self.expires_at:
+            return timezone.now() > self.expires_at
+        return False
+    
+    @property
+    def is_valid(self):
+        """Check if assignment is active and not expired"""
+        return self.is_active and not self.is_expired
+    
+    def expire(self):
+        """Expire this assignment"""
+        self.is_active = False
+        self.save()
+        logger.info(f"Assignment expired: {self}")
 
 
 
 # ====================================
-# SIGNALS - Automatic Quantity Updates
+# SIGNALS - Automatic  Updates
 # ====================================
 
 @receiver([post_save, post_delete], sender=ProductUnit)
@@ -1782,6 +1832,24 @@ def create_finance_transaction_for_stock_entry(sender, instance, created, **kwar
     except Exception as e:
         logger.error(f"Failed to create finance transaction for stock entry {instance.id}: {str(e)}")
         print(f"❌ Error: {str(e)}")
+
+
+@receiver(pre_save, sender=ProductUnit)
+def expire_assignments_on_sale(sender, instance, **kwargs):
+    """Automatically expire assignments when a unit is sold"""
+    if instance.pk:
+        old_instance = ProductUnit.objects.get(pk=instance.pk)
+        if old_instance.status != 'sold' and instance.status == 'sold':
+            # Unit is being marked as sold - expire all active assignments
+            ProductAssignment.objects.filter(
+                product_unit=instance,
+                is_active=True
+            ).update(is_active=False)
+            logger.info(f"Expired assignments for sold unit: {instance.unique_identifier}")
+
+
+
+
 
 
 
