@@ -421,7 +421,7 @@
     
     const csrftoken = getCookie('csrftoken');
     
-    // Search for job
+    // Search for job - USING CORRECT URL
     async function searchJob() {
         const jobId = document.getElementById('jobIdInput').value.trim();
         
@@ -437,7 +437,13 @@
         hideAlert();
         
         try {
-            const response = await fetch(`/workshop/search-job-for-pickup/?job_id=${jobId}`);
+            // CORRECT URL: /workshop/pickup/search/?job_id=xxx
+            const response = await fetch(`/workshop/pickup/search/?job_id=${jobId}`);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
             const data = await response.json();
             
             document.getElementById('searchLoading').style.display = 'none';
@@ -451,7 +457,7 @@
             }
         } catch (error) {
             document.getElementById('searchLoading').style.display = 'none';
-            showAlert('An error occurred. Please try again.', 'error');
+            showAlert('Job not found or an error occurred. Please try again.', 'error');
             console.error('Error:', error);
         }
     }
@@ -460,12 +466,12 @@
     function displayJobDetails(job) {
         document.getElementById('jobId').textContent = `#${job.id}`;
         document.getElementById('customerName').textContent = job.customer_name;
-        document.getElementById('customerPhone').textContent = job.customer_phone;
+        document.getElementById('customerPhone').textContent = job.customer_phone || 'Not provided';
         document.getElementById('deviceType').textContent = job.device_type;
-        document.getElementById('deviceModel').textContent = job.device_model;
+        document.getElementById('deviceModel').textContent = job.device_model || 'N/A';
         document.getElementById('issueDescription').textContent = job.issue_description.substring(0, 100) + (job.issue_description.length > 100 ? '...' : '');
         document.getElementById('shopName').textContent = job.shop_name;
-        document.getElementById('technicianName').textContent = job.technician_name;
+        document.getElementById('technicianName').textContent = job.technician_name || 'Not assigned';
         document.getElementById('completedDate').textContent = job.completed_at;
         document.getElementById('totalAmount').textContent = `KSH ${parseFloat(job.total_amount).toFixed(2)}`;
         document.getElementById('amountPaid').textContent = `KSH ${parseFloat(job.amount_paid).toFixed(2)}`;
@@ -479,7 +485,7 @@
             balanceElement.style.color = '#ef4444';
             balanceRow.style.display = 'flex';
         } else {
-            balanceElement.textContent = `KSH 0.00 - Fully Paid`;
+            balanceElement.textContent = 'KSH 0.00 - Fully Paid';
             balanceElement.style.color = '#10b981';
             balanceRow.style.display = 'flex';
         }
@@ -487,7 +493,7 @@
         document.getElementById('warranty').innerHTML = `<span class="warranty-badge"><i class="fas fa-calendar-alt"></i> ${job.warranty_days} days warranty</span>`;
     }
     
-    // Process pickup
+    // Process pickup - USING CORRECT URL
     async function processPickup() {
         if (!currentJob) return;
         
@@ -502,7 +508,8 @@
         handoverBtn.disabled = true;
         
         try {
-            const response = await fetch(`/workshop/process-pickup/${currentJob.id}/`, {
+            // CORRECT URL: /workshop/pickup/process/xxx/
+            const response = await fetch(`/workshop/pickup/process/${currentJob.id}/`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

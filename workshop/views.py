@@ -142,16 +142,39 @@ def job_create(request):
             device_model = request.POST.get('device_model')
             issue_description = request.POST.get('issue_description')
             shop_id = request.POST.get('shop')
+            technician_id = request.POST.get('technician_id')  # ADD THIS LINE
             material_cost = Decimal(request.POST.get('material_cost', 0))
             labor_cost = Decimal(request.POST.get('labor_cost', 0))
             amount_paid = Decimal(request.POST.get('amount_paid', 0))
             warranty_days = request.POST.get('warranty_days', 30)
+            status = request.POST.get('status', 'pending')  # ADD THIS LINE
             notes = request.POST.get('notes', '')
             
+            # Validate required fields
+            if not all([customer_name, device_type, issue_description, shop_id]):
+                messages.error(request, 'Please fill in all required fields.')
+                shops = ShopBranch.objects.filter(is_active=True)
+                return render(request, 'workshop/job_form.html', {'shops': shops, 'is_edit': False})
+            
+            # Get shop
             shop = ShopBranch.objects.get(id=shop_id)
+            
+            # Get technician name if selected
+            technician_name = None
+            if technician_id:
+                try:
+                    from django.contrib.auth import get_user_model
+                    User = get_user_model()
+                    technician = User.objects.get(id=technician_id)
+                    technician_name = technician.get_full_name() or technician.username
+                except User.DoesNotExist:
+                    pass
+            
+            # Calculate totals
             total_amount = material_cost + labor_cost
             remaining_balance = total_amount - amount_paid
             
+            # Create job with all fields
             job = RepairJob.objects.create(
                 customer_name=customer_name,
                 customer_phone=customer_phone,
@@ -159,25 +182,30 @@ def job_create(request):
                 device_model=device_model,
                 issue_description=issue_description,
                 shop=shop,
+                technician_name=technician_name,
                 material_cost=material_cost,
                 labor_cost=labor_cost,
                 total_amount=total_amount,
                 amount_paid=amount_paid,
                 remaining_balance=remaining_balance,
                 warranty_days=warranty_days,
+                status=status,
                 notes=notes
             )
             
             messages.success(request, f'Job #{job.id} created successfully!')
             return redirect('workshop:job_detail', job_id=job.id)
             
+        except ShopBranch.DoesNotExist:
+            messages.error(request, 'Selected shop does not exist.')
         except Exception as e:
-            messages.error(request, f'Error: {str(e)}')
+            messages.error(request, f'Error creating job: {str(e)}')
+            import traceback
+            traceback.print_exc()
     
+    # GET request - show form
     shops = ShopBranch.objects.filter(is_active=True)
     return render(request, 'workshop/job_form.html', {'shops': shops, 'is_edit': False})
-
-
 
 
 
@@ -203,7 +231,6 @@ def job_detail(request, job_id):
 
 
 
-
 @login_required
 def job_edit(request, job_id):
     """Edit repair job"""
@@ -212,35 +239,69 @@ def job_edit(request, job_id):
     
     if request.method == 'POST':
         try:
-            job.customer_name = request.POST.get('customer_name')
-            job.customer_phone = request.POST.get('customer_phone')
-            job.device_type = request.POST.get('device_type')
-            job.device_model = request.POST.get('device_model')
-            job.issue_description = request.POST.get('issue_description')
-            job.material_cost = Decimal(request.POST.get('material_cost', 0))
-            job.labor_cost = Decimal(request.POST.get('labor_cost', 0))
-            job.amount_paid = Decimal(request.POST.get('amount_paid', 0))
-            job.warranty_days = request.POST.get('warranty_days', 30)
-            job.notes = request.POST.get('notes', '')
+            # Get form data
+            customer_name = request.POST.get('customer_name')
+            customer_phone = request.POST.get('customer_phone')
+            device_type = request.POST.get('device_type')
+            device_model = request.POST.get('device_model')
+            issue_description = request.POST.get('issue_description')
+            shop_id = request.POST.get('shop')
+            technician_id = request.POST.get('technician_id')
+            material_cost = Decimal(request.POST.get('material_cost', 0))
+            labor_cost = Decimal(request.POST.get('labor_cost', 0))
+            amount_paid = Decimal(request.POST.get('amount_paid', 0))
+            warranty_days = request.POST.get('warranty_days', 30)
+            status = request.POST.get('status', 'pending')
+            notes = request.POST.get('notes', '')
             
+            # Update job fields
+            job.customer_name = customer_name
+            job.customer_phone = customer_phone
+            job.device_type = device_type
+            job.device_model = device_model
+            job.issue_description = issue_description
+            job.material_cost = material_cost
+            job.labor_cost = labor_cost
+            job.amount_paid = amount_paid
+            job.warranty_days = warranty_days
+            job.status = status
+            job.notes = notes
+            
+            # Recalculate totals
             job.total_amount = job.material_cost + job.labor_cost
             job.remaining_balance = job.total_amount - job.amount_paid
             
-            shop_id = request.POST.get('shop')
+            # Update shop if changed
             if shop_id:
                 job.shop = ShopBranch.objects.get(id=shop_id)
             
+            # Update technician if changed
+            if technician_id:
+                try:
+                    from django.contrib.auth import get_user_model
+                    User = get_user_model()
+                    technician = User.objects.get(id=technician_id)
+                    job.technician_name = technician.get_full_name() or technician.username
+                except User.DoesNotExist:
+                    pass
+            else:
+                job.technician_name = None
+            
             job.save()
-            messages.success(request, f'Job #{job.id} updated!')
+            
+            messages.success(request, f'Job #{job.id} updated successfully!')
             return redirect('workshop:job_detail', job_id=job.id)
             
         except Exception as e:
-            messages.error(request, f'Error: {str(e)}')
+            messages.error(request, f'Error updating job: {str(e)}')
     
     shops = ShopBranch.objects.filter(is_active=True)
-    return render(request, 'workshop/job_form.html', {'job': job, 'shops': shops, 'is_edit': True})
-
-
+    context = {
+        'job': job,
+        'shops': shops,
+        'is_edit': True,
+    }
+    return render(request, 'workshop/job_form.html', context)
 
 
 
