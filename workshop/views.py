@@ -326,7 +326,6 @@ def job_delete(request, job_id):
 
 
 
-
 @login_required
 def add_payment(request, job_id):
     """Add payment to job"""
@@ -334,22 +333,38 @@ def add_payment(request, job_id):
     job = get_object_or_404(RepairJob, id=job_id)
     
     if request.method == 'POST':
-        amount = Decimal(request.POST.get('amount', 0))
-        
-        if amount <= 0:
-            messages.error(request, 'Invalid amount')
-        elif amount > job.remaining_balance:
-            messages.error(request, f'Amount exceeds balance of KSH {job.remaining_balance:.2f}')
-        else:
+        try:
+            amount = Decimal(request.POST.get('amount', 0))
+            payment_method = request.POST.get('payment_method', 'cash')
+            mpesa_code = request.POST.get('mpesa_code', '')
+            
+            if amount <= 0:
+                messages.error(request, 'Please enter a valid amount.')
+                return redirect('workshop:add_payment', job_id=job.id)
+            
+            if amount > job.remaining_balance:
+                messages.error(request, f'Amount cannot exceed remaining balance of KSH {job.remaining_balance:.2f}')
+                return redirect('workshop:add_payment', job_id=job.id)
+            
+            # Update job
             job.amount_paid += amount
             job.remaining_balance = job.total_amount - job.amount_paid
+            job.payment_method = payment_method
+            
+            if mpesa_code:
+                job.mpesa_transaction_code = mpesa_code
+            
             job.save()
-            messages.success(request, f'Payment of KSH {amount:.2f} added!')
-        
-        return redirect('workshop:job_detail', job_id=job.id)
+            
+            messages.success(request, f'Payment of KSH {amount:.2f} added successfully!')
+            return redirect('workshop:job_detail', job_id=job.id)
+            
+        except Exception as e:
+            messages.error(request, f'Error adding payment: {str(e)}')
+            return redirect('workshop:add_payment', job_id=job.id)
     
-    return render(request, 'workshop/add_payment.html', {'job': job})
-
+    context = {'job': job}
+    return render(request, 'workshop/add_payment.html', context)
 
 
 

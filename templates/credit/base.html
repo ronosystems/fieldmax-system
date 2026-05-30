@@ -2,966 +2,620 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FieldMax Credit - {% block title %}Credit Dashboard{% endblock %}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>{% block title %}FIELDMAX ETR - Device Financing{% endblock %}</title>
     
-    <!-- Bootstrap 5 CSS -->
+    <!-- Bootstrap 5 CSS + Icons + Fonts -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- DataTables -->
-    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap" rel="stylesheet">
     
-    {% load static %}
-    
-    <!-- Custom CSS - ONLY COLORS CHANGED to match staff template -->
     <style>
-        :root {
-            --primary-color: #f39c12;  /* Keep orange/gold for credit identity */
-            --success-color: #10b981;
-            --danger-color: #ef4444;
-            --warning-color: #f59e0b;
-            --info-color: #3b82f6;
-            --dark-color: #1f2937;
-            --light-bg: #f3f4f6;
-            --sidebar-bg: #142731;  /* Changed to dark teal like staff */
-            --sidebar-hover: #1e3a4a; /* Changed to match staff hover */
-            --navbar-bg: #000000;
-            --footer-bg: #084232;
-            --text-primary: #111827;
-            --text-secondary: #6b7280;
-            --text-light: #f3f4f6;
-            --border-color: #e5e7eb;
-            --card-bg: #ffffff;
-            --main-content-bg: #045270; /* Changed to teal like staff */
-        }
-        
-        [data-theme="dark"] {
-            --primary-color: #fbbf24;
-            --success-color: #34d399;
-            --danger-color: #f87171;
-            --warning-color: #fbbf24;
-            --info-color: #60a5fa;
-            --dark-color: #f3f4f6;
-            --light-bg: #111827;
-            --sidebar-bg: #1f2937;
-            --sidebar-hover: #374151;
-            --navbar-bg: #000000;
-            --footer-bg: #065f46;
-            --text-primary: #f9fafb;
-            --text-secondary: #9ca3af;
-            --text-light: #f3f4f6;
-            --border-color: #374151;
-            --card-bg: #1f2937;
-            --main-content-bg: #111827;
-        }
-        
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
-            font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
-            background-color: var(--light-bg);
-            color: var(--text-primary);
+            font-family: 'Inter', sans-serif;
+            background: #eef5ff;
             overflow: hidden;
             height: 100vh;
-            transition: background-color 0.3s ease, color 0.3s ease;
         }
-        
-        /* Fixed Top Navbar */
-        .top-navbar {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 70px;
-            background: var(--navbar-bg);
-            border-bottom: 1px solid var(--border-color);
-            display: flex;
-            align-items: center;
-            padding: 0 2rem;
-            z-index: 1030;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
-        
-        .navbar-brand {
-            font-size: 2rem;
-            font-weight: 1000;
-            background: linear-gradient(135deg, var(--primary-color), #ffffff);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            margin-right: 2rem;
-            display: flex;
-            align-items: center;
-        }
-        
-        .sidebar-toggle {
-            background: transparent;
-            border: none;
-            color: var(--text-light);
-            font-size: 1.5rem;
-            margin-right: 1rem;
-            display: none;
-            cursor: pointer;
-        }
-        
-        @media (max-width: 992px) {
-            .sidebar-toggle {
-                display: block;
-            }
-        }
-        
-        .navbar-menu {
-            display: flex;
-            align-items: center;
-            margin-left: auto;
-            gap: 1.5rem;
-        }
-        
-        .theme-toggle {
-            background: transparent;
-            border: none;
-            color: var(--text-light);
-            font-size: 1.25rem;
-            cursor: pointer;
-            padding: 0.5rem;
-            border-radius: 50%;
-            transition: background 0.2s;
-        }
-        
-        .theme-toggle:hover {
-            background: rgba(255, 255, 255, 0.1);
-        }
-        
-        .navbar-notification {
-            position: relative;
-            color: var(--text-light);
-            font-size: 1.25rem;
-            cursor: pointer;
-            transition: color 0.2s;
-            margin-right: 1.5rem; 
-        }
-        
-        .navbar-notification:hover {
-            color: var(--primary-color);
-        }
-        
-        .notification-badge {
-            position: absolute;
-            top: -5px;
-            right: -5px;
-            background: var(--danger-color);
-            color: white;
-            border-radius: 50%;
-            width: 18px;
-            height: 18px;
-            font-size: 0.7rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        .navbar-user {
-            display: flex;
-            align-items: center;
-            background: rgb(255, 255, 255); /* Changed to white background */
-            gap: 0.75rem;
-            cursor: pointer;
-            padding: 0.5rem 1rem;
-            border-radius: 8px;
-            transition: background 0.2s;
-        }
-        
-        .navbar-user:hover {
-            background: rgb(0, 217, 255); /* Changed hover color */
-        }
-        
-        .user-avatar {
-            width: 40px;
-            height: 40px;
-            background: linear-gradient(135deg, var(--primary-color), #2100df);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: 600;
-            font-size: 1.1rem;
-        }
-        
-        .user-info {
-            line-height: 1.4;
-        }
-        
-        .user-name {
-            font-weight: 600;
-            font-size: 0.95rem;
-            color: #000000; /* Changed to black text */
-        }
-        
-        .user-role {
-            font-size: 0.8rem;
-            color: var(--text-secondary);
-        }
-        
-        /* Fixed Sidebar */
+
+        /* ========= SIDEBAR - FIXED ========= */
         .sidebar {
-            position: fixed;
-            top: 70px;
-            left: 0;
-            bottom: 60px;
             width: 280px;
-            background: var(--sidebar-bg); /* Changed to solid color */
-            border-right: 1px solid var(--border-color);
-            overflow-y: auto;
-            z-index: 1020;
-            transition: all 0.3s ease;
-        }
-        
-        .sidebar.collapsed {
-            width: 80px;
-        }
-        
-        .sidebar.collapsed .nav-link span,
-        .sidebar.collapsed .sidebar-section-title,
-        .sidebar.collapsed .btn span,
-        .sidebar.collapsed .brand-text,
-        .sidebar.collapsed p,
-        .sidebar.collapsed hr + div,
-        .sidebar.collapsed .text-white-100,
-        .sidebar.collapsed .text-white-50 {
-            display: none;
-        }
-        
-        .sidebar.collapsed .nav-link i {
-            margin-right: 0;
-            width: auto;
-            font-size: 1.25rem;
-        }
-        
-        .sidebar.collapsed h4 {
-            font-size: 0;
-        }
-        
-        .sidebar.collapsed h4:before {
-            content: "C";
-            font-size: 1.5rem;
-        }
-        
-        .sidebar.collapsed .badge {
-            display: none;
-        }
-        
-        .sidebar.show-mobile {
-            left: 0;
-            box-shadow: 2px 0 10px rgba(0, 0, 0, 0.3);
-        }
-        
-        body.sidebar-open::after {
-            content: '';
+            background: linear-gradient(145deg, #ffffff 0%, #f0f8ff 100%);
+            border-right: 1px solid #000000;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             position: fixed;
             top: 0;
             left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.5);
-            z-index: 1019;
-            display: none;
+            height: 100vh;
+            z-index: 1050;
+            overflow-y: auto;
+            overflow-x: hidden;
+            box-shadow: 6px 0 18px rgb(0, 0, 0);
+            display: flex;
+            flex-direction: column;
         }
-        
-        @media (max-width: 992px) {
-            .sidebar {
-                left: -280px;
-            }
-            
-            body.sidebar-open .sidebar {
-                left: 0;
-            }
-            
-            body.sidebar-open::after {
-                display: block;
-            }
-        }
-        
+
+        /* Custom Scrollbar for Sidebar */
         .sidebar::-webkit-scrollbar {
-            width: 6px;
+            width: 5px;
         }
-        
         .sidebar::-webkit-scrollbar-track {
-            background: var(--light-bg);
+            background: #e2e8f0;
+            border-radius: 10px;
         }
-        
         .sidebar::-webkit-scrollbar-thumb {
-            background: var(--text-secondary);
-            border-radius: 3px;
+            background: #0284c7;
+            border-radius: 10px;
         }
-        
-        .sidebar .p-4 {
-            padding: 1.5rem 1rem !important;
-            color: var(--text-light);
+
+        .sidebar-header {
+            padding: 28px 20px 20px 24px;
+            border-bottom: 2px solid #000000;
+            background: #ffffff;
+            flex-shrink: 0;
         }
-        
-        .sidebar h4 {
-            color: var(--text-light);
-            font-size: 1.5rem;
-            margin-bottom: 0.5rem;
-        }
-        
-        .sidebar .text-white-100,
-        .sidebar .text-white-50 {
-            color: rgba(255, 255, 255, 0.8) !important;
-        }
-        
-        /* Added sidebar section style like staff template */
-        .sidebar-section {
-            margin-bottom: 1.5rem;
-            background: rgb(0, 140, 255);
-            border-radius: 10px; 
-            padding: 0.5rem;
-        }
-        
-        .sidebar-section-title {
-            font-size: 1rem;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            color: #000000;
-            padding: 0 1rem;
-            margin-bottom: 0.75rem;
-            margin-top: 1rem;
+
+        .sidebar-header h3 {
             font-weight: 800;
+            font-size: 1.7rem;
+            background: linear-gradient(135deg, #0077b6, #00b4d8);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            margin: 0;
+            letter-spacing: -0.3px;
         }
-        
-        .sidebar .nav-link {
+
+        .sidebar-header p {
+            font-size: 0.7rem;
+            color: #2c5f8a;
+            margin-top: 6px;
+            font-weight: 500;
+        }
+
+        .sidebar-nav {
+            padding: 20px 0 20px;
+            flex: 1;
+        }
+
+        .nav-section-title {
+            padding: 12px 24px 8px 24px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #5a7d9a;
+        }
+
+        .nav-item-custom {
+            padding: 12px 24px;
+            margin: 4px 12px;
             display: flex;
             align-items: center;
-            padding: 0.75rem 1rem;
-            color: var(--text-light);
-            border-radius: 10px;
-            margin: 0.25rem 0;
-            transition: all 0.2s;
-            position: relative;
+            gap: 14px;
+            color: #1e3a5f;
+            transition: 0.2s;
             font-weight: 500;
+            border-radius: 14px;
+            background: transparent;
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        .nav-item-custom a {
+            color: inherit;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            width: 100%;
+        }
+
+        .nav-item-custom i {
+            width: 26px;
+            font-size: 1.2rem;
+            color: #2c7da0;
+        }
+
+        .nav-item-custom:hover {
+            background: #caf0f8;
+            color: #0077b6;
+        }
+
+        .nav-item-custom:hover i {
+            color: #0077b6;
+        }
+
+        .nav-active {
+            background: #caf0f8;
+            color: #023e8a;
+            font-weight: 600;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+        }
+        .nav-active i {
+            color: #0077b6;
+        }
+
+        /* Logout button inside sidebar */
+        .sidebar-logout-area {
+            padding: 20px 20px 30px;
+            margin-top: 20px;
+            border-top: 1px solid #cfe3f0;
+            flex-shrink: 0;
+        }
+        
+        .btn-exit-sidebar {
+            background: #dc2626;
+            box-shadow: 0 4px 12px rgb(0, 0, 0);
+            border: none;
+            border-radius: 40px;
+            padding: 12px 16px;
+            width: 100%;
+            font-weight: 600;
+            color: white;
+            transition: all 0.2s;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            cursor: pointer;
+        }
+        
+        .btn-exit-sidebar:hover {
+            background: #b91c1c;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgb(0, 0, 0);
+        }
+        
+        .btn-exit-sidebar i {
+            font-size: 1rem;
+        }
+
+        /* Admin Dashboard button in sidebar area */
+        .sidebar-admin-area {
+            padding: 0px 20px 10px 20px;
+            margin-top: 10px;
+            flex-shrink: 0;
+        }
+        
+        .btn-admin-sidebar {
+            background: linear-gradient(135deg, #0284c7, #0369a1);
+            border: none;
+            border-radius: 40px;
+            padding: 12px 16px;
+            width: 100%;
+            font-weight: 600;
+            color: white;
+            transition: all 0.2s;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            cursor: pointer;
             text-decoration: none;
         }
         
-        .sidebar .nav-link i {
-            width: 24px;
-            margin-right: 12px;
-            font-size: 1.1rem;
-            color: var(--text-secondary);
-            transition: color 0.2s;
-        }
-        
-        .sidebar .nav-link:hover {
-            background: var(--sidebar-hover);
-            transform: translateX(5px);
-        }
-        
-        .sidebar .nav-link:hover i {
-            color: var(--primary-color);
-        }
-        
-        .sidebar .nav-link.active {
-            background: var(--primary-color);
+        .btn-admin-sidebar:hover {
+            background: linear-gradient(135deg, #0369a1, #0284c7);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
             color: white;
         }
         
-        .sidebar .nav-link.active i {
-            color: white;
+        .btn-admin-sidebar i {
+            font-size: 1rem;
+        }
+
+        /* Sidebar Footer Info */
+        .sidebar-footer {
+            padding: 20px 24px;
+            border-top: 1px solid #cfe3f0;
+            flex-shrink: 0;
         }
         
-        .sidebar .nav-link .badge {
-            margin-left: auto;
-            padding: 0.25rem 0.5rem;
+        .sidebar-footer p {
             font-size: 0.7rem;
-            border-radius: 20px;
-            float: right;
+            color: #002b4e;
+            margin-bottom: 8px;
         }
         
-        .sidebar hr {
-            background-color: rgba(255, 255, 255, 0.2);
-            margin: 1rem 0;
+        .sidebar-footer i {
+            width: 24px;
+            color: #0284c7;
         }
-        
-        /* Fixed Footer */
-        .footer {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            height: 60px;
-            background: var(--footer-bg);
-            border-top: 1px solid var(--border-color);
+
+        /* ========= MAIN CONTENT LAYOUT ========= */
+        .main-wrapper {
+            margin-left: 280px;
+            height: 100vh;
             display: flex;
-            align-items: center;
-            padding: 0 2rem;
-            z-index: 1030;
+            flex-direction: column;
+            transition: margin 0.3s ease;
         }
-        
-        .footer-content {
+
+        /* Top Header Bar - FIXED */
+        .top-header-bar {
+            background: white;
+            border-radius: 0;
+            padding: 12px 28px;
+            box-shadow: 0 4px 12px rgb(0, 0, 0);
             display: flex;
             justify-content: space-between;
             align-items: center;
-            width: 100%;
+            flex-wrap: wrap;
+            gap: 16px;
+            border-bottom: 1px solid #d4e7f5;
+            position: sticky;
+            top: 0;
+            z-index: 1040;
+            flex-shrink: 0;
+        }
+
+        .menu-toggle {
+            display: none;
+            background: white;
+            border: 1px solid #bdd9ec;
+            border-radius: 40px;
+            padding: 8px 14px;
+            font-size: 1.2rem;
+            cursor: pointer;
+            color: #0369a1;
+            transition: all 0.2s;
         }
         
-        .footer-left {
-            color: var(--text-light);
-            font-size: 0.9rem;
+        .menu-toggle:hover {
+            background: #caf0f8;
         }
-        
-        .footer-right {
-            color: var(--danger-color);
-            font-size: 0.9rem;
-            font-weight: 500;
-        }
-        
-        .footer-right i {
-            color: var(--danger-color);
-            margin-right: 5px;
-        }
-        
-        /* Main Content Area */
-        .main-content {
-            position: fixed;
-            top: 70px;
-            left: 280px;
-            right: 0;
-            bottom: 60px;
-            overflow-y: auto;
-            padding: 2rem;
-            background: var(--main-content-bg);
-            transition: left 0.3s ease;
-        }
-        
-        .sidebar.collapsed + .main-content {
-            left: 80px;
-        }
-        
-        @media (max-width: 992px) {
-            .main-content {
-                left: 0 !important;
-            }
-        }
-        
-        .main-content::-webkit-scrollbar {
-            width: 8px;
-        }
-        
-        .main-content::-webkit-scrollbar-track {
-            background: var(--light-bg);
-        }
-        
-        .main-content::-webkit-scrollbar-thumb {
-            background: var(--text-secondary);
-            border-radius: 4px;
-        }
-        
-        /* Content Cards */
-        .stat-card {
-            background: var(--card-bg);
-            border-radius: 15px;
-            padding: 25px;
-            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.05);
-            transition: transform 0.3s;
-            border: 1px solid var(--border-color);
-            overflow: hidden;
-            position: relative;
-        }
-        
-        .stat-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
-        }
-        
-        .stat-icon {
-            font-size: 3rem;
-            opacity: 0.2;
-            position: absolute;
-            right: 20px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: var(--primary-color);
-        }
-        
-        .stat-value {
-            font-size: 2rem;
+
+        .page-title h4 {
             font-weight: 700;
-            margin-bottom: 5px;
-            color: var(--text-primary);
+            margin: 0;
+            color: #0a2f44;
         }
         
-        .stat-label {
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            font-size: 0.85rem;
-            letter-spacing: 1px;
+        .page-title p {
+            margin: 0;
+            font-size: 0.7rem;
+            color: #2c7da0;
+        }
+
+        .user-badge {
+            display: flex;
+            align-items: center;
+            gap: 12px;
         }
         
-        .card {
-            border: 1px solid var(--border-color);
-            border-radius: 15px;
-            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.05);
-            background: var(--card-bg);
+        .user-info-card {
+            background: #f0f9ff;
+            padding: 6px 18px;
+            border-radius: 50px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border: 1px solid #cde3f5;
+            box-shadow: 0 4px 12px rgb(0, 0, 0);
         }
         
-        .card-header {
-            background: var(--card-bg);
-            border-bottom: 2px solid var(--light-bg);
-            padding: 20px 25px;
-            font-weight: 600;
-            border-radius: 15px 15px 0 0 !important;
-            color: var(--text-primary);
-        }
-        
-        .table {
-            color: var(--text-primary);
-            margin-bottom: 0;
-        }
-        
-        .table thead th {
-            border-top: none;
-            background: var(--light-bg);
-            color: var(--text-primary);
-            font-weight: 600;
-            font-size: 0.9rem;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            padding: 1rem;
-        }
-        
-        .table td {
-            padding: 1rem;
-            vertical-align: middle;
-            color: var(--text-primary);
-        }
-        
-        /* Loading Skeleton */
-        .skeleton-loader {
-            background: linear-gradient(90deg, var(--border-color) 25%, var(--light-bg) 50%, var(--border-color) 75%);
-            background-size: 200% 100%;
-            animation: loading 1.5s infinite;
-            border-radius: 4px;
-            height: 20px;
-            margin: 10px 0;
-        }
-        
-        @keyframes loading {
-            0% { background-position: 200% 0; }
-            100% { background-position: -200% 0; }
-        }
-        
-        /* Badge Styles - Credit specific */
-        .badge-pending {
-            background-color: #ef4444;
+        .avatar-sm {
+            width: 38px;
+            height: 38px;
+            background: linear-gradient(145deg, #38bdf8, #0284c7);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
             color: white;
-            padding: 5px 10px;
-            border-radius: 20px;
-            font-weight: 500;
+            box-shadow: 0 2px 8px rgba(2, 132, 199, 0.3);
+        }
+
+        /* Content Area - SCROLLABLE */
+        .content-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px 32px;
         }
         
-        .badge-paid {
-            background-color: #10b981;
-            color: white;
-            padding: 5px 10px;
-            border-radius: 20px;
-            font-weight: 500;
+        /* Custom Scrollbar for Content */
+        .content-area::-webkit-scrollbar {
+            width: 6px;
         }
-        
-        .badge-partial {
-            background-color: #8b5cf6;
-            color: white;
-            padding: 5px 10px;
-            border-radius: 20px;
-            font-weight: 500;
-        }
-        
-        .badge-overdue {
-            background-color: #dc2626;
-            color: white;
-            padding: 5px 10px;
-            border-radius: 20px;
-            font-weight: 500;
-        }
-        
-        /* Buttons */
-        .btn-primary {
-            background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
-            border: none;
-            padding: 10px 25px;
+        .content-area::-webkit-scrollbar-track {
+            background: #e2e8f0;
             border-radius: 10px;
-            font-weight: 600;
-            transition: all 0.2s;
         }
-        
-        .btn-primary:hover {
-            background: linear-gradient(135deg, #e67e22 0%, #f39c12 100%);
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(243, 156, 18, 0.4);
-        }
-        
-        .btn-outline-primary {
-            border: 1px solid var(--primary-color);
-            color: var(--primary-color);
-            padding: 0.6rem 1.5rem;
+        .content-area::-webkit-scrollbar-thumb {
+            background: #0284c7;
             border-radius: 10px;
-            font-weight: 500;
-            transition: all 0.2s;
-            background: transparent;
+        }
+
+        /* Footer - FIXED AT BOTTOM */
+        .main-footer {
+            padding: 16px 0;
+            text-align: center;
+            border-top: 1px solid #cde3f5;
+            background: white;
+            flex-shrink: 0;
         }
         
-        .btn-outline-primary:hover {
-            background: var(--primary-color);
-            color: white;
+        .main-footer p {
+            margin: 0;
+            font-size: 0.75rem;
+            color: #5a7d9a;
         }
         
-        /* Credit-specific styles */
-        .credit-card {
-            border-left: 4px solid #f39c12;
+        .main-footer a {
+            color: #0284c7;
+            text-decoration: none;
         }
         
-        .amount-pending {
-            color: #ef4444;
-            font-weight: bold;
+        .main-footer a:hover {
+            text-decoration: underline;
         }
-        
-        .amount-paid {
-            color: #10b981;
-            font-weight: bold;
-        }
-        
-        .amount-total {
-            color: #f39c12;
-            font-weight: bold;
-        }
-        
-        @media print {
-            .no-print, .sidebar, .footer, .btn {
-                display: none !important;
-            }
-        }
-        
-        /* Responsive */
+
+        /* Mobile Responsive */
         @media (max-width: 768px) {
-            .top-navbar {
-                padding: 0 1rem;
+            .sidebar {
+                transform: translateX(-100%);
+                width: 280px;
+                z-index: 1060;
             }
-            
-            .navbar-brand {
-                font-size: 1.2rem;
+            .sidebar.open-mobile {
+                transform: translateX(0);
             }
-            
-            .user-info {
-                display: none;
+            .main-wrapper {
+                margin-left: 0;
             }
-            
-            .main-content {
-                padding: 1rem;
+            .menu-toggle {
+                display: block;
             }
-            
-            .footer {
-                padding: 0 1rem;
-            }
-            
-            .footer-content {
+            .top-header-bar {
                 flex-direction: column;
-                gap: 5px;
-                text-align: center;
+                align-items: stretch;
             }
-            
-            .footer-left p {
-                font-size: 0.8rem;
+            .user-badge {
+                justify-content: space-between;
             }
+            .content-area {
+                padding: 16px;
+            }
+        }
+
+        /* Animation */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.3s ease;
         }
     </style>
     
     {% block extra_css %}{% endblock %}
 </head>
-<body data-theme="light">
-    <!-- Fixed Top Navbar -->
-    <nav class="top-navbar" role="navigation" aria-label="Main navigation">
-        <button class="sidebar-toggle" aria-label="Toggle sidebar menu" id="sidebarToggle">
-            <i class="fas fa-bars"></i>
-        </button>
-        <div class="navbar-brand">
-            <img src="{% static 'images/LOGO.jpg' %}" alt="FieldMax Logo" height="40" class="me-2" style="max-height: 40px; width: auto;">
-            FIELDMAX MANAGEMENT
-        </div>
+<body>
 
-        <div class="navbar-menu">
-            <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
-                <i class="fas fa-moon"></i>
-            </button>
+<div class="app-wrapper">
+    <!-- ========= SIDEBAR - FIXED ========= -->
+    <aside class="sidebar" id="mainSidebar">
+        <div class="sidebar-header">
+            <h3><i class="fas fa-cloud-sun me-2"></i>FieldMax</h3>
+            <p>Financing Smartphone Devices</p>
+        </div>
+        
+        <div class="sidebar-nav">
+            <div class="nav-section-title">MAIN MENU</div>
             
-            <a href="{% url 'staff:notifications_page' %}" class="navbar-notification" aria-label="Notifications">
-                <i class="far fa-bell"></i>
-                {% if notification_count > 0 %}
-                <span class="notification-badge">{{ notification_count }}</span>
-                {% endif %}
-            </a>
+            <!-- New ETR Link -->
+            <div class="nav-item-custom {% if request.resolver_match.url_name == 'credit_officer_dashboard' %}nav-active{% endif %}">
+                <a href="{% url 'staff:credit_officer_dashboard' %}">
+                    <i class="fas fa-plus-circle"></i>
+                    <span>New ETR</span>
+                </a>
+            </div>
             
-            <div style="width: 20px;"></div>
+            <!-- Products Link (Credit Officer) -->
+            <div class="nav-item-custom {% if request.resolver_match.url_name == 'my_assigned_products' %}nav-active{% endif %}">
+                <a href="{% url 'staff:my_assigned_products' %}">
+                    <i class="fas fa-box"></i>
+                    <span>Products</span>
+                </a>
+            </div>
             
-            <div class="navbar-user" id="userMenu" role="button" aria-haspopup="true" aria-expanded="false">
-                <div class="user-avatar">
-                    {{ request.user.first_name|first|default:request.user.username|first|upper }}
+            <!-- Prospects Link -->
+            <div class="nav-item-custom {% if request.resolver_match.url_name == 'prospects_list' %}nav-active{% endif %}">
+                <a href="{% url 'staff:prospects_list' %}">
+                    <i class="fas fa-users"></i>
+                    <span>Prospects</span>
+                </a>
+            </div>
+            
+            {% if is_administrator %}
+            <div class="nav-section-title mt-3">ADMINISTRATION</div>
+            
+            <!-- Assign Products Link (Admin only) -->
+            <div class="nav-item-custom {% if request.resolver_match.url_name == 'assign_products' %}nav-active{% endif %}">
+                <a href="{% url 'staff:assign_products' %}">
+                    <i class="fas fa-tasks"></i>
+                    <span>Assign Products</span>
+                </a>
+            </div>
+            
+            <!-- Manage Assignments Link (Admin only) -->
+            <div class="nav-item-custom {% if request.resolver_match.url_name == 'manage_assignments' %}nav-active{% endif %}">
+                <a href="{% url 'staff:manage_assignments' %}">
+                    <i class="fas fa-clipboard-list"></i>
+                    <span>Manage Assignments</span>
+                </a>
+            </div>
+            
+            <!-- Admin Dashboard Link -->
+            <div class="sidebar-admin-area">
+                <a href="{% url 'staff:admin_dashboard' %}" class="btn-admin-sidebar">
+                    <i class="fas fa-user-shield"></i> Admin Dashboard
+                </a>
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Sidebar Footer Info -->
+        <div class="sidebar-footer">
+            <p><i class="fas fa-phone-alt"></i> 📞 CALL 0722 558 544 HR</p>
+            <p><i class="fas fa-envelope"></i> 📩 support@fieldmax.com</p>
+            <p><i class="fas fa-clock"></i> Mon-Fri: 8AM - 5PM</p>
+        </div>
+        
+        <!-- Logout Button -->
+        <div class="sidebar-logout-area">
+            <form method="post" action="{% url 'staff:logout' %}" id="logoutSidebarForm">
+                {% csrf_token %}
+                <button type="submit" class="btn-exit-sidebar">
+                    <i class="fas fa-sign-out-alt"></i> Exit & Logout
+                </button>
+            </form>
+        </div>
+    </aside>
+
+    <!-- ========= MAIN CONTENT WRAPPER ========= -->
+    <div class="main-wrapper">
+        <!-- Top Header Bar - FIXED -->
+        <div class="top-header-bar">
+            <div class="d-flex align-items-center gap-3">
+                <button class="menu-toggle" id="mobileMenuToggle">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <div class="page-title">
+                    <h4>
+                        <i class="fas {% block header_icon %}fa-chart-line{% endblock %} text-primary me-2"></i>
+                        {% block page_title %}FIELDMAX DASHBOARD{% endblock %}
+                    </h4>
+                    <p><span id="currentDateHeader"></span> • <span id="currentTimeHeader"></span></p>
                 </div>
-                <div class="user-info">
-                    <div class="user-name">{{ request.user.get_full_name|default:request.user.username }}</div>
-                    <div class="user-role">
-                        {% if request.user.is_superuser %}
-                            Administrator
-                        {% else %}
-                            {% if request.user.position %}
-                                {{ request.user.position|title }}
-                            {% else %}
-                                Credit Staff
-                            {% endif %}
-                        {% endif %}
+            </div>
+            <div class="user-badge">
+                <div class="user-info-card">
+                    <div class="avatar-sm">
+                        {{ request.user.first_name|default:request.user.username|first|upper }}
+                    </div>
+                    <div>
+                        <div class="fw-semibold">{{ request.user.get_full_name|default:request.user.username }}</div>
+                        <div class="small fw-bold" style="color:#0284c7;">
+                            {% if is_administrator %}Administrator{% else %}Credit Officer{% endif %}
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
-    </nav>
 
-    <!-- Fixed Sidebar -->
-    <div class="sidebar" id="sidebar">
-        <div class="p-4">
-            <!-- Added HOME BUTTON like staff template -->
-            <div class="sidebar-section">
-                <a href="{% url 'website:home' %}" class="btn btn-outline-primary w-100 mb-3">
-                    <i class="fas fa-home me-2"></i> <span>WEBSITE PAGE</span>
-                </a>
-            </div>
-
-            <h4 class="text-white mb-4">
-                <span class="brand-text"><strong>CREDIT DASHBOARD</strong></span>
-            </h4>
+        <!-- Content Area - SCROLLABLE -->
+        <div class="content-area fade-in">
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-3" role="alert">
+                        <i class="fas fa-{% if message.tags == 'success' %}check-circle{% elif message.tags == 'error' %}exclamation-circle{% else %}info-circle{% endif %} me-2"></i>
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
             
-            <!-- Main Navigation - Added sidebar-section wrapper -->
-            <div class="sidebar-section">
-                <div class="sidebar-section-title">MAIN</div>
-                <nav class="nav flex-column">
-                    <!-- Dashboard -->
-                    <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'credit:dashboard' %}">
-                        <i class="fas fa-chart-pie"></i> <span>Dashboard</span>
-                    </a>
-
-                    <!-- Credit Department Team -->
-                    <a class="nav-link {% if 'credit_manager_dashboard' in request.path %}active{% endif %}" href="{% url 'staff:credit_manager_dashboard' %}">
-                        <i class="fas fa-users"></i> <span>Credit Department Team</span>
-                    </a>
-                </nav>
-            </div>
-
-            <!-- Credit Management Section - Added sidebar-section wrapper -->
-            <div class="sidebar-section">
-                <div class="sidebar-section-title">CREDIT MANAGEMENT</div>
-                <nav class="nav flex-column">
-                    <!-- Companies -->
-                    <a class="nav-link {% if 'company' in request.path %}active{% endif %}" href="{% url 'credit:company_list' %}">
-                        <i class="fas fa-building"></i> <span>Credit Companies</span>
-                    </a>
-                    
-                    <!-- Customers -->
-                    <a class="nav-link {% if 'customer' in request.path %}active{% endif %}" href="{% url 'credit:customer_list' %}">
-                        <i class="fas fa-users"></i> <span>Customers</span>
-                    </a>
-                    
-                    <!-- Transactions -->
-                    <a class="nav-link {% if 'transaction' in request.path %}active{% endif %}" href="{% url 'credit:transaction_list' %}">
-                        <i class="fas fa-exchange-alt"></i> <span>Transactions</span>
-                    </a>
-                    
-                    <!-- Payments -->
-                    <a class="nav-link {% if 'payment' in request.path %}active{% endif %}" href="{% url 'credit:payment_list' %}">
-                        <i class="fas fa-money-bill-wave"></i> <span>Company Payments</span>
-                    </a>
-                </nav>
-            </div>
-            
-            <!-- Other Apps Navigation - Added sidebar-section wrapper -->
-            <div class="sidebar-section">
-                <div class="sidebar-section-title">OTHER APPS</div>
-                <nav class="nav flex-column">
-                    <!-- Sales Integration -->
-                    <a class="nav-link" href="{% url 'sales:sales_dashboard' %}">
-                        <i class="fas fa-chart-line"></i> <span>Sales Dashboard</span>
-                    </a>
-                    
-                    <!-- Inventory Link -->
-                    <a class="nav-link" href="{% url 'inventory:dashboard' %}">
-                        <i class="fas fa-boxes"></i> <span>Inventory Dashboard</span>
-                    </a>
-
-                    <!-- Staff Link -->
-                    <a class="nav-link" href="{% url 'staff:staff_dashboard' %}">
-                        <i class="fas fa-users"></i> <span>Home Dashboard</span>
-                    </a>
-                </nav>
-            </div>
-
-            <hr>
-            
-            <div class="text-white-100 small">
-                <p class="mb-1"><strong>FieldMax Credit System</strong></p>
-                <p class="mb-0">Version 1.0.0</p>   
-            </div>
-
-            <!-- Logout Section - Added sidebar-section wrapper -->
-            <div class="sidebar-section mt-4">
-                <form method="post" action="{% url 'staff:logout' %}" id="logoutForm">
-                   {% csrf_token %}
-                   <button type="submit" class="nav-link w-100 text-start" style="background: var(--danger-color); border: none; color: white; border-radius: 10px;">
-                     <i class="fas fa-sign-out-alt"></i> <span>Logout</span>
-                   </button>
-                </form>
-            </div>
+            {% block content %}
+            <!-- Child templates will override this -->
+            {% endblock %}
         </div>
-    </div>
 
-    <!-- Main Content Area -->
-    <div class="main-content" id="mainContent">
-        <!-- Messages -->
-        {% if messages %}
-            {% for message in messages %}
-                <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-                    {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                </div>
-            {% endfor %}
-        {% endif %}
-        
-        <!-- Page specific content -->
-        {% block content %}{% endblock %}
+        <!-- Footer - FIXED AT BOTTOM -->
+        <footer class="main-footer">
+            <p>&copy; {% now "Y" %} FieldMax Device Financing. All rights reserved. | Secure Loan Processing</p>
+            <p class="mt-1">
+                <a href="#"><i class="fas fa-shield-alt"></i> Privacy Policy</a> |
+                <a href="#"><i class="fas fa-file-contract"></i> Terms of Service</a> |
+                <a href="#"><i class="fas fa-headset"></i> Support</a>
+            </p>
+        </footer>
     </div>
+</div>
 
-    <!-- Fixed Footer -->
-    <footer class="footer">
-        <div class="footer-content">
-            <div class="footer-left">
-                <p class="mb-0">&copy; {% now "Y" %} FieldMax Credit System. All rights reserved.</p>
-            </div>
-            <div class="footer-right">
-                <a href="{% url 'staff:powered_by' %}" target="_self" style="color: inherit; text-decoration: none;">
-                    <i class="fas fa-bolt"></i> POWERED BY FIELDMAX
-                </a>
-            </div>
-        </div>
-    </footer>
-    
-    <!-- Scripts - EXACTLY THE SAME as working version -->
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
-    <script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    
-    <script>
-        $(document).ready(function() {
-            // Theme Management
-            const savedTheme = localStorage.getItem('theme') || 'light';
-            document.body.setAttribute('data-theme', savedTheme);
-            updateThemeIcon(savedTheme);
-            
-            $('#themeToggle').click(function() {
-                const currentTheme = document.body.getAttribute('data-theme');
-                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-                document.body.setAttribute('data-theme', newTheme);
-                localStorage.setItem('theme', newTheme);
-                updateThemeIcon(newTheme);
-            });
-            
-            function updateThemeIcon(theme) {
-                const $icon = $('#themeToggle i');
-                if (theme === 'dark') {
-                    $icon.removeClass('fa-moon').addClass('fa-sun');
-                } else {
-                    $icon.removeClass('fa-sun').addClass('fa-moon');
-                }
-            }
-            
-            // Sidebar Toggle
-            $('#sidebarToggle').click(function() {
-                $('body').toggleClass('sidebar-open');
-            });
-            
-            // Close sidebar when clicking outside on mobile
-            $(document).click(function(event) {
-                if ($(window).width() <= 992) {
-                    if (!$(event.target).closest('.sidebar').length && 
-                        !$(event.target).closest('.sidebar-toggle').length && 
-                        $('body').hasClass('sidebar-open')) {
-                        $('body').removeClass('sidebar-open');
-                    }
-                }
-            });
-            
-            // Handle responsive sidebar
-            function handleSidebar() {
-                if ($(window).width() <= 992) {
-                    $('.sidebar').removeClass('collapsed');
-                    $('body').removeClass('sidebar-open');
-                } else {
-                    if (localStorage.getItem('sidebarCollapsed') === 'true') {
-                        $('.sidebar').addClass('collapsed');
-                    } else {
-                        $('.sidebar').removeClass('collapsed');
-                    }
-                }
-            }
-            
-            // Double click on sidebar to toggle collapse (desktop only)
-            $('.sidebar').dblclick(function() {
-                if ($(window).width() > 992) {
-                    $('.sidebar').toggleClass('collapsed');
-                    localStorage.setItem('sidebarCollapsed', $('.sidebar').hasClass('collapsed'));
-                }
-            });
-            
-            handleSidebar();
-            $(window).resize(handleSidebar);
-            
-            // Initialize DataTables
-            $('table.datatable').each(function() {
-                var $table = $(this);
-                
-                if ($.fn.DataTable.isDataTable(this)) {
-                    $table.DataTable().destroy();
-                }
-                
-                $table.DataTable({
-                    "pageLength": 25,
-                    "language": {
-                        "search": "Search:",
-                        "lengthMenu": "Show _MENU_ entries",
-                        "info": "Showing _START_ to _END_ of _TOTAL_ entries",
-                        "infoEmpty": "Showing 0 to 0 of 0 entries",
-                        "infoFiltered": "(filtered from _MAX_ total entries)",
-                        "emptyTable": "No data available",
-                        "zeroRecords": "No matching records found"
-                    }
-                });
-            });
-            
-            // Auto-hide alerts after 5 seconds
-            setTimeout(function() {
-                $('.alert').fadeOut('slow');
-            }, 5000);
-            
-            // Logout confirmation
-            $('#logoutForm').submit(function(e) {
-                if (!confirm('Are you sure you want to logout?')) {
-                    e.preventDefault();
-                }
-            });
+<!-- Scripts -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+    // ============================================
+    // DATE/TIME UPDATE
+    // ============================================
+    function updateDateTimeUI() {
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('en-US', { 
+            weekday: 'long', 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric' 
         });
-    </script>
+        const timeStr = now.toLocaleTimeString('en-US', { 
+            hour: '2-digit', 
+            minute: '2-digit', 
+            second: '2-digit' 
+        });
+        
+        const dateElement = document.getElementById('currentDateHeader');
+        const timeElement = document.getElementById('currentTimeHeader');
+        
+        if(dateElement) dateElement.innerText = dateStr;
+        if(timeElement) timeElement.innerText = timeStr;
+    }
     
-    {% block extra_js %}{% endblock %}
+    updateDateTimeUI();
+    setInterval(updateDateTimeUI, 1000);
+
+    // ============================================
+    // MOBILE SIDEBAR TOGGLE
+    // ============================================
+    const toggleBtn = document.getElementById('mobileMenuToggle');
+    const sidebar = document.getElementById('mainSidebar');
+    
+    if(toggleBtn && sidebar) {
+        toggleBtn.addEventListener('click', (e) => { 
+            e.stopPropagation(); 
+            sidebar.classList.toggle('open-mobile'); 
+        });
+        
+        // Close sidebar when clicking outside on mobile
+        document.addEventListener('click', (event) => {
+            if(window.innerWidth <= 768 && 
+               sidebar.classList.contains('open-mobile') && 
+               !sidebar.contains(event.target) && 
+               !toggleBtn.contains(event.target)) {
+                sidebar.classList.remove('open-mobile');
+            }
+        });
+    }
+
+    // ============================================
+    // ACTIVE LINK HIGHLIGHTING
+    // ============================================
+    document.addEventListener('DOMContentLoaded', function() {
+        const currentPath = window.location.pathname;
+        const navLinks = document.querySelectorAll('.nav-item-custom a');
+        
+        navLinks.forEach(link => {
+            if(link.getAttribute('href') === currentPath) {
+                link.closest('.nav-item-custom').classList.add('nav-active');
+            }
+        });
+    });
+</script>
+
+{% block extra_js %}{% endblock %}
 </body>
 </html>

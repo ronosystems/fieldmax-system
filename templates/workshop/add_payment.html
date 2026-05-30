@@ -1,0 +1,296 @@
+{% extends "workshop/base.html" %}
+
+{% block title %}Add Payment - Workshop{% endblock %}
+
+{% block header_icon %}fa-money-bill-wave{% endblock %}
+
+{% block page_title %}ADD PAYMENT{% endblock %}
+
+{% block extra_css %}
+<style>
+    .payment-container {
+        max-width: 600px;
+        margin: 0 auto;
+    }
+    
+    .payment-card {
+        background: white;
+        border-radius: 20px;
+        overflow: hidden;
+        border: 1px solid #cde3f5;
+    }
+    
+    .payment-header {
+        background: linear-gradient(135deg, #10b981, #059669);
+        color: white;
+        padding: 20px;
+        text-align: center;
+    }
+    
+    .payment-header h2 {
+        font-size: 24px;
+        margin-bottom: 5px;
+    }
+    
+    .payment-header p {
+        opacity: 0.9;
+    }
+    
+    .payment-body {
+        padding: 25px;
+    }
+    
+    .info-section {
+        background: #f8fafc;
+        border-radius: 12px;
+        padding: 15px;
+        margin-bottom: 20px;
+    }
+    
+    .info-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 0;
+        font-size: 14px;
+    }
+    
+    .info-label {
+        color: #5a7d9a;
+        font-weight: 500;
+    }
+    
+    .info-value {
+        color: #1e3a5f;
+        font-weight: 600;
+    }
+    
+    .balance-amount {
+        font-size: 24px;
+        font-weight: 700;
+        color: #f59e0b;
+    }
+    
+    .form-group {
+        margin-bottom: 20px;
+    }
+    
+    label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 600;
+        color: #1e3a5f;
+        font-size: 14px;
+    }
+    
+    label .required {
+        color: #ef4444;
+        margin-left: 4px;
+    }
+    
+    input[type="number"],
+    select {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #cde3f5;
+        border-radius: 8px;
+        font-size: 14px;
+        transition: all 0.3s;
+    }
+    
+    input:focus,
+    select:focus {
+        outline: none;
+        border-color: #0284c7;
+        box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.1);
+    }
+    
+    .help-text {
+        font-size: 11px;
+        color: #5a7d9a;
+        margin-top: 5px;
+    }
+    
+    .form-actions {
+        display: flex;
+        gap: 15px;
+        margin-top: 25px;
+    }
+    
+    .btn {
+        padding: 12px 24px;
+        border: none;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s;
+        text-decoration: none;
+        display: inline-block;
+        text-align: center;
+        flex: 1;
+    }
+    
+    .btn-primary {
+        background: #10b981;
+        color: white;
+    }
+    
+    .btn-primary:hover {
+        background: #059669;
+        transform: translateY(-1px);
+    }
+    
+    .btn-secondary {
+        background: #e2e8f0;
+        color: #4a5568;
+    }
+    
+    .btn-secondary:hover {
+        background: #cbd5e1;
+    }
+    
+    .payment-method-group {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+    }
+    
+    @media (max-width: 768px) {
+        .payment-method-group {
+            grid-template-columns: 1fr;
+        }
+        
+        .form-actions {
+            flex-direction: column;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-0">
+    <div class="payment-container">
+        <div class="payment-card">
+            <div class="payment-header">
+                <h2><i class="fas fa-money-bill-wave"></i> Add Payment</h2>
+                <p>Record payment from customer</p>
+            </div>
+            
+            <div class="payment-body">
+                <!-- Job Information -->
+                <div class="info-section">
+                    <div class="info-row">
+                        <span class="info-label">Job ID:</span>
+                        <span class="info-value">#{{ job.id }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Customer:</span>
+                        <span class="info-value">{{ job.customer_name }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Device:</span>
+                        <span class="info-value">{{ job.device_type }} {{ job.device_model }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Total Amount:</span>
+                        <span class="info-value">KSH {{ job.total_amount|floatformat:2 }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Amount Paid:</span>
+                        <span class="info-value">KSH {{ job.amount_paid|floatformat:2 }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Remaining Balance:</span>
+                        <span class="info-value balance-amount">KSH {{ job.remaining_balance|floatformat:2 }}</span>
+                    </div>
+                </div>
+                
+                <!-- Payment Form -->
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <div class="form-group">
+                        <label>Amount to Pay <span class="required">*</span></label>
+                        <input type="number" name="amount" id="amount" 
+                               step="0.01" min="0.01" max="{{ job.remaining_balance }}"
+                               value="{{ job.remaining_balance }}" required>
+                        <div class="help-text">Maximum amount: KSH {{ job.remaining_balance|floatformat:2 }}</div>
+                    </div>
+                    
+                    <div class="payment-method-group">
+                        <div class="form-group">
+                            <label>Payment Method</label>
+                            <select name="payment_method">
+                                <option value="cash">💵 Cash</option>
+                                <option value="mpesa">📱 M-Pesa</option>
+                                <option value="bank">🏦 Bank Transfer</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group" id="mpesaCodeGroup" style="display: none;">
+                            <label>M-Pesa Transaction Code</label>
+                            <input type="text" name="mpesa_code" placeholder="e.g., QWERTY123">
+                        </div>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Process Payment
+                        </button>
+                        <a href="{% url 'workshop:job_detail' job.id %}" class="btn btn-secondary">
+                            <i class="fas fa-times"></i> Cancel
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Show/hide M-Pesa code field based on payment method
+    const paymentMethodSelect = document.querySelector('select[name="payment_method"]');
+    const mpesaCodeGroup = document.getElementById('mpesaCodeGroup');
+    const amountInput = document.getElementById('amount');
+    const maxAmount = {{ job.remaining_balance|default:0 }};
+    
+    if (paymentMethodSelect) {
+        paymentMethodSelect.addEventListener('change', function() {
+            if (this.value === 'mpesa') {
+                mpesaCodeGroup.style.display = 'block';
+            } else {
+                mpesaCodeGroup.style.display = 'none';
+            }
+        });
+    }
+    
+    // Validate amount
+    if (amountInput) {
+        amountInput.addEventListener('input', function() {
+            let value = parseFloat(this.value);
+            if (value > maxAmount) {
+                this.value = maxAmount;
+                showMessage('Amount cannot exceed remaining balance', 'error');
+            }
+            if (value < 0) {
+                this.value = 0;
+            }
+        });
+    }
+    
+    function showMessage(message, type) {
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+        alertDiv.style.position = 'fixed';
+        alertDiv.style.top = '20px';
+        alertDiv.style.right = '20px';
+        alertDiv.style.zIndex = '9999';
+        alertDiv.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        document.body.appendChild(alertDiv);
+        setTimeout(() => alertDiv.remove(), 3000);
+    }
+</script>
+{% endblock %}

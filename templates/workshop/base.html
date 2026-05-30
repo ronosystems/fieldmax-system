@@ -23,10 +23,11 @@
         body {
             font-family: 'Inter', sans-serif;
             background: #f0f4f8;
-            overflow-x: hidden;
+            overflow: hidden;
+            height: 100vh;
         }
 
-        /* ========= SIDEBAR ========= */
+        /* ========= SIDEBAR - FIXED ========= */
         .sidebar {
             width: 280px;
             background: #ffffff;
@@ -35,13 +36,16 @@
             position: fixed;
             top: 0;
             left: 0;
-            bottom: 0;
+            height: 100vh;
             z-index: 1050;
             overflow-y: auto;
+            overflow-x: hidden;
             box-shadow: 0 0 20px rgba(0, 0, 0, 0.979);
+            display: flex;
+            flex-direction: column;
         }
 
-        /* Custom Scrollbar */
+        /* Sidebar Scrollbar */
         .sidebar::-webkit-scrollbar {
             width: 4px;
         }
@@ -61,6 +65,7 @@
             padding: 24px 20px 20px 24px;
             border-bottom: 1px solid #000000;
             background: #ffffff;
+            flex-shrink: 0;
         }
 
         .sidebar-header h3 {
@@ -83,6 +88,7 @@
 
         .sidebar-nav {
             padding: 20px 0 20px;
+            flex: 1;
         }
 
         .nav-section-title {
@@ -147,6 +153,7 @@
             padding: 20px 20px 30px;
             margin-top: 20px;
             border-top: 1px solid #e2e8f0;
+            flex-shrink: 0;
         }
         
         .btn-exit-sidebar {
@@ -178,7 +185,7 @@
         .sidebar-footer {
             padding: 16px 24px;
             border-top: 1px solid #e2e8f0;
-            margin-top: auto;
+            flex-shrink: 0;
         }
         
         .sidebar-footer p {
@@ -192,31 +199,31 @@
             color: #64748b;
         }
 
-        /* ========= MAIN CONTENT ========= */
-        .main-content {
-            flex: 1;
+        /* ========= MAIN CONTENT LAYOUT ========= */
+        .main-wrapper {
             margin-left: 280px;
-            width: calc(100% - 280px);
-            transition: margin 0.3s ease;
-            padding: 20px 28px;
-            min-height: 100vh;
+            height: 100vh;
             display: flex;
             flex-direction: column;
+            transition: margin 0.3s ease;
         }
 
-        /* Top Header Bar */
+        /* Top Navbar - FIXED */
         .top-header-bar {
             background: white;
-            border-radius: 20px;
-            padding: 10px 24px;
-            margin-bottom: 24px;
+            border-radius: 0;
+            padding: 12px 28px;
             box-shadow: 0 1px 3px rgb(0, 0, 0);
             display: flex;
             justify-content: space-between;
             align-items: center;
             flex-wrap: wrap;
             gap: 16px;
-            border: 1px solid #e2e8f0;
+            border-bottom: 1px solid #000000;
+            position: sticky;
+            top: 0;
+            z-index: 1040;
+            flex-shrink: 0;
         }
 
         .menu-toggle {
@@ -279,17 +286,36 @@
             font-size: 0.9rem;
         }
 
-        /* Content Area */
+        /* Content Area - SCROLLABLE */
         .content-area {
             flex: 1;
+            overflow-y: auto;
+            padding: 24px 28px;
+        }
+        
+        /* Custom Scrollbar for Content */
+        .content-area::-webkit-scrollbar {
+            width: 6px;
+        }
+        .content-area::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        .content-area::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
+        .content-area::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
         }
 
-        /* Footer */
+        /* Footer - FIXED AT BOTTOM */
         .main-footer {
-            margin-top: 32px;
-            padding: 16px 0;
+            padding: 12px 0;
             text-align: center;
-            border-top: 1px solid #e2e8f0;
+            border-top: 1px solid #000000;
+            background: white;
+            flex-shrink: 0;
         }
         
         .main-footer p {
@@ -367,41 +393,26 @@
             display: inline-block;
         }
 
-        /* Mobile Responsive */
-        @media (max-width: 768px) {
-            .sidebar {
-                transform: translateX(-100%);
-                width: 280px;
-                z-index: 1060;
-            }
-            .sidebar.open-mobile {
-                transform: translateX(0);
-            }
-            .main-content {
-                margin-left: 0;
-                width: 100%;
-                padding: 16px;
-            }
-            .menu-toggle {
-                display: block;
-            }
-            .top-header-bar {
-                flex-direction: column;
-                align-items: stretch;
-            }
-            .user-badge {
-                justify-content: space-between;
-            }
+        /* Tables */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
         }
-
-        /* Animation */
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+        .data-table th {
+            background: #f8fafc;
+            padding: 12px 15px;
+            font-weight: 600;
+            color: #475569;
+            border-bottom: 1px solid #000000;
+            font-size: 0.8rem;
         }
-        
-        .fade-in {
-            animation: fadeIn 0.3s ease;
+        .data-table td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #000000;
+            font-size: 0.85rem;
+        }
+        .data-table tr:hover {
+            background: #f8fafc;
         }
 
         /* Buttons */
@@ -419,26 +430,42 @@
             transform: translateY(-1px);
         }
 
-        /* Tables */
-        .data-table {
-            width: 100%;
-            border-collapse: collapse;
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                width: 280px;
+                z-index: 1060;
+            }
+            .sidebar.open-mobile {
+                transform: translateX(0);
+            }
+            .main-wrapper {
+                margin-left: 0;
+            }
+            .menu-toggle {
+                display: block;
+            }
+            .top-header-bar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .user-badge {
+                justify-content: space-between;
+            }
+            .content-area {
+                padding: 16px;
+            }
         }
-        .data-table th {
-            background: #f8fafc;
-            padding: 12px 15px;
-            font-weight: 600;
-            color: #475569;
-            border-bottom: 1px solid #e2e8f0;
-            font-size: 0.8rem;
+
+        /* Animation */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
-        .data-table td {
-            padding: 12px 15px;
-            border-bottom: 1px solid #e2e8f0;
-            font-size: 0.85rem;
-        }
-        .data-table tr:hover {
-            background: #f8fafc;
+        
+        .fade-in {
+            animation: fadeIn 0.3s ease;
         }
     </style>
     
@@ -447,7 +474,7 @@
 
 <body>
 <div class="app-wrapper">
-    <!-- SIDEBAR -->
+    <!-- SIDEBAR - FIXED -->
     <aside class="sidebar" id="mainSidebar">
         <div class="sidebar-header">
             <h3><i class="fas fa-tools me-2"></i>Workshop Hub</h3>
@@ -490,8 +517,6 @@
                     <span>My Performance</span>
                 </a>
             </div>
-            
-
 
             {% if is_administrator %}
             <div class="nav-section-title mt-3">MANAGEMENT</div>
@@ -529,10 +554,6 @@
             </div>
             {% endif %}
             
-
-
-
-
             <div class="nav-section-title mt-3">SUPPORT</div>
             
             <!-- Help -->
@@ -562,9 +583,9 @@
         </div>
     </aside>
 
-    <!-- MAIN CONTENT -->
-    <div class="main-content">
-        <!-- Top Header Bar -->
+    <!-- MAIN CONTENT WRAPPER -->
+    <div class="main-wrapper">
+        <!-- Top Navbar - FIXED -->
         <div class="top-header-bar">
             <div class="d-flex align-items-center gap-3">
                 <button class="menu-toggle" id="mobileMenuToggle">
@@ -593,7 +614,7 @@
             </div>
         </div>
 
-        <!-- Main Content Area -->
+        <!-- Content Area - SCROLLABLE -->
         <div class="content-area fade-in">
             {% if messages %}
                 {% for message in messages %}
@@ -610,7 +631,7 @@
             {% endblock %}
         </div>
 
-        <!-- Footer -->
+        <!-- Footer - FIXED AT BOTTOM -->
         <footer class="main-footer">
             <p>&copy; {% now "Y" %} FieldMax Workshop Management. All rights reserved.</p>
             <p class="mt-1">
