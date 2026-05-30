@@ -1,1063 +1,744 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Workshop Reports - Financial & Performance Analysis</title>
+{% extends "workshop/base.html" %}
+
+{% block title %}Workshop Reports - Financial & Performance Analysis{% endblock %}
+
+{% block header_icon %}fa-chart-line{% endblock %}
+
+{% block page_title %}FINANCIAL REPORTS{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Filter Bar */
+    .filter-bar {
+        background: white;
+        padding: 20px;
+        border-radius: 16px;
+        margin-bottom: 25px;
+        border: 1px solid #cde3f5;
+    }
     
-    <!-- Bootstrap 5 CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    .filter-form {
+        display: flex;
+        gap: 15px;
+        flex-wrap: wrap;
+        align-items: flex-end;
+    }
     
-    <!-- Font Awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    .filter-group {
+        flex: 1;
+        min-width: 150px;
+    }
     
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+    .filter-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: 600;
+        color: #1e3a5f;
+        font-size: 12px;
+    }
+    
+    .filter-group input,
+    .filter-group select {
+        width: 100%;
+        padding: 8px 12px;
+        border: 1px solid #cde3f5;
+        border-radius: 8px;
+        font-size: 14px;
+    }
+    
+    .btn-filter {
+        background: #0284c7;
+        color: white;
+        border: none;
+        padding: 8px 20px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 600;
+    }
+    
+    .btn-filter:hover {
+        background: #0369a1;
+    }
+    
+    .btn-print {
+        background: #6c757d;
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .btn-print:hover {
+        background: #5a6268;
+    }
+    
+    /* Stats Grid */
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 20px;
+        margin-bottom: 25px;
+    }
+    
+    .stat-card {
+        background: white;
+        padding: 20px;
+        border-radius: 16px;
+        border: 1px solid #cde3f5;
+        transition: transform 0.2s;
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-3px);
+    }
+    
+    .stat-card h3 {
+        font-size: 14px;
+        color: #5a7d9a;
+        margin-bottom: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .stat-number {
+        font-size: 32px;
+        font-weight: 800;
+        color: #0c4e6e;
+        margin-bottom: 5px;
+    }
+    
+    .stat-sub {
+        font-size: 12px;
+        color: #5a7d9a;
+    }
+    
+    .stat-positive {
+        color: #10b981;
+    }
+    
+    .stat-negative {
+        color: #ef4444;
+    }
+    
+    /* Chart Containers */
+    .chart-container {
+        background: white;
+        padding: 20px;
+        border-radius: 16px;
+        margin-bottom: 25px;
+        border: 1px solid #cde3f5;
+    }
+    
+    .chart-title {
+        font-size: 16px;
+        font-weight: 600;
+        margin-bottom: 15px;
+        color: #1e3a5f;
+        border-left: 4px solid #0284c7;
+        padding-left: 12px;
+    }
+    
+    canvas {
+        max-height: 300px;
+        width: 100%;
+    }
+    
+    /* Table Styles */
+    .data-table {
+        background: white;
+        border-radius: 16px;
+        overflow: hidden;
+        border: 1px solid #cde3f5;
+        margin-bottom: 25px;
+    }
+    
+    .table-header {
+        background: #f8fafc;
+        padding: 15px 20px;
+        border-bottom: 1px solid #e2e8f0;
+    }
+    
+    .table-header h3 {
+        font-size: 16px;
+        font-weight: 700;
+        color: #1e3a5f;
+        margin: 0;
+    }
+    
+    .table-wrapper {
+        overflow-x: auto;
+    }
+    
+    .data-table table {
+        width: 100%;
+        margin-bottom: 0;
+    }
+    
+    .data-table th {
+        background: #f8fafc;
+        padding: 12px 15px;
+        font-weight: 700;
+        color: #1e3a5f;
+        border-bottom: 1px solid #e2e8f0;
+        font-size: 12px;
+        text-transform: uppercase;
+    }
+    
+    .data-table td {
+        padding: 12px 15px;
+        vertical-align: middle;
+        border-bottom: 1px solid #e2e8f0;
+    }
+    
+    .data-table tr:hover {
+        background: #f0f9ff;
+    }
+    
+    /* Summary Cards */
+    .summary-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 10px 0;
+        border-bottom: 1px solid #e2e8f0;
+    }
+    
+    .summary-row:last-child {
+        border-bottom: none;
+    }
+    
+    .summary-label {
+        font-weight: 600;
+        color: #1e3a5f;
+    }
+    
+    .summary-value {
+        font-weight: 700;
+        font-size: 16px;
+    }
+    
+    /* Two Column Layout */
+    .two-columns {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 25px;
+        margin-bottom: 25px;
+    }
+    
+    /* Alert */
+    .alert-info {
+        background: #e0f2fe;
+        border: 1px solid #bae6fd;
+        color: #0369a1;
+        padding: 12px 20px;
+        border-radius: 12px;
+        margin-bottom: 20px;
+    }
+    
+    /* Loading Spinner */
+    .loading {
+        text-align: center;
+        padding: 40px;
+    }
+    
+    .spinner {
+        border: 3px solid #e2e8f0;
+        border-top: 3px solid #0284c7;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+        margin: 0 auto;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    /* Responsive */
+    @media (max-width: 1200px) {
+        .stats-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+    
+    @media (max-width: 768px) {
+        .two-columns {
+            grid-template-columns: 1fr;
         }
         
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #f0f2f5;
-            overflow-x: hidden;
-        }
-        
-        /* Layout */
-        .app-container {
-            display: flex;
-            min-height: 100vh;
-        }
-        
-        /* Sidebar */
-        .sidebar {
-            width: 280px;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            color: white;
-            position: fixed;
-            height: 100vh;
-            overflow-y: auto;
-            transition: all 0.3s;
-            z-index: 100;
-        }
-        
-        .sidebar-header {
-            padding: 25px 20px;
-            background: #28a745;
-            text-align: center;
-            border-bottom: 1px solid rgb(0, 217, 255);
-        }
-        
-        .sidebar-header h2 {
-            font-size: 22px;
-            margin-bottom: 5px;
-        }
-        
-        .sidebar-header p {
-            font-size: 12px;
-            opacity: 0.7;
-        }
-        
-        .nav-menu {
-            list-style: none;
-            padding: 20px 0;
-        }
-        
-        .nav-item {
-            margin-bottom: 5px;
-        }
-        
-        .nav-link {
-            display: flex;
-            align-items: center;
-            padding: 12px 20px;
-            color: rgba(255,255,255,0.8);
-            text-decoration: none;
-            transition: all 0.3s;
-            gap: 12px;
-        }
-        
-        .nav-link:hover {
-            background: rgba(255,255,255,0.1);
-            color: white;
-            padding-left: 25px;
-        }
-        
-        .nav-link.active {
-            background: #667eea;
-            color: white;
-            border-left: 3px solid #fff;
-        }
-        
-        .nav-icon {
-            font-size: 20px;
-            width: 24px;
-        }
-        
-        /* Main Content */
-        .main-content {
-            flex: 1;
-            margin-left: 280px;
-            padding: 20px;
-        }
-        
-        /* Top Bar */
-        .top-bar {
-            background: white;
-            padding: 15px 25px;
-            border-radius: 12px;
-            margin-bottom: 25px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            flex-wrap: wrap;
-            gap: 15px;
-        }
-        
-        .page-title h1 {
-            font-size: 24px;
-            color: #2c3e50;
-            margin-bottom: 5px;
-        }
-        
-        .page-title p {
-            color: #7f8c8d;
-            font-size: 14px;
-        }
-        
-        .user-info {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-        
-        .user-name {
-            font-weight: 600;
-            color: #2c3e50;
-        }
-        
-        .btn-print {
-            background: #6c757d;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        
-        .btn-print:hover {
-            background: #5a6268;
-        }
-        
-        /* Filter Bar */
-        .filter-bar {
-            background: white;
-            padding: 20px;
-            border-radius: 12px;
-            margin-bottom: 25px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        .stats-grid {
+            grid-template-columns: 1fr;
         }
         
         .filter-form {
-            display: flex;
-            gap: 15px;
-            flex-wrap: wrap;
-            align-items: flex-end;
+            flex-direction: column;
         }
         
         .filter-group {
-            flex: 1;
-            min-width: 150px;
-        }
-        
-        .filter-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: 600;
-            color: #555;
-            font-size: 12px;
-        }
-        
-        .filter-group input,
-        .filter-group select {
-            width: 100%;
-            padding: 8px 12px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            font-size: 14px;
-        }
-        
-        .btn-filter {
-            background: #667eea;
-            color: white;
-            border: none;
-            padding: 8px 20px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: 600;
-        }
-        
-        .btn-filter:hover {
-            background: #5a67d8;
-        }
-        
-        /* Stats Grid */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 20px;
-            margin-bottom: 25px;
-        }
-        
-        .stat-card {
-            background: white;
-            padding: 20px;
-            border-radius: 12px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            transition: transform 0.2s;
-        }
-        
-        .stat-card:hover {
-            transform: translateY(-3px);
-        }
-        
-        .stat-card h3 {
-            font-size: 14px;
-            color: #666;
-            margin-bottom: 10px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        
-        .stat-number {
-            font-size: 32px;
-            font-weight: bold;
-            color: #2c3e50;
-            margin-bottom: 5px;
-        }
-        
-        .stat-sub {
-            font-size: 12px;
-            color: #888;
-        }
-        
-        .stat-positive {
-            color: #27ae60;
-        }
-        
-        .stat-negative {
-            color: #e74c3c;
-        }
-        
-        /* Chart Containers */
-        .chart-container {
-            background: white;
-            padding: 20px;
-            border-radius: 12px;
-            margin-bottom: 25px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-        
-        .chart-title {
-            font-size: 18px;
-            font-weight: 600;
-            margin-bottom: 20px;
-            color: #2c3e50;
-            border-left: 4px solid #667eea;
-            padding-left: 12px;
-        }
-        
-        canvas {
-            max-height: 300px;
             width: 100%;
         }
         
-        /* Table Styles */
-        .data-table {
-            background: white;
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            margin-bottom: 25px;
+        .top-bar {
+            flex-direction: column;
+            align-items: flex-start;
         }
-        
-        .table-header {
-            background: #f8f9fa;
-            padding: 15px 20px;
-            border-bottom: 2px solid #e0e0e0;
-        }
-        
-        .table-header h3 {
-            font-size: 18px;
-            color: #2c3e50;
-        }
-        
-        .table-wrapper {
-            overflow-x: auto;
-        }
-        
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        
-        th, td {
-            padding: 12px 15px;
-            text-align: left;
-            border-bottom: 1px solid #e0e0e0;
-        }
-        
-        th {
-            background: #f8f9fa;
-            font-weight: 600;
-            color: #555;
-            font-size: 13px;
-            text-transform: uppercase;
-        }
-        
-        tr:hover {
-            background: #f8f9fa;
-        }
-        
-        /* Status Badges */
-        .status-badge {
-            display: inline-block;
-            padding: 4px 10px;
-            border-radius: 20px;
-            font-size: 11px;
-            font-weight: 600;
-        }
-        
-        .status-pending { background: #fff3cd; color: #856404; }
-        .status-in_progress { background: #d1ecf1; color: #0c5460; }
-        .status-completed { background: #d4edda; color: #155724; }
-        .status-picked_up { background: #e2e3e5; color: #383d41; }
-        
-        /* Summary Cards */
-        .summary-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 10px 0;
-            border-bottom: 1px solid #e0e0e0;
-        }
-        
-        .summary-row:last-child {
-            border-bottom: none;
-        }
-        
-        .summary-label {
-            font-weight: 600;
-            color: #555;
-        }
-        
-        .summary-value {
-            font-weight: 700;
-            font-size: 16px;
-        }
-        
-        /* Two Column Layout */
-        .two-columns {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 25px;
-            margin-bottom: 25px;
-        }
-        
-        /* Floating Admin Button */
-        .floating-admin-btn {
-            position: fixed;
-            bottom: 30px;
-            right: 30px;
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 1.8rem;
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
-            transition: all 0.3s;
-            z-index: 1050;
-            text-decoration: none;
-            animation: pulse 2s infinite;
-        }
-        
-        .floating-admin-btn:hover {
-            transform: scale(1.1);
-            background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
-            color: white;
-            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
-        }
-        
-        .floating-admin-btn .admin-btn-text {
+    }
+    
+    /* Print Styles */
+    @media print {
+        .sidebar, .top-header-bar, .filter-bar, .btn-print, .floating-admin-btn {
             display: none;
-            font-size: 12px;
-            margin-left: 5px;
-            position: absolute;
-            right: 70px;
-            background: #2c3e50;
-            padding: 5px 10px;
-            border-radius: 20px;
-            white-space: nowrap;
         }
         
-        .floating-admin-btn:hover .admin-btn-text {
-            display: inline;
+        .main-content {
+            margin-left: 0;
+            padding: 0;
         }
         
-        /* Pulse animation */
-        @keyframes pulse {
-            0% {
-                box-shadow: 0 0 0 0 rgba(102, 126, 234, 0.4);
-            }
-            70% {
-                box-shadow: 0 0 0 15px rgba(102, 126, 234, 0);
-            }
-            100% {
-                box-shadow: 0 0 0 0 rgba(102, 126, 234, 0);
-            }
+        .stat-card, .chart-container, .data-table {
+            box-shadow: none;
+            border: 1px solid #ddd;
+            break-inside: avoid;
         }
         
-        /* Responsive */
-        @media (max-width: 768px) {
-            .sidebar {
-                transform: translateX(-100%);
-            }
-            
-            .main-content {
-                margin-left: 0;
-            }
-            
-            .two-columns {
-                grid-template-columns: 1fr;
-            }
-            
-            .stats-grid {
-                grid-template-columns: 1fr;
-            }
-            
-            .filter-form {
-                flex-direction: column;
-            }
-            
-            .floating-admin-btn {
-                width: 50px;
-                height: 50px;
-                font-size: 1.4rem;
-                bottom: 20px;
-                right: 20px;
-            }
-            
-            .floating-admin-btn .admin-btn-text {
-                display: none !important;
-            }
-            
-            .top-bar {
-                flex-direction: column;
-                align-items: flex-start;
-            }
+        body {
+            background: white;
         }
-        
-        /* Print Styles */
-        @media print {
-            .sidebar, .top-bar, .filter-bar, .btn-print, .nav-menu, .floating-admin-btn {
-                display: none;
-            }
-            
-            .main-content {
-                margin-left: 0;
-                padding: 0;
-            }
-            
-            .stat-card, .chart-container, .data-table {
-                box-shadow: none;
-                border: 1px solid #ddd;
-                break-inside: avoid;
-            }
-            
-            body {
-                background: white;
-            }
-        }
-        
+    }
+</style>
+{% endblock %}
 
-        /* Website Button Style */
-        .website-btn {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 20px;
-            padding: 12px 20px;
-            background: #28a745;
-            color: white;
-            text-decoration: none;
-            border-radius: 10px;
-            font-weight: 600;
-            transition: all 0.3s;
-            gap: 10px;
-        }
-        
-        .website-btn:hover {
-            background: #218838;
-            transform: translateY(-2px);
-            color: white;
-        }
-
-        /* Loading Spinner */
-        .loading {
-            text-align: center;
-            padding: 40px;
-        }
-        
-        .spinner {
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #667eea;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto;
-        }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        
-        /* Alert */
-        .alert-info {
-            background: #d1ecf1;
-            border: 1px solid #bee5eb;
-            color: #0c5460;
-            padding: 12px 20px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-        }
-    </style>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-</head>
-<body>
-    <div class="app-container">
-        <!-- Sidebar -->
-        <div class="sidebar">
-            <div class="sidebar-header">
-                <h2>🛠️FIELDMAX WORKSHOP</h2>
-                <p>Repair Management System</p>
+{% block content %}
+<div class="container-fluid px-0">
+    <!-- Date Filter Bar -->
+    <div class="filter-bar">
+        <form method="get" class="filter-form">
+            <div class="filter-group">
+                <label>📅 From Date</label>
+                <input type="date" name="date_from" value="{{ date_from|default:month_ago }}">
             </div>
+            <div class="filter-group">
+                <label>📅 To Date</label>
+                <input type="date" name="date_to" value="{{ date_to|default:today }}">
+            </div>
+            <div class="filter-group">
+                <label>🏪 Shop Branch</label>
+                <select name="shop">
+                    <option value="">All Shops</option>
+                    {% for shop in shops %}
+                    <option value="{{ shop.id }}" {% if selected_shop_id == shop.id|stringformat:"s" %}selected{% endif %}>
+                        {{ shop.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-group">
+                <button type="submit" class="btn-filter">🔍 Generate Report</button>
+            </div>
+        </form>
+    </div>
 
-            <!-- WEBSITE PAGE BUTTON - MOVED INSIDE SIDEBAR -->
-            <a href="{% url 'website:home' %}" class="website-btn">
-                <i class="fas fa-globe"></i> 
-                <span>WEBSITE PAGE</span>
-                <i class="fas fa-external-link-alt"></i>
-            </a>
+    <!-- Alert for no data -->
+    {% if total_jobs == 0 %}
+    <div class="alert-info">
+        ⚠️ No repair jobs found in the selected date range. Please adjust your filters.
+    </div>
+    {% endif %}
 
-            <ul class="nav-menu">
-                <li class="nav-item">
-                    <a href="{% url 'workshop:dashboard' %}" class="nav-link">
-                        <span class="nav-icon">📊</span>
-                        <span>Dashboard</span>
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a href="{% url 'workshop:job_list' %}" class="nav-link">
-                        <span class="nav-icon">📋</span>
-                        <span>All Repairs</span>
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a href="{% url 'workshop:job_create' %}" class="nav-link">
-                        <span class="nav-icon">➕</span>
-                        <span>New Repair</span>
-                    </a>
-                </li>
-
-                <li class="nav-item">
-                    <a href="{% url 'workshop:pickup_page' %}" class="nav-link">
-                        <span class="nav-icon">📦</span>
-                        <span>Customer Pickup</span>
-                    </a>
-                </li>
-
-                <li class="nav-item">
-                    <a href="{% url 'workshop:reports' %}" class="nav-link active">
-                        <span class="nav-icon">📈</span>
-                        <span>Reports</span>
-                    </a>
-                </li>
-            </ul>
+    <!-- Statistics Overview -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <h3>Total Repair Jobs</h3>
+            <div class="stat-number">{{ total_jobs }}</div>
+            <div class="stat-sub">Completed: {{ completed_jobs }} | Pending: {{ pending_jobs }}</div>
         </div>
-
-        <!-- Main Content -->
-        <div class="main-content">
-            <!-- Top Bar -->
-            <div class="top-bar">
-                <div class="page-title">
-                    <h1>📊 Financial Reports</h1>
-                    <p>Comprehensive analysis of repair jobs, revenue, and performance metrics</p>
-                </div>
-                <div class="user-info">
-                    <button onclick="window.print()" class="btn-print">
-                        🖨️ Print Report
-                    </button>
-                    <span class="user-name">👋 {{ request.user.get_full_name|default:request.user.username }}</span>
-                </div>
+        <div class="stat-card">
+            <h3>Total Revenue</h3>
+            <div class="stat-number stat-positive">KSH {{ total_revenue|floatformat:2 }}</div>
+            <div class="stat-sub">From {{ total_jobs }} jobs</div>
+        </div>
+        <div class="stat-card">
+            <h3>Amount Collected</h3>
+            <div class="stat-number stat-positive">KSH {{ total_paid|floatformat:2 }}</div>
+            <div class="stat-sub">{{ collection_percentage|floatformat:1 }}% of total revenue</div>
+        </div>
+        <div class="stat-card">
+            <h3>Outstanding Balance</h3>
+            <div class="stat-number {% if total_balance > 0 %}stat-negative{% else %}stat-positive{% endif %}">
+                KSH {{ total_balance|floatformat:2 }}
             </div>
-
-            <!-- Date Filter Bar -->
-            <div class="filter-bar">
-                <form method="get" class="filter-form">
-                    <div class="filter-group">
-                        <label>📅 From Date</label>
-                        <input type="date" name="date_from" value="{{ date_from|default:month_ago }}">
-                    </div>
-                    <div class="filter-group">
-                        <label>📅 To Date</label>
-                        <input type="date" name="date_to" value="{{ date_to|default:today }}">
-                    </div>
-                    <div class="filter-group">
-                        <label>🏪 Shop Branch</label>
-                        <select name="shop">
-                            <option value="">All Shops</option>
-                            {% for shop in shops %}
-                            <option value="{{ shop.id }}" {% if selected_shop_id == shop.id|stringformat:"s" %}selected{% endif %}>
-                                {{ shop.name }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="filter-group">
-                        <button type="submit" class="btn-filter">🔍 Generate Report</button>
-                    </div>
-                </form>
-            </div>
-
-            <!-- Alert for no data -->
-            {% if total_jobs == 0 %}
-            <div class="alert-info">
-                ⚠️ No repair jobs found in the selected date range. Please adjust your filters.
-            </div>
-            {% endif %}
-
-            <!-- Statistics Overview -->
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <h3>Total Repair Jobs</h3>
-                    <div class="stat-number">{{ total_jobs }}</div>
-                    <div class="stat-sub">Completed: {{ completed_jobs }} | Pending: {{ pending_jobs }}</div>
-                </div>
-                <div class="stat-card">
-                    <h3>Total Revenue</h3>
-                    <div class="stat-number stat-positive">KSH  {{ total_revenue|floatformat:2 }}</div>
-                    <div class="stat-sub">From {{ total_jobs }} jobs</div>
-                </div>
-                <div class="stat-card">
-                    <h3>Amount Collected</h3>
-                    <div class="stat-number stat-positive">KSH  {{ total_paid|floatformat:2 }}</div>
-                    <div class="stat-sub">{{ collection_percentage|floatformat:1 }}% of total revenue</div>
-                </div>
-                <div class="stat-card">
-                    <h3>Outstanding Balance</h3>
-                    <div class="stat-number {% if total_balance > 0 %}stat-negative{% else %}stat-positive{% endif %}">
-                        KSH  {{ total_balance|floatformat:2 }}
-                    </div>
-                    <div class="stat-sub">Pending customer payments</div>
-                </div>
-            </div>
-
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <h3>Material Costs</h3>
-                    <div class="stat-number">KSH  {{ total_material_cost|floatformat:2 }}</div>
-                    <div class="stat-sub">{{ material_percentage|floatformat:1 }}% of revenue</div>
-                </div>
-                <div class="stat-card">
-                    <h3>Labor Charges</h3>
-                    <div class="stat-number">KSH  {{ total_labor_cost|floatformat:2 }}</div>
-                    <div class="stat-sub">{{ labor_percentage|floatformat:1 }}% of revenue</div>
-                </div>
-                <div class="stat-card">
-                    <h3>Net Profit</h3>
-                    <div class="stat-number stat-positive">KSH  {{ net_profit|floatformat:2 }}</div>
-                    <div class="stat-sub">Revenue - Material Costs</div>
-                </div>
-                <div class="stat-card">
-                    <h3>Profit Margin</h3>
-                    <div class="stat-number stat-positive">{{ profit_margin|floatformat:1 }}%</div>
-                    <div class="stat-sub">Net profit margin</div>
-                </div>
-            </div>
-
-            <!-- Charts Section -->
-            <div class="two-columns">
-                <div class="chart-container">
-                    <div class="chart-title">📈 Daily Revenue Trend (Last 30 Days)</div>
-                    <canvas id="revenueChart"></canvas>
-                </div>
-                <div class="chart-container">
-                    <div class="chart-title">🥧 Jobs by Status</div>
-                    <canvas id="statusChart"></canvas>
-                </div>
-            </div>
-
-            <div class="two-columns">
-                <div class="chart-container">
-                    <div class="chart-title">🏪 Revenue by Shop Branch</div>
-                    <canvas id="shopChart"></canvas>
-                </div>
-                <div class="chart-container">
-                    <div class="chart-title">📱 Top Device Types</div>
-                    <canvas id="deviceChart"></canvas>
-                </div>
-            </div>
-
-            <!-- Shop Performance Table -->
-            <div class="data-table">
-                <div class="table-header">
-                    <h3>🏪 Shop Performance Summary</h3>
-                </div>
-                <div class="table-wrapper">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Shop Name</th>
-                                <th>Total Jobs</th>
-                                <th>Completed</th>
-                                <th>Revenue</th>
-                                <th>Material Cost</th>
-                                <th>Net Profit</th>
-                                <th>Avg. Job Value</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for shop in shop_performance %}
-                            <tr>
-                                <td><strong>{{ shop.name }}</strong></td>
-                                <td>{{ shop.total_jobs }}</td>
-                                <td>{{ shop.completed_jobs }}</td>
-                                <td class="stat-positive">KSH  {{ shop.total_revenue|floatformat:2 }}</td>
-                                <td>KSH  {{ shop.total_material|floatformat:2 }}</td>
-                                <td class="stat-positive">KSH  {{ shop.net_profit|floatformat:2 }}</td>
-                                <td>KSH  {{ shop.avg_job_value|floatformat:2 }}</td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="7" style="text-align: center;">No shop data available</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- Technician Performance Table -->
-            <div class="data-table">
-                <div class="table-header">
-                    <h3>🔧 Technician Performance</h3>
-                </div>
-                <div class="table-wrapper">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Technician Name</th>
-                                <th>Jobs Completed</th>
-                                <th>In Progress</th>
-                                <th>Total Revenue</th>
-                                <th>Avg. Completion Time</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for tech in technician_performance %}
-                            <tr>
-                                <td><strong>{{ tech.name }}</strong></td>
-                                <td>{{ tech.completed_jobs }}</td>
-                                <td>{{ tech.in_progress_jobs }}</td>
-                                <td class="stat-positive">KSH  {{ tech.total_revenue|floatformat:2 }}</td>
-                                <td>{{ tech.avg_completion_hours|default:"-" }} hrs</td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="5" style="text-align: center;">No technician data available</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- Recent Completed Jobs -->
-            <div class="data-table">
-                <div class="table-header">
-                    <h3>✅ Recent Completed Jobs</h3>
-                </div>
-                <div class="table-wrapper">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Job ID</th>
-                                <th>Customer</th>
-                                <th>Device</th>
-                                <th>Shop</th>
-                                <th>Technician</th>
-                                <th>Revenue</th>
-                                <th>Completed Date</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for job in recent_completed %}
-                            <tr>
-                                <td>#{{ job.id }}</td>
-                                <td>{{ job.customer_name }}</td>
-                                <td>{{ job.device_type }} {{ job.device_model }}</td>
-                                <td>{{ job.shop.name|default:"-" }}</td>
-                                <td>{{ job.technician_name|default:"-" }}</td>
-                                <td class="stat-positive">KSH  {{ job.total_amount|floatformat:2 }}</td>
-                                <td>{{ job.completed_at|date:"Y-m-d H:i"|default:"-" }}</td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="7" style="text-align: center;">No completed jobs in this period</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- Summary Cards Footer -->
-            <div class="two-columns">
-                <div class="stat-card">
-                    <h3>📊 Key Insights</h3>
-                    <div class="summary-row">
-                        <span class="summary-label">Average Job Value:</span>
-                        <span class="summary-value">KSH  {{ avg_job_value|floatformat:2 }}</span>
-                    </div>
-                    <div class="summary-row">
-                        <span class="summary-label">Collection Rate:</span>
-                        <span class="summary-value">{{ collection_percentage|floatformat:1 }}%</span>
-                    </div>
-                    <div class="summary-row">
-                        <span class="summary-label">Material Cost Ratio:</span>
-                        <span class="summary-value">{{ material_percentage|floatformat:1 }}%</span>
-                    </div>
-                    <div class="summary-row">
-                        <span class="summary-label">Labor Ratio:</span>
-                        <span class="summary-value">{{ labor_percentage|floatformat:1 }}%</span>
-                    </div>
-                </div>
-                <div class="stat-card">
-                    <h3>🎯 Performance Targets</h3>
-                    <div class="summary-row">
-                        <span class="summary-label">Monthly Target:</span>
-                        <span class="summary-value">KSH  10,000</span>
-                    </div>
-                    <div class="summary-row">
-                        <span class="summary-label">Achieved:</span>
-                        <span class="summary-value {% if monthly_revenue >= 10000 %}stat-positive{% else %}stat-negative{% endif %}">
-                            KSH  {{ monthly_revenue|floatformat:2 }}
-                        </span>
-                    </div>
-                    <div class="summary-row">
-                        <span class="summary-label">Target Progress:</span>
-                        <span class="summary-value">{{ monthly_progress|floatformat:1 }}%</span>
-                    </div>
-                    <div class="summary-row">
-                        <span class="summary-label">Remaining:</span>
-                        <span class="summary-value">KSH  {{ monthly_remaining|floatformat:2 }}</span>
-                    </div>
-                </div>
-            </div>
+            <div class="stat-sub">Pending customer payments</div>
         </div>
     </div>
 
-    <!-- Floating Admin Button - Only for Superusers/Administrators -->
-    {% if request.user.is_superuser %}
-    <a href="{% url 'staff:staff_dashboard' %}" 
-       class="floating-admin-btn" 
-       id="adminFloatingBtn"
-       data-bs-toggle="tooltip" 
-       data-bs-placement="left" 
-       title="Back to Admin Dashboard">
-        <i class="fas fa-crown"></i>
-        <span class="admin-btn-text">Admin Dashboard</span>
-    </a>
-    {% endif %}
+    <div class="stats-grid">
+        <div class="stat-card">
+            <h3>Material Costs</h3>
+            <div class="stat-number">KSH {{ total_material_cost|floatformat:2 }}</div>
+            <div class="stat-sub">{{ material_percentage|floatformat:1 }}% of revenue</div>
+        </div>
+        <div class="stat-card">
+            <h3>Labor Charges</h3>
+            <div class="stat-number">KSH {{ total_labor_cost|floatformat:2 }}</div>
+            <div class="stat-sub">{{ labor_percentage|floatformat:1 }}% of revenue</div>
+        </div>
+        <div class="stat-card">
+            <h3>Net Profit</h3>
+            <div class="stat-number stat-positive">KSH {{ net_profit|floatformat:2 }}</div>
+            <div class="stat-sub">Revenue - Material Costs</div>
+        </div>
+        <div class="stat-card">
+            <h3>Profit Margin</h3>
+            <div class="stat-number stat-positive">{{ profit_margin|floatformat:1 }}%</div>
+            <div class="stat-sub">Net profit margin</div>
+        </div>
+    </div>
 
-    <!-- Scripts -->
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    
-    <script>
-        // Initialize Bootstrap tooltips
-        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-            return new bootstrap.Tooltip(tooltipTriggerEl)
-        });
-        
-        // Revenue Chart (Last 30 Days)
-        const revenueCtx = document.getElementById('revenueChart').getContext('2d');
-        new Chart(revenueCtx, {
-            type: 'line',
-            data: {
-                labels: {{ chart_labels|safe }},
-                datasets: [{
-                    label: 'Daily Revenue (KSH  )',
-                    data: {{ revenue_data|safe }},
-                    borderColor: '#667eea',
-                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
-                    borderWidth: 2,
-                    fill: true,
-                    tension: 0.4,
-                    pointBackgroundColor: '#667eea',
-                    pointBorderColor: '#fff',
-                    pointBorderWidth: 2,
-                    pointRadius: 3,
-                    pointHoverRadius: 6
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                plugins: {
-                    legend: {
-                        position: 'top',
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                return 'KSH  ' + context.parsed.y.toFixed(2);
-                            }
-                        }
-                    }
+    <!-- Charts Section -->
+    <div class="two-columns">
+        <div class="chart-container">
+            <div class="chart-title">📈 Daily Revenue Trend (Last 30 Days)</div>
+            <canvas id="revenueChart"></canvas>
+        </div>
+        <div class="chart-container">
+            <div class="chart-title">🥧 Jobs by Status</div>
+            <canvas id="statusChart"></canvas>
+        </div>
+    </div>
+
+    <div class="two-columns">
+        <div class="chart-container">
+            <div class="chart-title">🏪 Revenue by Shop Branch</div>
+            <canvas id="shopChart"></canvas>
+        </div>
+        <div class="chart-container">
+            <div class="chart-title">📱 Top Device Types</div>
+            <canvas id="deviceChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Shop Performance Table -->
+    <div class="data-table">
+        <div class="table-header">
+            <h3>🏪 Shop Performance Summary</h3>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Shop Name</th>
+                        <th>Total Jobs</th>
+                        <th>Completed</th>
+                        <th>Revenue</th>
+                        <th>Material Cost</th>
+                        <th>Net Profit</th>
+                        <th>Avg. Job Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for shop in shop_performance %}
+                    <tr>
+                        <td><strong>{{ shop.name }}</strong></td>
+                        <td>{{ shop.total_jobs }}</td>
+                        <td>{{ shop.completed_jobs }}</td>
+                        <td class="stat-positive">KSH {{ shop.total_revenue|floatformat:2 }}</td>
+                        <td>KSH {{ shop.total_material|floatformat:2 }}</td>
+                        <td class="stat-positive">KSH {{ shop.net_profit|floatformat:2 }}</td>
+                        <td>KSH {{ shop.avg_job_value|floatformat:2 }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" style="text-align: center;">No shop data available</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Technician Performance Table -->
+    <div class="data-table">
+        <div class="table-header">
+            <h3>🔧 Technician Performance</h3>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Technician Name</th>
+                        <th>Jobs Completed</th>
+                        <th>In Progress</th>
+                        <th>Total Revenue</th>
+                        <th>Avg. Completion Time</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for tech in technician_performance %}
+                    <tr>
+                        <td><strong>{{ tech.name }}</strong></td>
+                        <td>{{ tech.completed_jobs }}</td>
+                        <td>{{ tech.in_progress_jobs }}</td>
+                        <td class="stat-positive">KSH {{ tech.total_revenue|floatformat:2 }}</td>
+                        <td>{{ tech.avg_completion_hours|default:"-" }} hrs</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" style="text-align: center;">No technician data available</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Recent Completed Jobs -->
+    <div class="data-table">
+        <div class="table-header">
+            <h3>✅ Recent Completed Jobs</h3>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Job ID</th>
+                        <th>Customer</th>
+                        <th>Device</th>
+                        <th>Shop</th>
+                        <th>Technician</th>
+                        <th>Revenue</th>
+                        <th>Completed Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for job in recent_completed %}
+                    <tr>
+                        <td>#{{ job.id }}</td>
+                        <td>{{ job.customer_name }}</td>
+                        <td>{{ job.device_type }} {{ job.device_model }}</td>
+                        <td>{{ job.shop.name|default:"-" }}</td>
+                        <td>{{ job.technician_name|default:"-" }}</td>
+                        <td class="stat-positive">KSH {{ job.total_amount|floatformat:2 }}</td>
+                        <td>{{ job.completed_at|date:"Y-m-d H:i"|default:"-" }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" style="text-align: center;">No completed jobs in this period</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Summary Cards Footer -->
+    <div class="two-columns">
+        <div class="stat-card">
+            <h3>📊 Key Insights</h3>
+            <div class="summary-row">
+                <span class="summary-label">Average Job Value:</span>
+                <span class="summary-value">KSH {{ avg_job_value|floatformat:2 }}</span>
+            </div>
+            <div class="summary-row">
+                <span class="summary-label">Collection Rate:</span>
+                <span class="summary-value">{{ collection_percentage|floatformat:1 }}%</span>
+            </div>
+            <div class="summary-row">
+                <span class="summary-label">Material Cost Ratio:</span>
+                <span class="summary-value">{{ material_percentage|floatformat:1 }}%</span>
+            </div>
+            <div class="summary-row">
+                <span class="summary-label">Labor Ratio:</span>
+                <span class="summary-value">{{ labor_percentage|floatformat:1 }}%</span>
+            </div>
+        </div>
+        <div class="stat-card">
+            <h3>🎯 Performance Targets</h3>
+            <div class="summary-row">
+                <span class="summary-label">Monthly Target:</span>
+                <span class="summary-value">KSH 10,000</span>
+            </div>
+            <div class="summary-row">
+                <span class="summary-label">Achieved:</span>
+                <span class="summary-value {% if monthly_revenue >= 10000 %}stat-positive{% else %}stat-negative{% endif %}">
+                    KSH {{ monthly_revenue|floatformat:2 }}
+                </span>
+            </div>
+            <div class="summary-row">
+                <span class="summary-label">Target Progress:</span>
+                <span class="summary-value">{{ monthly_progress|floatformat:1 }}%</span>
+            </div>
+            <div class="summary-row">
+                <span class="summary-label">Remaining:</span>
+                <span class="summary-value">KSH {{ monthly_remaining|floatformat:2 }}</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Revenue Chart (Last 30 Days)
+    const revenueCtx = document.getElementById('revenueChart').getContext('2d');
+    new Chart(revenueCtx, {
+        type: 'line',
+        data: {
+            labels: {{ chart_labels|safe }},
+            datasets: [{
+                label: 'Daily Revenue (KSH)',
+                data: {{ revenue_data|safe }},
+                borderColor: '#0284c7',
+                backgroundColor: 'rgba(2, 132, 199, 0.1)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.4,
+                pointBackgroundColor: '#0284c7',
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2,
+                pointRadius: 3,
+                pointHoverRadius: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    position: 'top',
                 },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            callback: function(value) {
-                                return 'KSH  ' + value;
-                            }
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return 'KSH ' + context.parsed.y.toFixed(2);
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return 'KSH ' + value;
                         }
                     }
                 }
             }
-        });
+        }
+    });
 
-        // Status Distribution Chart (Pie)
-        const statusCtx = document.getElementById('statusChart').getContext('2d');
-        new Chart(statusCtx, {
-            type: 'pie',
-            data: {
-                labels: ['Pending', 'In Progress', 'Completed', 'Picked Up'],
-                datasets: [{
-                    data: {{ status_data|safe }},
-                    backgroundColor: ['#ffc107', '#17a2b8', '#28a745', '#6c757d'],
-                    borderWidth: 0,
-                    hoverOffset: 10
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                plugins: {
-                    legend: {
-                        position: 'bottom',
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                const label = context.label || '';
-                                const value = context.parsed || 0;
-                                const total = {{ total_jobs }};
-                                const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
-                                return `KSH  {label}: KSH  {value} jobs (KSH  {percentage}%)`;
-                            }
-                        }
-                    }
-                }
-            }
-        });
-
-        // Shop Performance Chart (Bar)
-        const shopCtx = document.getElementById('shopChart').getContext('2d');
-        new Chart(shopCtx, {
-            type: 'bar',
-            data: {
-                labels: {{ shop_labels|safe }},
-                datasets: [{
-                    label: 'Revenue by Shop (KSH  )',
-                    data: {{ shop_revenue_data|safe }},
-                    backgroundColor: '#764ba2',
-                    borderRadius: 8,
-                    borderWidth: 0
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                plugins: {
-                    legend: {
-                        position: 'top',
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                return 'KSH  ' + context.parsed.y.toFixed(2);
-                            }
-                        }
-                    }
+    // Status Distribution Chart (Pie)
+    const statusCtx = document.getElementById('statusChart').getContext('2d');
+    new Chart(statusCtx, {
+        type: 'pie',
+        data: {
+            labels: ['Pending', 'In Progress', 'Completed', 'Picked Up'],
+            datasets: [{
+                data: {{ status_data|safe }},
+                backgroundColor: ['#f59e0b', '#0284c7', '#10b981', '#6c757d'],
+                borderWidth: 0,
+                hoverOffset: 10
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    position: 'bottom',
                 },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            callback: function(value) {
-                                return 'KSH  ' + value;
-                            }
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.label || '';
+                            const value = context.parsed || 0;
+                            const total = {{ total_jobs }};
+                            const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                            return `${label}: ${value} jobs (${percentage}%)`;
                         }
                     }
                 }
             }
-        });
+        }
+    });
 
-        // Device Type Chart (Horizontal Bar)
-        const deviceCtx = document.getElementById('deviceChart').getContext('2d');
-        new Chart(deviceCtx, {
-            type: 'bar',
-            data: {
-                labels: {{ device_labels|safe }},
-                datasets: [{
-                    label: 'Number of Repairs',
-                    data: {{ device_data|safe }},
-                    backgroundColor: '#3498db',
-                    borderRadius: 8,
-                    borderWidth: 0
-                }]
+    // Shop Performance Chart (Bar)
+    const shopCtx = document.getElementById('shopChart').getContext('2d');
+    new Chart(shopCtx, {
+        type: 'bar',
+        data: {
+            labels: {{ shop_labels|safe }},
+            datasets: [{
+                label: 'Revenue by Shop (KSH)',
+                data: {{ shop_revenue_data|safe }},
+                backgroundColor: '#6366f1',
+                borderRadius: 8,
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    position: 'top',
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return 'KSH ' + context.parsed.y.toFixed(2);
+                        }
+                    }
+                }
             },
-            options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                indexAxis: 'y',
-                plugins: {
-                    legend: {
-                        position: 'top',
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                return context.parsed.x + ' repairs';
-                            }
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return 'KSH ' + value;
                         }
                     }
                 }
             }
-        });
-    </script>
-</body>
-</html>
+        }
+    });
+
+    // Device Type Chart (Horizontal Bar)
+    const deviceCtx = document.getElementById('deviceChart').getContext('2d');
+    new Chart(deviceCtx, {
+        type: 'bar',
+        data: {
+            labels: {{ device_labels|safe }},
+            datasets: [{
+                label: 'Number of Repairs',
+                data: {{ device_data|safe }},
+                backgroundColor: '#0891b2',
+                borderRadius: 8,
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            indexAxis: 'y',
+            plugins: {
+                legend: {
+                    position: 'top',
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.parsed.x + ' repairs';
+                        }
+                    }
+                }
+            }
+        }
+    });
+</script>
+{% endblock %}

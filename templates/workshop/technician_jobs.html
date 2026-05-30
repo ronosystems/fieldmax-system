@@ -1,665 +1,446 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Jobs - Technician Dashboard</title>
+{% extends "workshop/base.html" %}
+
+{% block title %}My Jobs - Technician Dashboard{% endblock %}
+
+{% block header_icon %}fa-clipboard-list{% endblock %}
+
+{% block page_title %}MY JOBS{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Additional page-specific styles */
+    .filter-bar {
+        background: white;
+        padding: 20px;
+        border-radius: 12px;
+        margin-bottom: 25px;
+        border: 1px solid #cde3f5;
+    }
     
-    <!-- Bootstrap 5 CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    .filter-form {
+        display: flex;
+        gap: 15px;
+        flex-wrap: wrap;
+        align-items: flex-end;
+    }
     
-    <!-- Font Awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    .filter-group {
+        flex: 1;
+        min-width: 150px;
+    }
     
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #f0f2f5;
-            overflow-x: hidden;
-        }
-        
-        /* Layout */
-        .app-container {
-            display: flex;
-            min-height: 100vh;
-        }
-        
-        /* Sidebar */
-        .sidebar {
-            width: 280px;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            color: white;
-            position: fixed;
-            height: 100vh;
-            overflow-y: auto;
-            transition: all 0.3s;
-            z-index: 100;
-        }
-        
-        .sidebar-header {
-            padding: 25px 20px;
-            background: #28a745;
-            text-align: center;
-            border-bottom: 1px solid rgb(0, 217, 255);
-        }
-        
-        .sidebar-header h2 {
-            font-size: 22px;
-            margin-bottom: 5px;
-        }
-        
-        .sidebar-header p {
-            font-size: 12px;
-            opacity: 0.7;
-        }
-        
-        .nav-menu {
-            list-style: none;
-            padding: 20px 0;
-        }
-        
-        .nav-item {
-            margin-bottom: 5px;
-        }
-        
-        .nav-link {
-            display: flex;
-            align-items: center;
-            padding: 12px 20px;
-            color: rgba(255,255,255,0.8);
-            text-decoration: none;
-            transition: all 0.3s;
-            gap: 12px;
-        }
-        
-        .nav-link:hover {
-            background: rgba(255,255,255,0.1);
-            color: white;
-            padding-left: 25px;
-        }
-        
-        .nav-link.active {
-            background: #667eea;
-            color: white;
-            border-left: 3px solid #fff;
-        }
-        
-        .nav-icon {
-            font-size: 20px;
-            width: 24px;
-        }
-        
-        /* Main Content */
-        .main-content {
-            flex: 1;
-            margin-left: 280px;
-            padding: 20px;
-        }
-        
-        /* Top Bar */
-        .top-bar {
-            background: white;
-            padding: 15px 25px;
-            border-radius: 12px;
-            margin-bottom: 25px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            flex-wrap: wrap;
-            gap: 15px;
-        }
-        
-        .page-title h1 {
-            font-size: 24px;
-            color: #2c3e50;
-            margin-bottom: 5px;
-        }
-        
-        .page-title p {
-            color: #7f8c8d;
-            font-size: 14px;
-        }
-        
-        /* Filter Bar */
-        .filter-bar {
-            background: white;
-            padding: 20px;
-            border-radius: 12px;
-            margin-bottom: 25px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-        
+    .filter-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: 600;
+        color: #1e3a5f;
+        font-size: 12px;
+    }
+    
+    .filter-group input,
+    .filter-group select {
+        width: 100%;
+        padding: 8px 12px;
+        border: 1px solid #cde3f5;
+        border-radius: 8px;
+        font-size: 14px;
+    }
+    
+    .filter-actions {
+        display: flex;
+        gap: 10px;
+    }
+    
+    .btn-filter {
+        background: #0284c7;
+        color: white;
+        border: none;
+        padding: 8px 20px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 600;
+    }
+    
+    .btn-filter:hover {
+        background: #0369a1;
+    }
+    
+    .btn-reset {
+        background: #e2e8f0;
+        color: #4a5568;
+        border: none;
+        padding: 8px 20px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 600;
+        text-decoration: none;
+    }
+    
+    .btn-reset:hover {
+        background: #cbd5e1;
+    }
+    
+    .stats-summary {
+        background: white;
+        padding: 15px 20px;
+        border-radius: 12px;
+        margin-bottom: 25px;
+        display: flex;
+        gap: 30px;
+        flex-wrap: wrap;
+        border: 1px solid #cde3f5;
+    }
+    
+    .stat-badge {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    
+    .stat-badge-label {
+        font-size: 13px;
+        color: #5a7d9a;
+    }
+    
+    .stat-badge-count {
+        font-weight: 700;
+        font-size: 18px;
+        color: #0c4e6e;
+    }
+    
+    .jobs-table-container {
+        background: white;
+        border-radius: 12px;
+        overflow: hidden;
+        border: 1px solid #cde3f5;
+    }
+    
+    .table-header {
+        padding: 20px;
+        border-bottom: 2px solid #e2e8f0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 10px;
+        background: #f8fafc;
+    }
+    
+    .table-header h2 {
+        font-size: 16px;
+        font-weight: 700;
+        color: #1e3a5f;
+        margin: 0;
+    }
+    
+    .table-info {
+        font-size: 13px;
+        color: #5a7d9a;
+    }
+    
+    .table-wrapper {
+        overflow-x: auto;
+    }
+    
+    .data-table {
+        width: 100%;
+        margin-bottom: 0;
+    }
+    
+    .data-table th {
+        background: #f8fafc;
+        padding: 12px 15px;
+        font-weight: 700;
+        color: #1e3a5f;
+        border-bottom: 1px solid #e2e8f0;
+        font-size: 12px;
+        text-transform: uppercase;
+    }
+    
+    .data-table td {
+        padding: 12px 15px;
+        vertical-align: middle;
+        border-bottom: 1px solid #e2e8f0;
+    }
+    
+    .data-table tr:hover {
+        background: #f0f9ff;
+    }
+    
+    .action-buttons {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    
+    .btn-icon {
+        padding: 5px 12px;
+        border-radius: 6px;
+        text-decoration: none;
+        font-size: 12px;
+        font-weight: 600;
+        transition: all 0.2s;
+        cursor: pointer;
+        border: none;
+    }
+    
+    .btn-view {
+        background: #0284c7;
+        color: white;
+    }
+    
+    .btn-accept {
+        background: #10b981;
+        color: white;
+    }
+    
+    .btn-complete {
+        background: #f59e0b;
+        color: #333;
+    }
+    
+    .btn-view:hover, .btn-accept:hover, .btn-complete:hover {
+        opacity: 0.8;
+        transform: translateY(-1px);
+    }
+    
+    .amount-positive {
+        color: #10b981;
+        font-weight: 600;
+    }
+    
+    .amount-negative {
+        color: #ef4444;
+        font-weight: 600;
+    }
+    
+    .pagination {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 10px;
+        padding: 20px;
+        background: white;
+        border-top: 1px solid #e2e8f0;
+    }
+    
+    .pagination a, .pagination span {
+        padding: 8px 12px;
+        border-radius: 6px;
+        text-decoration: none;
+        color: #0284c7;
+        font-weight: 500;
+    }
+    
+    .pagination a:hover {
+        background: #0284c7;
+        color: white;
+    }
+    
+    .pagination .current {
+        background: #0284c7;
+        color: white;
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+    }
+    
+    .empty-state-icon {
+        font-size: 64px;
+        margin-bottom: 20px;
+        opacity: 0.5;
+    }
+    
+    @media (max-width: 768px) {
         .filter-form {
-            display: flex;
-            gap: 15px;
-            flex-wrap: wrap;
-            align-items: flex-end;
+            flex-direction: column;
         }
-        
-        .filter-group {
-            flex: 1;
-            min-width: 150px;
-        }
-        
-        .filter-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: 600;
-            color: #555;
-            font-size: 12px;
-        }
-        
-        .filter-group input,
-        .filter-group select {
-            width: 100%;
-            padding: 8px 12px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            font-size: 14px;
-        }
-        
         .filter-actions {
-            display: flex;
-            gap: 10px;
-        }
-        
-        .btn-filter {
-            background: #667eea;
-            color: white;
-            border: none;
-            padding: 8px 20px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: 600;
-        }
-        
-        .btn-reset {
-            background: #e2e8f0;
-            color: #4a5568;
-            border: none;
-            padding: 8px 20px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: 600;
-            text-decoration: none;
-        }
-        
-        /* Stats Summary */
-        .stats-summary {
-            background: white;
-            padding: 15px 20px;
-            border-radius: 12px;
-            margin-bottom: 25px;
-            display: flex;
-            gap: 30px;
-            flex-wrap: wrap;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-        
-        .stat-badge {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .stat-badge-label {
-            font-size: 13px;
-            color: #7f8c8d;
-        }
-        
-        .stat-badge-count {
-            font-weight: 700;
-            font-size: 18px;
-            color: #2c3e50;
-        }
-        
-        /* Table */
-        .jobs-table-container {
-            background: white;
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-        
-        .table-header {
-            padding: 20px;
-            border-bottom: 2px solid #f0f2f5;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-        
-        .table-header h2 {
-            font-size: 18px;
-            color: #2c3e50;
-        }
-        
-        .table-info {
-            font-size: 13px;
-            color: #7f8c8d;
-        }
-        
-        .table-wrapper {
-            overflow-x: auto;
-        }
-        
-        table {
             width: 100%;
-            border-collapse: collapse;
         }
-        
-        th, td {
-            padding: 12px 15px;
-            text-align: left;
-            border-bottom: 1px solid #e0e0e0;
+        .btn-filter, .btn-reset {
+            flex: 1;
+            text-align: center;
         }
-        
-        th {
-            background: #f8f9fa;
-            font-weight: 600;
-            color: #555;
-            font-size: 13px;
-            text-transform: uppercase;
+        .stats-summary {
+            flex-direction: column;
+            gap: 10px;
         }
-        
-        tr:hover {
-            background: #f8f9fa;
-        }
-        
-        /* Status Badges */
-        .status-badge {
-            display: inline-block;
-            padding: 4px 10px;
-            border-radius: 20px;
-            font-size: 11px;
-            font-weight: 600;
-        }
-        
-        .status-pending {
-            background: #fff3cd;
-            color: #856404;
-        }
-        
-        .status-in_progress {
-            background: #d1ecf1;
-            color: #0c5460;
-        }
-        
-        .status-completed {
-            background: #d4edda;
-            color: #155724;
-        }
-        
-        .status-picked_up {
-            background: #e2e3e5;
-            color: #383d41;
-        }
-        
-        /* Action Buttons */
-        .action-buttons {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-        }
-        
-        .btn-icon {
-            padding: 5px 10px;
-            border-radius: 4px;
-            text-decoration: none;
+        .data-table {
             font-size: 12px;
-            transition: all 0.2s;
-            cursor: pointer;
-            border: none;
         }
-        
-        .btn-view {
-            background: #667eea;
-            color: white;
+        .data-table th, .data-table td {
+            padding: 8px 10px;
         }
-        
-        .btn-accept {
-            background: #28a745;
-            color: white;
-        }
-        
-        .btn-complete {
-            background: #ffc107;
-            color: #333;
-        }
-        
-        .btn-view:hover, .btn-accept:hover, .btn-complete:hover {
-            opacity: 0.8;
-        }
-        
-        /* Amount Styling */
-        .amount-positive {
-            color: #27ae60;
-            font-weight: 600;
-        }
-        
-        .amount-negative {
-            color: #e74c3c;
-            font-weight: 600;
-        }
-        
-        /* Pagination */
-        .pagination {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 10px;
-            padding: 20px;
-            background: white;
-            border-top: 1px solid #e0e0e0;
-        }
-        
-        .pagination a, .pagination span {
-            padding: 8px 12px;
-            border-radius: 6px;
-            text-decoration: none;
-            color: #667eea;
-            font-weight: 500;
-        }
-        
-        .pagination a:hover {
-            background: #667eea;
-            color: white;
-        }
-        
-        .pagination .current {
-            background: #667eea;
-            color: white;
-        }
-        
-        /* Website Button Style */
-        .website-btn {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 20px;
-            padding: 12px 20px;
-            background: #28a745;
-            color: white;
-            text-decoration: none;
-            border-radius: 10px;
-            font-weight: 600;
-            transition: all 0.3s;
-            gap: 10px;
-        }
-        
-        .website-btn:hover {
-            background: #218838;
-            transform: translateY(-2px);
-            color: white;
-        }
+    }
+</style>
+{% endblock %}
 
-        /* Empty State */
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-        }
-        
-        .empty-state-icon {
-            font-size: 64px;
-            margin-bottom: 20px;
-            opacity: 0.5;
-        }
-        
-        /* Loading */
-        .loading {
-            text-align: center;
-            padding: 20px;
-        }
-        
-        .spinner-border-sm {
-            width: 1rem;
-            height: 1rem;
-        }
-        
-        /* Responsive */
-        @media (max-width: 768px) {
-            .sidebar {
-                transform: translateX(-100%);
-            }
-            .main-content {
-                margin-left: 0;
-            }
-            .filter-form {
-                flex-direction: column;
-            }
-            .filter-actions {
-                width: 100%;
-            }
-            .btn-filter, .btn-reset {
-                flex: 1;
-                text-align: center;
-            }
-            .stats-summary {
-                flex-direction: column;
-                gap: 10px;
-            }
-        }
-    </style>
-</head>
-<body>
-    <div class="app-container">
-        <!-- Sidebar -->
-        <div class="sidebar">
-            <div class="sidebar-header">
-                <h2>🔧 FSL WORKSH OP</h2>
-                <p>Technician Portal</p>
+{% block content %}
+<div class="container-fluid px-0">
+    <!-- Filter Bar -->
+    <div class="filter-bar">
+        <form method="get" class="filter-form" id="filterForm">
+            <div class="filter-group">
+                <label>🔍 Search</label>
+                <input type="text" name="search" placeholder="Customer name, phone, device..." 
+                       value="{{ search_query }}">
             </div>
+            <div class="filter-group">
+                <label>📌 Status</label>
+                <select name="status">
+                    <option value="">All Status</option>
+                    <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>Pending</option>
+                    <option value="in_progress" {% if status_filter == 'in_progress' %}selected{% endif %}>In Progress</option>
+                    <option value="completed" {% if status_filter == 'completed' %}selected{% endif %}>Completed</option>
+                    <option value="picked_up" {% if status_filter == 'picked_up' %}selected{% endif %}>Picked Up</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>🏪 Shop Branch</label>
+                <select name="shop">
+                    <option value="">All Shops</option>
+                    {% for shop in shops %}
+                        <option value="{{ shop.id }}" {% if shop_filter|stringformat:"s" == shop.id|stringformat:"s" %}selected{% endif %}>
+                            {{ shop.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-actions">
+                <button type="submit" class="btn-filter">🔍 Apply Filters</button>
+                <a href="{% url 'staff:technician_jobs' %}" class="btn-reset">🔄 Reset</a>
+            </div>
+        </form>
+    </div>
 
-            <!-- WEBSITE PAGE BUTTON - MOVED INSIDE SIDEBAR -->
-            <a href="{% url 'website:home' %}" class="website-btn">
-                <i class="fas fa-globe"></i> 
-                <span>WEBSITE PAGE</span>
-                <i class="fas fa-external-link-alt"></i>
-            </a>
-            
-            <ul class="nav-menu">
-                <li class="nav-item">
-                    <a href="{% url 'staff:technician_dashboard' %}" class="nav-link">
-                        <span class="nav-icon">📊</span>
-                        <span>Dashboard</span>
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a href="{% url 'staff:technician_jobs' %}" class="nav-link active">
-                        <span class="nav-icon">📋</span>
-                        <span>My Jobs</span>
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a href="{% url 'staff:technician_reports' %}" class="nav-link">
-                        <span class="nav-icon">📈</span>
-                        <span>My Reports</span>
-                    </a>
-                </li>
-            </ul>
+    <!-- Stats Summary -->
+    <div class="stats-summary">
+        <div class="stat-badge">
+            <span class="stat-badge-label">📊 Total Jobs:</span>
+            <span class="stat-badge-count">{{ total_jobs }}</span>
         </div>
-
-        <!-- Main Content -->
-        <div class="main-content">
-            <!-- Top Bar -->
-            <div class="top-bar">
-                <div class="page-title">
-                    <h1>📋 My Jobs</h1>
-                    <p>Jobs assigned to: <strong>{{ technician_name }}</strong> | {{ today|date:"l, F j, Y" }}</p>
-                </div>
-            </div>
-
-            <!-- Filter Bar -->
-            <div class="filter-bar">
-                <form method="get" class="filter-form" id="filterForm">
-                    <div class="filter-group">
-                        <label>🔍 Search</label>
-                        <input type="text" name="search" placeholder="Customer name, phone, device..." 
-                               value="{{ search_query }}">
-                    </div>
-                    <div class="filter-group">
-                        <label>📌 Status</label>
-                        <select name="status">
-                            <option value="">All Status</option>
-                            <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>Pending</option>
-                            <option value="in_progress" {% if status_filter == 'in_progress' %}selected{% endif %}>In Progress</option>
-                            <option value="completed" {% if status_filter == 'completed' %}selected{% endif %}>Completed</option>
-                            <option value="picked_up" {% if status_filter == 'picked_up' %}selected{% endif %}>Picked Up</option>
-                        </select>
-                    </div>
-                    <div class="filter-group">
-                        <label>🏪 Shop Branch</label>
-                        <select name="shop">
-                            <option value="">All Shops</option>
-                            {% for shop in shops %}
-                                <option value="{{ shop.id }}" {% if shop_filter|stringformat:"s" == shop.id|stringformat:"s" %}selected{% endif %}>
-                                    {{ shop.name }}
-                                </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="filter-actions">
-                        <button type="submit" class="btn-filter">🔍 Apply Filters</button>
-                        <a href="{% url 'staff:technician_jobs' %}" class="btn-reset">🔄 Reset</a>
-                    </div>
-                </form>
-            </div>
-
-            <!-- Stats Summary -->
-            <div class="stats-summary">
-                <div class="stat-badge">
-                    <span class="stat-badge-label">📊 Total Jobs:</span>
-                    <span class="stat-badge-count">{{ total_jobs }}</span>
-                </div>
-                <div class="stat-badge">
-                    <span class="stat-badge-label">⏳ Pending:</span>
-                    <span class="stat-badge-count">{{ pending_count }}</span>
-                </div>
-                <div class="stat-badge">
-                    <span class="stat-badge-label">🔧 In Progress:</span>
-                    <span class="stat-badge-count">{{ in_progress_count }}</span>
-                </div>
-                <div class="stat-badge">
-                    <span class="stat-badge-label">✅ Completed:</span>
-                    <span class="stat-badge-count">{{ completed_count }}</span>
-                </div>
-                <div class="stat-badge">
-                    <span class="stat-badge-label">💰 Total Revenue:</span>
-                    <span class="stat-badge-count">KSH {{ total_revenue|floatformat:2 }}</span>
-                </div>
-            </div>
-
-            <!-- Jobs Table -->
-            <div class="jobs-table-container">
-                <div class="table-header">
-                    <h2>📋 My Repair Jobs</h2>
-                    <div class="table-info">
-                        Showing {{ jobs.start_index }} to {{ jobs.end_index }} of {{ jobs.paginator.count }} jobs
-                    </div>
-                </div>
-                
-                <div class="table-wrapper">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Job ID</th>
-                                <th>Customer</th>
-                                <th>Device</th>
-                                <th>Shop</th>
-                                <th>Status</th>
-                                <th>Total</th>
-                                <th>Created</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for job in jobs %}
-                            <tr>
-                                <td style="font-weight: 600;">#{{ job.id }}</td>
-                                <td>
-                                    {{ job.customer_name }}<br>
-                                    <small style="color: #888;">{{ job.customer_phone|default:"No phone" }}</small>
-                                </td>
-                                <td>
-                                    {{ job.device_type }}<br>
-                                    <small style="color: #888;">{{ job.device_model|default:"-" }}</small>
-                                </td>
-                                <td>{{ job.shop.name|default:"-" }}</td>
-                                <td>
-                                    <span class="status-badge status-{{ job.status }}">
-                                        {% if job.status == 'pending' %}⏳ Pending
-                                        {% elif job.status == 'in_progress' %}🔧 In Progress
-                                        {% elif job.status == 'completed' %}✅ Completed
-                                        {% elif job.status == 'picked_up' %}📦 Picked Up
-                                        {% endif %}
-                                    </span>
-                                </td>
-                                <td class="amount-positive">KSH {{ job.total_amount|floatformat:2 }}</td>
-                                <td>
-                                    {{ job.created_at|date:"Y-m-d" }}<br>
-                                    <small style="color: #888;">{{ job.created_at|time:"H:i" }}</small>
-                                </td>
-                                <td>
-                                    <div class="action-buttons">
-                                        {% if job.status == 'pending' %}
-                                        <button class="btn-icon btn-accept" onclick="updateJobStatus({{ job.id }}, 'in_progress', this)">
-                                            ✅ Accept KSH   Start
-                                        </button>
-                                        {% elif job.status == 'in_progress' %}
-                                        <button class="btn-icon btn-complete" onclick="updateJobStatus({{ job.id }}, 'completed', this)">
-                                            ✔️ Complete
-                                        </button>
-                                        {% endif %}
-                                    </div>
-                                </td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="8" class="empty-state">
-                                    <div class="empty-state-icon">🔧</div>
-                                    <h3>No jobs assigned to you</h3>
-                                    <p>You don't have any repair jobs assigned yet.</p>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                
-                <!-- Pagination -->
-                {% if jobs.has_other_pages %}
-                <div class="pagination">
-                    {% if jobs.has_previous %}
-                        <a href="?page={{ jobs.previous_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if shop_filter %}&shop={{ shop_filter }}{% endif %}">
-                            ← Previous
-                        </a>
-                    {% else %}
-                        <span class="disabled">← Previous</span>
-                    {% endif %}
-                    
-                    <span class="current">Page {{ jobs.number }} of {{ jobs.paginator.num_pages }}</span>
-                    
-                    {% if jobs.has_next %}
-                        <a href="?page={{ jobs.next_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if shop_filter %}&shop={{ shop_filter }}{% endif %}">
-                            Next →
-                        </a>
-                    {% else %}
-                        <span class="disabled">Next →</span>
-                    {% endif %}
-                </div>
-                {% endif %}
-            </div>
+        <div class="stat-badge">
+            <span class="stat-badge-label">⏳ Pending:</span>
+            <span class="stat-badge-count">{{ pending_count }}</span>
+        </div>
+        <div class="stat-badge">
+            <span class="stat-badge-label">🔧 In Progress:</span>
+            <span class="stat-badge-count">{{ in_progress_count }}</span>
+        </div>
+        <div class="stat-badge">
+            <span class="stat-badge-label">✅ Completed:</span>
+            <span class="stat-badge-count">{{ completed_count }}</span>
+        </div>
+        <div class="stat-badge">
+            <span class="stat-badge-label">💰 Total Revenue:</span>
+            <span class="stat-badge-count">KSH {{ total_revenue|floatformat:2 }}</span>
         </div>
     </div>
+
+    <!-- Jobs Table -->
+    <div class="jobs-table-container">
+        <div class="table-header">
+            <h2>📋 My Repair Jobs</h2>
+            <div class="table-info">
+                Showing {{ jobs.start_index }} to {{ jobs.end_index }} of {{ jobs.paginator.count }} jobs
+            </div>
+        </div>
+        
+        <div class="table-wrapper">
+            <table class="data-table table">
+                <thead>
+                    <tr>
+                        <th>Job ID</th>
+                        <th>Customer</th>
+                        <th>Device</th>
+                        <th>Shop</th>
+                        <th>Status</th>
+                        <th>Total</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for job in jobs %}
+                    <tr>
+                        <td style="font-weight: 600;">#{{ job.id }}</td>
+                        <td>
+                            {{ job.customer_name }}<br>
+                            <small class="text-muted">{{ job.customer_phone|default:"No phone" }}</small>
+                        </td>
+                        <td>
+                            {{ job.device_type }}<br>
+                            <small class="text-muted">{{ job.device_model|default:"-" }}</small>
+                        </td>
+                        <td>{{ job.shop.name|default:"-" }}</td>
+                        <td>
+                            <span class="status-badge status-{{ job.status }}">
+                                {% if job.status == 'pending' %}⏳ Pending
+                                {% elif job.status == 'in_progress' %}🔧 In Progress
+                                {% elif job.status == 'completed' %}✅ Completed
+                                {% elif job.status == 'picked_up' %}📦 Picked Up
+                                {% endif %}
+                            </span>
+                        </td>
+                        <td class="amount-positive">KSH {{ job.total_amount|floatformat:2 }}</td>
+                        <td>
+                            {{ job.created_at|date:"Y-m-d" }}<br>
+                            <small class="text-muted">{{ job.created_at|time:"H:i" }}</small>
+                        </td>
+                        <td>
+                            <div class="action-buttons">
+                                {% if job.status == 'pending' %}
+                                <button class="btn-icon btn-accept" onclick="updateJobStatus({{ job.id }}, 'in_progress', this)">
+                                    ✅ Accept & Start
+                                </button>
+                                {% elif job.status == 'in_progress' %}
+                                <button class="btn-icon btn-complete" onclick="updateJobStatus({{ job.id }}, 'completed', this)">
+                                    ✔️ Complete
+                                </button>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="empty-state">
+                            <div class="empty-state-icon">🔧</div>
+                            <h3>No jobs assigned to you</h3>
+                            <p>You don't have any repair jobs assigned yet.</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination -->
+        {% if jobs.has_other_pages %}
+        <div class="pagination">
+            {% if jobs.has_previous %}
+                <a href="?page={{ jobs.previous_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if shop_filter %}&shop={{ shop_filter }}{% endif %}">
+                    ← Previous
+                </a>
+            {% else %}
+                <span class="disabled">← Previous</span>
+            {% endif %}
+            
+            <span class="current">Page {{ jobs.number }} of {{ jobs.paginator.num_pages }}</span>
+            
+            {% if jobs.has_next %}
+                <a href="?page={{ jobs.next_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if shop_filter %}&shop={{ shop_filter }}{% endif %}">
+                    Next →
+                </a>
+            {% else %}
+                <span class="disabled">Next →</span>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
 
 <script>
     // Get CSRF token
@@ -681,62 +462,65 @@
     const csrftoken = getCookie('csrftoken');
     
     // Update job status via AJAX
-    function updateJobStatus(jobId, newStatus, buttonElement) {
-        let confirmMessage = newStatus === 'in_progress' 
-            ? 'Accept this job and start working on it?' 
-            : 'Mark this job as completed?';
+function updateJobStatus(jobId, newStatus, buttonElement) {
+    let confirmMessage = newStatus === 'in_progress' 
+        ? 'Accept this job and start working on it?' 
+        : 'Mark this job as completed?';
+    
+    if (confirm(confirmMessage)) {
+        const originalText = buttonElement.innerHTML;
+        buttonElement.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Processing...';
+        buttonElement.disabled = true;
         
-        if (confirm(confirmMessage)) {
-            // Save original button text
-            const originalText = buttonElement.innerHTML;
-            buttonElement.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Processing...';
-            buttonElement.disabled = true;
-            
-            // Make AJAX request
-            fetch(`/worKSH op/technician-update-status/KSH {jobId}/`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrftoken,
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                body: JSON.stringify({ status: newStatus })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    // Show success message
-                    showNotification('success', data.message);
-                    // Reload page after 1 second
-                    setTimeout(() => {
-                        location.reload();
-                    }, 1000);
-                } else {
-                    showNotification('error', data.error || 'Failed to update status');
-                    buttonElement.innerHTML = originalText;
-                    buttonElement.disabled = false;
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                showNotification('error', 'An error occurred. Please try again.');
+        fetch(`/staff/technician-update-job/${jobId}/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrftoken,
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({ status: newStatus })
+        })
+        .then(response => {
+            console.log('Response status:', response.status);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Response data:', data);
+            if (data.success) {
+                showNotification('success', data.message);
+                setTimeout(() => {
+                    location.reload();
+                }, 1000);
+            } else {
+                showNotification('error', data.error || 'Failed to update status');
                 buttonElement.innerHTML = originalText;
                 buttonElement.disabled = false;
-            });
-        }
+            }
+        })
+        .catch(error => {
+            console.error('Error details:', error);
+            showNotification('error', 'Error: ' + error.message);
+            buttonElement.innerHTML = originalText;
+            buttonElement.disabled = false;
+        });
     }
+}
     
     // Show notification
     function showNotification(type, message) {
         const alertDiv = document.createElement('div');
-        alertDiv.className = `alert alert-KSH {type === 'success' ? 'success' : 'danger'} alert-dismissible fade show position-fixed`;
+        alertDiv.className = `alert alert-${type === 'success' ? 'success' : 'danger'} alert-dismissible fade show position-fixed`;
         alertDiv.style.top = '20px';
         alertDiv.style.right = '20px';
         alertDiv.style.zIndex = '9999';
         alertDiv.style.minWidth = '300px';
         alertDiv.innerHTML = `
-            <i class="fas KSH {type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'} me-2"></i>
-            KSH {message}
+            <i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'} me-2"></i>
+            ${message}
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         `;
         document.body.appendChild(alertDiv);
@@ -765,5 +549,4 @@
         }
     }
 </script>
-</body>
-</html>
+{% endblock %}

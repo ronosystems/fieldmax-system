@@ -2643,7 +2643,7 @@ def technician_performance(request):
         'today': today,
     }
     
-    return render(request, 'staff/dashboards/technician_performance.html', context)
+    return render(request, 'workshop/technician_performance.html', context)
 
 
 # ============================================

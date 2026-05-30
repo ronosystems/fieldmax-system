@@ -1,3 +1,4 @@
+# workshop/urls.py
 from django.urls import path, include
 from . import views
 
@@ -16,11 +17,12 @@ urlpatterns = [
     path('shops/<int:shop_id>/jobs/', views.shop_jobs, name='shop_jobs'),
     path('job-receipt/<int:job_id>/', views.job_receipt, name='job_receipt'),
     
-    # Technician URLs
+    # Include technician URLs (no namespace)
     path('technician/', include('workshop.urls_technician')),
-    # Add this to your urlpatterns
+    
+    # Helper URLs
     path('get-technicians-by-shop/', views.get_technicians_by_shop, name='get_technicians_by_shop'),
-    path('technician-update-status/<int:job_id>/', views.technician_update_status, name='technician_update_status'),
+    path('technician-update-job-status/<int:job_id>/', views.technician_update_job_status, name='technician_update_job_status'),
 
     # Pickup URLs
     path('pickup/', views.pickup_page, name='pickup_page'),

@@ -650,67 +650,98 @@ def shop_jobs(request, shop_id):
     return render(request, 'workshop/shop_jobs.html', context)
 
 
-# Add to workshop/views.py
-from django.views.decorators.csrf import csrf_exempt
-from django.http import JsonResponse
+# staff/views.py
 import json
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404
+from django.contrib.auth.decorators import login_required
+from workshop.models import RepairJob
+from staff.models import Staff
+from django.utils import timezone
+import logging
 
-@csrf_exempt
-def technician_update_status(request, job_id):
-    """AJAX endpoint for technician to update job status"""
-    from staff.models import Staff
+logger = logging.getLogger(__name__)
+
+@login_required
+def technician_update_job_status(request, job_id):
+    """Update job status for technician via AJAX"""
     
     if request.method != 'POST':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
     
     try:
-        # Get the job
         job = get_object_or_404(RepairJob, id=job_id)
         
-        # Get technician name from staff profile
+        # Get technician name
         try:
             staff_profile = Staff.objects.get(user=request.user)
             technician_name = staff_profile.user.get_full_name() or staff_profile.user.username
         except:
             technician_name = request.user.get_full_name() or request.user.username
         
-        # Check if job belongs to this technician
-        if job.technician_name != technician_name and not request.user.is_superuser:
-            return JsonResponse({'error': 'You are not assigned to this job'}, status=403)
-        
-        # Parse request body
-        try:
-            data = json.loads(request.body)
-            new_status = data.get('status')
-        except:
+        # Parse request body - handle both JSON and form data
+        if request.content_type == 'application/json':
+            try:
+                data = json.loads(request.body)
+                new_status = data.get('status')
+            except json.JSONDecodeError:
+                return JsonResponse({'error': 'Invalid JSON data'}, status=400)
+        else:
             new_status = request.POST.get('status')
+        
+        # Log for debugging
+        logger.info(f"Received status update for job {job_id}: {new_status}")
+        
+        # Valid statuses - map common variations
+        status_mapping = {
+            'in_progress': 'in_progress',
+            'inprogress': 'in_progress',
+            'completed': 'completed',
+            'complete': 'completed',
+            'pending': 'pending',
+            'picked_up': 'picked_up',
+            'pickedup': 'picked_up',
+        }
+        
+        # Get the correct status value
+        new_status = status_mapping.get(new_status, new_status)
         
         # Validate status
         valid_statuses = ['pending', 'in_progress', 'completed', 'picked_up']
         if new_status not in valid_statuses:
-            return JsonResponse({'error': 'Invalid status'}, status=400)
+            return JsonResponse({
+                'error': f'Invalid status: {new_status}. Valid statuses: {valid_statuses}'
+            }, status=400)
         
         # Update status
         old_status = job.status
         job.status = new_status
         
-        # Set completion timestamp if completed
+        # If moving to in_progress, assign technician
+        if new_status == 'in_progress' and not job.technician_name:
+            job.technician_name = technician_name
+        
+        # Set completion dates
         if new_status == 'completed' and not job.completed_at:
             job.completed_at = timezone.now()
-        elif new_status == 'picked_up' and not job.picked_up_at:
+        
+        if new_status == 'picked_up' and not job.picked_up_at:
             job.picked_up_at = timezone.now()
         
         job.save()
         
+        # Get status display name
+        status_display = dict(job._meta.get_field('status').choices).get(new_status, new_status)
+        
+        logger.info(f"Job #{job.id} status updated from {old_status} to {new_status} by {request.user.username}")
+        
         return JsonResponse({
             'success': True,
-            'message': f'Job #{job.id} status updated to {job.get_status_display()}',
+            'message': f'Job status updated to {status_display}',
             'new_status': new_status,
-            'status_display': job.get_status_display()
+            'status_display': status_display
         })
         
-    except RepairJob.DoesNotExist:
-        return JsonResponse({'error': 'Job not found'}, status=404)
     except Exception as e:
         logger.error(f"Error updating job status: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
