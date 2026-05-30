@@ -461,7 +461,7 @@
     
     const csrftoken = getCookie('csrftoken');
     
-    // Update job status via AJAX
+// Update job status via AJAX
 function updateJobStatus(jobId, newStatus, buttonElement) {
     let confirmMessage = newStatus === 'in_progress' 
         ? 'Accept this job and start working on it?' 
@@ -472,7 +472,8 @@ function updateJobStatus(jobId, newStatus, buttonElement) {
         buttonElement.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Processing...';
         buttonElement.disabled = true;
         
-        fetch(`/staff/technician-update-job/${jobId}/`, {
+        // CORRECTED URL - using workshop URLs
+        fetch(`/workshop/technician/jobs/${jobId}/update-status/`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -484,7 +485,7 @@ function updateJobStatus(jobId, newStatus, buttonElement) {
         .then(response => {
             console.log('Response status:', response.status);
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
+                return response.json().then(err => { throw err; });
             }
             return response.json();
         })
@@ -503,7 +504,7 @@ function updateJobStatus(jobId, newStatus, buttonElement) {
         })
         .catch(error => {
             console.error('Error details:', error);
-            showNotification('error', 'Error: ' + error.message);
+            showNotification('error', error.error || 'An error occurred. Please try again.');
             buttonElement.innerHTML = originalText;
             buttonElement.disabled = false;
         });
