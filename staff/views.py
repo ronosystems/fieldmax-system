@@ -4613,7 +4613,7 @@ def application_detail(request, pk):
             actual_staff_id = None
     else:
         # Only calculate next ID for pending applications
-        last_staff = Staff.objects.order_by('-id').first()
+        last_staff = Staff.objects.order_by('-staff_id').first()
         if last_staff and last_staff.staff_id:
             numbers = re.findall(r'\d+', last_staff.staff_id)
             if numbers:
@@ -4762,7 +4762,7 @@ def application_approve(request, pk):
                 try:
                     with transaction.atomic():
                         # Get the last staff member with row lock
-                        last_staff = Staff.objects.select_for_update().order_by('-id').first()
+                        last_staff = Staff.objects.select_for_update().order_by('-staff_id').first()
                         
                         if last_staff and last_staff.staff_id:
                             numbers = re.findall(r'\d+', last_staff.staff_id)
