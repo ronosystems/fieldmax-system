@@ -4716,37 +4716,6 @@ def application_approve(request, pk):
             notes = request.POST.get('review_notes', '')
             
             # ============================================
-            # GENERATE STAFF ID FIRST (FM001, FM002, etc.)
-            # ============================================
-            from staff.models import Staff
-            import re
-            
-            # Get the last staff member to generate sequential ID
-            last_staff = Staff.objects.order_by('-id').first()
-            if last_staff and last_staff.staff_id:
-                numbers = re.findall(r'\d+', last_staff.staff_id)
-                if numbers:
-                    last_num = int(numbers[0])
-                    next_num = last_num + 1
-                    staff_id = f"FM{next_num:03d}"
-                else:
-                    staff_id = "FM001"
-            else:
-                staff_id = "FM001"
-            
-            # ============================================
-            # USE STAFF ID AS USERNAME (THIS IS THE KEY FIX)
-            # ============================================
-            username = staff_id  # e.g., FM001, FM002, FM003
-            
-            # Ensure username is unique
-            base_username = username
-            counter = 1
-            while User.objects.filter(username=username).exists():
-                username = f"{base_username}_{counter}"
-                counter += 1
-            
-            # ============================================
             # GET APPLICANT'S PREFERRED PASSWORD FROM SESSION
             # ============================================
             password = request.session.get(f'pending_password_{application.id_number}')
@@ -4758,19 +4727,21 @@ def application_approve(request, pk):
                     password = password.zfill(8)
             
             # ============================================
-            # CHECK IF USER ALREADY EXISTS
+            # CREATE USER FIRST (WITHOUT STAFF ID)
             # ============================================
+            from staff.models import Staff
+            from django.db import IntegrityError, transaction
+            import re
+            
+            # Check if user already exists
             user = None
             if User.objects.filter(email=application.email).exists():
                 user = User.objects.get(email=application.email)
-                # Update username to staff_id
-                user.username = username
-                user.save()
-                logger.info(f"Existing user updated with username: {username}")
             else:
-                # CREATE NEW USER ACCOUNT WITH STAFF ID AS USERNAME
+                # Create temporary username (will update after staff_id is generated)
+                temp_username = f"temp_{application.id}_{timezone.now().timestamp()}"
                 user = User.objects.create_user(
-                    username=username,  # Staff ID as username
+                    username=temp_username,
                     email=application.email,
                     password=password,
                     first_name=application.first_name,
@@ -4778,91 +4749,137 @@ def application_approve(request, pk):
                     is_active=True,
                     is_staff=False
                 )
-                logger.info(f"New user account created with username: {username} (Staff ID)")
+                logger.info(f"Temporary user account created with ID: {user.id}")
             
             # ============================================
-            # CREATE OR UPDATE USER PROFILE
+            # GENERATE STAFF ID WITH RETRY LOGIC
             # ============================================
-            profile, created = UserProfile.objects.get_or_create(user=user)
-            profile.password_changed = True
-            profile.first_login = False
-            profile.is_verified = True
-            profile.verified_at = timezone.now()
-            profile.verified_by = request.user
-            profile.save()
+            max_retries = 5
+            staff_profile = None
+            created = False
             
-            # ============================================
-            # CREATE OR UPDATE STAFF PROFILE
-            # ============================================
-            staff_profile, created = Staff.objects.get_or_create(
-                user=user,
-                defaults={
-                    'staff_id': staff_id,
-                    'id_number': application.id_number,
-                    'position': 'pending',
-                    'is_identity_verified': True,
-                    'verified_at': timezone.now(),
-                    'verified_by': request.user,
-                    'verification_notes': f"Auto-verified during application approval. Original notes: {notes}",
-                    'passport_photo': application.passport_photo,
-                    'id_front': application.id_front,
-                    'id_back': application.id_back,
-                }
-            )
-            
-            if not created:
-                # Update existing staff profile
-                staff_profile.staff_id = staff_id
-                staff_profile.id_number = application.id_number
-                staff_profile.is_identity_verified = True
-                staff_profile.verified_at = timezone.now()
-                staff_profile.verified_by = request.user
-                staff_profile.verification_notes = f"Auto-verified during application approval. Original notes: {notes}"
-                if application.passport_photo:
-                    staff_profile.passport_photo = application.passport_photo
-                if application.id_front:
-                    staff_profile.id_front = application.id_front
-                if application.id_back:
-                    staff_profile.id_back = application.id_back
-                staff_profile.save()
-            
-            # Assign shop if provided
-            if shop_id:
+            for attempt in range(max_retries):
                 try:
-                    from shops.models import ShopBranch
-                    shop = ShopBranch.objects.get(id=shop_id)
-                    staff_profile.assigned_shop = shop
-                    staff_profile.save()
-                    logger.info(f"Staff {username} assigned to shop: {shop.name}")
-                except Exception as e:
-                    logger.error(f"Error assigning shop: {str(e)}")
-            
-            # ============================================
-            # ASSIGN TO GROUP
-            # ============================================
-            group_name = None
-            if group_id:
-                try:
-                    group = Group.objects.get(id=group_id)
-                    user.groups.clear()  # Clear existing groups
-                    user.groups.add(group)
-                    group_name = group.name
-                except Group.DoesNotExist:
-                    logger.warning(f"Group with id {group_id} does not exist")
-            
-            # ============================================
-            # UPDATE APPLICATION STATUS
-            # ============================================
-            application.status = 'approved'
-            application.reviewed_by = request.user
-            application.review_date = timezone.now()
-            application.review_notes = notes
-            application.created_user = user
-            application.save()
-            
-            # Clean up session
-            if f'pending_password_{application.id_number}' in request.session:
-                del request.session[f'pending_password_{application.id_number}']
+                    with transaction.atomic():
+                        # Get the last staff member with row lock
+                        last_staff = Staff.objects.select_for_update().order_by('-id').first()
+                        
+                        if last_staff and last_staff.staff_id:
+                            numbers = re.findall(r'\d+', last_staff.staff_id)
+                            if numbers:
+                                last_num = int(numbers[0])
+                                next_num = last_num + 1
+                                staff_id = f"FM{next_num:03d}"
+                            else:
+                                staff_id = "FM001"
+                        else:
+                            staff_id = "FM001"
+                        
+                        # Ensure staff_id is unique (double-check)
+                        if Staff.objects.filter(staff_id=staff_id).exists():
+                            # Force regeneration if somehow exists
+                            max_staff = Staff.objects.order_by('-staff_id').last()
+                            if max_staff and max_staff.staff_id:
+                                numbers = re.findall(r'\d+', max_staff.staff_id)
+                                if numbers:
+                                    staff_id = f"FM{int(numbers[0]) + 1:03d}"
+                                else:
+                                    staff_id = "FM001"
+                            else:
+                                staff_id = "FM001"
+                        
+                        # Update user's username to staff_id
+                        user.username = staff_id
+                        user.save()
+                        
+                        # Create or update user profile
+                        profile, profile_created = UserProfile.objects.get_or_create(user=user)
+                        profile.password_changed = True
+                        profile.first_login = False
+                        profile.is_verified = True
+                        profile.verified_at = timezone.now()
+                        profile.verified_by = request.user
+                        profile.save()
+                        
+                        # Create staff profile
+                        staff_profile, created = Staff.objects.get_or_create(
+                            user=user,
+                            defaults={
+                                'staff_id': staff_id,
+                                'id_number': application.id_number,
+                                'position': 'pending',
+                                'is_identity_verified': True,
+                                'verified_at': timezone.now(),
+                                'verified_by': request.user,
+                                'verification_notes': f"Auto-verified during application approval. Original notes: {notes}",
+                                'passport_photo': application.passport_photo,
+                                'id_front': application.id_front,
+                                'id_back': application.id_back,
+                            }
+                        )
+                        
+                        if not created:
+                            # Update existing staff profile
+                            staff_profile.staff_id = staff_id
+                            staff_profile.id_number = application.id_number
+                            staff_profile.is_identity_verified = True
+                            staff_profile.verified_at = timezone.now()
+                            staff_profile.verified_by = request.user
+                            staff_profile.verification_notes = f"Auto-verified during application approval. Original notes: {notes}"
+                            if application.passport_photo:
+                                staff_profile.passport_photo = application.passport_photo
+                            if application.id_front:
+                                staff_profile.id_front = application.id_front
+                            if application.id_back:
+                                staff_profile.id_back = application.id_back
+                            staff_profile.save()
+                        
+                        # Assign shop if provided
+                        if shop_id:
+                            try:
+                                from shops.models import ShopBranch
+                                shop = ShopBranch.objects.get(id=shop_id)
+                                staff_profile.assigned_shop = shop
+                                staff_profile.save()
+                                logger.info(f"Staff {staff_id} assigned to shop: {shop.name}")
+                            except Exception as e:
+                                logger.error(f"Error assigning shop: {str(e)}")
+                        
+                        # Assign to group
+                        group_name = None
+                        if group_id:
+                            try:
+                                group = Group.objects.get(id=group_id)
+                                user.groups.clear()
+                                user.groups.add(group)
+                                group_name = group.name
+                            except Group.DoesNotExist:
+                                logger.warning(f"Group with id {group_id} does not exist")
+                        
+                        # Update application status
+                        application.status = 'approved'
+                        application.reviewed_by = request.user
+                        application.review_date = timezone.now()
+                        application.review_notes = notes
+                        application.created_user = user
+                        application.save()
+                        
+                        # Clean up session
+                        if f'pending_password_{application.id_number}' in request.session:
+                            del request.session[f'pending_password_{application.id_number}']
+                        
+                        # Success - break out of retry loop
+                        break
+                        
+                except IntegrityError as e:
+                    logger.warning(f"IntegrityError on attempt {attempt + 1}/{max_retries}: {str(e)}")
+                    
+                    if attempt == max_retries - 1:
+                        # Last attempt failed, re-raise
+                        raise
+                    
+                    # Continue to next retry
+                    continue
             
             # ============================================
             # SEND APPROVAL EMAIL
@@ -4920,7 +4937,7 @@ def application_approve(request, pk):
             messages.error(request, f'Error approving application: {str(e)}')
             return redirect('staff:application_detail', pk=application.pk)
     
-    # GET request - show approval form
+    # GET request - show approval form (unchanged)
     groups = Group.objects.all().order_by('name')
     from shops.models import ShopBranch
     shops = ShopBranch.objects.filter(is_active=True).order_by('name')
