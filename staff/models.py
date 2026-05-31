@@ -147,6 +147,7 @@ class Staff(models.Model):
     """Staff member profile linked to User account"""
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='staff_profile')
     staff_id = models.CharField(max_length=20, unique=True, blank=True)
+    phone = models.CharField(max_length=20, blank=True, null=True, verbose_name="Phone Number")
     id_number = models.CharField(max_length=50, unique=True, blank=True, null=True) 
     position = models.CharField(max_length=50, choices=POSITION_CHOICES)
     department = models.CharField(max_length=100, blank=True)

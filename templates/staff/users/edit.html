@@ -1,7 +1,7 @@
 {% extends 'staff/base.html' %}
 {% load static %}
 
-{% block title %}Edit User - {{ user.username }}{% endblock %}
+{% block title %}Edit User - {{ user.get_full_name|default:user.username }}{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -55,6 +55,11 @@
         border-left-color: #28a745;
         background-color: #e8f5e9;
     }
+    .required-field::after {
+        content: " *";
+        color: red;
+        font-weight: bold;
+    }
 </style>
 {% endblock %}
 
@@ -66,7 +71,7 @@
             <ol class="breadcrumb">
                 <li class="breadcrumb-item"><a href="{% url 'staff:staff_dashboard' %}">Dashboard</a></li>
                 <li class="breadcrumb-item"><a href="{% url 'staff:user_list' %}">Users</a></li>
-                <li class="breadcrumb-item"><a href="{% url 'staff:user_detail' user.id %}">{{ user.username }}</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'staff:user_detail' user.id %}">{{ user.get_full_name|default:user.username }}</a></li>
                 <li class="breadcrumb-item active">Edit User</li>
             </ol>
         </nav>
@@ -102,12 +107,18 @@
                         {% if profile.is_verified %}
                             <span class="badge bg-success">Verified</span>
                         {% endif %}
+                        {% if staff_profile.is_identity_verified %}
+                            <span class="badge bg-success">ITP Verified</span>
+                        {% else %}
+                            <span class="badge bg-warning">ITP Pending</span>
+                        {% endif %}
                     </p>
                     <hr>
                     <div class="text-start">
                         <small class="text-muted">
-                            <i class="fas fa-calendar me-1"></i> Joined: {{ user.date_joined|date:"M d, Y" }}<br>
-                            <i class="fas fa-clock me-1"></i> Last Login: {{ user.last_login|date:"M d, Y H:i"|default:"Never" }}
+                            <i class="fas fa-calendar me-1"></i> Joined: {{ user.date_joined|date:"M d, Y H:i" }}<br>
+                            <i class="fas fa-clock me-1"></i> Last Login: {{ user.last_login|date:"M d, Y H:i"|default:"Never" }}<br>
+                            <i class="fas fa-id-card me-1"></i> User ID: #{{ user.id }}
                         </small>
                     </div>
                 </div>
@@ -147,10 +158,21 @@
                         <label class="fw-bold">Identity Verified (ITP):</label>
                         {% if staff_profile.is_identity_verified %}
                             <span class="badge bg-success">Verified</span>
+                            {% if staff_profile.verified_at %}
+                                <small class="text-muted d-block">on {{ staff_profile.verified_at|date:"M d, Y H:i" }}</small>
+                            {% endif %}
                         {% else %}
                             <span class="badge bg-warning">Pending</span>
                         {% endif %}
                     </div>
+                    {% if user.status and user.status.failed_login_attempts %}
+                    <div class="mb-2">
+                        <label class="fw-bold">Failed Login Attempts:</label>
+                        <span class="badge {% if user.status.failed_login_attempts >= 3 %}bg-danger{% else %}bg-warning{% endif %}">
+                            {{ user.status.failed_login_attempts }}/5
+                        </span>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
 
@@ -258,23 +280,31 @@
                     <h4><i class="fas fa-user me-2"></i>Basic Information</h4>
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label class="form-label fw-bold">First Name</label>
+                            <label class="form-label fw-bold required-field">First Name</label>
                             <input type="text" name="first_name" class="form-control" value="{{ user.first_name|default:'' }}">
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label class="form-label fw-bold">Last Name</label>
+                            <label class="form-label fw-bold required-field">Last Name</label>
                             <input type="text" name="last_name" class="form-control" value="{{ user.last_name|default:'' }}">
                         </div>
                     </div>
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label class="form-label fw-bold">Email Address</label>
+                            <label class="form-label fw-bold required-field">Email Address</label>
                             <input type="email" name="email" class="form-control" value="{{ user.email|default:'' }}">
+                            <div class="info-text">Used for login and notifications</div>
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label class="form-label fw-bold">Username</label>
+                            <label class="form-label fw-bold required-field">Username</label>
                             <input type="text" name="username" class="form-control" value="{{ user.username|default:'' }}">
                             <div class="info-text">For staff members, this should match Staff ID (e.g., FM001)</div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold">Phone Number</label>
+                            <input type="text" name="phone" class="form-control" value="{{ profile.phone|default:'' }}">
+                            <div class="info-text">Contact phone number for the user</div>
                         </div>
                     </div>
                 </div>
@@ -291,20 +321,32 @@
                         <div class="col-md-6 mb-3">
                             <label class="form-label fw-bold">ID Number (National ID)</label>
                             <input type="text" name="id_number" class="form-control" value="{{ staff_profile.id_number|default:'' }}">
+                            <div class="info-text">Unique identification number</div>
                         </div>
                     </div>
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label class="form-label fw-bold">Position</label>
-                            <input type="text" name="position" class="form-control" value="{{ staff_profile.position|default:'' }}">
+                            <label class="form-label fw-bold">Position / Job Title</label>
+                            <select name="position" class="form-select">
+                                <option value="">-- Select Position --</option>
+                                <option value="administrator" {% if staff_profile.position == 'administrator' %}selected{% endif %}>Administrator</option>
+                                <option value="sales_manager" {% if staff_profile.position == 'sales_manager' %}selected{% endif %}>Sales Manager</option>
+                                <option value="sales_agent" {% if staff_profile.position == 'sales_agent' %}selected{% endif %}>Sales Agent</option>
+                                <option value="cashier" {% if staff_profile.position == 'cashier' %}selected{% endif %}>Cashier</option>
+                                <option value="store_manager" {% if staff_profile.position == 'store_manager' %}selected{% endif %}>Store Manager</option>
+                                <option value="inventory_manager" {% if staff_profile.position == 'inventory_manager' %}selected{% endif %}>Inventory Manager</option>
+                                <option value="credit_manager" {% if staff_profile.position == 'credit_manager' %}selected{% endif %}>Credit Manager</option>
+                                <option value="credit_officer" {% if staff_profile.position == 'credit_officer' %}selected{% endif %}>Credit Officer</option>
+                                <option value="finance_manager" {% if staff_profile.position == 'finance_manager' %}selected{% endif %}>Finance Manager</option>
+                                <option value="customer_service" {% if staff_profile.position == 'customer_service' %}selected{% endif %}>Customer Service</option>
+                                <option value="security_officer" {% if staff_profile.position == 'security_officer' %}selected{% endif %}>Security Officer</option>
+                                <option value="mpesa_agent" {% if staff_profile.position == 'mpesa_agent' %}selected{% endif %}>M-Pesa Agent</option>
+                                <option value="technician" {% if staff_profile.position == 'technician' %}selected{% endif %}>Technician</option>
+                                <option value="cleaner" {% if staff_profile.position == 'cleaner' %}selected{% endif %}>Cleaner</option>
+                                <option value="pending" {% if staff_profile.position == 'pending' %}selected{% endif %}>Pending Assignment</option>
+                            </select>
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label class="form-label fw-bold">Department</label>
-                            <input type="text" name="department" class="form-control" value="{{ staff_profile.department|default:'' }}">
-                        </div>
-                    </div>
-                    <div class="row">
-                        <div class="col-md-12 mb-3">
                             <label class="form-label fw-bold">Assigned Shop Branch</label>
                             <select name="assigned_shop" class="form-select">
                                 <option value="">-- Select Shop Branch --</option>
@@ -328,24 +370,28 @@
                                 <input type="checkbox" name="is_active" class="form-check-input" id="is_active" {% if user.is_active %}checked{% endif %}>
                                 <label class="form-check-label fw-bold" for="is_active">Active Account</label>
                             </div>
+                            <div class="info-text">User can log in</div>
                         </div>
                         <div class="col-md-3 mb-3">
                             <div class="form-check">
                                 <input type="checkbox" name="is_staff" class="form-check-input" id="is_staff" {% if user.is_staff %}checked{% endif %}>
                                 <label class="form-check-label fw-bold" for="is_staff">Staff Status</label>
                             </div>
+                            <div class="info-text">Access to admin panel</div>
                         </div>
                         <div class="col-md-3 mb-3">
                             <div class="form-check">
                                 <input type="checkbox" name="is_superuser" class="form-check-input" id="is_superuser" {% if user.is_superuser %}checked{% endif %}>
                                 <label class="form-check-label fw-bold" for="is_superuser">Superuser</label>
                             </div>
+                            <div class="info-text">Full system access</div>
                         </div>
                         <div class="col-md-3 mb-3">
                             <div class="form-check">
                                 <input type="checkbox" name="is_ceo" class="form-check-input" id="is_ceo" {% if profile.is_ceo %}checked{% endif %}>
                                 <label class="form-check-label fw-bold" for="is_ceo">CEO Status</label>
                             </div>
+                            <div class="info-text">Executive privileges</div>
                         </div>
                     </div>
                     <div class="row">
@@ -354,18 +400,21 @@
                                 <input type="checkbox" name="is_verified" class="form-check-input" id="is_verified" {% if profile.is_verified %}checked{% endif %}>
                                 <label class="form-check-label fw-bold" for="is_verified">Profile Verified</label>
                             </div>
+                            <div class="info-text">Email/phone verified</div>
                         </div>
                         <div class="col-md-4 mb-3">
                             <div class="form-check">
                                 <input type="checkbox" name="is_identity_verified" class="form-check-input" id="is_identity_verified" {% if staff_profile.is_identity_verified %}checked{% endif %}>
                                 <label class="form-check-label fw-bold" for="is_identity_verified">Identity Verified (ITP)</label>
                             </div>
+                            <div class="info-text">Documents verified</div>
                         </div>
                         <div class="col-md-4 mb-3">
                             <div class="form-check">
                                 <input type="checkbox" name="password_changed" class="form-check-input" id="password_changed" {% if profile.password_changed %}checked{% endif %}>
                                 <label class="form-check-label fw-bold" for="password_changed">Password Changed</label>
                             </div>
+                            <div class="info-text">User has changed password</div>
                         </div>
                     </div>
                     <div class="row">
@@ -374,7 +423,7 @@
                                 <input type="checkbox" name="first_login" class="form-check-input" id="first_login" {% if profile.first_login %}checked{% endif %}>
                                 <label class="form-check-label fw-bold" for="first_login">First Login Required</label>
                             </div>
-                            <div class="info-text">Require user to change password on next login</div>
+                            <div class="info-text">Force password change on next login</div>
                         </div>
                     </div>
                 </div>
@@ -399,6 +448,18 @@
                         {% endfor %}
                     </div>
                     <div class="info-text mt-2">Role groups determine dashboard access and permissions</div>
+                </div>
+
+                <!-- Section 5: Verification Notes -->
+                <div class="form-section">
+                    <h4><i class="fas fa-sticky-note me-2"></i>Verification Notes</h4>
+                    <div class="row">
+                        <div class="col-12 mb-3">
+                            <label class="form-label fw-bold">Verification Notes</label>
+                            <textarea name="verification_notes" class="form-control" rows="3">{{ staff_profile.verification_notes|default:'' }}</textarea>
+                            <div class="info-text">Internal notes about identity verification or staff status</div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Form Actions -->
@@ -427,6 +488,18 @@
             staffIdInput.addEventListener('input', function() {
                 if (usernameInput.value === '' || usernameInput.value === usernameInput.defaultValue) {
                     usernameInput.value = this.value;
+                }
+            });
+        }
+        
+        // Warning for superuser changes
+        const superuserCheckbox = document.getElementById('is_superuser');
+        if (superuserCheckbox) {
+            superuserCheckbox.addEventListener('change', function() {
+                if (this.checked) {
+                    if (!confirm('Warning: Giving superuser status grants full system access. Continue?')) {
+                        this.checked = false;
+                    }
                 }
             });
         }

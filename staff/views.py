@@ -52,7 +52,7 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required, user_passes_test
 from .models import UserProfile
 from finance.utils import UnifiedFinanceCalculator
-
+from django.urls import reverse
 
 
 
@@ -4640,38 +4640,97 @@ def application_edit(request, pk):
     """Edit application details"""
     application = get_object_or_404(StaffApplication, pk=pk)
     
+    # Get extra data if exists
+    try:
+        extra_data = application.extra_data
+    except:
+        extra_data = None
+    
     if request.method == 'POST':
         try:
-            # Update fields
-            application.first_name = request.POST.get('first_name')
-            application.last_name = request.POST.get('last_name')
-            application.email = request.POST.get('email')
-            application.phone = request.POST.get('phone')
-            application.id_number = request.POST.get('id_number')
-            application.address = request.POST.get('address', '')
-            application.position = request.POST.get('position')
-            application.experience = request.POST.get('experience', '')
-            application.status = request.POST.get('status')
-            application.review_notes = request.POST.get('review_notes', '')
+            # Check if this is a file upload
+            is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
             
-            # Handle file uploads (only if new files are provided)
+            # ============================================
+            # UPDATE BASIC FIELDS
+            # ============================================
+            application.first_name = request.POST.get('first_name', '').strip()
+            application.last_name = request.POST.get('last_name', '').strip()
+            application.email = request.POST.get('email', '').strip()
+            application.phone = request.POST.get('phone', '').strip()
+            application.id_number = request.POST.get('id_number', '').strip()
+            application.address = request.POST.get('address', '').strip()
+            application.position = request.POST.get('position', 'pending')
+            application.experience = request.POST.get('experience', '').strip()
+            application.status = request.POST.get('status', 'pending')
+            application.review_notes = request.POST.get('review_notes', '').strip()
+            
+            # ============================================
+            # HANDLE FILE UPLOADS (only if new files are provided)
+            # ============================================
             if request.FILES.get('passport_photo'):
+                # Delete old file if exists (optional)
+                if application.passport_photo:
+                    application.passport_photo.delete(save=False)
                 application.passport_photo = request.FILES['passport_photo']
+                
             if request.FILES.get('id_front'):
+                if application.id_front:
+                    application.id_front.delete(save=False)
                 application.id_front = request.FILES['id_front']
+                
             if request.FILES.get('id_back'):
+                if application.id_back:
+                    application.id_back.delete(save=False)
                 application.id_back = request.FILES['id_back']
             
+            # ============================================
+            # UPDATE EXTRA DATA IF EXISTS
+            # ============================================
+            if extra_data:
+                extra_data.resident = request.POST.get('resident', '').strip()
+                extra_data.former_employer = request.POST.get('former_employer', '').strip()
+                extra_data.preferred_salary = request.POST.get('preferred_salary', '').strip()
+                extra_data.signature = request.POST.get('signature', '').strip()
+                
+                # Handle other documents upload
+                if request.FILES.get('other_documents'):
+                    if extra_data.other_documents:
+                        extra_data.other_documents.delete(save=False)
+                    extra_data.other_documents = request.FILES['other_documents']
+                
+                extra_data.save()
+            
+            # Save the application
             application.save()
             
-            messages.success(request, f'Application for {application.full_name()} updated successfully.')
+            logger.info(f"Application #{application.id} updated by {request.user.username}")
+            
+            if is_ajax:
+                return JsonResponse({
+                    'success': True,
+                    'message': 'Application updated successfully!',
+                    'redirect_url': reverse('staff:application_detail', args=[application.pk])
+                })
+            
+            messages.success(request, f'✅ Application for {application.full_name()} has been updated successfully!')
             return redirect('staff:application_detail', pk=application.pk)
             
         except Exception as e:
-            messages.error(request, f'Error updating application: {str(e)}')
+            logger.error(f"Error updating application #{application.id}: {str(e)}", exc_info=True)
+            error_msg = f'Error updating application: {str(e)}'
+            
+            is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+            if is_ajax:
+                return JsonResponse({'success': False, 'error': error_msg})
+            
+            messages.error(request, error_msg)
+            return redirect('staff:application_edit', pk=application.pk)
     
+    # GET request - prepare context for form
     context = {
         'application': application,
+        'extra_data': extra_data,
         'status_choices': StaffApplication.STATUS_CHOICES,
         'position_choices': StaffApplication.POSITION_CHOICES,
     }
@@ -4696,6 +4755,7 @@ def application_delete(request, pk):
         'application': application,
     }
     return render(request, 'staff/delete.html', context)
+
 
 @login_required
 def application_approve(request, pk):
@@ -4868,6 +4928,22 @@ def application_approve(request, pk):
                         profile.verified_by = request.user
                         profile.save()
                         
+                        # Prepare verification notes with employment details from extra_data
+                        verification_notes = f"Auto-verified during application approval. Original notes: {notes}"
+                        
+                        # ADD EMPLOYMENT DETAILS FROM EXTRA_DATA
+                        if extra_data:
+                            employment_info = f"""
+                            
+                            === EMPLOYMENT DETAILS ===
+                            Current Residence: {extra_data.resident or 'Not provided'}
+                            Former Employer: {extra_data.former_employer or 'Not provided'}
+                            Preferred Salary: KSH {extra_data.preferred_salary or 'Not provided'}
+                            Digital Signature: {extra_data.signature[:100] if extra_data.signature else 'Not provided'}
+                            """
+                            verification_notes += employment_info
+                            logger.info(f"Employment details added to staff profile for {staff_id}")
+                        
                         # Create staff profile
                         staff_profile, created = Staff.objects.get_or_create(
                             user=user,
@@ -4878,7 +4954,7 @@ def application_approve(request, pk):
                                 'is_identity_verified': True,
                                 'verified_at': timezone.now(),
                                 'verified_by': request.user,
-                                'verification_notes': f"Auto-verified during application approval. Original notes: {notes}",
+                                'verification_notes': verification_notes,
                                 'passport_photo': application.passport_photo,
                                 'id_front': application.id_front,
                                 'id_back': application.id_back,
@@ -4892,7 +4968,19 @@ def application_approve(request, pk):
                             staff_profile.is_identity_verified = True
                             staff_profile.verified_at = timezone.now()
                             staff_profile.verified_by = request.user
-                            staff_profile.verification_notes = f"Auto-verified during application approval. Original notes: {notes}"
+                            # Append employment details to existing notes
+                            if extra_data:
+                                employment_info = f"""
+                                
+                                === EMPLOYMENT DETAILS ===
+                                Current Residence: {extra_data.resident or 'Not provided'}
+                                Former Employer: {extra_data.former_employer or 'Not provided'}
+                                Preferred Salary: KSH {extra_data.preferred_salary or 'Not provided'}
+                                """
+                                staff_profile.verification_notes = f"Auto-verified during application approval. Original notes: {notes}{employment_info}"
+                            else:
+                                staff_profile.verification_notes = f"Auto-verified during application approval. Original notes: {notes}"
+                            
                             if application.passport_photo:
                                 staff_profile.passport_photo = application.passport_photo
                             if application.id_front:
@@ -5051,7 +5139,7 @@ def application_approve(request, pk):
     # Calculate next staff ID for preview - FIXED to use staff_id ordering
     from staff.models import Staff
     import re
-    last_staff = Staff.objects.order_by('-staff_id').first()  # Changed from '-id' to '-staff_id'
+    last_staff = Staff.objects.order_by('-staff_id').first()
     if last_staff and last_staff.staff_id:
         numbers = re.findall(r'\d+', last_staff.staff_id)
         if numbers:
@@ -5331,12 +5419,13 @@ def diagnostic_email(request):
         'sendgrid_key_exists': bool(settings.SENDGRID_API_KEY),
     })
 
-
 @login_required
 @user_passes_test(lambda u: u.is_superuser)
 def user_edit(request, pk):
     """Edit user details including staff profile information"""
     from shops.models import ShopBranch
+    from staff.models import Staff, UserProfile
+    from django.contrib.auth.models import Group
     
     user_to_edit = get_object_or_404(User, pk=pk)
     
@@ -5356,22 +5445,118 @@ def user_edit(request, pk):
     shops = ShopBranch.objects.filter(is_active=True).order_by('name')
     
     if request.method == 'POST':
-        # ... rest of your POST handling code ...
-        pass
+        try:
+            # ============================================
+            # UPDATE BASIC USER INFORMATION
+            # ============================================
+            user_to_edit.first_name = request.POST.get('first_name', '').strip()
+            user_to_edit.last_name = request.POST.get('last_name', '').strip()
+            user_to_edit.email = request.POST.get('email', '').strip()
+            user_to_edit.username = request.POST.get('username', '').strip()
+            
+            # ============================================
+            # UPDATE PERMISSIONS
+            # ============================================
+            user_to_edit.is_active = request.POST.get('is_active') == 'on'
+            user_to_edit.is_staff = request.POST.get('is_staff') == 'on'
+            user_to_edit.is_superuser = request.POST.get('is_superuser') == 'on'
+            
+            # Save user changes
+            user_to_edit.save()
+            
+            # ============================================
+            # UPDATE USER PROFILE
+            # ============================================
+            profile.is_ceo = request.POST.get('is_ceo') == 'on'
+            profile.is_verified = request.POST.get('is_verified') == 'on'
+            profile.password_changed = request.POST.get('password_changed') == 'on'
+            profile.first_login = request.POST.get('first_login') == 'on'
+            profile.save()
+            
+            # ============================================
+            # UPDATE STAFF PROFILE
+            # ============================================
+            staff_id = request.POST.get('staff_id', '').strip()
+            id_number = request.POST.get('id_number', '').strip()
+            position = request.POST.get('position', '')
+            assigned_shop_id = request.POST.get('assigned_shop')
+            is_identity_verified = request.POST.get('is_identity_verified') == 'on'
+            verification_notes = request.POST.get('verification_notes', '')
+            phone = request.POST.get('phone', '').strip()  # ADD THIS LINE
+            
+            if staff_profile:
+                # Update existing staff profile
+                staff_profile.staff_id = staff_id
+                staff_profile.id_number = id_number
+                staff_profile.position = position
+                staff_profile.is_identity_verified = is_identity_verified
+                staff_profile.verification_notes = verification_notes
+                staff_profile.phone = phone  # ADD THIS LINE
+                
+                # Handle assigned shop
+                if assigned_shop_id:
+                    try:
+                        shop = ShopBranch.objects.get(id=assigned_shop_id)
+                        staff_profile.assigned_shop = shop
+                    except ShopBranch.DoesNotExist:
+                        staff_profile.assigned_shop = None
+                else:
+                    staff_profile.assigned_shop = None
+                
+                staff_profile.save()
+            else:
+                # Create new staff profile if it doesn't exist
+                staff_profile = Staff.objects.create(
+                    user=user_to_edit,
+                    staff_id=staff_id,
+                    id_number=id_number,
+                    position=position,
+                    is_identity_verified=is_identity_verified,
+                    verification_notes=verification_notes,
+                    phone=phone  # ADD THIS LINE
+                )
+                
+                if assigned_shop_id:
+                    try:
+                        shop = ShopBranch.objects.get(id=assigned_shop_id)
+                        staff_profile.assigned_shop = shop
+                        staff_profile.save()
+                    except ShopBranch.DoesNotExist:
+                        pass
+            
+            # ============================================
+            # UPDATE GROUPS
+            # ============================================
+            selected_group_ids = request.POST.getlist('groups')
+            user_to_edit.groups.clear()
+            for group_id in selected_group_ids:
+                try:
+                    group = Group.objects.get(id=group_id)
+                    user_to_edit.groups.add(group)
+                except Group.DoesNotExist:
+                    pass
+            
+            messages.success(request, f'User "{user_to_edit.get_full_name() or user_to_edit.username}" has been updated successfully!')
+            return redirect('staff:user_detail', pk=user_to_edit.id)
+            
+        except Exception as e:
+            logger.error(f"Error editing user {user_to_edit.id}: {str(e)}")
+            messages.error(request, f'Error updating user: {str(e)}')
+            return redirect('staff:user_edit', pk=user_to_edit.id)
     
+    # GET request - prepare context
+    display_name = user_to_edit.get_full_name() or user_to_edit.username
     context = {
         'user': user_to_edit,
         'profile': profile,
         'staff_profile': staff_profile,
         'groups': Group.objects.all().order_by('name'),
-        'selected_groups': user_to_edit.groups.values_list('id', flat=True),
-        'shops': shops,  # Make sure this is passed
+        'selected_groups': list(user_to_edit.groups.values_list('id', flat=True)),
+        'shops': shops,
         'selected_shop': staff_profile.assigned_shop.id if staff_profile and staff_profile.assigned_shop else None,
-        'title': f'Edit User: {user_to_edit.username}'
+        'title': f'Edit User: {display_name}'
     }
     return render(request, 'staff/users/edit.html', context)
-
-
 
 @login_required
 @user_passes_test(lambda u: u.is_superuser)

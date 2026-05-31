@@ -1,7 +1,7 @@
 {% extends 'staff/base.html' %}
 {% load static %}
 
-{% block title %}User Details - {{ user.username }}{% endblock %}
+{% block title %}User Details - {{ user.get_full_name|default:user.username }}{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -30,6 +30,14 @@
         border-left-color: #28a745;
         background-color: #e8f5e9;
     }
+    
+    .btn-group-vertical {
+        gap: 8px;
+    }
+    
+    .action-buttons .btn {
+        margin: 2px;
+    }
 </style>
 {% endblock %}
 
@@ -39,384 +47,416 @@
         <ol class="breadcrumb">
             <li class="breadcrumb-item"><a href="{% url 'staff:staff_dashboard' %}">Dashboard</a></li>
             <li class="breadcrumb-item"><a href="{% url 'staff:user_list' %}">Users</a></li>
-            <li class="breadcrumb-item active">{{ user.username }}</li>
+            <li class="breadcrumb-item active">{{ user.get_full_name|default:user.username }}</li>
         </ol>
     </nav>
 </div>
 
-<div class="row">
-    <!-- Left Column -->
-    <div class="col-md-4">
-        <!-- Profile Card -->
-        <div class="card mb-4">
-            <div class="card-header bg-info text-white">
-                <h5 class="mb-0"><i class="fas fa-user-circle me-2"></i>Profile Information</h5>
-            </div>
-            <div class="card-body text-center">
-                <div class="mb-3">
-                    <div class="rounded-circle bg-secondary d-flex align-items-center justify-content-center mx-auto" 
-                         style="width: 120px; height: 120px; font-size: 3rem; color: white;">
-                        {{ user.first_name|first|default:user.username|first|upper }}
+<!-- User Summary Card -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card bg-gradient-primary text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h3 class="mb-0">{{ user.get_full_name|default:user.username }}</h3>
+                        <p class="mb-0 opacity-75">
+                            <i class="fas fa-id-card me-1"></i> 
+                            {% if user.staff_profile %}
+                                Staff ID: {{ user.staff_profile.staff_id }}
+                            {% else %}
+                                No Staff Profile
+                            {% endif %}
+                            | <i class="fas fa-user me-1"></i> User ID: #{{ user.id }}
+                        </p>
+                    </div>
+                    <div>
+                        {% if user.is_superuser %}
+                            <span class="badge bg-danger fs-6 me-1">Super Admin</span>
+                        {% endif %}
+                        {% if user.is_staff %}
+                            <span class="badge bg-primary fs-6 me-1">Staff</span>
+                        {% endif %}
+                        {% if not user.is_active %}
+                            <span class="badge bg-danger fs-6">Deactivated</span>
+                        {% elif user.status.is_locked %}
+                            <span class="badge bg-info fs-6">Locked</span>
+                        {% elif user.status.is_suspended %}
+                            <span class="badge bg-warning fs-6">Suspended</span>
+                        {% else %}
+                            <span class="badge bg-success fs-6">Active</span>
+                        {% endif %}
                     </div>
                 </div>
-                
-                <h4 class="mb-1">{{ user.get_full_name|default:user.username }}</h4>
-                <p class="text-muted mb-3">
-                    <i class="fas fa-envelope me-1"></i> {{ user.email|default:"No email" }}
-                </p>
-                
-                <hr>
-                
-                <div class="mb-3">
-                    {% if user.is_superuser %}
-                        <span class="badge bg-danger me-1">Super Admin</span>
-                    {% endif %}
-                    {% if user.is_staff %}
-                        <span class="badge bg-primary me-1">Staff</span>
-                    {% endif %}
-                    
-                    <!-- Enhanced Status Badge -->
-                    {% if not user.is_active %}
-                        <span class="badge bg-danger">Deactivated</span>
-                    {% elif user.status.is_locked %}
-                        <span class="badge bg-info">Locked</span>
-                    {% elif user.status.is_suspended %}
-                        <span class="badge bg-warning">Suspended</span>
-                    {% else %}
-                        <span class="badge bg-success">Active</span>
-                    {% endif %}
-                    
-                    <a href="{% url 'staff:user_edit' user.id %}" class="btn btn-sm btn-outline-primary ms-2">
-                        <i class="fas fa-edit"></i> Edit
-                    </a>
-                </div>
-                
-                <table class="table table-sm">
-                     <tr>
-                        <th>Joined:</th>
-                        <td>{{ user.date_joined|date:"F d, Y" }}</td>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- LEFT COLUMN - User Information -->
+    <div class="col-md-6">
+        <!-- Personal Information Card -->
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="fas fa-user-circle me-2"></i>Personal Information</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-bordered">
+                    <tr>
+                        <th style="width: 40%;">Full Name:</th>
+                        <td>{{ user.get_full_name|default:"Not set" }}</td>
+                    </tr>
+                    <tr>
+                        <th>First Name:</th>
+                        <td>{{ user.first_name|default:"-" }}</td>
+                    </tr>
+                    <tr>
+                        <th>Last Name:</th>
+                        <td>{{ user.last_name|default:"-" }}</td>
+                    </tr>
+                    <tr>
+                        <th>Email:</th>
+                        <td>{{ user.email|default:"-" }}</td>
+                    </tr>
+                    <tr>
+                        <th>Phone Number:</th>
+                        <td>
+                            {% if user.staff_profile and user.staff_profile.phone %}
+                                {{ user.staff_profile.phone }}
+                            {% elif user.profile and user.profile.phone %}
+                                {{ user.profile.phone }}
+                            {% else %}
+                                {{ user.username|default:"-" }}
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>ID Number:</th>
+                        <td>
+                            {% if user.staff_profile %}
+                                {{ user.staff_profile.id_number|default:"-" }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Staff ID:</th>
+                        <td>
+                            {% if user.staff_profile %}
+                                <span class="badge bg-secondary">{{ user.staff_profile.staff_id }}</span>
+                            {% else %}
+                                <span class="text-muted">No staff profile</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Username:</th>
+                        <td>{{ user.username }}</td>
+                    </tr>
+                    <tr>
+                        <th>Date Joined:</th>
+                        <td>{{ user.date_joined|date:"F d, Y H:i" }}</td>
                     </tr>
                     <tr>
                         <th>Last Login:</th>
                         <td>{{ user.last_login|date:"F d, Y H:i"|default:"Never" }}</td>
                     </tr>
-                    {% if user.status %}
-                    <tr>
-                        <th>Failed Attempts:</th>
-                        <td>
-                            {{ user.status.failed_login_attempts }}/5
-                            {% if user.status.failed_login_attempts >= 3 %}
-                                <i class="fas fa-exclamation-triangle text-warning ms-1" title="Multiple failed attempts"></i>
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% endif %}
                 </table>
             </div>
         </div>
-        
         
         <!-- Groups & Roles Card -->
         <div class="card mb-4">
-            <div class="card-header bg-info text-white">
-                <h5 class="mb-0"><i class="fas fa-users-cog me-2"></i>Groups & Roles</h5>
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="fas fa-users-cog me-2"></i>User Role Groups</h5>
             </div>
             <div class="card-body">
-                <table class="table table-sm">
+                <div class="mb-3">
+                    <strong>Assigned Groups:</strong>
+                    <div class="mt-2">
+                        {% if user.groups.all %}
+                            {% for group in user.groups.all %}
+                                <span class="badge bg-primary me-1 p-2">{{ group.name }}</span>
+                            {% endfor %}
+                        {% else %}
+                            <span class="text-muted">No groups assigned</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <strong>User Type:</strong>
+                    <div class="mt-2">
+                        {% if user.is_superuser %}
+                            <span class="badge bg-danger">Super Administrator</span>
+                        {% elif user.is_staff %}
+                            <span class="badge bg-info">Staff Member</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Regular User</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Account Status Card -->
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="fas fa-shield-alt me-2"></i>Account Status</h5>
+            </div>
+            <div class="card-body">
+                <table class="table table-bordered">
                     <tr>
-                        <th>Groups:</th>
+                        <th style="width: 40%;">Status:</th>
                         <td>
-                            {% if user.groups.all %}
-                                {% for group in user.groups.all %}
-                                    <span class="badge bg-primary me-1">{{ group.name }}</span>
-                                {% endfor %}
+                            {% if not user.is_active %}
+                                <span class="badge bg-danger">Deactivated</span>
+                            {% elif user.status.is_locked %}
+                                <span class="badge bg-info">Locked</span>
+                            {% elif user.status.is_suspended %}
+                                <span class="badge bg-warning">Suspended</span>
                             {% else %}
-                                <span class="text-muted">No groups assigned</span>
+                                <span class="badge bg-success">Active</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% if user.status.is_locked %}
+                    <tr>
+                        <th>Locked At:</th>
+                        <td>{{ user.status.locked_at|date:"F d, Y H:i" }}</td>
+                    </tr>
+                    <tr>
+                        <th>Lock Reason:</th>
+                        <td>{{ user.status.get_lock_reason_display }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if user.status.is_suspended %}
+                    <tr>
+                        <th>Suspended Until:</th>
+                        <td>{{ user.status.suspended_until|date:"F d, Y" }}</td>
+                    </tr>
+                    <tr>
+                        <th>Suspension Reason:</th>
+                        <td>{{ user.status.suspension_reason }}</td>
+                    </tr>
+                    <tr>
+                        <th>Suspended By:</th>
+                        <td>{{ user.status.suspended_by.get_full_name|default:user.status.suspended_by.username }}</td>
+                    </tr>
+                    {% endif %}
+                    <tr>
+                        <th>Failed Login Attempts:</th>
+                        <td>
+                            {% if user.status %}
+                                {{ user.status.failed_login_attempts }}/5
+                                {% if user.status.failed_login_attempts >= 3 %}
+                                    <i class="fas fa-exclamation-triangle text-warning ms-2"></i>
+                                {% endif %}
+                            {% else %}
+                                0/5
                             {% endif %}
                         </td>
                     </tr>
                 </table>
-            </div>
-        </div>
-        
-        <!-- Danger Zone Card (for admins only) -->
-        {% if request.user.is_superuser and user != request.user %}
-        <div class="card border-danger">
-            <div class="card-header bg-danger text-white">
-                <h5 class="mb-0"><i class="fas fa-exclamation-triangle me-2"></i>Account Management</h5>
-            </div>
-            <div class="card-body">
-                <!-- Lock/Unlock Actions -->
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <div>
-                        {% if user.status.is_locked %}
-                            <h6 class="fw-bold text-info mb-0">Account Locked</h6>
-                            <small class="text-muted">Temporarily locked</small>
-                        {% else %}
-                            <h6 class="fw-bold text-warning mb-0">Lock Account</h6>
-                            <small class="text-muted">Temporarily restrict access</small>
-                        {% endif %}
+                
+                <!-- Action Buttons for User Account -->
+                <div class="mt-3">
+                    <h6 class="fw-bold mb-3">Account Actions:</h6>
+                    <div class="btn-group-vertical w-100">
+                        <div class="d-flex gap-2 mb-2">
+                            <a href="{% url 'staff:user_edit' user.id %}" class="btn btn-primary flex-fill">
+                                <i class="fas fa-edit me-1"></i> Edit User
+                            </a>
+                            {% if request.user.is_superuser and user != request.user %}
+                            <a href="{% url 'staff:user_delete_confirm' user.id %}" class="btn btn-danger flex-fill">
+                                <i class="fas fa-trash me-1"></i> Delete User
+                            </a>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="d-flex gap-2">
+                            {% if user.is_active %}
+                                <a href="{% url 'staff:user_deactivate_confirm' user.id %}" class="btn btn-warning flex-fill">
+                                    <i class="fas fa-ban me-1"></i> Deactivate
+                                </a>
+                                {% if not user.status.is_locked %}
+                                <a href="{% url 'staff:user_lock_confirm' user.id %}" class="btn btn-info flex-fill">
+                                    <i class="fas fa-lock me-1"></i> Lock
+                                </a>
+                                {% endif %}
+                                {% if not user.status.is_suspended %}
+                                <a href="{% url 'staff:user_suspend_confirm' user.id %}" class="btn btn-warning flex-fill">
+                                    <i class="fas fa-pause-circle me-1"></i> Suspend
+                                </a>
+                                {% endif %}
+                            {% else %}
+                                <a href="{% url 'staff:user_activate_confirm' user.id %}" class="btn btn-success flex-fill">
+                                    <i class="fas fa-check-circle me-1"></i> Activate
+                                </a>
+                            {% endif %}
+                            
+                            {% if user.status.is_locked %}
+                            <a href="{% url 'staff:user_unlock_confirm' user.id %}" class="btn btn-success flex-fill">
+                                <i class="fas fa-unlock-alt me-1"></i> Unlock
+                            </a>
+                            {% endif %}
+                            
+                            {% if user.status.is_suspended %}
+                            <a href="{% url 'staff:user_unsuspend_confirm' user.id %}" class="btn btn-success flex-fill">
+                                <i class="fas fa-play me-1"></i> Unsuspend
+                            </a>
+                            {% endif %}
+                        </div>
                     </div>
-                    {% if user.status.is_locked %}
-                    <a href="{% url 'staff:user_unlock_confirm' user.id %}" class="btn btn-info btn-sm">
-                        <i class="fas fa-unlock-alt me-1"></i> Unlock
-                    </a>
-                    {% else %}
-                    <a href="{% url 'staff:user_lock_confirm' user.id %}" class="btn btn-warning btn-sm">
-                        <i class="fas fa-lock me-1"></i> Lock
-                    </a>
-                    {% endif %}
-                </div>
-                
-                <hr>
-                
-                <!-- Suspend/Unsuspend Actions -->
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <div>
-                        {% if user.status.is_suspended %}
-                            <h6 class="fw-bold text-warning mb-0">Account Suspended</h6>
-                            <small class="text-muted">Disciplinary suspension</small>
-                        {% else %}
-                            <h6 class="fw-bold text-warning mb-0">Suspend Account</h6>
-                            <small class="text-muted">Temporary suspension</small>
-                        {% endif %}
-                    </div>
-                    {% if user.status.is_suspended %}
-                    <a href="{% url 'staff:user_unsuspend_confirm' user.id %}" class="btn btn-success btn-sm">
-                        <i class="fas fa-play me-1"></i> Unsuspend
-                    </a>
-                    {% else %}
-                    <a href="{% url 'staff:user_suspend_confirm' user.id %}" class="btn btn-warning btn-sm">
-                        <i class="fas fa-pause-circle me-1"></i> Suspend
-                    </a>
-                    {% endif %}
-                </div>
-                
-                <hr>
-                
-                <!-- Deactivate/Activate Actions -->
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <div>
-                        {% if user.is_active %}
-                        <h6 class="fw-bold text-danger mb-0">Deactivate Account</h6>
-                        <small class="text-muted">Permanent deactivation</small>
-                        {% else %}
-                        <h6 class="fw-bold text-success mb-0">Activate Account</h6>
-                        <small class="text-muted">Restore access</small>
-                        {% endif %}
-                    </div>
-                    {% if user.is_active %}
-                    <a href="{% url 'staff:user_deactivate_confirm' user.id %}" class="btn btn-danger btn-sm">
-                        <i class="fas fa-ban me-1"></i> Deactivate
-                    </a>
-                    {% else %}
-                    <a href="{% url 'staff:user_activate_confirm' user.id %}" class="btn btn-success btn-sm">
-                        <i class="fas fa-check-circle me-1"></i> Activate
-                    </a>
-                    {% endif %}
-                </div>
-                
-                <hr>
-                
-                <!-- Delete Action -->
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="fw-bold text-danger mb-0">Delete User Account</h6>
-                        <small class="text-muted">Permanently remove this user</small>
-                    </div>
-                    <a href="{% url 'staff:user_delete_confirm' user.id %}" class="btn btn-danger btn-sm">
-                        <i class="fas fa-trash me-1"></i> Delete
-                    </a>
                 </div>
             </div>
         </div>
-        {% endif %}
     </div>
     
-    <!-- Right Column -->
-    <div class="col-md-8">
+    <!-- RIGHT COLUMN - Application & Verification Information -->
+    <div class="col-md-6">
         <!-- Staff Application Information -->
         {% with application=user.staff_applications.first %}
-        {% if application %}
         <div class="card mb-4">
-            <div class="card-header bg-info text-white">
+            <div class="card-header bg-success text-white">
                 <h5 class="mb-0"><i class="fas fa-file-alt me-2"></i>Staff Application Details</h5>
             </div>
             <div class="card-body">
-                <table class="table">
+                {% if application %}
+                <table class="table table-bordered">
                     <tr>
-                        <th style="width: 150px;">Application ID:</th>
-                        <td>#{{ application.id }}</td>
+                        <th style="width: 40%;">Application ID:</th>
+                        <td><span class="badge bg-secondary">#{{ application.id }}</span></td>
+                    </tr>
+                    <tr>
+                        <th>Application Status:</th>
+                        <td>
+                            {% if application.status == 'approved' %}
+                                <span class="badge bg-success">Approved</span>
+                            {% elif application.status == 'pending' %}
+                                <span class="badge bg-warning">Pending</span>
+                            {% elif application.status == 'rejected' %}
+                                <span class="badge bg-danger">Rejected</span>
+                            {% elif application.status == 'under_review' %}
+                                <span class="badge bg-info">Under Review</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ application.status }}</span>
+                            {% endif %}
+                        </td>
                     </tr>
                     <tr>
                         <th>Applied On:</th>
-                        <td>{{ application.application_date|date:"M d, Y" }}</td>
+                        <td>{{ application.application_date|date:"F d, Y H:i" }}</td>
                     </tr>
                     <tr>
-                        <th>ID Number:</th>
-                        <td><span class="badge bg-secondary">{{ application.id_number }}</span></td>
+                        <th>Verified On:</th>
+                        <td>{{ application.review_date|date:"F d, Y H:i"|default:"Not verified" }}</td>
                     </tr>
                     <tr>
-                        <th>Phone:</th>
-                        <td>{{ application.phone }}</td>
+                        <th>Verified By:</th>
+                        <td>{{ application.reviewed_by.get_full_name|default:application.reviewed_by.username|default:"-" }}</td>
                     </tr>
                     <tr>
-                        <th>Experience:</th>
-                        <td>{{ application.experience|truncatewords:15|default:"-" }}</td>
+                        <th>Review Notes:</th>
+                        <td>{{ application.review_notes|default:"-" }}</td>
+                    </tr>
+                    <tr>
+                        <th>IP Address:</th>
+                        <td>{{ application.ip_address|default:"-" }}</td>
                     </tr>
                 </table>
-                <div class="mt-2">
-                    <a href="{% url 'staff:application_detail' application.id %}" class="btn btn-info btn-sm">
-                        <i class="fas fa-eye me-1"></i> View Full Application
-                    </a>
+                
+                <!-- Application Action Buttons -->
+                <div class="mt-3">
+                    <h6 class="fw-bold mb-3">Application Actions:</h6>
+                    <div class="btn-group w-100 mb-2">
+                        <a href="{% url 'staff:application_detail' application.id %}" class="btn btn-info">
+                            <i class="fas fa-eye me-1"></i> View Application
+                        </a>
+                        <a href="{% url 'staff:application_edit' application.id %}" class="btn btn-primary">
+                            <i class="fas fa-edit me-1"></i> Edit Application
+                        </a>
+                    </div>
+                    <div class="btn-group w-100">
+                        {% if application.status != 'approved' %}
+                        <a href="{% url 'staff:application_approve' application.id %}" class="btn btn-success">
+                            <i class="fas fa-check-circle me-1"></i> Approve Application
+                        </a>
+                        {% endif %}
+                        {% if application.status != 'rejected' %}
+                        <a href="{% url 'staff:application_reject' application.id %}" class="btn btn-danger">
+                            <i class="fas fa-times-circle me-1"></i> Reject Application
+                        </a>
+                        {% endif %}
+                        {% if application.status == 'approved' %}
+                        <a href="{% url 'staff:application_revert_to_pending' application.id %}" class="btn btn-warning">
+                            <i class="fas fa-undo me-1"></i> Revert Application
+                        </a>
+                        {% endif %}
+                        <a href="{% url 'staff:application_delete' application.id %}" class="btn btn-danger" onclick="return confirm('Are you sure you want to delete this application?')">
+                            <i class="fas fa-trash me-1"></i> Delete Application
+                        </a>
+                    </div>
                 </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="fas fa-file-alt fa-3x text-muted mb-3"></i>
+                    <p class="text-muted mb-0">No staff application found for this user</p>
+                </div>
+                {% endif %}
             </div>
         </div>
-        {% endif %}
         {% endwith %}
-
-
-        <!-- Account Status Card -->
-        {% if user.status %}
-        <div class="card mb-4">
-            <div class="card-header bg-info text-white">
-                <h5 class="mb-0"><i class="fas fa-shield-alt me-2"></i>Account Status</h5>
-            </div>
-            <div class="card-body">
-                {% if not user.is_active %}
-                    <div class="status-card danger p-3">
-                        <div class="d-flex align-items-center">
-                            <i class="fas fa-ban fa-2x text-danger me-3"></i>
-                            <div>
-                                <h6 class="mb-0 text-danger">Account Deactivated</h6>
-                                <small class="text-muted">
-                                    Deactivated: {{ user.status.deactivated_at|date:"F d, Y H:i"|default:"N/A" }}
-                                    {% if user.status.deactivated_reason %}
-                                        <br>Reason: {{ user.status.deactivated_reason }}
-                                    {% endif %}
-                                </small>
-                            </div>
-                        </div>
-                    </div>
-                {% endif %}
-                
-                {% if user.status.is_locked %}
-                    <div class="status-card info p-3">
-                        <div class="d-flex align-items-center">
-                            <i class="fas fa-lock fa-2x text-info me-3"></i>
-                            <div>
-                                <h6 class="mb-0 text-info">Account Locked</h6>
-                                <small class="text-muted">
-                                    Locked: {{ user.status.locked_at|date:"F d, Y H:i" }}
-                                    {% if user.status.lock_reason %}
-                                        <br>Reason: {{ user.status.get_lock_reason_display }}
-                                    {% endif %}
-                                </small>
-                            </div>
-                        </div>
-                    </div>
-                {% endif %}
-                
-                {% if user.status.is_suspended %}
-                    <div class="status-card warning p-3">
-                        <div class="d-flex align-items-center">
-                            <i class="fas fa-pause-circle fa-2x text-warning me-3"></i>
-                            <div>
-                                <h6 class="mb-0 text-warning">Account Suspended</h6>
-                                <small class="text-muted">
-                                    Until: {{ user.status.suspended_until|date:"F d, Y" }}
-                                    {% if user.status.suspension_reason %}
-                                        <br>Reason: {{ user.status.suspension_reason }}
-                                    {% endif %}
-                                    {% if user.status.suspended_by %}
-                                        <br>Suspended by: {{ user.status.suspended_by.get_full_name|default:user.status.suspended_by.username }}
-                                    {% endif %}
-                                </small>
-                            </div>
-                        </div>
-                    </div>
-                {% endif %}
-                
-                {% if user.is_active and not user.status.is_locked and not user.status.is_suspended %}
-                    <div class="status-card success p-3">
-                        <div class="d-flex align-items-center">
-                            <i class="fas fa-check-circle fa-2x text-success me-3"></i>
-                            <div>
-                                <h6 class="mb-0 text-success">Account Active</h6>
-                                <small class="text-muted">No restrictions applied</small>
-                            </div>
-                        </div>
-                    </div>
-                {% endif %}
-            </div>
-        </div>
-        {% endif %}
-
-
-        <!-- Staff Profile & Verification Documents -->
+        
+        <!-- Verification Documents -->
         {% if user.staff_profile %}
         <div class="card mb-4">
             <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
-                <h5 class="mb-0"><i class="fas fa-id-card me-2"></i>Verified Documents</h5>
+                <h5 class="mb-0"><i class="fas fa-id-card me-2"></i>Verification Documents</h5>
                 {% if user.staff_profile.is_identity_verified %}
-                <span class="badge bg-success">Verified</span>
+                    <span class="badge bg-success">Identity Verified</span>
                 {% else %}
-                <span class="badge bg-warning">Pending</span>
+                    <span class="badge bg-warning">Pending Verification</span>
                 {% endif %}
             </div>
             <div class="card-body">
                 {% with staff=user.staff_profile %}
-                <table class="table">
-                    <tr>
-                        <th style="width: 150px;">Staff ID:</th>
-                        <td><span class="badge bg-secondary">{{ staff.staff_id }}</span></td>
-                    </tr>
-                    {% if staff.verified_at %}
-                    <tr>
-                        <th>Verified On:</th>
-                        <td>{{ staff.verified_at|date:"F d, Y H:i" }}</td>
-                    </tr>
-                    <tr>
-                        <th>Verified By:</th>
-                        <td>{{ staff.verified_by.get_full_name|default:staff.verified_by.username }}</td>
-                    </tr>
-                    {% endif %}
-                </table>
-
-                <!-- Verification Documents -->
-                <h6 class="fw-bold mt-3 mb-3"><i class="fas fa-file-upload me-2"></i>Verification Documents</h6>
+                
+                <!-- Document Images -->
+                <h6 class="fw-bold mt-3 mb-3"><i class="fas fa-file-upload me-2"></i>Uploaded Documents</h6>
                 
                 {% if staff.id_front or staff.id_back or staff.passport_photo or staff.live_photo %}
                 <div class="row">
+                    {% if staff.passport_photo %}
+                    <div class="col-md-6 text-center mb-3">
+                        <label class="fw-bold d-block mb-2">Passport Photo</label>
+                        <img src="{{ staff.passport_photo.url }}" class="img-fluid rounded border" style="max-height: 150px;">
+                        <div class="mt-1"><span class="badge bg-success">Verified</span></div>
+                    </div>
+                    {% endif %}
+                    
                     {% if staff.id_front %}
-                    <div class="col-md-4 text-center mb-3">
+                    <div class="col-md-6 text-center mb-3">
                         <label class="fw-bold d-block mb-2">ID Card (Front)</label>
-                        <img src="{{ staff.id_front.url }}" class="document-preview img-fluid rounded border" style="max-height: 120px;">
+                        <img src="{{ staff.id_front.url }}" class="img-fluid rounded border" style="max-height: 150px;">
                         <div class="mt-1"><span class="badge bg-success">Verified</span></div>
                     </div>
                     {% endif %}
                     
                     {% if staff.id_back %}
-                    <div class="col-md-4 text-center mb-3">
+                    <div class="col-md-6 text-center mb-3">
                         <label class="fw-bold d-block mb-2">ID Card (Back)</label>
-                        <img src="{{ staff.id_back.url }}" class="document-preview img-fluid rounded border" style="max-height: 120px;">
-                        <div class="mt-1"><span class="badge bg-success">Verified</span></div>
-                    </div>
-                    {% endif %}
-                    
-                    {% if staff.passport_photo %}
-                    <div class="col-md-4 text-center mb-3">
-                        <label class="fw-bold d-block mb-2">Passport Photo</label>
-                        <img src="{{ staff.passport_photo.url }}" class="document-preview img-fluid rounded border" style="max-height: 120px;">
+                        <img src="{{ staff.id_back.url }}" class="img-fluid rounded border" style="max-height: 150px;">
                         <div class="mt-1"><span class="badge bg-success">Verified</span></div>
                     </div>
                     {% endif %}
                     
                     {% if staff.live_photo %}
-                    <div class="col-md-4 text-center mb-3">
+                    <div class="col-md-6 text-center mb-3">
                         <label class="fw-bold d-block mb-2">Live Photo</label>
-                        <img src="{{ staff.live_photo.url }}" class="document-preview img-fluid rounded border" style="max-height: 120px;">
-                        <div class="mt-1"><span class="badge bg-success">Live</span></div>
+                        <img src="{{ staff.live_photo.url }}" class="img-fluid rounded border" style="max-height: 150px;">
+                        <div class="mt-1"><span class="badge bg-info">Live Photo</span></div>
                     </div>
                     {% endif %}
                 </div>
