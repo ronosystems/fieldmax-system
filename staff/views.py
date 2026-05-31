@@ -4702,6 +4702,72 @@ def application_approve(request, pk):
     """Approve an application and create user account with Staff ID as username"""
     application = get_object_or_404(StaffApplication, pk=pk)
     
+    # ============================================
+    # CHECK FOR DUPLICATES BEFORE PROCESSING
+    # ============================================
+    from staff.models import Staff
+    from django.contrib.auth.models import User
+    
+    # Check if ID number already exists in Staff table
+    if Staff.objects.filter(id_number=application.id_number).exists():
+        existing_staff = Staff.objects.get(id_number=application.id_number)
+        error_msg = f"❌ Cannot approve: ID Number '{application.id_number}' already exists in the system! This ID belongs to {existing_staff.user.get_full_name()} (Staff ID: {existing_staff.staff_id}). Please reject this application as duplicate."
+        
+        # Auto-reject the application
+        application.status = 'rejected'
+        application.reviewed_by = request.user
+        application.review_date = timezone.now()
+        application.review_notes = f"Auto-rejected - Duplicate ID Number: {application.id_number} already exists in system (Staff: {existing_staff.staff_id})"
+        application.save()
+        
+        logger.warning(f"Auto-rejected application #{application.id} - Duplicate ID number: {application.id_number}")
+        messages.error(request, error_msg)
+        return redirect('staff:application_detail', pk=application.pk)
+    
+    # Check if email already has an approved application or user account
+    if StaffApplication.objects.filter(email=application.email, status='approved').exists():
+        existing_app = StaffApplication.objects.get(email=application.email, status='approved')
+        error_msg = f"❌ Cannot approve: Email '{application.email}' already has an approved application! (Application ID: {existing_app.id})"
+        
+        application.status = 'rejected'
+        application.reviewed_by = request.user
+        application.review_date = timezone.now()
+        application.review_notes = f"Auto-rejected - Duplicate email: {application.email} already approved in application #{existing_app.id}"
+        application.save()
+        
+        logger.warning(f"Auto-rejected application #{application.id} - Duplicate email: {application.email}")
+        messages.error(request, error_msg)
+        return redirect('staff:application_detail', pk=application.pk)
+    
+    # Check if email already exists as a user
+    if User.objects.filter(email=application.email).exists():
+        existing_user = User.objects.get(email=application.email)
+        error_msg = f"❌ Cannot approve: Email '{application.email}' already has a user account! (Username: {existing_user.username})"
+        
+        application.status = 'rejected'
+        application.reviewed_by = request.user
+        application.review_date = timezone.now()
+        application.review_notes = f"Auto-rejected - Email {application.email} already has user account: {existing_user.username}"
+        application.save()
+        
+        logger.warning(f"Auto-rejected application #{application.id} - Email already has user: {application.email}")
+        messages.error(request, error_msg)
+        return redirect('staff:application_detail', pk=application.pk)
+    
+    # Check if phone already exists in Staff or User
+    if Staff.objects.filter(user__username=application.phone).exists():
+        error_msg = f"❌ Cannot approve: Phone number '{application.phone}' already exists in the system!"
+        
+        application.status = 'rejected'
+        application.reviewed_by = request.user
+        application.review_date = timezone.now()
+        application.review_notes = f"Auto-rejected - Duplicate phone number: {application.phone}"
+        application.save()
+        
+        logger.warning(f"Auto-rejected application #{application.id} - Duplicate phone: {application.phone}")
+        messages.error(request, error_msg)
+        return redirect('staff:application_detail', pk=application.pk)
+    
     # Get extra data
     try:
         extra_data = application.extra_data
@@ -4733,10 +4799,11 @@ def application_approve(request, pk):
             from django.db import IntegrityError, transaction
             import re
             
-            # Check if user already exists
+            # Check if user already exists (should have been caught above, but double-check)
             user = None
             if User.objects.filter(email=application.email).exists():
-                user = User.objects.get(email=application.email)
+                # This shouldn't happen due to check above, but just in case
+                raise IntegrityError(f"User with email {application.email} already exists")
             else:
                 # Create temporary username (will update after staff_id is generated)
                 temp_username = f"temp_{application.id}_{timezone.now().timestamp()}"
@@ -4874,6 +4941,17 @@ def application_approve(request, pk):
                 except IntegrityError as e:
                     logger.warning(f"IntegrityError on attempt {attempt + 1}/{max_retries}: {str(e)}")
                     
+                    # Check if it's a duplicate ID number error
+                    if 'id_number' in str(e) and attempt == max_retries - 1:
+                        # Auto-reject the application
+                        application.status = 'rejected'
+                        application.reviewed_by = request.user
+                        application.review_date = timezone.now()
+                        application.review_notes = f"Auto-rejected - Duplicate ID Number: {application.id_number}"
+                        application.save()
+                        messages.error(request, f"Cannot approve: ID Number '{application.id_number}' already exists in the system!")
+                        return redirect('staff:application_detail', pk=application.pk)
+                    
                     if attempt == max_retries - 1:
                         # Last attempt failed, re-raise
                         raise
@@ -4932,6 +5010,34 @@ def application_approve(request, pk):
             )
             return redirect('staff:application_detail', pk=application.pk)
             
+        except IntegrityError as e:
+            # Handle duplicate key errors gracefully
+            error_msg = str(e)
+            if 'duplicate key value violates unique constraint' in error_msg:
+                if 'id_number' in error_msg:
+                    friendly_msg = f"❌ Cannot approve: ID Number '{application.id_number}' already exists in the system. This application has been automatically rejected."
+                elif 'email' in error_msg:
+                    friendly_msg = f"❌ Cannot approve: Email '{application.email}' already exists in the system. This application has been automatically rejected."
+                elif 'username' in error_msg:
+                    friendly_msg = f"❌ Cannot approve: Username conflict. This application has been automatically rejected."
+                else:
+                    friendly_msg = f"❌ Cannot approve: Duplicate data detected. This application has been automatically rejected."
+                
+                # Auto-reject the application
+                application.status = 'rejected'
+                application.reviewed_by = request.user
+                application.review_date = timezone.now()
+                application.review_notes = f"Auto-rejected - {friendly_msg}"
+                application.save()
+                
+                logger.error(f"Auto-rejected application #{application.id} due to IntegrityError: {error_msg}")
+                messages.error(request, friendly_msg)
+            else:
+                logger.error(f"Error approving application: {error_msg}", exc_info=True)
+                messages.error(request, f'Error approving application: {error_msg}')
+            
+            return redirect('staff:application_detail', pk=application.pk)
+            
         except Exception as e:
             logger.error(f"Error approving application: {str(e)}", exc_info=True)
             messages.error(request, f'Error approving application: {str(e)}')
@@ -4942,10 +5048,10 @@ def application_approve(request, pk):
     from shops.models import ShopBranch
     shops = ShopBranch.objects.filter(is_active=True).order_by('name')
     
-    # Calculate next staff ID for preview
+    # Calculate next staff ID for preview - FIXED to use staff_id ordering
     from staff.models import Staff
     import re
-    last_staff = Staff.objects.order_by('-id').first()
+    last_staff = Staff.objects.order_by('-staff_id').first()  # Changed from '-id' to '-staff_id'
     if last_staff and last_staff.staff_id:
         numbers = re.findall(r'\d+', last_staff.staff_id)
         if numbers:
@@ -4965,8 +5071,6 @@ def application_approve(request, pk):
         'next_staff_id': next_staff_id,
     }
     return render(request, 'staff/approve.html', context)
-
-
 
 
 @staff_member_required
