@@ -858,7 +858,48 @@ class SavingsAccount(models.Model):
         
         logger.info(f"💰 SAVINGS: +{amount} profit from sale {sale_reference}")
         return self.balance
-    
+
+    # ============================================
+    # SAVINGS TO INJECTION
+    # ============================================   
+    def transfer_to_injection(self, amount, user=None):
+        """
+        Transfer money from Savings Account to Injection Account
+        This REDUCES savings (profits available) and INCREASES injection (capital history)
+        """
+        if amount <= 0:
+            return False, "Amount must be greater than 0"
+        
+        if self.balance < amount:
+            return False, f"Insufficient savings. Available: KES {self.balance:,.2f}"
+        
+        with transaction.atomic():
+            # 1. Subtract from Savings
+            self.balance -= amount
+            self.updated_by = user
+            self.save()
+            
+            # 2. Record transaction in SavingsTransaction
+            SavingsTransaction.objects.create(
+                savings_account=self,
+                amount=amount,
+                transaction_type='transfer_to_injection',  # This matches your TRANSACTION_TYPES
+                description=f"Transferred to Injection Account: KES {amount:,.2f}",
+                created_by=user
+            )
+            
+            # 3. Add to Injection Account
+            injection_account = InjectionAccount.get_account()
+            injection_account.receive_from_savings(amount, user=user)
+            
+            # 4. Optional: Record transfer in InjectionTransaction
+            # The receive_from_savings method already does this
+            
+            logger.info(f"💸 TRANSFER: KES {amount:,.2f} from Savings to Injection")
+            
+        return True, f"Successfully transferred KES {amount:,.2f} to Injection Account"
+
+
     # ============================================
     # ADD THIS NEW METHOD - ONE CLICK PROFIT TAKING
     # ============================================
@@ -934,6 +975,7 @@ class SavingsTransaction(models.Model):
     TRANSACTION_TYPES = [
         ('profit', 'Profit Added'),
         ('transfer_out', 'Transfer to Injection'),
+        ('transfer_to_injection', 'Transfer to Injection Account'), 
         ('profit_taken', 'Profit Taken by Owner'), 
         ('expense', 'Expense Deduction'),
     ]
