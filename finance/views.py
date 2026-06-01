@@ -42,7 +42,7 @@ from django.db.models import Sum, Count, Q, F, DecimalField, ExpressionWrapper
 from datetime import datetime, timedelta
 from .models import (
     IncomeAccount, PurchaseAccount, ProfitAccount, 
-    IncomeTransaction, PurchaseTransaction, ProfitTransaction
+    IncomeTransaction, PurchaseTransaction, ProfitTransaction, AccountTransaction, 
 )
 from sales.models import Sale, SaleItem
 from inventory.models import Product, StockEntry
@@ -778,6 +778,7 @@ def financial_income(request):
 @login_required
 def financial_expenses(request):
     """List all expense transactions only"""
+    from .models import BankAccount, AccountTransaction
     from decimal import Decimal
     from django.core.paginator import Paginator
     from datetime import datetime, timedelta
@@ -891,158 +892,6 @@ def financial_expenses(request):
     }
     
     return render(request, 'finance/financial_expenses.html', context)
-
-
-    """Bank account dashboard with bank sales and credit payments"""
-    from .models import BankAccount, AccountTransaction
-    from credit.models import CompanyPayment
-    from sales.models import Sale
-    from decimal import Decimal
-    from datetime import datetime
-    from django.utils import timezone
-    
-    bank_account, created = BankAccount.objects.get_or_create(id=1)
-    
-    # ============================================
-    # CALCULATE TOTALS FOR THE CARDS
-    # ============================================
-    
-    # Calculate Total Income
-    bank_sales_total = Sale.objects.filter(
-        payment_method__in=['M-Pesa', 'Card', 'Bank'],
-        is_reversed=False
-    ).aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
-    
-    credit_bank_total = CompanyPayment.objects.filter(
-        payment_method__in=['bank', 'mpesa']
-    ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-    
-    manual_income_total = AccountTransaction.objects.filter(
-        account_type='bank',
-        transaction_type='income'
-    ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-    
-    total_income = bank_sales_total + credit_bank_total + manual_income_total
-    
-    # Calculate Total Expenses
-    manual_expense_total = AccountTransaction.objects.filter(
-        account_type='bank',
-        transaction_type='expense'
-    ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-    
-    total_expenses = manual_expense_total
-    
-    # ============================================
-    # NET BALANCE = CURRENT BALANCE (from the account)
-    # ============================================
-    net_balance = bank_account.balance  # This is the actual current balance
-    
-    # ============================================
-    # BUILD TRANSACTIONS LIST FOR DISPLAY
-    # ============================================
-    transactions = []
-    
-    # Add bank sales
-    bank_sales = Sale.objects.filter(
-        payment_method__in=['M-Pesa', 'Card', 'Bank'],
-        is_reversed=False
-    ).select_related('seller')
-    
-    for sale in bank_sales:
-        transactions.append({
-            'date': sale.sale_date,
-            'type': 'income',
-            'description': f"{sale.payment_method} Sale - {sale.sale_id} - {sale.buyer_name or 'Walk-in Customer'}",
-            'amount': sale.total_amount,
-            'reference': sale.sale_id,
-            'created_by': sale.seller,
-            'source': 'bank_sale'
-        })
-    
-    # Add manual transactions
-    manual_trans = AccountTransaction.objects.filter(
-        account_type='bank'
-    ).select_related('created_by')
-    
-    for t in manual_trans:
-        transactions.append({
-            'date': t.transaction_date,
-            'type': t.transaction_type,
-            'description': t.description,
-            'amount': t.amount,
-            'reference': t.reference or '',
-            'created_by': t.created_by,
-            'source': 'manual'
-        })
-    
-    # Add credit payments
-    credit_payments = CompanyPayment.objects.filter(
-        payment_method__in=['bank', 'mpesa']
-    ).select_related('credit_company', 'created_by')
-    
-    for payment in credit_payments:
-        payment_date = datetime.combine(payment.payment_date, datetime.min.time())
-        if timezone.is_naive(payment_date):
-            payment_date = timezone.make_aware(payment_date)
-        transactions.append({
-            'date': payment_date,
-            'type': 'income',
-            'description': f'Credit payment - {payment.credit_company.name}',
-            'amount': payment.amount,
-            'reference': payment.payment_reference,
-            'created_by': payment.created_by,
-            'source': 'credit_payment'
-        })
-    
-    # Add money transfers
-    transfers_in = MoneyTransfer.objects.filter(
-        to_account='bank',
-        status='completed'
-    ).order_by('-created_at')
-    
-    transfers_out = MoneyTransfer.objects.filter(
-        from_account='bank',
-        status='completed'
-    ).order_by('-created_at')
-    
-    for transfer in transfers_in:
-        transactions.append({
-            'date': transfer.created_at,
-            'type': 'transfer',
-            'description': f'Transfer from {transfer.get_from_account_display()} to Bank - {transfer.description}',
-            'amount': transfer.amount,
-            'reference': transfer.transfer_reference,
-            'created_by': transfer.requested_by,
-            'source': 'transfer_in'
-        })
-    
-    for transfer in transfers_out:
-        transactions.append({
-            'date': transfer.created_at,
-            'type': 'transfer',
-            'description': f'Transfer from Bank to {transfer.get_to_account_display()} - {transfer.description}',
-            'amount': transfer.amount,
-            'reference': transfer.transfer_reference,
-            'created_by': transfer.requested_by,
-            'source': 'transfer_out'
-        })
-    
-    # Sort by date
-    transactions.sort(key=lambda x: x['date'], reverse=True)
-    recent_transactions = transactions[:50]
-    
-    context = {
-        'account': bank_account,
-        'transactions': recent_transactions,
-        'total_income': total_income,
-        'total_expenses': total_expenses,
-        'net_balance': net_balance,  # This is the current balance
-        'account_type': 'Bank Account',
-        'account_icon': 'fa-university',
-        'account_color': 'primary',
-    }
-    
-    return render(request, 'finance/account_detail.html', context)
 
 
 
