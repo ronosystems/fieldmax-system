@@ -982,7 +982,7 @@ class SavingsTransaction(models.Model):
     
     savings_account = models.ForeignKey(SavingsAccount, on_delete=models.CASCADE, related_name='transactions')
     amount = models.DecimalField(max_digits=15, decimal_places=2)
-    transaction_type = models.CharField(max_length=20, choices=TRANSACTION_TYPES)
+    transaction_type = models.CharField(max_length=30, choices=TRANSACTION_TYPES)
     sale_reference = models.CharField(max_length=100, blank=True)
     description = models.TextField(blank=True)
     transaction_date = models.DateTimeField(default=timezone.now)
